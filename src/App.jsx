@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { setApiKey, hasApiKey, clearApiKey, ping } from './lib/anthropic.js'
+import { getProfile } from './lib/store.js'
 import NorthStars from './components/NorthStars.jsx'
+import OnboardingQuiz from './components/OnboardingQuiz.jsx'
 import SpineCheck from './components/SpineCheck.jsx'
 
 // Day-0 scaffold surface: paste your Anthropic key (BYOK, sessionStorage-only) and prove
@@ -11,6 +13,12 @@ export default function App() {
   const [status, setStatus] = useState('idle') // idle | pinging | ok | error
   const [reply, setReply] = useState('')
   const [error, setError] = useState('')
+  const [onboarded, setOnboarded] = useState(null) // null = loading profile
+
+  // First run shows the onboarding quiz; once a profile is saved we show the digest.
+  useEffect(() => {
+    getProfile().then((profile) => setOnboarded(!!profile?.onboarded))
+  }, [])
 
   function handleSave(e) {
     e.preventDefault()
@@ -113,10 +121,16 @@ export default function App() {
           )}
         </section>
 
-        <NorthStars />
-
-        {/* Re-mount on key change so the disabled state tracks the saved key. */}
-        <SpineCheck key={saved ? 'keyed' : 'nokey'} />
+        {/* First run: build a steering profile. After that: edit it + run the digest. */}
+        {onboarded === false ? (
+          <OnboardingQuiz onDone={() => setOnboarded(true)} />
+        ) : onboarded === true ? (
+          <>
+            <NorthStars />
+            {/* Re-mount on key change so the disabled state tracks the saved key. */}
+            <SpineCheck key={saved ? 'keyed' : 'nokey'} />
+          </>
+        ) : null}
       </div>
     </div>
   )
