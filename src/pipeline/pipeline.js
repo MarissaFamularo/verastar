@@ -14,6 +14,7 @@ import {
   fetchRegistry,
   registryValue,
   fetchCitation,
+  fetchCitations,
   pmidToPmcid,
   searchPubmed,
 } from './sources.js'
@@ -86,6 +87,29 @@ export async function searchPapers({ northStars = [], retmax = 10, days = 30 } =
   const term = terms.map((t) => `"${t.replace(/"/g, '')}"[tiab]`).join(' OR ')
   const pmids = await searchPubmed(term, { retmax, days })
   return pmids.map((pmid) => ({ id: pmid, pmid, pmcid: null, nct: null, title: null }))
+}
+
+// Wide candidate search for the selection funnel: search PubMed broadly on the north
+// stars, then pull batched metadata (title · journal · year · publication types) in ONE
+// call. Returns candidate stubs the selection pass can score WITHOUT any full-text fetch or
+// extraction — the ~50-candidates-in step of the real morning workflow. Newest-first.
+export async function searchCandidates({ northStars = [], retmax = 40, days = 90 } = {}) {
+  const terms = northStars.length ? northStars : ['vascular surgery']
+  const term = terms.map((t) => `"${t.replace(/"/g, '')}"[tiab]`).join(' OR ')
+  const pmids = await searchPubmed(term, { retmax, days })
+  if (!pmids.length) return []
+  const cites = await fetchCitations(pmids)
+  return cites.map((c) => ({
+    id: c.pmid,
+    pmid: c.pmid,
+    pmcid: null,
+    nct: null,
+    title: c.title,
+    journal: c.journal,
+    year: c.year,
+    author: c.author,
+    pubtypes: c.pubtypes,
+  }))
 }
 
 // Run the full pipeline on one paper. Returns:

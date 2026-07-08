@@ -98,6 +98,41 @@ export async function fetchCitation(pmid) {
   }
 }
 
+// Batched citation metadata for many PMIDs in ONE esummary call — the cheap fuel for the
+// selection funnel (title · journal · year · publication types) before any LLM extraction.
+// Returns [{ pmid, title, journal, year, author, pubtypes, url }] in the requested order,
+// skipping ids PubMed couldn't resolve. Never throws past an empty array.
+export async function fetchCitations(pmids) {
+  const ids = (Array.isArray(pmids) ? pmids : [pmids]).map(String)
+  if (!ids.length) return []
+  try {
+    const data = await getJson(
+      withKey(`${EUTILS}/esummary.fcgi?db=pubmed&id=${ids.join(',')}&retmode=json`),
+    )
+    const result = data?.result || {}
+    return ids
+      .map((pmid) => {
+        const rec = result[pmid]
+        if (!rec || rec.error || !rec.title) return null
+        const authors = rec.authors || []
+        const first = authors[0]?.name || ''
+        const author = authors.length > 1 ? `${first} et al.` : first
+        return {
+          pmid,
+          url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+          title: rec.title || '',
+          journal: rec.source || rec.fulljournalname || '',
+          year: (rec.pubdate || '').split(' ')[0] || '',
+          author,
+          pubtypes: Array.isArray(rec.pubtype) ? rec.pubtype : [],
+        }
+      })
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
 // PMID -> PMCID via idconv. Returns e.g. "PMC11848676" or null (not in OA).
 export async function pmidToPmcid(pmid) {
   const url = `${IDCONV}/?ids=${encodeURIComponent(pmid)}&format=json`

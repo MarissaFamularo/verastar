@@ -7,8 +7,9 @@
 import { useEffect, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, store } from '../lib/store.js'
-import { DEMO_PAPERS, runPaper, corruptAndReverify, searchPapers } from '../pipeline/pipeline.js'
+import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
+import { selectCandidates } from '../pipeline/select.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
 
@@ -103,9 +104,97 @@ function Row({ quantity, verdict, onOpenSource, hero }) {
   )
 }
 
+// Score → chip color. Just a visual bucket; the number is the real signal.
+function scoreChip(score) {
+  if (score >= 70) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+  if (score >= 40) return 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'
+  return 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+}
+
+// The selection funnel surface: the wide candidate pool ranked by rubric fit, with the top
+// N pre-checked. The clinician confirms/adjusts the selection, then runs the digest on only
+// those — mirroring the ~50-candidates → ~10-kept step of a hand-run morning review.
+function CandidatePool({ candidates, selectedIds, onToggle, onRunDigest, onRescore, selecting, running }) {
+  const chosen = candidates.filter((c) => selectedIds.has(c.id)).length
+  return (
+    <div className="mt-5 rounded-lg border border-indigo-200 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">
+            Selection funnel — {candidates.length} candidates scored, {chosen} selected
+          </h3>
+          <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+            Every recent match, ranked against your rubric. The top papers are pre-selected;
+            adjust below, then run the digest on just those.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button
+            onClick={onRescore}
+            disabled={selecting || running}
+            title="Re-score this same pool against your current rubric — no new search"
+            className="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-200 dark:hover:bg-indigo-900/40"
+          >
+            {selecting ? 'Re-ranking…' : 'Re-rank with current rubric'}
+          </button>
+          <button
+            onClick={onRunDigest}
+            disabled={!chosen || selecting || running}
+            className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {running ? 'Running…' : `Run digest on ${chosen} selected`}
+          </button>
+        </div>
+      </div>
+
+      <ol className="mt-3 max-h-96 space-y-1.5 overflow-y-auto pr-1">
+        {candidates.map((c, i) => {
+          const picked = selectedIds.has(c.id)
+          const types = (c.pubtypes || []).filter((t) => t && t !== 'Journal Article').join(' · ')
+          return (
+            <li
+              key={c.id}
+              className={`flex items-start gap-3 rounded-md border p-2.5 ${
+                picked
+                  ? 'border-indigo-300 bg-white dark:border-indigo-700 dark:bg-slate-900'
+                  : 'border-transparent bg-white/50 opacity-70 dark:bg-slate-900/40'
+              }`}
+            >
+              <label className="flex cursor-pointer items-center pt-0.5">
+                <input
+                  type="checkbox"
+                  checked={picked}
+                  onChange={() => onToggle(c.id)}
+                  className="h-4 w-4 accent-indigo-600"
+                />
+              </label>
+              <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${scoreChip(c.score)}`}>
+                {c.score}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug text-slate-800 dark:text-slate-100">
+                  <span className="text-slate-400">{i + 1}.</span> {c.title}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {[c.journal, c.year].filter(Boolean).join(' · ')}
+                  {types && <span className="text-slate-400"> · {types}</span>}
+                </p>
+                {c.reason && <p className="mt-0.5 text-xs italic text-slate-500 dark:text-slate-400">{c.reason}</p>}
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
 export default function SpineCheck() {
   const [running, setRunning] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [selecting, setSelecting] = useState(false) // selection funnel LLM call in flight
+  const [candidates, setCandidates] = useState([]) // scored candidate pool (funnel output)
+  const [selectedIds, setSelectedIds] = useState(() => new Set()) // ids chosen for the digest
   const [scanError, setScanError] = useState('')
   const [stages, setStages] = useState({})
   const [results, setResults] = useState([]) // runPaper results (live or showcase)
@@ -201,6 +290,7 @@ export default function SpineCheck() {
         const rankings = await triage({
           northStars: profile?.northStars ?? [],
           projects: profile?.projects ?? [],
+          rubric: profile?.rubric?.criteria ?? '',
           candidates: ok.map((r) => ({
             id: r.paper.id,
             title: titleOf(r),
@@ -224,31 +314,87 @@ export default function SpineCheck() {
     }
   }
 
-  // The product loop: live PubMed search over the north stars, then verify each.
-  async function runScan() {
+  // Score a candidate pool against the current rubric and pre-check the top N. Shared by
+  // the initial scan and the re-rank button. `pool` is candidate stubs (metadata only).
+  async function scorePool(pool) {
+    const profile = await getProfile()
+    const scored = await selectCandidates({
+      rubric: profile?.rubric?.criteria ?? '',
+      northStars: profile?.northStars ?? [],
+      projects: profile?.projects ?? [],
+      candidates: pool,
+    })
+    setCandidates(scored)
+    const n = profile?.rubric?.selectCount ?? 10
+    setSelectedIds(new Set(scored.slice(0, n).map((c) => c.id)))
+  }
+
+  // The product loop, step 1: search PubMed WIDE, then score every candidate against the
+  // rubric (metadata only — no extraction yet). Shows the pool with the top N pre-selected.
+  async function startScan() {
     setScanError('')
+    setResults([])
+    setTriaged({})
+    setCandidates([])
     setSearching(true)
-    let papers = []
+    let pool = []
     try {
       const profile = await getProfile()
-      papers = await searchPapers({ northStars: profile?.northStars ?? [], retmax: 8, days: 90 })
+      pool = await searchCandidates({ northStars: profile?.northStars ?? [], retmax: 40, days: 90 })
     } catch (err) {
       setScanError(`PubMed search failed: ${err.message}`)
       setSearching(false)
       return
     }
     setSearching(false)
-    if (!papers.length) {
+    if (!pool.length) {
       setScanError('No recent papers matched your north stars — broaden them or widen the window.')
       return
     }
-    await runList(papers, { injectCorrupt: false })
+    setSelecting(true)
+    try {
+      await scorePool(pool)
+    } catch (err) {
+      setScanError(`Selection failed: ${err.message}`)
+    }
+    setSelecting(false)
+  }
+
+  // Live re-rank: re-score the SAME cached pool against the (edited) rubric — no re-fetch,
+  // no extraction. This is the cheap rubric-swing: edit the rubric above, watch it re-order.
+  async function rescore() {
+    if (!candidates.length || selecting) return
+    setSelecting(true)
+    setScanError('')
+    try {
+      await scorePool(candidates.map(({ score, reason, ...c }) => c)) // strip old scores
+    } catch (err) {
+      setScanError(`Re-rank failed: ${err.message}`)
+    }
+    setSelecting(false)
+  }
+
+  // The product loop, step 2: run the verify pipeline on ONLY the selected candidates,
+  // then rank + summarize them. This is where the (expensive) extraction happens.
+  async function runDigest() {
+    const chosen = candidates.filter((c) => selectedIds.has(c.id))
+    if (!chosen.length) return
+    await runList(chosen, { injectCorrupt: false })
+  }
+
+  function toggleCandidate(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
   }
 
   // Proof surface: the three reference trials, always demonstrating the hard guarantees
   // (registry match, the corruption catch) deterministically.
   async function runShowcase() {
     setScanError('')
+    setCandidates([])
     await runList(DEMO_PAPERS, { injectCorrupt: true })
   }
 
@@ -275,18 +421,18 @@ export default function SpineCheck() {
         <div className="flex shrink-0 gap-2">
           <button
             onClick={runShowcase}
-            disabled={!keySet || running || searching}
+            disabled={!keySet || running || searching || selecting}
             title="Three reference trials that demonstrate the verifier's guarantees"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
           >
             Verifier proof
           </button>
           <button
-            onClick={runScan}
-            disabled={!keySet || running || searching}
+            onClick={startScan}
+            disabled={!keySet || running || searching || selecting}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
           >
-            {searching ? 'Searching…' : running ? 'Scanning…' : "Run today's scan"}
+            {searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Scanning…' : "Run today's scan"}
           </button>
         </div>
       </div>
@@ -294,7 +440,12 @@ export default function SpineCheck() {
         <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">Set your API key above first.</p>
       )}
       {searching && (
-        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Searching PubMed for recent papers…</p>
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Searching PubMed wide for recent papers…</p>
+      )}
+      {selecting && (
+        <p className="mt-3 text-sm text-indigo-600 dark:text-indigo-300">
+          Claude is scoring every candidate against your rubric…
+        </p>
       )}
       {scanError && <p className="mt-3 text-sm text-rose-600 dark:text-rose-400">{scanError}</p>}
       {ranking && (
@@ -302,11 +453,26 @@ export default function SpineCheck() {
           Claude is ranking and summarizing against your steering profile…
         </p>
       )}
-      {!running && !searching && !ranking && results.length === 0 && !scanError && (
+      {!running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && (
         <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-          Run today's scan to pull recent papers on your north stars — or hit “Verifier proof”
-          to see the guarantees on three reference trials.
+          Run today's scan to search recent literature wide, score every candidate against your
+          rubric, and pick the top papers — or hit “Verifier proof” to see the guarantees on
+          three reference trials.
         </p>
+      )}
+
+      {/* The selection funnel: the wide candidate pool, scored against the rubric, with the
+          top N pre-checked. This is the ~50-candidates → ~10-selected step, on screen. */}
+      {candidates.length > 0 && (
+        <CandidatePool
+          candidates={candidates}
+          selectedIds={selectedIds}
+          onToggle={toggleCandidate}
+          onRunDigest={runDigest}
+          onRescore={rescore}
+          selecting={selecting}
+          running={running}
+        />
       )}
 
       <div className="mt-5 space-y-5">
