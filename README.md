@@ -66,5 +66,8 @@ do the work. No shared model bill, no lock-in, and your key and reading stay you
 
 ## Status
 
-Hackathon build in progress. See [PLAN.md](PLAN.md) for the one-week scope and the
-verification-engine spec.
+Hackathon build in progress. Planning docs:
+
+- [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) — scope, build order, never-cut list, demo script.
+- [docs/VERIFICATION_SPEC.md](docs/VERIFICATION_SPEC.md) — the sacred core: algorithm, tiers, integrity rules.
+- [docs/FACTS.md](docs/FACTS.md) — locked API + data facts and the demo corpus.
