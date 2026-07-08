@@ -20,6 +20,33 @@ sources → extract (LLM) → VERIFY (this layer, deterministic) → badge → U
 (schema in [FACTS.md](FACTS.md)). `verify` never trusts those fields — it re-derives
 truth from the fetched source text.
 
+## How the gate works — the model's output surface
+
+"The verifier gates the model" is true *by construction*, not by bolting a checker onto
+free-form output. Three properties make it real:
+
+1. **Constrained output surface.** The model is only permitted to emit
+   `(value, source_quote, location)` tuples. The extraction schema has **no field for a
+   free-floating numeric claim** — the model cannot say "a large benefit" with a number
+   attached; it can only fill slots that each carry their own receipt. The gate is the
+   *shape* of what the model is allowed to say.
+2. **Hard render gate.** There is **no code path that renders a number as fact unless it
+   passed `verify`.** Unverified values are shown as *flagged* — greyed, never charted,
+   never in a summary sentence. This is a property of the data flow, not a UI choice.
+3. **Two-channel rule — never blur opinion and fact.** The UI keeps two visually
+   distinct channels:
+   - **Facts** = verified tuples: badged, click-to-source, app-owned.
+   - **Reasoning** = the model's "why this matters" prose, explicitly marked as
+     *Claude's take*. Reasoning prose **may not contain a bare number** — any quantity
+     must be a tuple that went through the gate. Model opinion is never dressed up as
+     verified fact.
+
+**The gate defeats three distinct failure modes (name all three in the demo):**
+- **Hallucinated number/citation** → quote not located → flagged.
+- **Faithful quote, wrong number** (real sentence, mistranscribed value in the tuple) →
+  numeric-consistency (§3) catches it → flagged.
+- **Misleading aggregation** (pooling incompatible designs) → refuse-to-pool card.
+
 ## Algorithm
 
 For each extracted quantity `q` (with `q.value`, optional `q.ci_low`, `q.ci_high`,

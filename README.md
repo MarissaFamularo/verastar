@@ -69,5 +69,6 @@ do the work. No shared model bill, no lock-in, and your key and reading stay you
 Hackathon build in progress. Planning docs:
 
 - [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) — scope, build order, never-cut list, demo script.
-- [docs/VERIFICATION_SPEC.md](docs/VERIFICATION_SPEC.md) — the sacred core: algorithm, tiers, integrity rules.
+- [docs/VERIFICATION_SPEC.md](docs/VERIFICATION_SPEC.md) — the sacred core: the gate, algorithm, tiers, integrity rules.
+- [docs/EVAL.md](docs/EVAL.md) — proving the verifier never lies: precision-first metric, ground-truth sources.
 - [docs/FACTS.md](docs/FACTS.md) — locked API + data facts and the demo corpus.
