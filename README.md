@@ -1,8 +1,11 @@
-# Paper Trellis
+# Verastar
 
 **A verifiable evidence digest for clinicians.**
 
-You tell Paper Trellis your *north-star concepts* and your active research projects.
+*Vera* (truth) + *star* (your north stars): verified evidence, aimed at the concepts
+you steer by.
+
+You tell Verastar your *north-star concepts* and your active research projects.
 Every morning it hands you a digest of the last 1–3 days of literature that actually
 moves those north stars forward. Click the DOI, read it, download the PDF (if open
 access or your institution allows). If a paper earns its salt, save it into your
@@ -10,7 +13,7 @@ Knowledge Base. Once a week, a weekend digest surfaces the connections — betwe
 you read this week and the concepts you care about most.
 
 It is the app version of a system I already run by hand: a personal knowledge base, a
-context portfolio, and a daily/weekend research briefing. Paper Trellis makes it
+context portfolio, and a daily/weekend research briefing. Verastar makes it
 something any clinician can pick up.
 
 Built for **Built with Claude: Life Sciences** (Anthropic × Gladstone Institutes),
@@ -20,7 +23,7 @@ July 7–13, 2026 — **Build track**.
 
 ## The sacred core: verifiable, never fabricated
 
-Most "AI research digest" tools ask you to trust the model. Paper Trellis does the
+Most "AI research digest" tools ask you to trust the model. Verastar does the
 opposite. Two non-negotiable rules govern everything:
 
 1. **Quote-verification is the sacred core — built and protected first.**
@@ -30,7 +33,7 @@ opposite. Two non-negotiable rules govern everything:
    in the source, there is no badge.
 
 2. **Never fabricate a value or a source. Flag instead.**
-   If a claim can't be tied to verifiable source text, Paper Trellis does not smooth
+   If a claim can't be tied to verifiable source text, Verastar does not smooth
    over it or invent a plausible citation. It flags the gap and shows you exactly what
    it could and couldn't confirm.
 
@@ -56,7 +59,7 @@ This is the whole point. Provenance is the product, not a footer.
 
 ## Bring your own API key
 
-Paper Trellis runs on **your** Anthropic API key. You paste it in; the app uses it to
+Verastar runs on **your** Anthropic API key. You paste it in; the app uses it to
 do the work. No shared model bill, no lock-in, and your key and reading stay yours.
 
 ---

@@ -1,4 +1,4 @@
-# Paper Trellis — one-week build plan
+# Verastar — one-week build plan
 
 **Event:** Built with Claude: Life Sciences (Anthropic × Gladstone), Jul 7–13, 2026. Build track.
 **Named user:** A practicing clinician-researcher who steers by a handful of recurring
