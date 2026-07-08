@@ -1,0 +1,21 @@
+# Secrets — never commit an API key
+.env
+.env.*
+*.key
+secrets.json
+
+# Dependencies
+node_modules/
+__pycache__/
+.venv/
+venv/
+
+# Build output
+dist/
+build/
+.next/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
