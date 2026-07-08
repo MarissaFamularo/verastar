@@ -19,3 +19,6 @@ build/
 .DS_Store
 .vscode/
 .idea/
+
+# Machine-local Claude Code settings (keep launch.json, ignore local overrides)
+.claude/settings.local.json
