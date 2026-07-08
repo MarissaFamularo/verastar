@@ -25,6 +25,12 @@ describe('normalization primitives', () => {
   it('collapses whitespace and lowercases', () => {
     expect(normalize('  Hazard\n  Ratio  ')).toBe('hazard ratio')
   })
+  it('strips strict thousands separators but leaves a decimal comma alone', () => {
+    expect(normalize('502,157 participants')).toBe('502157 participants')
+    expect(normalize('1,234,567')).toBe('1234567')
+    expect(normalize('1,234.56')).toBe('1234.56') // trailing decimal preserved
+    expect(normalize('0,84')).toBe('0,84') // 2-digit group -> not thousands, untouched
+  })
 })
 
 describe('numeric tokenization (boundary-delimited)', () => {
@@ -238,6 +244,33 @@ describe('verify — extra precision guards', () => {
     const source = 'The effect was significant (P<0.001).'
     const v = verify(q({ value: 0.005, source_quote: 'significant (P<0.001)' }), source)
     expect(v.tier).toBe(TIERS.FLAGGED)
+  })
+
+  it('thousands separator: quote "502,157", claim 502157 -> verified (regression: live UK Biobank N)', () => {
+    const source = 'We used data from 502,157 UKBB participants for the external validation in the primary analysis.'
+    const v = verify(q({ value: 502157, source_quote: 'data from 502,157 UKBB participants' }), source)
+    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.flagged).toBe(false)
+  })
+
+  it('multi-group thousands: quote "1,234,567", claim 1234567 -> verified', () => {
+    const source = 'The database held 1,234,567 records at baseline.'
+    const v = verify(q({ value: 1234567, source_quote: 'held 1,234,567 records' }), source)
+    expect(v.tier).toBe(TIERS.FULL_TEXT)
+  })
+
+  it('[false-verify guard] thousands value off by one: claim 502158, source "502,157" -> flagged', () => {
+    const source = 'We used data from 502,157 UKBB participants.'
+    const v = verify(q({ value: 502158, source_quote: 'data from 502,157 UKBB participants' }), source)
+    expect(v.tier).toBe(TIERS.FLAGGED)
+    expect(v.badNums).toContain(502158)
+  })
+
+  it('[false-verify guard] thousands does not resurrect the degenerate quote: "8" inside "2,008" -> flagged', () => {
+    const source = 'The cohort of 2,008 patients was assembled across three centers.'
+    const v = verify(q({ value: 8, source_quote: '8' }), source)
+    expect(v.tier).toBe(TIERS.FLAGGED)
+    expect(v.consistent).toBe(false)
   })
 
   it('negative effect difference with negative CI bounds -> verified (regression: live STARDUST CRP)', () => {

@@ -21,15 +21,23 @@ const DASH_VARIANTS = /[‐‑‒–—−－]/g // ‐ ‑ ‒ – — − －
 // Interpunct / middle-dot decimals used by Lancet, EJVES, etc.: 0·84 -> 0.84.
 // Only between two digits, so it never touches a real bullet list.
 const INTERPUNCT_DECIMAL = /(\d)[·‧⋅∙•](\d)/g
+// Thousands separators in grouped integers: 502,157 -> 502157, 1,234,567 -> 1234567.
+// Scoped to STRICT grouping — 1–3 lead digits, then one-or-more comma-delimited groups of
+// EXACTLY 3 digits — so a decimal comma ("0,84", "1,5") is never a match and can't be
+// mis-read as an integer (that would risk a false-verify). A trailing period decimal is
+// preserved: "1,234.56" -> "1234.56" because the group match ends before the dot. Applied
+// identically to quote and source, so exact-substring location still lines up.
+const THOUSANDS_GROUP = /\b\d{1,3}(?:,\d{3})+\b/g
 
 // Normalize a string for matching: NFKC, unify dashes, middle-dot decimals -> period,
-// collapse whitespace, lowercase. Applied identically to quote and source text so the
-// two are compared on equal footing.
+// strip thousands separators, collapse whitespace, lowercase. Applied identically to quote
+// and source text so the two are compared on equal footing.
 export function normalize(str) {
   if (str == null) return ''
   let s = String(str).normalize('NFKC')
   s = s.replace(DASH_VARIANTS, '-')
   s = s.replace(INTERPUNCT_DECIMAL, '$1.$2')
+  s = s.replace(THOUSANDS_GROUP, (m) => m.replace(/,/g, ''))
   s = s.replace(/\s+/g, ' ').trim()
   return s.toLowerCase()
 }
