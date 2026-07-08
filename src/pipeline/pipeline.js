@@ -1,0 +1,161 @@
+// pipeline/pipeline.js — the orchestrator that wires the spine together:
+//   sources (fetch)  ->  extract (LLM, untrusted)  ->  verify (deterministic gate)
+//
+// This is also the spine-day TEST ORACLE (docs/VERIFICATION_SPEC.md#test-oracle). It runs
+// the REAL pipeline on the demo corpus — cached source docs would be fine, cached results
+// never are. The three conditions that must hold:
+//   - BASIL-3  HR 0.84            -> verified-full-text
+//   - STARDUST TcPO2 diff 11.2    -> verified-registry (matches CT.gov)
+//   - a corrupted value (HR 0.94) -> flagged, never charted
+
+import {
+  fetchPmcFullText,
+  fetchAbstracts,
+  fetchRegistry,
+  registryValue,
+  fetchCitation,
+  pmidToPmcid,
+  searchPubmed,
+} from './sources.js'
+import { extractQuantities } from './extract.js'
+import { verify } from './verify.js'
+
+// Public identifiers only — the app re-verifies every value live (docs/FACTS.md).
+export const DEMO_PAPERS = [
+  {
+    id: 'BASIL-3',
+    title: 'BASIL-3 (BMJ 2024) — CLTI, endovascular vs surgery',
+    pmid: '39993822',
+    pmcid: 'PMC11848676',
+    nct: null,
+    expect: 'verified-full-text',
+    headline: 'HR 0.84 (97.5% CI 0.61–1.16, P=0.22)',
+  },
+  {
+    id: 'STARDUST',
+    title: 'STARDUST (JAMA Netw Open 2024) — PAD',
+    pmid: '38470420',
+    pmcid: 'PMC10933706',
+    nct: 'NCT04881110',
+    expect: 'verified-registry',
+    headline: 'TcPO2 diff 11.2 mmHg (95% CI 8.0–14.5, P<0.001)',
+  },
+  {
+    id: 'ACST-2',
+    title: 'ACST-2 (Lancet 2021) — carotid CAS vs CEA',
+    pmid: '34469763',
+    pmcid: 'PMC8473558',
+    nct: null,
+    expect: 'verified-full-text',
+    headline: 'RR 1.16 (95% CI 0.86–1.57, p=0.33)',
+  },
+]
+
+// Fetch the best available source for a paper. Prefers PMC OA full text (resolving the
+// PMCID live when not supplied), and falls back to the ABSTRACT for the large majority of
+// papers that aren't open-access. Verifying against the abstract is the point: it lets the
+// digest cover all of today's literature, not just the OA subset — the DOI/PMID link is
+// the reader's path to the full text. Never throws past the flag.
+export async function fetchSource(paper) {
+  let pmcid = paper.pmcid
+  if (!pmcid && paper.pmid) {
+    try {
+      pmcid = await pmidToPmcid(paper.pmid)
+    } catch {
+      /* no OA mapping — abstract it is */
+    }
+  }
+  if (pmcid) {
+    try {
+      const full = await fetchPmcFullText(pmcid)
+      if (full.hasBody) return full
+    } catch (err) {
+      console.warn(`PMC full text failed for ${paper.id}:`, err.message)
+    }
+  }
+  const abstract = await fetchAbstracts(paper.pmid)
+  return { hasBody: false, text: abstract, tables: '', tier: 'abstract_only' }
+}
+
+// Live daily scan: search recent PubMed for the clinician's north stars and return paper
+// stubs the pipeline can run. Each north star is matched in title/abstract; results are
+// recent-first. This is the real product loop — mostly abstracts, exactly like a hand-run
+// morning digest.
+export async function searchPapers({ northStars = [], retmax = 10, days = 30 } = {}) {
+  const terms = northStars.length ? northStars : ['vascular surgery']
+  const term = terms.map((t) => `"${t.replace(/"/g, '')}"[tiab]`).join(' OR ')
+  const pmids = await searchPubmed(term, { retmax, days })
+  return pmids.map((pmid) => ({ id: pmid, pmid, pmcid: null, nct: null, title: null }))
+}
+
+// Run the full pipeline on one paper. Returns:
+//   { paper, design, source: {tier, hasBody}, rows: [{ quantity, verdict }], error? }
+export async function runPaper(paper, { onStage } = {}) {
+  const notify = (stage) => onStage?.(paper.id, stage)
+  // Fetch citation independently of the source so a failed source fetch still leaves us
+  // the citation (title, link) to show — a graceful degrade, not a bare error.
+  const citation = await fetchCitation(paper.pmid).catch(() => ({
+    pmid: paper.pmid,
+    url: `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`,
+    verified: false,
+  }))
+
+  try {
+    notify('fetching')
+    const source = await fetchSource(paper)
+
+    // Registry outcome (drives verified-registry) — only for trials we can value-match.
+    let regValue = null
+    if (paper.nct) {
+      try {
+        await fetchRegistry(paper.nct) // proves hasResults live; posted value from the locked map
+        regValue = registryValue(paper.nct)
+      } catch (err) {
+        console.warn(`CT.gov failed for ${paper.nct}:`, err.message)
+      }
+    }
+
+    notify('extracting')
+    // The model sees prose + flattened tables so it can cite table values.
+    const sourceText = source.tables ? `${source.text}\n\nTABLES:\n${source.tables}` : source.text
+    const extracted = await extractQuantities({ studyId: paper.id, sourceText })
+
+    notify('verifying')
+    const rows = extracted.quantities.map((quantity) => ({
+      quantity,
+      verdict: verify(quantity, { text: source.text, tables: source.tables }, {
+        sourceTier: source.tier,
+        registryValue: regValue,
+      }),
+    }))
+
+    notify('done')
+    return {
+      paper,
+      citation,
+      design: extracted.design,
+      source: { tier: source.tier, hasBody: source.hasBody },
+      sourceDoc: { text: source.text, tables: source.tables }, // kept for corrupt-reverify
+      rows,
+    }
+  } catch (err) {
+    notify('error')
+    return { paper, citation, design: null, source: null, rows: [], error: err.message }
+  }
+}
+
+// The corrupted-value oracle case. Takes a real, verified row from a run and mutates the
+// value by a digit, then re-verifies to prove the gate flags it. Returns null if the run
+// has no clean verified row to corrupt.
+export function corruptAndReverify(paperResult, sourceForReverify) {
+  const clean = paperResult.rows.find((r) => !r.verdict.flagged && r.quantity.value != null)
+  if (!clean) return null
+  // Nudge the last significant digit so it can't accidentally still match the source.
+  const corruptedValue = Number((clean.quantity.value + 0.1).toFixed(6))
+  const corrupted = { ...clean.quantity, value: corruptedValue }
+  return {
+    quantity: corrupted,
+    original: clean.quantity.value,
+    verdict: verify(corrupted, sourceForReverify, { sourceTier: paperResult.source.tier }),
+  }
+}
