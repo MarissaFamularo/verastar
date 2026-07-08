@@ -9,16 +9,14 @@
 // animation so it survives re-renders without relayout.
 
 import { useEffect, useRef } from 'react'
-import { categoryMap, colorOf } from '../lib/domains.js'
+import { domainColor, PROJECT_COLOR, DEFAULT_PAPER_COLOR } from '../lib/domains.js'
 
-// --- star colors: categories (the clinician's north stars + projects) each own a palette
-// color; a concept inherits the color of its parent category. Anchors get a warm-white core so
-// they still read as bright anchor stars, tinted by their category glow. `catMap` = category
-// colors keyed by anchor id (built from the current node set). ---
-function starColor(node, catMap) {
-  const c = colorOf(node, catMap)
-  const isAnchor = node.kind === 'northStar' || node.kind === 'project'
-  return { core: isAnchor ? '#fff6e0' : c, glow: c }
+// --- star colors: concepts take their DOMAIN color (her taxonomy); projects are the "Projects"
+// yellow with a warm-white core so they read as bright hubs. North stars aren't map nodes. ---
+function starColor(node) {
+  if (node.kind === 'project') return { core: '#fff6d8', glow: PROJECT_COLOR }
+  const c = node.domain ? domainColor(node.domain) : DEFAULT_PAPER_COLOR
+  return { core: c, glow: c }
 }
 const EDGE_CONFIRMED = '150,180,255'
 const EDGE_SUGGEST = '190,205,255'
@@ -221,7 +219,7 @@ export default function StarMap({
           let dx = s.x - o.x
           let dy = s.y - o.y
           let d2 = dx * dx + dy * dy || 0.01
-          const rep = 5200 / d2
+          const rep = 9000 / d2 // more spread so labels don't pile up
           const d = Math.sqrt(d2)
           fx += (dx / d) * rep
           fy += (dy / d) * rep
@@ -236,7 +234,7 @@ export default function StarMap({
         const dx = b.x - a.x
         const dy = b.y - a.y
         const d = Math.hypot(dx, dy) || 0.01
-        const rest = e.status === 'confirmed' ? 95 : 150
+        const rest = e.status === 'confirmed' ? 120 : 180
         const k = e.status === 'confirmed' ? 0.02 : 0.008
         const f = (d - rest) * k
         const ux = dx / d
@@ -382,13 +380,14 @@ export default function StarMap({
       }
 
       // nodes
-      const catMap = categoryMap(ns)
       for (const n of ns) {
         const s = sim.get(n.id)
         if (!s) continue
-        const col = starColor(n, catMap)
+        const col = starColor(n)
         const deg = degree.get(n.id) || 0
-        const baseR = (RADIUS[n.kind] || 5) * (1 + Math.min(deg, 8) * 0.1)
+        // size by connections (like her KG): well-linked concepts read much bigger. Projects a
+        // fixed modest hub size.
+        const baseR = n.kind === 'project' ? 7 : Math.min(14, 3.6 + 2.4 * Math.sqrt(deg))
         const tw = 0.85 + 0.15 * Math.sin(now * 0.002 + hash01(n.id) * 6.28)
         const isFocus = n.id === focusId
         const a = dim(n.id)
@@ -410,8 +409,8 @@ export default function StarMap({
         ctx.beginPath()
         ctx.arc(s.x, s.y, R, 0, 6.2832)
         ctx.fill()
-        // 4-point glint for the bright anchors
-        if (n.kind === 'northStar' || flare > 0.05) {
+        // 4-point glint for the bright hubs (projects + well-connected concepts)
+        if (n.kind === 'project' || deg >= 4 || flare > 0.05) {
           drawGlint(ctx, s.x, s.y, R * (2.4 + flare * 2), hexA('#ffffff', 0.6 * tw + flare))
         }
         if (isFocus) {
@@ -421,19 +420,23 @@ export default function StarMap({
           ctx.arc(s.x, s.y, R + 4, 0, 6.2832)
           ctx.stroke()
         }
-        // labels: anchors + concepts always; bare papers (legacy) only on focus/hover
-        const isAnchor = n.kind === 'northStar' || n.kind === 'project'
-        const showLabel = n.kind !== 'paper' || isFocus
-        if (showLabel) {
-          const label = isAnchor ? n.label : truncate(n.label, 34)
-          ctx.font = `${n.kind === 'northStar' ? 600 : 400} ${isAnchor ? 12 : 11}px ui-sans-serif, system-ui, sans-serif`
+        // labels: projects + concepts. When something is focused, only the focus + its neighbors
+        // keep labels (the rest fade to dots) so a dense map stays readable. A strong dark halo
+        // keeps text legible over the starfield.
+        const isProject = n.kind === 'project'
+        const showLabel = focusId ? neighbors.has(n.id) : true
+        if (showLabel && n.kind !== 'paper') {
+          const label = isProject ? n.label : truncate(n.label, 30)
+          ctx.font = `${isProject ? 600 : 500} ${isProject ? 12 : 11}px ui-sans-serif, system-ui, sans-serif`
           ctx.textAlign = 'center'
           ctx.textBaseline = 'top'
-          ctx.fillStyle = hexA('#e8efff', isFocus ? 0.98 : 0.72)
-          ctx.shadowColor = 'rgba(0,0,0,0.8)'
-          ctx.shadowBlur = 4
+          // dark halo: stroke the text first, then fill — reads over any background
+          ctx.lineJoin = 'round'
+          ctx.strokeStyle = 'rgba(4,7,15,0.92)'
+          ctx.lineWidth = 3.5
+          ctx.strokeText(label, s.x, s.y + R + 5)
+          ctx.fillStyle = hexA('#eef3ff', isFocus ? 1 : 0.82)
           ctx.fillText(label, s.x, s.y + R + 5)
-          ctx.shadowBlur = 0
         }
         ctx.globalAlpha = 1
       }
@@ -462,10 +465,9 @@ export default function StarMap({
     let added = false
     nodes.forEach((n, i) => {
       if (sim.has(n.id)) return
-      // seed anchors on a ring, content near center; deterministic jitter from the id
+      // seed projects on a ring, concepts spread across the field; deterministic jitter from id
       const ang = hash01(n.id) * 6.2832
-      const isAnchor = n.kind === 'northStar' || n.kind === 'project'
-      const rad = isAnchor ? 150 : 40 + hash01('r' + n.id) * 60
+      const rad = n.kind === 'project' ? 160 : 60 + hash01('r' + n.id) * 130
       sim.set(n.id, { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, vx: 0, vy: 0 })
       added = true
     })

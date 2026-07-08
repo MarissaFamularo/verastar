@@ -20,7 +20,7 @@ import {
   refreshStructuralSuggestions,
 } from '../pipeline/graph.js'
 import { proposeConnections } from '../pipeline/connect.js'
-import { categoryList, categoryMap, colorOf, categoryLabelOf } from '../lib/domains.js'
+import { DOMAINS, PROJECT_COLOR, domainColor, domainLabel } from '../lib/domains.js'
 import StarMap from './StarMap.jsx'
 
 const KIND_LABEL = { northStar: 'North star', project: 'Project', concept: 'Concept' }
@@ -64,10 +64,6 @@ export default function ConstellationView() {
     })()
   }, [])
 
-  const catMap = categoryMap(nodes)
-  const categories = categoryList(nodes)
-  const isAnchor = (n) => n?.kind === 'northStar' || n?.kind === 'project'
-
   const selected = nodes.find((n) => n.id === selectedId) || null
   const neighborsOf = (id) =>
     edges
@@ -75,15 +71,9 @@ export default function ConstellationView() {
       .map((e) => ({ edge: e, other: nodes.find((n) => n.id === (e.source === id ? e.target : e.source)) }))
       .filter((x) => x.other)
 
-  // The source papers filed under a node: a concept (by conceptId / its pmid set), or a category
-  // anchor holding papers directly (paper.category === anchor.id with no concept / its pmid set).
+  // The source papers filed under a concept (by conceptId, or the concept's pmid set).
   const sourcePapersOf = (node) =>
-    papers.filter(
-      (p) =>
-        p.conceptId === node.id ||
-        (isAnchor(node) && !p.conceptId && p.category === node.id) ||
-        (node.sourcePmids || []).includes(String(p.pmid)),
-    )
+    papers.filter((p) => p.conceptId === node.id || (node.sourcePmids || []).includes(String(p.pmid)))
 
   async function handleConfirm(edge) {
     setNote('')
@@ -208,29 +198,22 @@ export default function ConstellationView() {
                 Drag to pan, scroll to zoom. Click a concept star to read its synthesized summary and
                 source papers. Click a pulsing gold marker to confirm a proposed connection.
               </p>
-              {/* legend lives here (not over the map) so it never covers a low star. Colors are
-                  the clinician's own categories — each north star / project — and concepts take
-                  the color of the category they belong to. */}
+              {/* legend lives here (not over the map) so it never covers a low star. Concepts are
+                  colored by their DOMAIN; projects are yellow. Node size grows with connections. */}
               <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-800">
                 <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  Your categories
+                  Domains
                 </p>
-                {categories.length ? (
-                  <div className="grid grid-cols-1 gap-y-1">
-                    {categories.map((c) => (
-                      <div key={c.key} className="flex items-center gap-2">
-                        <ColorDot color={c.color} /> {c.label}
-                        <span className="text-[10px] text-slate-400">
-                          {c.kind === 'project' ? 'project' : 'north star'}
-                        </span>
-                      </div>
-                    ))}
+                <div className="grid grid-cols-1 gap-y-1">
+                  {DOMAINS.map((d) => (
+                    <div key={d.key} className="flex items-center gap-2">
+                      <ColorDot color={d.color} /> {d.label}
+                    </div>
+                  ))}
+                  <div className="mt-1 flex items-center gap-2 border-t border-slate-200 pt-1 dark:border-slate-800">
+                    <ColorDot color={PROJECT_COLOR} /> Project
                   </div>
-                ) : (
-                  <p className="text-xs italic text-slate-400">
-                    Add north stars and projects in your profile — they become your categories.
-                  </p>
-                )}
+                </div>
                 <p className="mt-2 border-t border-slate-200 pt-2 dark:border-slate-800">
                   <span className="text-amber-500 dark:text-amber-400">◌ pulsing</span> = proposed · click
                   to chart · solid = confirmed
@@ -240,12 +223,8 @@ export default function ConstellationView() {
           ) : (
             <NodePanel
               node={selected}
-              color={colorOf(selected, catMap)}
-              categoryLabel={
-                selected.kind === 'concept'
-                  ? categoryLabelOf(selected, catMap)
-                  : KIND_LABEL[selected.kind]
-              }
+              color={selected.kind === 'concept' ? domainColor(selected.domain) : PROJECT_COLOR}
+              categoryLabel={selected.kind === 'concept' ? domainLabel(selected.domain) : KIND_LABEL[selected.kind]}
               sources={sourcePapersOf(selected)}
               connections={neighborsOf(selected.id)}
               openPaper={openPaper}

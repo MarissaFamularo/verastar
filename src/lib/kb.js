@@ -1,25 +1,18 @@
 // lib/kb.js — pure search/filter for the Knowledge Base view.
 //
-// The KB mirrors the clinician's own graph hierarchy: categories (their north stars + projects)
-// → grouping nodes → source papers. A grouping node is either a CONCEPT (a finer topic beneath a
-// category) or a CATEGORY ANCHOR itself (when a paper's topic IS a north star, it files directly
-// under the anchor — no separate concept). Browsing lists the grouping nodes that hold papers,
-// optionally narrowed to one category, and searches title/summary/tags across both the group and
-// its papers. Kept pure (no store, no React) so it's unit-testable and the component just renders.
+// The KB is concept-first (mirroring the clinician's real KG): each concept node groups its source
+// papers under one synthesized summary and sits in one broad DOMAIN. Browsing = list the concepts
+// that hold papers (optionally narrowed to one domain) and search title/summary/tags across both
+// the concept and its source papers. Kept pure (no store, no React) so it's unit-testable.
 
 function hit(text, q) {
   if (!q) return true
   return String(text || '').toLowerCase().includes(q)
 }
 
-const isCategoryNode = (n) => n?.kind === 'northStar' || n?.kind === 'project'
-
-// A grouping node's category = itself (if it's an anchor) or its parent (if it's a concept).
-const categoryOf = (node) => (isCategoryNode(node) ? node.id : node.category)
-
-function groupFieldsMatch(node, q) {
-  if (hit(node.label, q) || hit(node.summary, q)) return true
-  return (node.tags || []).some((t) => hit(t, q))
+function conceptFieldsMatch(concept, q) {
+  if (hit(concept.label, q) || hit(concept.summary, q)) return true
+  return (concept.tags || []).some((t) => hit(t, q))
 }
 
 function paperFieldsMatch(paper, q) {
@@ -28,30 +21,28 @@ function paperFieldsMatch(paper, q) {
 }
 
 // Build the browsable KB.
-//   nodes  : all graph nodes (concepts + category anchors)
-//   papers : all saved KB papers
-//   opts   : { query, category }  — category '' / 'all' means no category filter; otherwise an
-//            anchor id (a north star / project)
+//   concepts : the concept nodes (graphNodes, kind 'concept')
+//   papers   : all saved KB papers
+//   opts     : { query, domain }  — domain '' / 'all' means no domain filter
 //
 // Returns { groups: [{ group, papers }], unfiled: [paper], counts }.
-//   - A paper's home node is its concept (conceptId), else the anchor it's filed directly under
-//     (paper.category with no conceptId), else any node whose sourcePmids lists it, else unfiled.
-//   - Only grouping nodes that actually hold papers are shown (bare categories are just filters).
-//   - Category filter narrows to groups (and unfiled papers) of that category.
-//   - A group shows if it OR any of its papers matches the query; a group-field/empty-query match
-//     shows all its papers, otherwise only the papers that matched.
-export function buildKB(nodes, papers, { query = '', category = '' } = {}) {
+//   - A paper's home is its concept (conceptId), else any concept whose sourcePmids lists it, else
+//     the unfiled bucket.
+//   - Only concepts that actually hold papers are shown.
+//   - Domain filter narrows to concepts of that domain (and unfiled papers of that domain).
+//   - A concept shows if it OR any of its papers matches the query; a concept-field/empty-query
+//     match shows all its papers, otherwise only the papers that matched.
+export function buildKB(concepts, papers, { query = '', domain = '' } = {}) {
   const q = query.trim().toLowerCase()
-  const catOk = (c) => !category || category === 'all' || c === category
-  const byId = new Map((nodes || []).map((n) => [n.id, n]))
+  const domainOk = (d) => !domain || domain === 'all' || d === domain
+  const byId = new Map((concepts || []).map((c) => [c.id, c]))
 
   const homeOf = (p) => {
     if (p.conceptId && byId.has(p.conceptId)) return p.conceptId
-    if (!p.conceptId && p.category && isCategoryNode(byId.get(p.category))) return p.category
-    return (nodes || []).find((n) => (n.sourcePmids || []).includes(String(p.pmid)))?.id || null
+    return (concepts || []).find((c) => (c.sourcePmids || []).includes(String(p.pmid)))?.id || null
   }
 
-  const grouped = new Map() // nodeId -> [paper]
+  const grouped = new Map()
   const filed = new Set()
   for (const p of papers || []) {
     const h = homeOf(p)
@@ -63,21 +54,21 @@ export function buildKB(nodes, papers, { query = '', category = '' } = {}) {
   }
 
   const groups = []
-  for (const node of nodes || []) {
-    const src = grouped.get(node.id) || []
-    if (!src.length) continue // bare categories/empty concepts aren't cards
-    if (!catOk(categoryOf(node))) continue
-    const selfMatch = groupFieldsMatch(node, q)
+  for (const concept of concepts || []) {
+    const src = grouped.get(concept.id) || []
+    if (!src.length) continue // empty concepts aren't cards
+    if (!domainOk(concept.domain)) continue
+    const selfMatch = conceptFieldsMatch(concept, q)
     const matchingPapers = src.filter((p) => paperFieldsMatch(p, q))
     if (!q || selfMatch || matchingPapers.length) {
-      groups.push({ group: node, papers: !q || selfMatch ? src : matchingPapers })
+      groups.push({ group: concept, papers: !q || selfMatch ? src : matchingPapers })
     }
   }
   groups.sort((a, b) => b.papers.length - a.papers.length || a.group.label.localeCompare(b.group.label))
 
   const unfiled = (papers || [])
     .filter((p) => !filed.has(p.id))
-    .filter((p) => catOk(p.category || ''))
+    .filter((p) => domainOk(p.domain))
     .filter((p) => paperFieldsMatch(p, q))
 
   return {
