@@ -31,20 +31,33 @@ export const TRIAGE_SCHEMA = {
   },
 }
 
-const SYSTEM = `You brief a busy clinician-researcher on today's new papers, in the style of a morning literature digest. For each paper you get its title, a snippet, the study design, and the results the app has INDEPENDENTLY VERIFIED against the source. Return per paper:
+// The app's integrity contract — output shape + the number-free two-channel rule. This is
+// NOT user-editable; it guarantees the digest prose never carries an unverified number.
+const OUTPUT_CONTRACT = `You brief a busy clinician-researcher on today's new papers, in the style of a morning literature digest. For each paper you get its title, a snippet, the study design, and the results the app has INDEPENDENTLY VERIFIED against the source. Return per paper:
 
-- score: integer 0–100 — fit to the clinician's north stars and active projects (100 = directly, importantly advances one; 0 = irrelevant). Drives ordering.
+- score: integer 0–100 — fit to the clinician's rubric, north stars, and active projects (100 = directly, importantly advances one; 0 = irrelevant). Drives ordering. Apply the rubric above as the deciding voice.
 - tier: integer 1–3 evidence strength. 1 = strongest (well-powered RCT, meta-analysis of RCTs, or a rigorous practice-relevant study); 2 = solid observational / cohort / smaller trial; 3 = limited (case series, single-arm, preliminary). Judge from study design, apparent sample size, and rigor.
 - finding: ONE plain sentence — what the study SHOWED, the takeaway a clinician would repeat to a colleague, stated directionally (improved / reduced / no significant difference / non-inferior / increased risk). Prefer the verified results; when a paper has no verified numeric results (e.g. a narrative review or methods piece), summarize its conclusion from the snippet instead. Never invent a specific result. EVERY paper gets a finding.
 - relevance: ONE short clause on why it matters to THIS clinician — name the specific north star or project it touches (e.g. "adjacent to your CLTI perfusion work" or "validates your hospital-free-days endpoint").
 
 HARD RULE: neither finding nor relevance may contain any number, effect size, hazard/risk ratio, confidence interval, p-value, percentage, or sample size. Convey magnitude and significance in words ("significantly improved", "roughly halved the risk", "no meaningful difference") — never with digits. The numbers are shown separately as verified facts.`
 
+// The clinician's own rubric leads; the fixed output contract follows. Editing the rubric
+// (in the steering profile) changes how papers score and rank.
+function buildSystem(rubric) {
+  const criteria = (rubric || '').trim()
+  const header = criteria
+    ? `The clinician's digest rubric — their editorial priorities, in their words. Treat it as the deciding voice on what ranks high and what to downrank:\n\n${criteria}\n\n---\n\n`
+    : ''
+  return header + OUTPUT_CONTRACT
+}
+
 // candidates: [{ id, title, summary, design, verified: [{name, value}] }]
 // Returns [{ id, score, tier, finding, relevance }]. One structured call on a cheap model.
 export async function triage({
   northStars = [],
   projects = [],
+  rubric = '',
   candidates,
   model = MODELS.triage,
   maxTokens = 8192,
@@ -64,7 +77,7 @@ export async function triage({
 
   const result = await extractStructured({
     model,
-    system: SYSTEM,
+    system: buildSystem(rubric),
     content,
     schema: TRIAGE_SCHEMA,
     maxTokens,
