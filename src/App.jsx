@@ -4,6 +4,7 @@ import { getProfile } from './lib/store.js'
 import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
 import SpineCheck from './components/SpineCheck.jsx'
+import ConstellationView from './components/ConstellationView.jsx'
 
 // Day-0 scaffold surface: paste your Anthropic key (BYOK, sessionStorage-only) and prove
 // the browser-direct round-trip works. Everything else hangs off this wiring.
@@ -14,6 +15,7 @@ export default function App() {
   const [reply, setReply] = useState('')
   const [error, setError] = useState('')
   const [onboarded, setOnboarded] = useState(null) // null = loading profile
+  const [view, setView] = useState('digest') // 'digest' | 'constellations'
 
   // First run shows the onboarding quiz; once a profile is saved we show the digest.
   useEffect(() => {
@@ -55,7 +57,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <div className="mx-auto max-w-2xl px-6 py-16">
+      <div className={`mx-auto px-6 py-16 ${view === 'constellations' && onboarded ? 'max-w-5xl' : 'max-w-2xl'}`}>
         <header className="mb-10">
           <h1 className="text-3xl font-semibold tracking-tight">Verastar</h1>
           <p className="mt-2 text-slate-600 dark:text-slate-400">
@@ -126,9 +128,36 @@ export default function App() {
           <OnboardingQuiz onDone={() => setOnboarded(true)} />
         ) : onboarded === true ? (
           <>
-            <NorthStars />
-            {/* Re-mount on key change so the disabled state tracks the saved key. */}
-            <SpineCheck key={saved ? 'keyed' : 'nokey'} />
+            {/* Digest (scan + steer) vs Constellations (the connected knowledge graph). */}
+            <div className="mt-8 inline-flex rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+              {[
+                ['digest', 'Digest'],
+                ['constellations', 'Constellations'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setView(id)}
+                  className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+                    view === id
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {view === 'digest' ? (
+              <>
+                <NorthStars />
+                {/* Re-mount on key change so the disabled state tracks the saved key. */}
+                <SpineCheck key={saved ? 'keyed' : 'nokey'} />
+              </>
+            ) : (
+              // Re-mount per visit so it re-syncs anchors + KB papers each time.
+              <ConstellationView key="constellations" />
+            )}
           </>
         ) : null}
       </div>

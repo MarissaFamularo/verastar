@@ -69,13 +69,14 @@ export async function fetchSource(paper) {
   if (pmcid) {
     try {
       const full = await fetchPmcFullText(pmcid)
-      if (full.hasBody) return full
+      if (full.hasBody) return { ...full, pmcid }
     } catch (err) {
       console.warn(`PMC full text failed for ${paper.id}:`, err.message)
     }
   }
   const abstract = await fetchAbstracts(paper.pmid)
-  return { hasBody: false, text: abstract, tables: '', tier: 'abstract_only' }
+  // pmcid may still be set (OA record with no parseable body) — keep it for the PDF link.
+  return { hasBody: false, text: abstract, tables: '', tier: 'abstract_only', pmcid: pmcid || null }
 }
 
 // Live daily scan: search recent PubMed for the clinician's north stars and return paper
@@ -158,7 +159,7 @@ export async function runPaper(paper, { onStage } = {}) {
       paper,
       citation,
       design: extracted.design,
-      source: { tier: source.tier, hasBody: source.hasBody },
+      source: { tier: source.tier, hasBody: source.hasBody, pmcid: source.pmcid || null },
       sourceDoc: { text: source.text, tables: source.tables }, // kept for corrupt-reverify
       rows,
     }

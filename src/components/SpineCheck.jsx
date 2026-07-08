@@ -10,6 +10,8 @@ import { getProfile, store } from '../lib/store.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates } from '../pipeline/select.js'
+import { analyzePaper, synthesizeConcept } from '../pipeline/concepts.js'
+import { loadConcepts, upsertConcept, setConceptSummary } from '../pipeline/graph.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
 
@@ -113,78 +115,133 @@ function scoreChip(score) {
 
 // The selection funnel surface: the wide candidate pool ranked by rubric fit, with the top
 // N pre-checked. The clinician confirms/adjusts the selection, then runs the digest on only
-// those — mirroring the ~50-candidates → ~10-kept step of a hand-run morning review.
-function CandidatePool({ candidates, selectedIds, onToggle, onRunDigest, onRescore, selecting, running }) {
+// those — mirroring the ~50-candidates → ~10-kept step of a hand-run morning review. Once a
+// digest exists the pool COLLAPSES (the digest is the centerpiece); reopening it lets you
+// check more papers and top up the digest later WITHOUT re-running the ones already done —
+// only the newly-checked papers go through the pipeline and append to the existing digest.
+function CandidatePool({
+  candidates,
+  selectedIds,
+  digestedIds,
+  open,
+  onToggleOpen,
+  onToggle,
+  onRunDigest,
+  onAddToDigest,
+  onRescore,
+  selecting,
+  running,
+}) {
+  const hasDigest = digestedIds.size > 0
   const chosen = candidates.filter((c) => selectedIds.has(c.id)).length
+  // papers checked but not yet run — the incremental additions.
+  const pending = candidates.filter((c) => selectedIds.has(c.id) && !digestedIds.has(c.id)).length
+  const available = candidates.filter((c) => !digestedIds.has(c.id)).length
+
   return (
     <div className="mt-5 rounded-lg border border-indigo-200 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">
-            Selection funnel — {candidates.length} candidates scored, {chosen} selected
+            Selection funnel — {candidates.length} candidates
+            {hasDigest ? `, ${digestedIds.size} in digest` : `, ${chosen} selected`}
           </h3>
           <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
-            Every recent match, ranked against your rubric. The top papers are pre-selected;
-            adjust below, then run the digest on just those.
+            {hasDigest
+              ? open
+                ? 'Check any others to add them to the digest — only the new ones run; the rest stay as they are.'
+                : `${available} more paper${available === 1 ? '' : 's'} available — open the list to add any without re-running the digest.`
+              : 'Every recent match, ranked against your rubric. The top papers are pre-selected; adjust below, then run the digest on just those.'}
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <button
-            onClick={onRescore}
-            disabled={selecting || running}
-            title="Re-score this same pool against your current rubric — no new search"
-            className="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-200 dark:hover:bg-indigo-900/40"
+            onClick={onToggleOpen}
+            className="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 dark:border-indigo-800 dark:text-indigo-200 dark:hover:bg-indigo-900/40"
           >
-            {selecting ? 'Re-ranking…' : 'Re-rank with current rubric'}
+            {open ? '▾ Hide list' : `▸ Show all ${candidates.length}`}
           </button>
-          <button
-            onClick={onRunDigest}
-            disabled={!chosen || selecting || running}
-            className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-          >
-            {running ? 'Running…' : `Run digest on ${chosen} selected`}
-          </button>
+          {open && (
+            <button
+              onClick={onRescore}
+              disabled={selecting || running}
+              title="Re-score this same pool against your current rubric — no new search"
+              className="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-200 dark:hover:bg-indigo-900/40"
+            >
+              {selecting ? 'Re-ranking…' : 'Re-rank with current rubric'}
+            </button>
+          )}
+          {open &&
+            (hasDigest ? (
+              <button
+                onClick={onAddToDigest}
+                disabled={!pending || selecting || running}
+                className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {running ? 'Adding…' : pending ? `Add ${pending} to digest` : 'Add to digest'}
+              </button>
+            ) : (
+              <button
+                onClick={onRunDigest}
+                disabled={!chosen || selecting || running}
+                className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {running ? 'Running…' : `Run digest on ${chosen} selected`}
+              </button>
+            ))}
         </div>
       </div>
 
-      <ol className="mt-3 max-h-96 space-y-1.5 overflow-y-auto pr-1">
-        {candidates.map((c, i) => {
-          const picked = selectedIds.has(c.id)
-          const types = (c.pubtypes || []).filter((t) => t && t !== 'Journal Article').join(' · ')
-          return (
-            <li
-              key={c.id}
-              className={`flex items-start gap-3 rounded-md border p-2.5 ${
-                picked
-                  ? 'border-indigo-300 bg-white dark:border-indigo-700 dark:bg-slate-900'
-                  : 'border-transparent bg-white/50 opacity-70 dark:bg-slate-900/40'
-              }`}
-            >
-              <label className="flex cursor-pointer items-center pt-0.5">
-                <input
-                  type="checkbox"
-                  checked={picked}
-                  onChange={() => onToggle(c.id)}
-                  className="h-4 w-4 accent-indigo-600"
-                />
-              </label>
-              <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${scoreChip(c.score)}`}>
-                {c.score}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium leading-snug text-slate-800 dark:text-slate-100">
-                  <span className="text-slate-400">{i + 1}.</span> {c.title}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {[c.journal, c.year].filter(Boolean).join(' · ')}
-                  {types && <span className="text-slate-400"> · {types}</span>}
-                </p>
-                {c.reason && <p className="mt-0.5 text-xs italic text-slate-500 dark:text-slate-400">{c.reason}</p>}
-              </div>
-            </li>
-          )
-        })}
-      </ol>
+      {open && (
+        <ol className="mt-3 max-h-96 space-y-1.5 overflow-y-auto pr-1">
+          {candidates.map((c, i) => {
+            const inDigest = digestedIds.has(c.id)
+            const picked = inDigest || selectedIds.has(c.id)
+            const types = (c.pubtypes || []).filter((t) => t && t !== 'Journal Article').join(' · ')
+            return (
+              <li
+                key={c.id}
+                className={`flex items-start gap-3 rounded-md border p-2.5 ${
+                  inDigest
+                    ? 'border-emerald-300 bg-white dark:border-emerald-800/70 dark:bg-slate-900'
+                    : picked
+                      ? 'border-indigo-300 bg-white dark:border-indigo-700 dark:bg-slate-900'
+                      : 'border-transparent bg-white/50 opacity-70 dark:bg-slate-900/40'
+                }`}
+              >
+                <label className={`flex items-center pt-0.5 ${inDigest ? 'cursor-default' : 'cursor-pointer'}`}>
+                  <input
+                    type="checkbox"
+                    checked={picked}
+                    disabled={inDigest || running}
+                    onChange={() => onToggle(c.id)}
+                    title={inDigest ? 'Already in the digest' : undefined}
+                    className={`h-4 w-4 ${inDigest ? 'accent-emerald-600' : 'accent-indigo-600'}`}
+                  />
+                </label>
+                <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${scoreChip(c.score)}`}>
+                  {c.score}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium leading-snug text-slate-800 dark:text-slate-100">
+                    <span className="text-slate-400">{i + 1}.</span> {c.title}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {[c.journal, c.year].filter(Boolean).join(' · ')}
+                    {types && <span className="text-slate-400"> · {types}</span>}
+                  </p>
+                  {c.reason && <p className="mt-0.5 text-xs italic text-slate-500 dark:text-slate-400">{c.reason}</p>}
+                </div>
+                {inDigest && (
+                  <span className="mt-0.5 shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                    in digest
+                  </span>
+                )}
+              </li>
+            )
+          })}
+        </ol>
+      )}
     </div>
   )
 }
@@ -195,6 +252,7 @@ export default function SpineCheck() {
   const [selecting, setSelecting] = useState(false) // selection funnel LLM call in flight
   const [candidates, setCandidates] = useState([]) // scored candidate pool (funnel output)
   const [selectedIds, setSelectedIds] = useState(() => new Set()) // ids chosen for the digest
+  const [poolOpen, setPoolOpen] = useState(true) // funnel expanded? collapses once a digest exists
   const [scanError, setScanError] = useState('')
   const [stages, setStages] = useState({})
   const [results, setResults] = useState([]) // runPaper results (live or showcase)
@@ -212,8 +270,10 @@ export default function SpineCheck() {
     store.all('papers').then((papers) => setSavedIds(new Set((papers || []).map((p) => p.id))))
   }, [])
 
-  // Deposit / withdraw a paper to the Knowledge Base — the citation, the finding, and the
-  // app-verified numbers, persisted locally. (The KB browsing view is still to come.)
+  // Deposit / withdraw a paper to the Knowledge Base — the citation, finding, relevance, the
+  // app-verified numbers, and the FULL fetched source text (no longer truncated), persisted
+  // locally. The save is instant; Claude auto-classifies the domain + topic tags in the
+  // background (she prunes later) and the record is patched when they arrive.
   async function toggleSave(res, take, verifiedRows, title) {
     const id = res.paper.id
     if (savedIds.has(id)) {
@@ -225,6 +285,7 @@ export default function SpineCheck() {
       })
       return
     }
+    const pmcid = res.source?.pmcid || null
     const record = {
       id,
       pmid: res.paper.pmid,
@@ -234,11 +295,47 @@ export default function SpineCheck() {
       finding: take?.finding ?? '',
       relevance: take?.relevance ?? '',
       quantities: verifiedRows.map((r) => ({ ...r.quantity, tier: r.verdict.tier })),
-      abstract: (res.sourceDoc?.text || '').slice(0, 6000),
+      fullText: res.sourceDoc?.text || '', // untruncated (was sliced to 6000)
+      tables: res.sourceDoc?.tables || '',
+      pdfUrl: pmcid ? `https://www.ncbi.nlm.nih.gov/pmc/articles/${pmcid}/pdf/` : null,
+      domain: null, // filled by the background analyze below
+      tags: [],
+      conceptId: null, // set once analyzed + filed under a concept star
+      notes: '', // clinician's own notes — editable in the KB view
       savedAt: new Date().toISOString(),
     }
     await store.put('papers', id, record)
     setSavedIds((prev) => new Set(prev).add(id))
+
+    // Background: file the paper under a concept star (create/reuse), then re-synthesize that
+    // concept's evidence summary from all its source papers. Never blocks the save; re-checks
+    // the paper still exists (she may have un-saved it) before patching.
+    ;(async () => {
+      try {
+        const existing = await loadConcepts()
+        const { concept, domain, tags } = await analyzePaper({
+          paper: { title, finding: record.finding, relevance: record.relevance, text: record.fullText },
+          concepts: existing.map((c) => ({ name: c.label, domain: c.domain })),
+        })
+        const conceptNode = await upsertConcept({ name: concept, domain, tags, sourcePmids: [id] })
+        const current = await store.get('papers', id)
+        if (!current) return // un-saved while we were working
+        await store.put('papers', id, { ...current, domain, tags, conceptId: conceptNode.id })
+
+        // Re-synthesize the concept summary from every saved paper filed under it.
+        const all = (await store.all('papers')) || []
+        const members = all.filter(
+          (p) => p.conceptId === conceptNode.id || (conceptNode.sourcePmids || []).includes(String(p.pmid)),
+        )
+        const summary = await synthesizeConcept({
+          concept: conceptNode,
+          papers: members.map((p) => ({ title: p.title, finding: p.finding })),
+        })
+        if (summary) await setConceptSummary(conceptNode.id, summary)
+      } catch (err) {
+        console.warn('Concept filing failed (paper still saved):', err.message)
+      }
+    })()
   }
 
   // Open the source panel for a located quote, picking the corpus (prose/table) it
@@ -256,17 +353,24 @@ export default function SpineCheck() {
   }
 
   // Run a list of papers through the pipeline, then rank + summarize them. Shared by the
-  // live scan and the reference-proof showcase.
-  async function runList(papers, { injectCorrupt = false } = {}) {
+  // live scan, the reference-proof showcase, and incremental "add to digest". In append mode
+  // we keep the existing results and only run papers not already in the digest — so topping
+  // up later never re-extracts (the expensive Opus step) the papers already done.
+  async function runList(papers, { injectCorrupt = false, append = false } = {}) {
     setRunning(true)
-    setResults([])
-    setStages({})
-    setTriaged({})
-    setExpanded({})
+    const base = append ? results : []
+    if (!append) {
+      setResults([])
+      setStages({})
+      setTriaged({})
+      setExpanded({})
+    }
     const onStage = (id, stage) => setStages((prev) => ({ ...prev, [id]: stage }))
 
-    const collected = []
-    for (const paper of papers) {
+    const existingIds = new Set(base.map((r) => r.paper.id))
+    const toRun = papers.filter((p) => !existingIds.has(p.id))
+    const collected = [...base]
+    for (const paper of toRun) {
       const res = await runPaper(paper, { onStage })
       // Showcase only: prove the gate rejects a corrupted value on the first clean paper.
       if (injectCorrupt && !res.error && collected.every((r) => !r.corrupt)) {
@@ -336,6 +440,7 @@ export default function SpineCheck() {
     setResults([])
     setTriaged({})
     setCandidates([])
+    setPoolOpen(true) // fresh scan → show the funnel expanded again
     setSearching(true)
     let pool = []
     try {
@@ -375,14 +480,27 @@ export default function SpineCheck() {
   }
 
   // The product loop, step 2: run the verify pipeline on ONLY the selected candidates,
-  // then rank + summarize them. This is where the (expensive) extraction happens.
+  // then rank + summarize them. This is where the (expensive) extraction happens. Once it's
+  // done the funnel collapses so the digest itself is the centerpiece.
   async function runDigest() {
     const chosen = candidates.filter((c) => selectedIds.has(c.id))
     if (!chosen.length) return
     await runList(chosen, { injectCorrupt: false })
+    setPoolOpen(false)
+  }
+
+  // Top up an existing digest: run ONLY the newly-checked candidates and append them, then
+  // re-rank the combined set. The papers already in the digest are never re-run.
+  async function addToDigest() {
+    const digested = new Set(results.map((r) => r.paper.id))
+    const additions = candidates.filter((c) => selectedIds.has(c.id) && !digested.has(c.id))
+    if (!additions.length) return
+    await runList(additions, { append: true })
   }
 
   function toggleCandidate(id) {
+    // Papers already in the digest are locked in — you add more, you don't uncheck done work.
+    if (results.some((r) => r.paper.id === id)) return
     setSelectedIds((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
@@ -402,6 +520,8 @@ export default function SpineCheck() {
   const ordered = [...results].sort(
     (a, b) => (triaged[b.paper.id]?.score ?? -1) - (triaged[a.paper.id]?.score ?? -1),
   )
+  // Which candidates are already in the digest (locked in; can't be re-run, only added to).
+  const digestedIds = new Set(results.map((r) => r.paper.id))
 
   return (
     <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -467,8 +587,12 @@ export default function SpineCheck() {
         <CandidatePool
           candidates={candidates}
           selectedIds={selectedIds}
+          digestedIds={digestedIds}
+          open={poolOpen}
+          onToggleOpen={() => setPoolOpen((o) => !o)}
           onToggle={toggleCandidate}
           onRunDigest={runDigest}
+          onAddToDigest={addToDigest}
           onRescore={rescore}
           selecting={selecting}
           running={running}
