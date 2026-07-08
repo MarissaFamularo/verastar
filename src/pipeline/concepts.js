@@ -11,7 +11,6 @@
 //     same evidence-careful instinct as the verifier; specific numbers stay with each source).
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
-import { DOMAINS, DOMAIN_KEYS } from '../lib/domains.js'
 
 // concept id from its name — stable slug so re-using the same name collapses to one node.
 export function conceptId(name) {
@@ -25,35 +24,41 @@ export function conceptId(name) {
   )
 }
 
-// --- analyze a deposited paper: concept + domain + tags ---
+// --- analyze a deposited paper: category (a north star / project) + concept + tags ---
 
 export const ANALYZE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['concept', 'domain', 'tags'],
+  required: ['category', 'concept', 'tags'],
   properties: {
-    concept: { type: 'string' }, // topic-level concept name (existing verbatim, or new)
-    domain: { type: 'string' }, // one of the domain keys
+    category: { type: 'string' }, // one of the clinician's north stars / projects (verbatim), or ""
+    concept: { type: 'string' }, // topic-level concept name (existing verbatim, a category name, or new)
     tags: { type: 'array', items: { type: 'string' } },
   },
 }
 
-const ANALYZE_SYSTEM = `You file papers into a vascular surgeon-scientist's concept-based knowledge graph. A concept is a topic-level "wiki" node (title-case, 2–6 words) that groups several papers — e.g. "CLTI Management", "Multidisciplinary Team for Diabetic Foot", "Carotid Revascularization", "LLM Clinical Applications". For the given paper return:
+const ANALYZE_SYSTEM = `You file papers into a clinician-scientist's OWN knowledge graph. The graph is organized by THEIR steering themes — their north stars and projects (the "categories") — not by any generic taxonomy. Under each category sit topic-level "concept" nodes (title-case, 2–6 words) that group several papers, e.g. "CLTI Risk Stratification", "Multidisciplinary Team for Diabetic Foot". For the given paper return:
 
-- concept: the SINGLE concept it belongs under. You are given the existing concepts — if the paper fits one, return that concept's name VERBATIM (so it groups there). Otherwise invent a new, reusable topic-level concept name at the same granularity (not too broad like "Vascular Surgery", not too narrow like the paper's exact title).
-- domain: the single best-fit domain, returned as its key. Domains:
-${DOMAINS.map((d) => `  - "${d.key}": ${d.label}`).join('\n')}
+- category: the SINGLE best-fit theme from the clinician's north stars / projects, returned as its label VERBATIM from the list provided. If NONE genuinely fit, return "" (empty).
+- concept: the topic-level concept the paper belongs under.
+    • If the paper's topic is essentially the SAME as its category (i.e. the category itself is the right level — nothing finer is warranted), return the category's label VERBATIM. (The paper then files directly under that north star / project — do NOT invent a near-duplicate concept.)
+    • Otherwise, if it fits an EXISTING concept, return that concept's name VERBATIM. Failing that, mint a new reusable concept name FINER than the category but not as narrow as the paper's exact title.
 - tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by.
 
-Prefer reusing an existing concept over minting a near-duplicate.`
+Prefer reusing an existing category and concept over minting near-duplicates.`
 
-// Analyze a paper. `paper` = { title, finding, relevance, text? }; `concepts` = existing
-// [{ name, domain }]. Returns { concept, domain, tags } (domain validated to a real key).
-export async function analyzePaper({ paper, concepts = [], model = MODELS.triage, maxTokens = 1024 }) {
+// Analyze a paper. `paper` = { title, finding, relevance, text? }; `categories` = the profile's
+// [{ label, kind }] north stars + projects; `concepts` = existing [{ name, category }]. Returns
+// { category, concept, tags } — category validated to a provided label (verbatim) or '' .
+export async function analyzePaper({ paper, categories = [], concepts = [], model = MODELS.triage, maxTokens = 1024 }) {
+  const cats = categories.length
+    ? categories.map((c) => `  - "${c.label}" (${c.kind === 'project' ? 'project' : 'north star'})`).join('\n')
+    : '  (none — the clinician has no north stars/projects yet)'
   const existing = concepts.length
-    ? concepts.map((c) => `- "${c.name}"${c.domain ? ` (${c.domain})` : ''}`).join('\n')
+    ? concepts.map((c) => `- "${c.name}"${c.category ? ` (under ${c.category})` : ''}`).join('\n')
     : '(none yet — mint the first concept)'
   const content =
+    `CLINICIAN'S CATEGORIES (north stars & projects):\n${cats}\n\n` +
     `EXISTING CONCEPTS:\n${existing}\n\n` +
     `PAPER\nTitle: ${paper.title || '(untitled)'}\n` +
     (paper.finding ? `Finding: ${paper.finding}\n` : '') +
@@ -68,13 +73,20 @@ export async function analyzePaper({ paper, concepts = [], model = MODELS.triage
     maxTokens,
     thinking: { type: 'disabled' },
   })
-  const domain = DOMAIN_KEYS.includes(r.domain) ? r.domain : DOMAIN_KEYS[0]
+  // Validate the category against the provided labels (case-insensitive) so a stray/hallucinated
+  // label can't create a phantom category; recover the verbatim label + kind.
+  const norm = (s) => (s || '').trim().toLowerCase()
+  const matched = categories.find((c) => norm(c.label) === norm(r.category)) || null
   const seen = new Set()
   const tags = (r.tags || [])
     .map((t) => (t || '').trim().toLowerCase())
     .filter((t) => t && !seen.has(t) && seen.add(t))
     .slice(0, 6)
-  return { concept: (r.concept || '').trim() || 'Uncategorized', domain, tags }
+  return {
+    category: matched, // { label, kind } | null
+    concept: (r.concept || '').trim() || 'Uncategorized',
+    tags,
+  }
 }
 
 // --- synthesize a concept's evidence summary from its source papers ---

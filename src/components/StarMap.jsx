@@ -9,15 +9,16 @@
 // animation so it survives re-renders without relayout.
 
 import { useEffect, useRef } from 'react'
-import { domainColor, PROJECT_COLOR, NORTHSTAR_COLOR, DEFAULT_PAPER_COLOR } from '../lib/domains.js'
+import { categoryMap, colorOf } from '../lib/domains.js'
 
-// --- star colors: north stars are the radiant gold steering anchors; projects echo her
-// "Projects" yellow; paper stars take the color of the clinician's own domain taxonomy. ---
-function starColor(node) {
-  if (node.kind === 'northStar') return { core: '#fff4cf', glow: NORTHSTAR_COLOR }
-  if (node.kind === 'project') return { core: '#fff2c2', glow: PROJECT_COLOR }
-  const c = node.domain ? domainColor(node.domain) : DEFAULT_PAPER_COLOR
-  return { core: c, glow: c }
+// --- star colors: categories (the clinician's north stars + projects) each own a palette
+// color; a concept inherits the color of its parent category. Anchors get a warm-white core so
+// they still read as bright anchor stars, tinted by their category glow. `catMap` = category
+// colors keyed by anchor id (built from the current node set). ---
+function starColor(node, catMap) {
+  const c = colorOf(node, catMap)
+  const isAnchor = node.kind === 'northStar' || node.kind === 'project'
+  return { core: isAnchor ? '#fff6e0' : c, glow: c }
 }
 const EDGE_CONFIRMED = '150,180,255'
 const EDGE_SUGGEST = '190,205,255'
@@ -381,10 +382,11 @@ export default function StarMap({
       }
 
       // nodes
+      const catMap = categoryMap(ns)
       for (const n of ns) {
         const s = sim.get(n.id)
         if (!s) continue
-        const col = starColor(n)
+        const col = starColor(n, catMap)
         const deg = degree.get(n.id) || 0
         const baseR = (RADIUS[n.kind] || 5) * (1 + Math.min(deg, 8) * 0.1)
         const tw = 0.85 + 0.15 * Math.sin(now * 0.002 + hash01(n.id) * 6.28)

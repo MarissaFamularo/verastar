@@ -10,8 +10,7 @@ import { getProfile, store } from '../lib/store.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates } from '../pipeline/select.js'
-import { analyzePaper, synthesizeConcept } from '../pipeline/concepts.js'
-import { loadConcepts, upsertConcept, setConceptSummary } from '../pipeline/graph.js'
+import { filePaper, synthesizeGroup } from '../pipeline/deposit.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
 
@@ -298,40 +297,23 @@ export default function SpineCheck() {
       fullText: res.sourceDoc?.text || '', // untruncated (was sliced to 6000)
       tables: res.sourceDoc?.tables || '',
       pdfUrl: pmcid ? `https://www.ncbi.nlm.nih.gov/pmc/articles/${pmcid}/pdf/` : null,
-      domain: null, // filled by the background analyze below
+      category: null, // parent north-star/project anchor id — filled by the background analyze
       tags: [],
-      conceptId: null, // set once analyzed + filed under a concept star
+      conceptId: null, // the concept node it's filed under (null when filed directly under the anchor)
       notes: '', // clinician's own notes — editable in the KB view
       savedAt: new Date().toISOString(),
     }
     await store.put('papers', id, record)
     setSavedIds((prev) => new Set(prev).add(id))
 
-    // Background: file the paper under a concept star (create/reuse), then re-synthesize that
-    // concept's evidence summary from all its source papers. Never blocks the save; re-checks
-    // the paper still exists (she may have un-saved it) before patching.
+    // Background: file the paper into the clinician's OWN graph (categories = their north stars /
+    // projects; a paper files under a finer concept beneath one, or directly under the anchor when
+    // its topic IS a north star), then re-synthesize the grouping node's summary. Shared with the
+    // "re-file" action via pipeline/deposit.js. Never blocks the save.
     ;(async () => {
       try {
-        const existing = await loadConcepts()
-        const { concept, domain, tags } = await analyzePaper({
-          paper: { title, finding: record.finding, relevance: record.relevance, text: record.fullText },
-          concepts: existing.map((c) => ({ name: c.label, domain: c.domain })),
-        })
-        const conceptNode = await upsertConcept({ name: concept, domain, tags, sourcePmids: [id] })
-        const current = await store.get('papers', id)
-        if (!current) return // un-saved while we were working
-        await store.put('papers', id, { ...current, domain, tags, conceptId: conceptNode.id })
-
-        // Re-synthesize the concept summary from every saved paper filed under it.
-        const all = (await store.all('papers')) || []
-        const members = all.filter(
-          (p) => p.conceptId === conceptNode.id || (conceptNode.sourcePmids || []).includes(String(p.pmid)),
-        )
-        const summary = await synthesizeConcept({
-          concept: conceptNode,
-          papers: members.map((p) => ({ title: p.title, finding: p.finding })),
-        })
-        if (summary) await setConceptSummary(conceptNode.id, summary)
+        const res = await filePaper(record)
+        if (res?.groupId) await synthesizeGroup(res.groupId, { fileUnderAnchor: res.fileUnderAnchor })
       } catch (err) {
         console.warn('Concept filing failed (paper still saved):', err.message)
       }

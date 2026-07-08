@@ -20,7 +20,7 @@ import {
   refreshStructuralSuggestions,
 } from '../pipeline/graph.js'
 import { proposeConnections } from '../pipeline/connect.js'
-import { DOMAINS, PROJECT_COLOR, NORTHSTAR_COLOR, domainLabel, domainColor } from '../lib/domains.js'
+import { categoryList, categoryMap, colorOf, categoryLabelOf } from '../lib/domains.js'
 import StarMap from './StarMap.jsx'
 
 const KIND_LABEL = { northStar: 'North star', project: 'Project', concept: 'Concept' }
@@ -64,6 +64,10 @@ export default function ConstellationView() {
     })()
   }, [])
 
+  const catMap = categoryMap(nodes)
+  const categories = categoryList(nodes)
+  const isAnchor = (n) => n?.kind === 'northStar' || n?.kind === 'project'
+
   const selected = nodes.find((n) => n.id === selectedId) || null
   const neighborsOf = (id) =>
     edges
@@ -71,10 +75,14 @@ export default function ConstellationView() {
       .map((e) => ({ edge: e, other: nodes.find((n) => n.id === (e.source === id ? e.target : e.source)) }))
       .filter((x) => x.other)
 
-  // The source papers filed under a concept (by conceptId, or by the concept's pmid set).
-  const sourcePapersOf = (concept) =>
+  // The source papers filed under a node: a concept (by conceptId / its pmid set), or a category
+  // anchor holding papers directly (paper.category === anchor.id with no concept / its pmid set).
+  const sourcePapersOf = (node) =>
     papers.filter(
-      (p) => p.conceptId === concept.id || (concept.sourcePmids || []).includes(String(p.pmid)),
+      (p) =>
+        p.conceptId === node.id ||
+        (isAnchor(node) && !p.conceptId && p.category === node.id) ||
+        (node.sourcePmids || []).includes(String(p.pmid)),
     )
 
   async function handleConfirm(edge) {
@@ -181,28 +189,6 @@ export default function ConstellationView() {
             onConfirmEdge={handleConfirm}
             onBackground={() => setSelectedId(null)}
           />
-          {/* legend — the clinician's own domain taxonomy (concepts colored by domain) */}
-          <div className="pointer-events-none absolute bottom-3 left-3 max-w-[280px] rounded-lg bg-black/45 px-3 py-2 text-[11px] text-slate-200 backdrop-blur-sm">
-            <p className="mb-1 font-semibold uppercase tracking-wide text-slate-400">Domains</p>
-            <div className="grid grid-cols-1 gap-y-0.5">
-              {DOMAINS.map((d) => (
-                <div key={d.key} className="flex items-center gap-1.5">
-                  <ColorDot color={d.color} /> {d.label}
-                </div>
-              ))}
-              <div className="mt-1 flex items-center gap-x-3 gap-y-0.5 border-t border-white/10 pt-1">
-                <span className="flex items-center gap-1.5">
-                  <ColorDot color={NORTHSTAR_COLOR} /> North star
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <ColorDot color={PROJECT_COLOR} /> Project
-                </span>
-              </div>
-            </div>
-            <div className="mt-1.5 border-t border-white/10 pt-1 text-slate-400">
-              <span className="text-amber-300">◌ pulsing</span> = proposed · click to chart · solid = confirmed
-            </div>
-          </div>
           {nodes.length === 0 && busy !== 'loading' && (
             <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
               <p className="text-sm text-slate-400">
@@ -222,10 +208,44 @@ export default function ConstellationView() {
                 Drag to pan, scroll to zoom. Click a concept star to read its synthesized summary and
                 source papers. Click a pulsing gold marker to confirm a proposed connection.
               </p>
+              {/* legend lives here (not over the map) so it never covers a low star. Colors are
+                  the clinician's own categories — each north star / project — and concepts take
+                  the color of the category they belong to. */}
+              <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-800">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Your categories
+                </p>
+                {categories.length ? (
+                  <div className="grid grid-cols-1 gap-y-1">
+                    {categories.map((c) => (
+                      <div key={c.key} className="flex items-center gap-2">
+                        <ColorDot color={c.color} /> {c.label}
+                        <span className="text-[10px] text-slate-400">
+                          {c.kind === 'project' ? 'project' : 'north star'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs italic text-slate-400">
+                    Add north stars and projects in your profile — they become your categories.
+                  </p>
+                )}
+                <p className="mt-2 border-t border-slate-200 pt-2 dark:border-slate-800">
+                  <span className="text-amber-500 dark:text-amber-400">◌ pulsing</span> = proposed · click
+                  to chart · solid = confirmed
+                </p>
+              </div>
             </div>
-          ) : selected.kind === 'concept' ? (
-            <ConceptPanel
-              concept={selected}
+          ) : (
+            <NodePanel
+              node={selected}
+              color={colorOf(selected, catMap)}
+              categoryLabel={
+                selected.kind === 'concept'
+                  ? categoryLabelOf(selected, catMap)
+                  : KIND_LABEL[selected.kind]
+              }
               sources={sourcePapersOf(selected)}
               connections={neighborsOf(selected.id)}
               openPaper={openPaper}
@@ -236,22 +256,9 @@ export default function ConstellationView() {
               onRemove={() => handleRemoveNode(selected.id)}
               keySet={keySet}
               proposing={busy === 'proposing'}
+              canAsk={selected.kind === 'concept'}
+              canRemove={selected.kind === 'concept'}
             />
-          ) : (
-            // anchor (north star / project)
-            <div>
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                {KIND_LABEL[selected.kind]}
-              </span>
-              <h3 className="mt-0.5 font-semibold leading-snug text-slate-800 dark:text-slate-100">
-                {selected.label}
-              </h3>
-              <ConnectionList
-                connections={neighborsOf(selected.id)}
-                onConfirm={handleConfirm}
-                onDismiss={handleDismiss}
-              />
-            </div>
           )}
         </div>
       </div>
@@ -259,11 +266,14 @@ export default function ConstellationView() {
   )
 }
 
-// The concept node's detail — mirrors the clinician's KG panel: colored domain header, title,
-// synthesized summary, the source papers (each with a Summary toggle + Open source / PDF),
-// tags, and connections.
-function ConceptPanel({
-  concept,
+// A node's detail — mirrors the clinician's KG panel: colored category header, title, synthesized
+// summary, source papers (each with a Summary toggle + Open source / PDF), tags, and connections.
+// Works for a concept (colored by its parent category) OR a category anchor holding papers
+// directly (colored by itself). `canAsk`/`canRemove` gate the concept-only actions.
+function NodePanel({
+  node,
+  color,
+  categoryLabel,
   sources,
   connections,
   openPaper,
@@ -274,32 +284,31 @@ function ConceptPanel({
   onRemove,
   keySet,
   proposing,
+  canAsk,
+  canRemove,
 }) {
   return (
     <div>
       <div className="flex items-start justify-between gap-2">
-        <span
-          className="text-[11px] font-bold uppercase tracking-wide"
-          style={{ color: domainColor(concept.domain) }}
-        >
-          {domainLabel(concept.domain)}
+        <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
+          {categoryLabel}
         </span>
       </div>
       <h3 className="mt-1 text-base font-semibold leading-snug text-slate-800 dark:text-slate-100">
-        {concept.label}
+        {node.label}
       </h3>
 
-      {concept.summary ? (
-        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{concept.summary}</p>
+      {node.summary ? (
+        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{node.summary}</p>
       ) : (
         <p className="mt-2 text-sm italic text-slate-400">
           Summary pending — add another paper or re-open after the scan to synthesize it.
         </p>
       )}
 
-      {concept.tags?.length > 0 && (
+      {node.tags?.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {concept.tags.map((t) => (
+          {node.tags.map((t) => (
             <span
               key={t}
               className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
@@ -310,7 +319,7 @@ function ConceptPanel({
         </div>
       )}
 
-      {keySet && (
+      {canAsk && keySet && (
         <button
           onClick={onAskClaude}
           disabled={proposing}
@@ -375,9 +384,11 @@ function ConceptPanel({
 
       <ConnectionList connections={connections} onConfirm={onConfirm} onDismiss={onDismiss} />
 
-      <button onClick={onRemove} className="mt-4 text-xs font-medium text-rose-500 hover:underline">
-        Remove concept from map
-      </button>
+      {canRemove && (
+        <button onClick={onRemove} className="mt-4 text-xs font-medium text-rose-500 hover:underline">
+          Remove concept from map
+        </button>
+      )}
     </div>
   )
 }

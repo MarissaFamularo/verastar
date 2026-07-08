@@ -5,6 +5,7 @@ import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
 import SpineCheck from './components/SpineCheck.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
+import KnowledgeBase from './components/KnowledgeBase.jsx'
 
 // Day-0 scaffold surface: paste your Anthropic key (BYOK, sessionStorage-only) and prove
 // the browser-direct round-trip works. Everything else hangs off this wiring.
@@ -15,7 +16,7 @@ export default function App() {
   const [reply, setReply] = useState('')
   const [error, setError] = useState('')
   const [onboarded, setOnboarded] = useState(null) // null = loading profile
-  const [view, setView] = useState('digest') // 'digest' | 'constellations'
+  const [view, setView] = useState('digest') // 'digest' | 'constellations' | 'kb'
 
   // First run shows the onboarding quiz; once a profile is saved we show the digest.
   useEffect(() => {
@@ -132,6 +133,7 @@ export default function App() {
             <div className="mt-8 inline-flex rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
               {[
                 ['digest', 'Digest'],
+                ['kb', 'Knowledge Base'],
                 ['constellations', 'Constellations'],
               ].map(([id, label]) => (
                 <button
@@ -154,6 +156,9 @@ export default function App() {
                 {/* Re-mount on key change so the disabled state tracks the saved key. */}
                 <SpineCheck key={saved ? 'keyed' : 'nokey'} />
               </>
+            ) : view === 'kb' ? (
+              // Re-mount per visit so it re-loads saved papers + concepts each time.
+              <KnowledgeBase key="kb" />
             ) : (
               // Re-mount per visit so it re-syncs anchors + KB papers each time.
               <ConstellationView key="constellations" />

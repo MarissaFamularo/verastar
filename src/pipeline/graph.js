@@ -12,6 +12,7 @@
 
 import { store } from '../lib/store.js'
 import { conceptId } from './concepts.js'
+import { paletteColor } from '../lib/domains.js'
 
 // --- id schemes (stable, so re-syncing never duplicates a node) ---
 
@@ -37,13 +38,17 @@ export async function loadGraph() {
 
 // --- anchor sync: the profile is the source of truth for north-star + project stars ---
 
-// Ensure a star exists for every current north star and project. Add-only: we never delete
-// an anchor the user may have wired papers to, even if they later drop it from the profile
-// (the star just stops being re-created). Returns the anchor nodes.
+// Ensure a star exists for every current north star and project — these ARE the categories,
+// so each is assigned a stable palette color (by its position in the profile: north stars
+// first, then projects). Add-only: we never delete an anchor the user may have filed papers
+// under, even if they later drop it from the profile (it just stops being re-created). An
+// anchor's color is preserved once set, so colors stay stable as the profile grows. Returns
+// the anchor nodes.
 export async function syncAnchors(profile) {
   const existing = await store.all('graphNodes')
   const byId = new Map((existing || []).map((n) => [n.id, n]))
   const anchors = []
+  let index = 0
 
   const ensure = (kind, label) => {
     const id = anchorId(kind, label)
@@ -52,8 +57,13 @@ export async function syncAnchors(profile) {
       kind, // 'northStar' | 'project'
       label,
       text: label,
+      sourcePmids: [], // an anchor can group papers directly (topic == a north star)
+      summary: '',
       addedAt: new Date().toISOString(),
     }
+    // Assign a color once (stable). New AND legacy color-less anchors get one here.
+    if (!node.color) node.color = paletteColor(index)
+    index++
     anchors.push(node)
     return node
   }
@@ -74,18 +84,21 @@ export async function loadConcepts() {
 }
 
 // Create or update a concept star. Matching is by name (via conceptId slug) so re-using a
-// name collapses to one node. `sourcePmids` is the set of papers filed under it; `text`
-// (label + tags + summary) is what the structural noticer keys off; `domain` colors it.
-export async function upsertConcept({ name, domain = null, tags = [], summary = '', sourcePmids = [] }) {
+// name collapses to one node. `category` is the parent anchor id (a north star / project) the
+// concept belongs to — it drives the concept's color. `sourcePmids` is the set of papers filed
+// under it; `text` (label + tags + summary) is what the structural noticer keys off. Tags are
+// capped so a concept accreting every source paper's tags doesn't become a firehose.
+const CONCEPT_TAG_CAP = 12
+export async function upsertConcept({ name, category = null, tags = [], summary = '', sourcePmids = [] }) {
   const id = conceptId(name)
   const existing = await store.get('graphNodes', id)
-  const mergedPmids = Array.from(new Set([...(existing?.sourcePmids || []), ...sourcePmids]))
-  const mergedTags = Array.from(new Set([...(existing?.tags || []), ...tags]))
+  const mergedPmids = Array.from(new Set([...(existing?.sourcePmids || []), ...sourcePmids.map(String)]))
+  const mergedTags = Array.from(new Set([...(existing?.tags || []), ...tags])).slice(0, CONCEPT_TAG_CAP)
   const node = {
     id,
     kind: 'concept',
     label: existing?.label || name,
-    domain: domain ?? existing?.domain ?? null,
+    category: category ?? existing?.category ?? null,
     tags: mergedTags,
     summary: summary || existing?.summary || '',
     sourcePmids: mergedPmids,
@@ -97,9 +110,38 @@ export async function upsertConcept({ name, domain = null, tags = [], summary = 
   return node
 }
 
-// Attach a paper (by pmid) to a concept, without disturbing its summary/domain.
+// Attach a paper (by pmid) to a concept, without disturbing its summary/category.
 export async function attachPaperToConcept(name, pmid) {
   return upsertConcept({ name, sourcePmids: [String(pmid)] })
+}
+
+// File a paper directly under a north-star / project anchor (the "topic == a north star" case:
+// the anchor itself is the grouping node, no separate concept). Merges the pmid into the
+// anchor's source set; leaves its color/label alone. Returns the anchor node (or null).
+export async function attachPaperToAnchor(id, pmid) {
+  const existing = await store.get('graphNodes', id)
+  if (!existing) return null
+  const sourcePmids = Array.from(new Set([...(existing.sourcePmids || []), String(pmid)]))
+  const node = { ...existing, sourcePmids, updatedAt: new Date().toISOString() }
+  await store.put('graphNodes', id, node)
+  return node
+}
+
+// Replace a concept's tag list — used by the KB "prune" UI (Claude auto-applies tags, the
+// clinician removes wrong ones). Unlike upsertConcept (add-only union), this SETS the tags, so
+// a removed tag stays gone. `text` is kept in sync so the structural noticer re-keys off it.
+export async function setConceptTags(id, tags) {
+  const existing = await store.get('graphNodes', id)
+  if (!existing) return null
+  const clean = Array.from(new Set((tags || []).map((t) => String(t).trim().toLowerCase()).filter(Boolean)))
+  const node = {
+    ...existing,
+    tags: clean,
+    text: [existing.label, ...clean, existing.summary || ''].filter(Boolean).join(' '),
+    updatedAt: new Date().toISOString(),
+  }
+  await store.put('graphNodes', id, node)
+  return node
 }
 
 // Update just the synthesized summary of an existing concept.
