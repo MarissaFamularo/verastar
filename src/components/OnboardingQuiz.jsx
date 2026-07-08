@@ -16,7 +16,7 @@ const QUESTIONS = [
   {
     key: 'focus',
     label: 'Your specialty and how the digest should address you',
-    placeholder: "e.g. I'm a vascular surgeon — call me Dr. Reyes.",
+    placeholder: "e.g. I'm a vascular surgeon — call me Dr. Famularo.",
   },
   {
     key: 'projects',

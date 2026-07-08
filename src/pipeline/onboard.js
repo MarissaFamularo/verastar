@@ -49,7 +49,7 @@ export const PROFILE_DRAFT_SCHEMA = {
 
 const SYSTEM = `You are setting up a personalized morning literature digest for a busy clinician-researcher. From their short intake answers, draft a steering profile they will review and edit. Return:
 
-- name: how the digest should address them (e.g. "Dr. Reyes"). If they don't give a name, use "Doctor".
+- name: how the digest should address them (e.g. "Dr. Famularo"). If they don't give a name, use "Doctor".
 - northStars: 3–6 SHORT concept phrases (2–4 words each) naming the recurring topics they steer by. These are used verbatim as PubMed title/abstract search terms, so make them clean, searchable clinical concepts (e.g. "carotid revascularization", "CLTI outcomes", "AI in medicine") — NOT full sentences, NOT boolean queries.
 - projects: 1–4 short names of the concrete efforts they're driving (programs, studies, initiatives). If none are stated, return an empty array.
 - rubric: a short prose steering doc (3–5 sentences) describing what makes a paper worth THEIR morning — what to prioritize, what to rank lower, what to skip. Ground it in their answers. Write it in first person ("Prioritize…", "Skip…") so it reads as their own instruction. Do NOT include any output-format rules or numbers-handling instructions — only their editorial priorities.
