@@ -19,7 +19,7 @@ the event per the "new work only" rule.*
 |---|---|---|
 | **Demo** | **30%** | The 3-min video is the highest-leverage artifact. Click-to-source, the *flagged* value, and the on-camera live swing are built to be "cool to watch." |
 | **Impact** | 25% | Named user is **real and it's the builder** — a practicing vascular surgeon who needs this daily. Adjacent to their own trial-matcher example ("reasoning shown for every match"). |
-| **Claude Use** | 25% | *The* differentiator, and where generic apps lose. Narrate the pattern: **a deterministic verifier gates the model — Claude cannot assert a citation the app hasn't proven.** Plus structured output, the citations API for exact click-to-source, prompt-cache live re-rank. "Claude Science should ship this." |
+| **Claude Use** | 25% | *The* differentiator, and where generic apps lose. Narrate the pattern: **a deterministic verifier gates the model — Claude cannot assert a citation the app hasn't proven.** Plus structured output, the citations API for exact click-to-source, prompt-cache live re-rank. Claude cites; Verastar proves — and flags what it can't. |
 | **Depth & Execution** | 20% | Show the craft: the two integrity fixes, interpunct-decimal normalization, refuse-to-pool. Evidence we wrestled past the first idea. |
 
 ## Thesis + named user
@@ -102,7 +102,7 @@ Ruthless cut. Every second earns its place.
 - **2:05–2:30** — A **flagged** value: greyed, not charted. "It refuses to fabricate."
 - **2:30–2:55** — **Live swing, on camera:** paste a random DOI → worst case it flags,
   never invents. Connection card wires paper → project → graph edge.
-- **2:55–3:00** — "Provenance you can click. Claude Science should ship this."
+- **2:55–3:00** — "Provenance you can click. Trust you can prove."
 
 ## Written summary (100–200 words) — draft during polish
 Lead with the named user and the one-sentence wedge (verified, never fabricated); name
