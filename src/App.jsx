@@ -6,6 +6,7 @@ import OnboardingQuiz from './components/OnboardingQuiz.jsx'
 import SpineCheck from './components/SpineCheck.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
 import KnowledgeBase from './components/KnowledgeBase.jsx'
+import WeekendRead from './components/WeekendRead.jsx'
 
 // Day-0 scaffold surface: paste your Anthropic key (BYOK, sessionStorage-only) and prove
 // the browser-direct round-trip works. Everything else hangs off this wiring.
@@ -16,7 +17,7 @@ export default function App() {
   const [reply, setReply] = useState('')
   const [error, setError] = useState('')
   const [onboarded, setOnboarded] = useState(null) // null = loading profile
-  const [view, setView] = useState('digest') // 'digest' | 'constellations' | 'kb'
+  const [view, setView] = useState('digest') // 'digest' | 'kb' | 'weekend' | 'constellations'
 
   // First run shows the onboarding quiz; once a profile is saved we show the digest.
   useEffect(() => {
@@ -134,6 +135,7 @@ export default function App() {
               {[
                 ['digest', 'Digest'],
                 ['kb', 'Knowledge Base'],
+                ['weekend', 'Weekend Read'],
                 ['constellations', 'Constellations'],
               ].map(([id, label]) => (
                 <button
@@ -159,6 +161,9 @@ export default function App() {
             ) : view === 'kb' ? (
               // Re-mount per visit so it re-loads saved papers + concepts each time.
               <KnowledgeBase key="kb" />
+            ) : view === 'weekend' ? (
+              // Re-mount per visit so it re-loads saved papers + the latest weekend read.
+              <WeekendRead key="weekend" />
             ) : (
               // Re-mount per visit so it re-syncs anchors + KB papers each time.
               <ConstellationView key="constellations" />
