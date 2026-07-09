@@ -89,7 +89,7 @@ export async function loadConcepts() {
 // of papers filed under it; `text` (label + tags + summary) is what the structural noticer keys
 // off. Tags are capped so a concept accreting every source paper's tags doesn't become a firehose.
 const CONCEPT_TAG_CAP = 12
-export async function upsertConcept({ name, domain = null, tags = [], summary = '', sourcePmids = [] }) {
+export async function upsertConcept({ name, domain = null, tags = [], summary = '', sourcePmids = [], isHub = false }) {
   const id = conceptId(name)
   const existing = await store.get('graphNodes', id)
   const mergedPmids = Array.from(new Set([...(existing?.sourcePmids || []), ...sourcePmids.map(String)]))
@@ -102,12 +102,38 @@ export async function upsertConcept({ name, domain = null, tags = [], summary = 
     tags: mergedTags,
     summary: summary || existing?.summary || '',
     sourcePmids: mergedPmids,
+    // isHub is sticky OR: once any satellite names a node as its hub, it stays a hub even if a
+    // later paper files papers directly under it (a node can be both a hub and hold sources).
+    isHub: isHub || existing?.isHub || false,
     text: [name, ...mergedTags, summary || existing?.summary || ''].filter(Boolean).join(' '),
     addedAt: existing?.addedAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }
   await store.put('graphNodes', id, node)
   return node
+}
+
+// Link a specific concept (satellite) to its broad hub with a CONFIRMED "taxonomy" edge — the
+// map's skeleton. Unlike a proposed connection, this is structural truth ("X is part of Y"), so it
+// draws solid immediately rather than waiting to be charted. No-op on a self-link (concept == hub)
+// or if the pair is already confirmed. Returns the stored edge, or null.
+export async function linkToHub(satelliteId, hubId, hubLabel = '') {
+  if (!satelliteId || !hubId || satelliteId === hubId) return null
+  const id = edgeId(satelliteId, hubId)
+  const existing = await store.get('graphEdges', id)
+  if (existing?.status === 'confirmed') return existing
+  const edge = {
+    id,
+    source: satelliteId,
+    target: hubId,
+    status: 'confirmed',
+    origin: 'taxonomy',
+    rationale: hubLabel ? `part of “${hubLabel}”` : 'part of a broader topic',
+    ts: existing?.ts || new Date().toISOString(),
+    confirmedAt: new Date().toISOString(),
+  }
+  await store.put('graphEdges', id, edge)
+  return edge
 }
 
 // Attach a paper (by pmid) to a concept, without disturbing its summary/domain.
@@ -152,24 +178,42 @@ export async function removeNode(id) {
 
 // --- edges: propose, confirm, dispose ---
 
-// Upsert a suggested edge WITHOUT ever downgrading a confirmed one. Returns the stored edge,
-// or null if the pair is already confirmed (nothing to propose).
+// Add a connection between two nodes. Connections are made automatically (structural noticing +
+// Claude) and just APPEAR — there is no manual "chart it" step (the clinician wanted her real KG's
+// behaviour: links form on their own; the map is light until you hover a star). So an edge is
+// created 'confirmed' outright. No-op on a self-link or an already-existing edge. `proposeEdge` is
+// the historical name (still called by connect.js / the structural refresh); it no longer proposes
+// a pending "maybe" — it links.
 export async function proposeEdge({ source, target, rationale = '', origin = 'structural' }) {
   if (source === target) return null
   const id = edgeId(source, target)
   const existing = await store.get('graphEdges', id)
-  if (existing?.status === 'confirmed') return null
+  if (existing) return existing
   const edge = {
     id,
     source,
     target,
-    status: 'suggested',
-    origin, // 'structural' | 'claude'
+    status: 'confirmed',
+    origin, // 'structural' | 'claude' | 'taxonomy'
     rationale,
-    ts: existing?.ts || new Date().toISOString(),
+    ts: new Date().toISOString(),
+    confirmedAt: new Date().toISOString(),
   }
   await store.put('graphEdges', id, edge)
   return edge
+}
+
+// One-time migration: promote any lingering 'suggested' edge (from the old confirm-ritual model)
+// to a real connection, so nothing sits waiting to be manually charted. Returns count promoted.
+export async function confirmAllEdges() {
+  const edges = (await store.all('graphEdges')) || []
+  const pending = edges.filter((e) => e.status !== 'confirmed')
+  await Promise.all(
+    pending.map((e) =>
+      store.put('graphEdges', e.id, { ...e, status: 'confirmed', confirmedAt: e.confirmedAt || new Date().toISOString() }),
+    ),
+  )
+  return pending.length
 }
 
 // Promote a suggestion to a confirmed constellation line (this is the "chart it" moment the

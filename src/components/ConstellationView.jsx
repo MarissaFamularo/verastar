@@ -14,10 +14,10 @@ import {
   loadGraph,
   syncAnchors,
   proposeEdge,
-  confirmEdge,
   dismissEdge,
   removeNode,
   refreshStructuralSuggestions,
+  confirmAllEdges,
 } from '../pipeline/graph.js'
 import { proposeConnections } from '../pipeline/connect.js'
 import { DOMAINS, PROJECT_COLOR, domainColor, domainLabel } from '../lib/domains.js'
@@ -56,6 +56,7 @@ export default function ConstellationView() {
       try {
         await syncAnchors(await getProfile())
         await refreshStructuralSuggestions()
+        await confirmAllEdges() // connections just appear — promote any legacy "suggested" links
         await refresh()
       } catch (err) {
         setError(err.message)
@@ -75,11 +76,6 @@ export default function ConstellationView() {
   const sourcePapersOf = (node) =>
     papers.filter((p) => p.conceptId === node.id || (node.sourcePmids || []).includes(String(p.pmid)))
 
-  async function handleConfirm(edge) {
-    setNote('')
-    await confirmEdge(edge.id)
-    await refresh()
-  }
   async function handleDismiss(edge) {
     setNote('')
     await dismissEdge(edge.id)
@@ -105,6 +101,7 @@ export default function ConstellationView() {
         paper: { title: selected.label, finding: selected.summary, relevance: '' },
         candidates,
       })
+      const existingIds = new Set(edges.map((e) => e.id))
       let added = 0
       for (const c of conns) {
         const e = await proposeEdge({
@@ -113,12 +110,12 @@ export default function ConstellationView() {
           rationale: c.rationale,
           origin: 'claude',
         })
-        if (e) added++
+        if (e && !existingIds.has(e.id)) added++ // count only brand-new links
       }
       await refresh()
       setNote(
         added
-          ? `Claude proposed ${added} connection${added === 1 ? '' : 's'} — click a glowing marker to confirm.`
+          ? `Claude linked ${added} new connection${added === 1 ? '' : 's'}.`
           : 'Claude found no new connections for this concept.',
       )
     } catch (err) {
@@ -127,8 +124,7 @@ export default function ConstellationView() {
     setBusy('')
   }
 
-  const suggestedCount = edges.filter((e) => e.status === 'suggested').length
-  const confirmedCount = edges.filter((e) => e.status === 'confirmed').length
+  const connectionCount = edges.length
   const conceptCount = nodes.filter((n) => n.kind === 'concept').length
 
   // The standing status line, always derived from live state so it never goes stale.
@@ -139,9 +135,9 @@ export default function ConstellationView() {
         ? 'Claude is looking for connections…'
         : note
           ? note
-          : suggestedCount
-            ? `${suggestedCount} connection${suggestedCount === 1 ? '' : 's'} waiting — click a glowing marker to chart it.`
-            : 'Save papers from your scan — they group into concept stars you can connect.'
+          : connectionCount
+            ? 'Hover a star to light its connections; click to read its evidence.'
+            : 'Save papers from your scan — they group into concept stars that link themselves.'
 
   return (
     <section className="mt-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -150,15 +146,15 @@ export default function ConstellationView() {
           <div>
             <h2 className="text-lg font-medium">Constellations</h2>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Your knowledge as a star map. North stars and projects are the bright anchors; each
-              concept star gathers its source papers under one synthesized summary. The app proposes
-              connections — dashed and pulsing — and you chart them into constellations.
+              Your knowledge as a star map. Projects are the bright anchors; each concept star
+              gathers its source papers under one synthesized summary, and grows with its
+              connections. The app links related concepts automatically — the web stays light until
+              you hover a star, then its constellation lights up.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
             <span>{conceptCount} concepts</span>
-            <span>{confirmedCount} charted</span>
-            <span className="text-amber-500 dark:text-amber-400">{suggestedCount} proposed</span>
+            <span>{connectionCount} connections</span>
           </div>
         </div>
         {!error && <p className="mt-3 text-sm text-indigo-600 dark:text-indigo-300">{statusLine}</p>}
@@ -176,7 +172,6 @@ export default function ConstellationView() {
               setSelectedId(n.id)
               setOpenPaper(null)
             }}
-            onConfirmEdge={handleConfirm}
             onBackground={() => setSelectedId(null)}
           />
           {nodes.length === 0 && busy !== 'loading' && (
@@ -195,8 +190,8 @@ export default function ConstellationView() {
             <div className="text-sm text-slate-500 dark:text-slate-400">
               <p className="font-medium text-slate-700 dark:text-slate-300">Roam the map</p>
               <p className="mt-1">
-                Drag to pan, scroll to zoom. Click a concept star to read its synthesized summary and
-                source papers. Click a pulsing gold marker to confirm a proposed connection.
+                Drag to pan, scroll to zoom. Hover a star to light its connections; click it to read
+                its synthesized summary and source papers. Bigger stars have more connections.
               </p>
               {/* legend lives here (not over the map) so it never covers a low star. Concepts are
                   colored by their DOMAIN; projects are yellow. Node size grows with connections. */}
@@ -215,8 +210,7 @@ export default function ConstellationView() {
                   </div>
                 </div>
                 <p className="mt-2 border-t border-slate-200 pt-2 dark:border-slate-800">
-                  <span className="text-amber-500 dark:text-amber-400">◌ pulsing</span> = proposed · click
-                  to chart · solid = confirmed
+                  Hover a star to light its connections. Star size grows with connections.
                 </p>
               </div>
             </div>
@@ -230,7 +224,6 @@ export default function ConstellationView() {
               openPaper={openPaper}
               onTogglePaper={(pmid) => setOpenPaper((cur) => (cur === pmid ? null : pmid))}
               onAskClaude={askClaude}
-              onConfirm={handleConfirm}
               onDismiss={handleDismiss}
               onRemove={() => handleRemoveNode(selected.id)}
               keySet={keySet}
@@ -258,7 +251,6 @@ function NodePanel({
   openPaper,
   onTogglePaper,
   onAskClaude,
-  onConfirm,
   onDismiss,
   onRemove,
   keySet,
@@ -266,12 +258,18 @@ function NodePanel({
   canAsk,
   canRemove,
 }) {
+  const isHub = node.isHub
   return (
     <div>
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-center gap-2">
         <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
           {categoryLabel}
         </span>
+        {isHub && (
+          <span className="rounded-full border px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide" style={{ color, borderColor: color }}>
+            Hub
+          </span>
+        )}
       </div>
       <h3 className="mt-1 text-base font-semibold leading-snug text-slate-800 dark:text-slate-100">
         {node.label}
@@ -279,6 +277,10 @@ function NodePanel({
 
       {node.summary ? (
         <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{node.summary}</p>
+      ) : isHub ? (
+        <p className="mt-2 text-sm italic text-slate-400">
+          A broad topic gathering the concepts below — click a linked concept to read its evidence.
+        </p>
       ) : (
         <p className="mt-2 text-sm italic text-slate-400">
           Summary pending — add another paper or re-open after the scan to synthesize it.
@@ -304,11 +306,12 @@ function NodePanel({
           disabled={proposing}
           className="mt-3 w-full rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
         >
-          {proposing ? 'Proposing…' : '✦ Ask Claude for connections'}
+          {proposing ? 'Linking…' : '✦ Find more connections with Claude'}
         </button>
       )}
 
-      {/* SOURCE ARTICLES */}
+      {/* SOURCE ARTICLES — hidden for a pure hub (no papers of its own; its concepts are below) */}
+      {!(isHub && sources.length === 0) && (
       <div className="mt-4">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
           Source articles ({sources.length})
@@ -360,8 +363,9 @@ function NodePanel({
           {sources.length === 0 && <li className="text-xs text-slate-400">No source papers linked yet.</li>}
         </ul>
       </div>
+      )}
 
-      <ConnectionList connections={connections} onConfirm={onConfirm} onDismiss={onDismiss} />
+      <ConnectionList connections={connections} onDismiss={onDismiss} />
 
       {canRemove && (
         <button onClick={onRemove} className="mt-4 text-xs font-medium text-rose-500 hover:underline">
@@ -372,42 +376,28 @@ function NodePanel({
   )
 }
 
-function ConnectionList({ connections, onConfirm, onDismiss }) {
+// Connections just exist (the app links related concepts automatically). Each row names the
+// neighbor + why they're linked; a subtle × prunes a wrong auto-link (the only manual control).
+function ConnectionList({ connections, onDismiss }) {
   return (
     <div className="mt-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Connections</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        Connections ({connections.length})
+      </p>
       <ul className="mt-1.5 space-y-1.5">
         {connections.map(({ edge, other }) => (
-          <li key={edge.id} className="rounded-md border border-slate-200 p-2 text-xs dark:border-slate-800">
+          <li key={edge.id} className="group rounded-md border border-slate-200 p-2 text-xs dark:border-slate-800">
             <div className="flex items-center justify-between gap-2">
               <span className="min-w-0 truncate font-medium text-slate-700 dark:text-slate-200">{other.label}</span>
-              <span
-                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                  edge.status === 'confirmed'
-                    ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
-                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                }`}
+              <button
+                onClick={() => onDismiss(edge)}
+                title="Unlink"
+                className="shrink-0 text-slate-300 opacity-0 transition group-hover:opacity-100 hover:text-rose-500 dark:text-slate-600"
               >
-                {edge.status === 'confirmed' ? 'charted' : 'proposed'}
-              </span>
+                ✕
+              </button>
             </div>
             {edge.rationale && <p className="mt-0.5 italic text-slate-500 dark:text-slate-400">{edge.rationale}</p>}
-            {edge.status === 'suggested' && (
-              <div className="mt-1.5 flex gap-2">
-                <button
-                  onClick={() => onConfirm(edge)}
-                  className="rounded bg-indigo-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-indigo-500"
-                >
-                  Chart it
-                </button>
-                <button
-                  onClick={() => onDismiss(edge)}
-                  className="rounded border border-slate-300 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
-                  Dismiss
-                </button>
-              </div>
-            )}
           </li>
         ))}
         {connections.length === 0 && <li className="text-xs text-slate-400">No connections yet.</li>}

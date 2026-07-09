@@ -18,12 +18,10 @@ function starColor(node) {
   const c = node.domain ? domainColor(node.domain) : DEFAULT_PAPER_COLOR
   return { core: c, glow: c }
 }
-const EDGE_CONFIRMED = '150,180,255'
-const EDGE_SUGGEST = '190,205,255'
-const INVITE = '255,214,120' // the gold "click me" twinkle on a suggested link
+const EDGE_BASE = '150,170,210' // cool, faint — the resting web recedes until you look at a star
 
 const RADIUS = { northStar: 9, project: 6.5, concept: 6, paper: 4.5 }
-const REVEAL_MS = 950
+const APPEAR_MS = 650 // a new connection fades in gently ("the app just noticed this")
 
 // Stable pseudo-random in [0,1) from a string — per-node twinkle phase + seed jitter,
 // without Math.random (so a node doesn't re-seed differently on every mount).
@@ -36,14 +34,7 @@ function hash01(str) {
   return ((h >>> 0) % 100000) / 100000
 }
 
-export default function StarMap({
-  nodes,
-  edges,
-  selectedId = null,
-  onSelectNode,
-  onConfirmEdge,
-  onBackground,
-}) {
+export default function StarMap({ nodes, edges, selectedId = null, onSelectNode, onBackground }) {
   const canvasRef = useRef(null)
   const engineRef = useRef(null)
 
@@ -57,7 +48,7 @@ export default function StarMap({
 
   // Keep the freshest callbacks without re-binding listeners.
   const cbRef = useRef({})
-  cbRef.current = { onSelectNode, onConfirmEdge, onBackground }
+  cbRef.current = { onSelectNode, onBackground }
 
   // --- one-time engine + loop + input wiring ---
   useEffect(() => {
@@ -67,8 +58,7 @@ export default function StarMap({
       sim: new Map(), // id -> { x, y, vx, vy }
       camera: { x: 0, y: 0, scale: 1 },
       hoverNode: null,
-      hoverEdge: null,
-      reveals: new Map(), // edgeId -> t0 (ms)
+      reveals: new Map(), // edgeId -> t0 (ms) for the gentle fade-in of a new connection
       settled: false, // physics frozen once the layout is calm
       stars: [], // static background starfield (world-space)
       w: 0,
@@ -119,21 +109,6 @@ export default function StarMap({
       }
       return null
     }
-    // Suggested edges expose a midpoint "invite" marker; clicking it confirms the link.
-    function suggestedEdgeAt(sx, sy) {
-      const p = toWorld(sx, sy)
-      for (const e of edgesRef.current) {
-        if (e.status !== 'suggested') continue
-        const a = eng.sim.get(e.source)
-        const b = eng.sim.get(e.target)
-        if (!a || !b) continue
-        const mx = (a.x + b.x) / 2
-        const my = (a.y + b.y) / 2
-        if ((mx - p.x) ** 2 + (my - p.y) ** 2 <= 12 * 12) return e
-      }
-      return null
-    }
-
     // --- input: pan / zoom / drag / hover / click ---
     let down = null // { sx, sy, moved, node }
     canvas.addEventListener('mousedown', (ev) => {
@@ -167,21 +142,18 @@ export default function StarMap({
       }
       // hover
       eng.hoverNode = nodeAt(ev.offsetX, ev.offsetY)
-      eng.hoverEdge = eng.hoverNode ? null : suggestedEdgeAt(ev.offsetX, ev.offsetY)
-      canvas.style.cursor = eng.hoverNode || eng.hoverEdge ? 'pointer' : 'grab'
+      canvas.style.cursor = eng.hoverNode ? 'pointer' : 'grab'
     })
     window.addEventListener('mouseup', () => {
       if (!down) return
       const wasDrag = down.moved
       const node = down.node
-      const edge = wasDrag ? null : node ? null : suggestedEdgeAt(down.sx, down.sy)
       if (node?.pinned) {
         const s = eng.sim.get(node.id)
         if (s) s.pinned = false
       }
       if (!wasDrag) {
         if (node) cbRef.current.onSelectNode?.(node)
-        else if (edge) cbRef.current.onConfirmEdge?.(edge)
         else cbRef.current.onBackground?.()
       }
       down = null
@@ -234,8 +206,8 @@ export default function StarMap({
         const dx = b.x - a.x
         const dy = b.y - a.y
         const d = Math.hypot(dx, dy) || 0.01
-        const rest = e.status === 'confirmed' ? 120 : 180
-        const k = e.status === 'confirmed' ? 0.02 : 0.008
+        const rest = 128
+        const k = 0.018
         const f = (d - rest) * k
         const ux = dx / d
         const uy = dy / d
@@ -318,87 +290,68 @@ export default function StarMap({
         degree.set(e.target, (degree.get(e.target) || 0) + 1)
       }
 
-      // edges first (under the stars)
+      // edges — a light resting web that recedes until you look at a star; then that star's
+      // connections light up in its own color (her KG's behaviour). No dashed "maybe", no marker
+      // to click: connections are made automatically and simply exist.
       ctx.lineCap = 'round'
+      const focusNode = focusId ? ns.find((n) => n.id === focusId) : null
+      const focusRGB = focusNode ? hexToRgb(starColor(focusNode).glow) : EDGE_BASE
       for (const e of es) {
         const a = sim.get(e.source)
         const b = sim.get(e.target)
         if (!a || !b) continue
-        const faded = focusId ? (neighbors.has(e.source) && neighbors.has(e.target) ? 1 : 0.22) : 1
-        if (e.status === 'confirmed') {
-          const reveal = eng.reveals.get(e.id)
-          let p = 1
-          if (reveal != null) {
-            p = Math.min(1, (now - reveal) / REVEAL_MS)
-            if (p >= 1) eng.reveals.delete(e.id)
-          }
-          const ex = a.x + (b.x - a.x) * easeOut(p)
-          const ey = a.y + (b.y - a.y) * easeOut(p)
-          ctx.strokeStyle = `rgba(${EDGE_CONFIRMED},${0.45 * faded})`
-          ctx.lineWidth = 1.4
-          ctx.shadowColor = `rgba(${EDGE_CONFIRMED},0.9)`
-          ctx.shadowBlur = 6
-          ctx.beginPath()
-          ctx.moveTo(a.x, a.y)
-          ctx.lineTo(ex, ey)
-          ctx.stroke()
-          ctx.shadowBlur = 0
-          // travelling particle + endpoint flare during the reveal
-          if (p < 1) {
-            drawGlowDot(ctx, ex, ey, 3.2, '#ffffff', '#bcd0ff')
-            const flare = Math.sin(easeOut(p) * Math.PI)
-            a._flare = b._flare = flare
-          }
-        } else {
-          // suggested = dashed, pulsing "maybe" + a gold invite marker at the midpoint
-          const pulse = 0.18 + 0.22 * (0.5 + 0.5 * Math.sin(now * 0.004 + hash01(e.id) * 6.28))
-          ctx.strokeStyle = `rgba(${EDGE_SUGGEST},${pulse * faded})`
-          ctx.lineWidth = 1
-          ctx.setLineDash([5, 6])
-          ctx.lineDashOffset = -now * 0.02
-          ctx.beginPath()
-          ctx.moveTo(a.x, a.y)
-          ctx.lineTo(b.x, b.y)
-          ctx.stroke()
-          ctx.setLineDash([])
-          const mx = (a.x + b.x) / 2
-          const my = (a.y + b.y) / 2
-          const hovered = eng.hoverEdge?.id === e.id
-          const ring = (hovered ? 6.5 : 4.5) + 1.4 * Math.sin(now * 0.005 + hash01(e.id) * 6.28)
-          ctx.globalAlpha = faded
-          ctx.strokeStyle = `rgba(${INVITE},${hovered ? 0.95 : 0.7})`
-          ctx.lineWidth = hovered ? 2 : 1.3
-          ctx.beginPath()
-          ctx.arc(mx, my, Math.abs(ring), 0, 6.2832)
-          ctx.stroke()
-          drawGlowDot(ctx, mx, my, 1.8, '#fff7df', INVITErgb())
-          ctx.globalAlpha = 1
-          if (hovered && e.rationale) {
-            drawHint(ctx, mx, my - 14, e.rationale)
-          }
+        // gentle fade-in the first time a connection appears
+        let appear = 1
+        const t0 = eng.reveals.get(e.id)
+        if (t0 != null) {
+          appear = Math.min(1, (now - t0) / APPEAR_MS)
+          if (appear >= 1) eng.reveals.delete(e.id)
         }
+        const incident = focusId && (e.source === focusId || e.target === focusId)
+        let rgb, alpha, width
+        if (incident) {
+          rgb = focusRGB
+          alpha = 0.6
+          width = 1.3
+        } else if (focusId) {
+          rgb = EDGE_BASE
+          alpha = 0.03 // the rest of the web recedes
+          width = 0.6
+        } else {
+          rgb = EDGE_BASE
+          alpha = 0.08 // very light at rest
+          width = 0.7
+        }
+        ctx.strokeStyle = `rgba(${rgb},${alpha * appear})`
+        ctx.lineWidth = width
+        if (incident) {
+          ctx.shadowColor = `rgba(${rgb},0.7)`
+          ctx.shadowBlur = 6
+        }
+        ctx.beginPath()
+        ctx.moveTo(a.x, a.y)
+        ctx.lineTo(b.x, b.y)
+        ctx.stroke()
+        ctx.shadowBlur = 0
       }
 
-      // nodes
+      // nodes — size grows with connection count (her KG: hubs are big, singletons tiny). A wide
+      // range so a well-linked hub reads dramatically bigger than a one-source satellite.
       for (const n of ns) {
         const s = sim.get(n.id)
         if (!s) continue
         const col = starColor(n)
         const deg = degree.get(n.id) || 0
-        // size by connections (like her KG): well-linked concepts read much bigger. Projects a
-        // fixed modest hub size.
-        const baseR = n.kind === 'project' ? 7 : Math.min(14, 3.6 + 2.4 * Math.sqrt(deg))
+        const baseR = n.kind === 'project' ? 7 : Math.min(22, 2.6 + 2.7 * Math.sqrt(deg))
         const tw = 0.85 + 0.15 * Math.sin(now * 0.002 + hash01(n.id) * 6.28)
         const isFocus = n.id === focusId
         const a = dim(n.id)
-        const flare = s._flare || 0
-        s._flare = Math.max(0, flare - 0.04)
 
         ctx.globalAlpha = a
         // glow halo
-        const R = baseR * (1 + 0.9 * flare) + (isFocus ? 3 : 0)
+        const R = baseR + (isFocus ? 3 : 0)
         const halo = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, R * 3.4)
-        halo.addColorStop(0, hexA(col.glow, 0.55 * tw + 0.4 * flare))
+        halo.addColorStop(0, hexA(col.glow, 0.5 * tw + (isFocus ? 0.2 : 0)))
         halo.addColorStop(1, hexA(col.glow, 0))
         ctx.fillStyle = halo
         ctx.beginPath()
@@ -410,12 +363,12 @@ export default function StarMap({
         ctx.arc(s.x, s.y, R, 0, 6.2832)
         ctx.fill()
         // 4-point glint for the bright hubs (projects + well-connected concepts)
-        if (n.kind === 'project' || deg >= 4 || flare > 0.05) {
-          drawGlint(ctx, s.x, s.y, R * (2.4 + flare * 2), hexA('#ffffff', 0.6 * tw + flare))
+        if (n.kind === 'project' || deg >= 5) {
+          drawGlint(ctx, s.x, s.y, R * 2.4, hexA('#ffffff', 0.5 * tw))
         }
         if (isFocus) {
-          ctx.strokeStyle = hexA(col.core, 0.9)
-          ctx.lineWidth = 1.2
+          ctx.strokeStyle = hexA('#ffffff', 0.85)
+          ctx.lineWidth = 1.4
           ctx.beginPath()
           ctx.arc(s.x, s.y, R + 4, 0, 6.2832)
           ctx.stroke()
@@ -474,20 +427,18 @@ export default function StarMap({
     if (added) eng.settled = false // new star → re-settle the layout
   }, [nodes])
 
-  // --- detect suggested→confirmed transitions and enqueue the reveal animation ---
-  const prevStatus = useRef(new Map())
+  // --- fade a connection in the first time we see it (the "app just noticed this" moment) ---
+  const seenEdges = useRef(new Set())
   useEffect(() => {
     const eng = engineRef.current
-    const prev = prevStatus.current
-    const next = new Map()
+    if (!eng) return
     for (const e of edges) {
-      next.set(e.id, e.status)
-      if (eng && e.status === 'confirmed' && prev.get(e.id) === 'suggested') {
+      if (!seenEdges.current.has(e.id)) {
+        seenEdges.current.add(e.id)
         eng.reveals.set(e.id, performance.now())
-        eng.settled = false // a new constellation line changes the pull — let it re-settle
+        eng.settled = false // a new line changes the pull — let it re-settle
       }
     }
-    prevStatus.current = next
   }, [edges])
 
   return (
@@ -500,12 +451,6 @@ export default function StarMap({
 }
 
 // --- little canvas helpers ---
-function easeOut(p) {
-  return 1 - Math.pow(1 - p, 3)
-}
-function INVITErgb() {
-  return '#ffd36b'
-}
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16)
   const r = (n >> 16) & 255
@@ -513,18 +458,9 @@ function hexA(hex, a) {
   const b = n & 255
   return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, a))})`
 }
-function drawGlowDot(ctx, x, y, r, core, glow) {
-  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 3)
-  g.addColorStop(0, glow)
-  g.addColorStop(1, hexA(typeof glow === 'string' && glow.startsWith('#') ? glow : '#6fa8ff', 0))
-  ctx.fillStyle = g
-  ctx.beginPath()
-  ctx.arc(x, y, r * 3, 0, 6.2832)
-  ctx.fill()
-  ctx.fillStyle = core
-  ctx.beginPath()
-  ctx.arc(x, y, r, 0, 6.2832)
-  ctx.fill()
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16)
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`
 }
 function drawGlint(ctx, x, y, len, color) {
   ctx.strokeStyle = color
@@ -535,27 +471,6 @@ function drawGlint(ctx, x, y, len, color) {
   ctx.moveTo(x, y - len)
   ctx.lineTo(x, y + len)
   ctx.stroke()
-}
-function drawHint(ctx, x, y, text) {
-  const t = truncate(text, 52)
-  ctx.font = '11px ui-sans-serif, system-ui, sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'bottom'
-  const w = ctx.measureText(t).width + 14
-  ctx.fillStyle = 'rgba(10,14,30,0.9)'
-  roundRect(ctx, x - w / 2, y - 20, w, 18, 5)
-  ctx.fill()
-  ctx.fillStyle = '#ffe9b8'
-  ctx.fillText(t, x, y - 4)
-}
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.arcTo(x + w, y, x + w, y + h, r)
-  ctx.arcTo(x + w, y + h, x, y + h, r)
-  ctx.arcTo(x, y + h, x, y, r)
-  ctx.arcTo(x, y, x + w, y, r)
-  ctx.closePath()
 }
 function truncate(s, n) {
   return s && s.length > n ? s.slice(0, n - 1) + '…' : s || ''

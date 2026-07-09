@@ -63,6 +63,18 @@ describe('structuralSuggestions', () => {
     expect(out.filter((o) => edgeId(o.source, o.target) === key).length).toBe(1)
   })
 
+  it('never re-proposes a satellite↔hub pair already joined by a taxonomy edge', () => {
+    // The two-tier skeleton links a specific concept to its broad hub with a CONFIRMED taxonomy
+    // edge. Both mention the same anchor, which would otherwise trigger a dashed serendipity edge —
+    // the existing-edge guard must suppress it so the skeleton line isn't shadowed by a "maybe".
+    const a = anchor('carotid revascularization')
+    const sat = concept('Transcarotid Outcomes', 'carotid revascularization stroke risk')
+    const hub = { ...concept('Carotid Revascularization', 'carotid revascularization'), isHub: true }
+    const taxonomy = [{ id: edgeId(sat.id, hub.id), source: sat.id, target: hub.id, status: 'confirmed', origin: 'taxonomy' }]
+    const out = structuralSuggestions([a, sat, hub], taxonomy)
+    expect(out.some((o) => edgeId(o.source, o.target) === edgeId(sat.id, hub.id))).toBe(false)
+  })
+
   it('links two concepts that share a topic tag (cross-domain serendipity)', () => {
     const tagged = (name, tags) => ({ ...concept(name, 'x'), tags })
     const c1 = tagged('CLTI Management', ['amputation-free survival', 'clti'])

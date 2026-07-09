@@ -30,31 +30,34 @@ export function conceptId(name) {
 export const ANALYZE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['concept', 'domain', 'tags'],
+  required: ['concept', 'hub', 'domain', 'tags'],
   properties: {
-    concept: { type: 'string' }, // topic-level concept name (existing verbatim, or new)
-    domain: { type: 'string' }, // one of the domain keys (colors the node)
+    concept: { type: 'string' }, // the paper's SPECIFIC topic (a small satellite node)
+    hub: { type: 'string' }, // the BROAD parent topic it lives under (the grouping node)
+    domain: { type: 'string' }, // one of the domain keys (colors both concept + hub)
     tags: { type: 'array', items: { type: 'string' } },
   },
 }
 
-const ANALYZE_SYSTEM = `You file papers into a vascular surgeon-scientist's concept-based knowledge graph. Every paper becomes a source under a topic-level "concept" node (title-case, 2–6 words) that groups related papers — e.g. "CLTI Risk Stratification", "Multidisciplinary Team for Diabetic Foot", "Transcarotid Revascularization", "Clinical AI Prediction". Each concept sits in ONE broad DOMAIN, which colors it on the map. For the given paper return:
+const ANALYZE_SYSTEM = `You file papers into a vascular surgeon-scientist's concept-based knowledge graph. The graph has TWO tiers, mirroring her real one: broad "hub" topics that gather many papers (e.g. "Carotid Revascularization", "CLTI Management", "Clinical AI in Vascular Care"), and specific "concept" satellites beneath them (e.g. "Transcarotid Revascularization Stroke Risk", "Pedal Bypass Patency"). A paper is a SOURCE under one specific concept, and that concept hangs off one broad hub. This is what makes the map read like a constellation — big hubs with small satellites orbiting them — instead of a handful of lonely stars. For the given paper return:
 
-- concept: the SINGLE concept it belongs under. You are given the existing concepts — if the paper fits one, return that concept's name VERBATIM (so it groups there). Otherwise invent a new, reusable topic-level concept name at that granularity (not too broad like "Vascular Surgery", not as narrow as the paper's exact title). Every distinct topic gets its own concept.
+- concept: the paper's SPECIFIC topic — a small, reusable node capturing its actual angle (technique, endpoint, cohort). Reuse an EXISTING concept name VERBATIM only if the paper is truly the SAME specific topic; otherwise mint a new specific concept. Do NOT collapse everything into the hub, and do NOT use the paper's exact title — name the topic it exemplifies (e.g. a paper on TCAR 30-day stroke → "Transcarotid Revascularization Outcomes", not the title). Keeping specific concepts as their own satellites is intended: singletons stay visible.
+- hub: the BROAD parent topic this concept belongs under. STRONGLY prefer an existing hub from the list — a TCAR paper, a CEA-vs-CAS paper, and an asymptomatic-stenosis paper all share the hub "Carotid Revascularization". Only mint a new hub when none fits. A hub is broad enough to gather a dozen concepts. If the paper's specific topic already IS that broad (no finer angle), you may return the same string for both concept and hub.
 - domain: the single best-fit domain, returned as its key. Domains:
 ${DOMAINS.map((d) => `  - "${d.key}": ${d.label}`).join('\n')}
-- tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by.
-
-Prefer reusing an existing concept over minting a near-duplicate.`
+- tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by. Tags carry the finest angle; the concept is specific and the hub is broad.`
 
 // Analyze a paper. `paper` = { title, finding, relevance, text? }; `concepts` = existing
-// [{ name, domain }]. Returns { concept, domain, tags } (domain validated to a real key).
+// [{ name, domain, isHub }]. Returns { concept, hub, domain, tags } — the paper's specific
+// concept (satellite) AND the broad hub it hangs under. domain validated to a real key.
 export async function analyzePaper({ paper, concepts = [], model = MODELS.triage, maxTokens = 1024 }) {
-  const existing = concepts.length
-    ? concepts.map((c) => `- "${c.name}"${c.domain ? ` (${c.domain})` : ''}`).join('\n')
-    : '(none yet — mint the first concept)'
+  const hubs = concepts.filter((c) => c.isHub)
+  const sats = concepts.filter((c) => !c.isHub)
+  const listOf = (arr) =>
+    arr.length ? arr.map((c) => `- "${c.name}"${c.domain ? ` (${c.domain})` : ''}`).join('\n') : '(none yet)'
   const content =
-    `EXISTING CONCEPTS:\n${existing}\n\n` +
+    `EXISTING HUBS (broad — reuse one if it fits):\n${listOf(hubs)}\n\n` +
+    `EXISTING CONCEPTS (specific satellites):\n${listOf(sats)}\n\n` +
     `PAPER\nTitle: ${paper.title || '(untitled)'}\n` +
     (paper.finding ? `Finding: ${paper.finding}\n` : '') +
     (paper.relevance ? `Relevance: ${paper.relevance}\n` : '') +
@@ -74,7 +77,9 @@ export async function analyzePaper({ paper, concepts = [], model = MODELS.triage
     .map((t) => (t || '').trim().toLowerCase())
     .filter((t) => t && !seen.has(t) && seen.add(t))
     .slice(0, 6)
-  return { concept: (r.concept || '').trim() || 'Uncategorized', domain, tags }
+  const concept = (r.concept || '').trim() || 'Uncategorized'
+  const hub = (r.hub || '').trim() || concept
+  return { concept, hub, domain, tags }
 }
 
 // --- synthesize a concept's evidence summary from its source papers ---

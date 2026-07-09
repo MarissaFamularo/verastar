@@ -8,18 +8,34 @@
 
 import { getProfile, store } from '../lib/store.js'
 import { analyzePaper, synthesizeConcept } from './concepts.js'
-import { loadGraph, loadConcepts, syncAnchors, upsertConcept, setConceptSummary, removeNode } from './graph.js'
+import {
+  loadGraph,
+  loadConcepts,
+  syncAnchors,
+  upsertConcept,
+  linkToHub,
+  setConceptSummary,
+  removeNode,
+} from './graph.js'
 
-// File one already-saved paper: analyze → upsert its concept (create/reuse) → patch the paper
-// record (domain + conceptId + tags). Does NOT synthesize the summary (do that once per concept
-// via synthesizeGroup so a batch re-file doesn't re-synthesize per paper). Returns { groupId } or null.
+// File one already-saved paper into the two-tier concept graph: analyze → upsert its SPECIFIC
+// concept (the satellite the paper is a source of) → upsert the BROAD hub it belongs under →
+// link satellite→hub with a confirmed taxonomy edge (the map's skeleton) → patch the paper record
+// (domain + conceptId + tags). Does NOT synthesize the summary (do that once per concept via
+// synthesizeGroup so a batch re-file doesn't re-synthesize per paper). Returns { groupId } or null.
 export async function filePaper(paper) {
   const existing = await loadConcepts()
-  const { concept, domain, tags } = await analyzePaper({
+  const { concept, hub, domain, tags } = await analyzePaper({
     paper: { title: paper.title, finding: paper.finding, relevance: paper.relevance, text: paper.fullText },
-    concepts: existing.map((c) => ({ name: c.label, domain: c.domain })),
+    concepts: existing.map((c) => ({ name: c.label, domain: c.domain, isHub: c.isHub })),
   })
   const node = await upsertConcept({ name: concept, domain, tags, sourcePmids: [paper.id] })
+  // The broad hub is a grouping node (no papers of its own, same domain color); the satellite
+  // hangs off it. When concept === hub the paper's topic already IS broad — no separate hub node.
+  if (hub && hub !== concept) {
+    const hubNode = await upsertConcept({ name: hub, domain, isHub: true })
+    await linkToHub(node.id, hubNode.id, hubNode.label)
+  }
 
   const current = await store.get('papers', paper.id)
   if (!current) return null // un-saved while we were working
