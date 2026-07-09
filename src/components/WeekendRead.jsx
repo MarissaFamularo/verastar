@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { store, getProfile } from '../lib/store.js'
 import { hasApiKey } from '../lib/anthropic.js'
 import { synthesizeWeekendRead } from '../pipeline/weekend.js'
+import { appendConnectionsToLibrary } from '../lib/library.js'
 
 // Which kind of anchor a thread hangs off — colors the pill so projects/north stars/cross-cutting
 // read distinctly (echoing the map: north stars gold, projects yellow).
@@ -127,6 +128,13 @@ export default function WeekendRead() {
         paperCount: papers.length,
         read: result,
       })
+      // If a flat-file library is connected, prepend this read to connections.md (newest-first).
+      // No-op when no folder is connected; never allowed to break generation.
+      try {
+        await appendConnectionsToLibrary(createdAt.slice(0, 10), result)
+      } catch (err) {
+        console.warn('Library connections write failed (read still saved):', err?.message || err)
+      }
     } catch (err) {
       setError(err?.message || String(err))
     }

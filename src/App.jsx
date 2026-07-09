@@ -7,6 +7,7 @@ import SpineCheck from './components/SpineCheck.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
 import KnowledgeBase from './components/KnowledgeBase.jsx'
 import WeekendRead from './components/WeekendRead.jsx'
+import LibraryPanel from './components/LibraryPanel.jsx'
 
 // Day-0 scaffold surface: paste your Anthropic key (BYOK, sessionStorage-only) and prove
 // the browser-direct round-trip works. Everything else hangs off this wiring.
@@ -136,6 +137,7 @@ export default function App() {
                 ['digest', 'Digest'],
                 ['kb', 'Knowledge Base'],
                 ['weekend', 'Weekend Read'],
+                ['library', 'Library'],
                 ['constellations', 'Constellations'],
               ].map(([id, label]) => (
                 <button
@@ -164,6 +166,9 @@ export default function App() {
             ) : view === 'weekend' ? (
               // Re-mount per visit so it re-loads saved papers + the latest weekend read.
               <WeekendRead key="weekend" />
+            ) : view === 'library' ? (
+              // Re-mount per visit so it reconnects the folder handle + reloads live counts.
+              <LibraryPanel key="library" />
             ) : (
               // Re-mount per visit so it re-syncs anchors + KB papers each time.
               <ConstellationView key="constellations" />

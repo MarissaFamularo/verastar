@@ -11,6 +11,7 @@ import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates } from '../pipeline/select.js'
 import { filePaper, synthesizeGroup } from '../pipeline/deposit.js'
+import { depositPaperToLibrary } from '../lib/library.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
 
@@ -315,6 +316,15 @@ export default function SpineCheck() {
         if (res?.groupId) await synthesizeGroup(res.groupId)
       } catch (err) {
         console.warn('Concept filing failed (paper still saved):', err.message)
+      }
+      // If a flat-file library is connected, write the source note (+ its concept) to disk. Re-fetch
+      // so conceptId — patched by filePaper above — is set on the record we deposit. No-op when no
+      // folder is connected; never allowed to affect the save.
+      try {
+        const filed = await store.get('papers', id)
+        if (filed) await depositPaperToLibrary(filed)
+      } catch (err) {
+        console.warn('Library deposit failed (paper still saved):', err.message)
       }
     })()
   }
