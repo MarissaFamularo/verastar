@@ -10,9 +10,7 @@ import { getProfile, store } from '../lib/store.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates } from '../pipeline/select.js'
-import { filePaper, synthesizeGroup } from '../pipeline/deposit.js'
-import { resolveOaPdf } from '../pipeline/openaccess.js'
-import { depositPaperToLibrary } from '../lib/library.js'
+import { savePaper } from '../pipeline/save.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
 
@@ -286,63 +284,15 @@ export default function SpineCheck() {
       })
       return
     }
-    const record = {
-      id,
-      pmid: res.paper.pmid,
-      title,
-      citation: res.citation || null,
-      tier: take?.tier ?? null,
-      finding: take?.finding ?? '',
-      relevance: take?.relevance ?? '',
-      quantities: verifiedRows.map((r) => ({ ...r.quantity, tier: r.verdict.tier })),
-      fullText: res.sourceDoc?.text || '', // untruncated (was sliced to 6000)
-      tables: res.sourceDoc?.tables || '',
-      pdfUrl: null, // resolved to an open-access LINK via Unpaywall in the background (the old PMC
-      // template link 404s since NCBI's host migration; byte-download is CORS-blocked anyway)
-      domain: null, // one of the 6 domain keys — filled by the background analyze (colors the node)
-      tags: [],
-      conceptId: null, // the concept node it's filed under
-      notes: '', // clinician's own notes — editable in the KB view
-      savedAt: new Date().toISOString(),
-    }
-    await store.put('papers', id, record)
     setSavedIds((prev) => new Set(prev).add(id))
-
-    // Background: file the paper under a topic concept (classified into one of the 6 domains),
-    // then re-synthesize that concept's summary. Shared with the "re-file" action via
-    // pipeline/deposit.js. Never blocks the save.
-    ;(async () => {
-      try {
-        const res = await filePaper(record)
-        if (res?.groupId) await synthesizeGroup(res.groupId)
-      } catch (err) {
-        console.warn('Concept filing failed (paper still saved):', err.message)
-      }
-      // Resolve a legal open-access PDF LINK via Unpaywall (DOI → best OA pdf url) and patch it on.
-      // Null when there's no DOI or no OA copy — behaves as before. A link, not a fetched file: the
-      // bytes are CORS-blocked, but the clinician can open the link in their own browser.
-      try {
-        const doi = record.citation?.doi
-        if (doi) {
-          const oaPdf = await resolveOaPdf(doi)
-          if (oaPdf) {
-            const cur = await store.get('papers', id)
-            if (cur) await store.put('papers', id, { ...cur, pdfUrl: oaPdf })
-          }
-        }
-      } catch (err) {
-        console.warn('OA PDF resolve failed (paper still saved):', err.message)
-      }
-      // If a flat-file library is connected, write the source note (+ its concept) to disk. Re-fetch
-      // so conceptId (patched by filePaper) and pdfUrl (patched above) are on the record we deposit.
-      // No-op when no folder is connected; never allowed to affect the save.
-      try {
-        const filed = await store.get('papers', id)
-        if (filed) await depositPaperToLibrary(filed)
-      } catch (err) {
-        console.warn('Library deposit failed (paper still saved):', err.message)
-      }
-    })()
+    // One shared path (pipeline/save.js): persist the record, then in the background file it under a
+    // concept, resolve an open-access PDF link, and write it to the connected on-disk folder. The
+    // "Add a paper" entry point in the Library uses the exact same path so they never drift.
+    try {
+      await savePaper(res, take, { title })
+    } catch (err) {
+      console.warn('Save failed:', err.message)
+    }
   }
 
   // Open the source panel for a located quote, picking the corpus (prose/table) it

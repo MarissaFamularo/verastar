@@ -206,6 +206,40 @@ export async function doiToPmid(doi) {
   return data?.esearchresult?.idlist?.[0] ?? null
 }
 
+// Resolve a user-pasted identifier — a bare PMID, a DOI (bare or doi.org URL), or a PubMed/PMC URL
+// (or PMCID) — to a PMID string. Returns null if it can't be tied to a PubMed record. The "Add a
+// paper" entry point uses this so the clinician can paste whatever they're looking at. Parsing is
+// pure; PMCID/DOI resolution hits the network.
+export async function resolvePmid(input) {
+  const raw = (input || '').trim()
+  if (!raw) return null
+  // A bare PMID.
+  if (/^\d+$/.test(raw)) return raw
+  // A PubMed URL → /<digits>.
+  const pubmed = raw.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/i)
+  if (pubmed) return pubmed[1]
+  // A PMCID or PMC URL → convert via idconv (records carry both ids).
+  const pmc = raw.match(/PMC\d+/i)
+  if (pmc) {
+    try {
+      const data = await getJson(`${IDCONV}/?ids=${encodeURIComponent(pmc[0].toUpperCase())}&format=json`)
+      return data?.records?.[0]?.pmid ?? null
+    } catch {
+      return null
+    }
+  }
+  // A DOI (bare or inside a doi.org URL) → PubMed [AID] lookup.
+  const doi = raw.match(/10\.\d{4,9}\/\S+/)
+  if (doi) {
+    try {
+      return await doiToPmid(doi[0].replace(/[).,;]+$/, ''))
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 // CrossRef fallback for a DOI not in PubMed: metadata + abstract (JATS). Abstract-only
 // tier. Strips JATS tags from the abstract if present.
 export async function fetchCrossref(doi) {

@@ -15,6 +15,7 @@ import { refileKB } from '../pipeline/deposit.js'
 import { buildKB } from '../lib/kb.js'
 import { DOMAINS, domainColor, domainLabel } from '../lib/domains.js'
 import FileToDisk from './LibraryPanel.jsx'
+import AddPaper from './AddPaper.jsx'
 
 export default function KnowledgeBase() {
   const [concepts, setConcepts] = useState([])
@@ -175,6 +176,7 @@ export default function KnowledgeBase() {
       </div>
 
       <div className="space-y-6 p-6">
+        <AddPaper onAdded={refresh} />
         <FileToDisk />
         {loading ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">Loading your library…</p>
