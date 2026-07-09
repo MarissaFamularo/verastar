@@ -137,14 +137,14 @@ export default function ConstellationView() {
           ? note
           : connectionCount
             ? 'Hover a star to light its connections; click to read its evidence.'
-            : 'Save papers from your scan — they group into concept stars that link themselves.'
+            : 'Save papers from today\'s digest — they group into concept stars that link themselves.'
 
   return (
     <section className="mt-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="border-b border-slate-200 p-6 dark:border-slate-800">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-medium">Constellations</h2>
+            <h2 className="text-lg font-medium">Star Map</h2>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
               Your knowledge as a star map. Projects are the bright anchors; each concept star
               gathers its source papers under one synthesized summary, and grows with its

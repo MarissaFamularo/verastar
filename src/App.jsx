@@ -7,7 +7,6 @@ import SpineCheck from './components/SpineCheck.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
 import KnowledgeBase from './components/KnowledgeBase.jsx'
 import WeekendRead from './components/WeekendRead.jsx'
-import LibraryPanel from './components/LibraryPanel.jsx'
 
 // Day-0 scaffold surface: paste your Anthropic key (BYOK, sessionStorage-only) and prove
 // the browser-direct round-trip works. Everything else hangs off this wiring.
@@ -18,7 +17,7 @@ export default function App() {
   const [reply, setReply] = useState('')
   const [error, setError] = useState('')
   const [onboarded, setOnboarded] = useState(null) // null = loading profile
-  const [view, setView] = useState('digest') // 'digest' | 'kb' | 'weekend' | 'constellations'
+  const [view, setView] = useState('digest') // 'digest' | 'kb' (Library) | 'starmap' | 'connections'
 
   // First run shows the onboarding quiz; once a profile is saved we show the digest.
   useEffect(() => {
@@ -60,7 +59,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <div className={`mx-auto px-6 py-16 ${view === 'constellations' && onboarded ? 'max-w-5xl' : 'max-w-2xl'}`}>
+      <div className={`mx-auto px-6 py-16 ${view === 'starmap' && onboarded ? 'max-w-5xl' : 'max-w-2xl'}`}>
         <header className="mb-10">
           <h1 className="text-3xl font-semibold tracking-tight">Verastar</h1>
           <p className="mt-2 text-slate-600 dark:text-slate-400">
@@ -131,14 +130,13 @@ export default function App() {
           <OnboardingQuiz onDone={() => setOnboarded(true)} />
         ) : onboarded === true ? (
           <>
-            {/* Digest (scan + steer) vs Constellations (the connected knowledge graph). */}
+            {/* Digest (run + steer) · Library (saved evidence) · Star Map · Connections. */}
             <div className="mt-8 inline-flex rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
               {[
                 ['digest', 'Digest'],
-                ['kb', 'Knowledge Base'],
-                ['weekend', 'Weekend Read'],
-                ['library', 'Library'],
-                ['constellations', 'Constellations'],
+                ['kb', 'Library'],
+                ['starmap', 'Star Map'],
+                ['connections', 'Connections'],
               ].map(([id, label]) => (
                 <button
                   key={id}
@@ -161,17 +159,15 @@ export default function App() {
                 <SpineCheck key={saved ? 'keyed' : 'nokey'} />
               </>
             ) : view === 'kb' ? (
-              // Re-mount per visit so it re-loads saved papers + concepts each time.
+              // Re-mount per visit so it re-loads saved papers + concepts (and reconnects the
+              // File-to-Disk folder handle) each time.
               <KnowledgeBase key="kb" />
-            ) : view === 'weekend' ? (
-              // Re-mount per visit so it re-loads saved papers + the latest weekend read.
-              <WeekendRead key="weekend" />
-            ) : view === 'library' ? (
-              // Re-mount per visit so it reconnects the folder handle + reloads live counts.
-              <LibraryPanel key="library" />
+            ) : view === 'connections' ? (
+              // Re-mount per visit so it re-loads saved papers + the latest connections read.
+              <WeekendRead key="connections" />
             ) : (
-              // Re-mount per visit so it re-syncs anchors + KB papers each time.
-              <ConstellationView key="constellations" />
+              // Re-mount per visit so it re-syncs anchors + saved papers each time.
+              <ConstellationView key="starmap" />
             )}
           </>
         ) : null}

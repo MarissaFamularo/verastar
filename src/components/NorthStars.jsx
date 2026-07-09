@@ -48,8 +48,8 @@ export default function NorthStars() {
     <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <h2 className="text-lg font-medium">Your steering profile</h2>
       <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        The concepts you steer by, the projects you're driving, and the rubric your scan
-        ranks against. Your daily scan surfaces and selects papers using these.
+        The concepts you steer by, the projects you're driving, and the rubric your digest
+        ranks against. Your daily digest surfaces and selects papers using these.
       </p>
 
       <div className="mt-5 grid gap-6 sm:grid-cols-2">

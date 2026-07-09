@@ -54,11 +54,25 @@ export function getStoredHandle() {
 }
 
 // Query, then (if needed) request readwrite permission on a handle. Returns whether it's granted.
+// NOTE: requestPermission requires transient user activation — only call this from a click handler.
 export async function ensurePermission(handle) {
   if (!handle) return false
   try {
     if ((await handle.queryPermission({ mode: 'readwrite' })) === 'granted') return true
     return (await handle.requestPermission({ mode: 'readwrite' })) === 'granted'
+  } catch {
+    return false
+  }
+}
+
+// Query ONLY (never request) whether a handle already has readwrite permission. Safe to call on
+// mount with no user gesture — browsers reset File System Access permission on a new session, so
+// after a restart this returns false even though the handle is remembered. The UI uses that to show
+// a one-click "Reconnect" (a gesture) instead of making the user re-pick the folder from scratch.
+export async function hasPermission(handle) {
+  if (!handle) return false
+  try {
+    return (await handle.queryPermission({ mode: 'readwrite' })) === 'granted'
   } catch {
     return false
   }

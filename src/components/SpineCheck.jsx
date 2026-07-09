@@ -253,7 +253,7 @@ export default function SpineCheck() {
   const [selecting, setSelecting] = useState(false) // selection funnel LLM call in flight
   const [candidates, setCandidates] = useState([]) // scored candidate pool (funnel output)
   const [selectedIds, setSelectedIds] = useState(() => new Set()) // ids chosen for the digest
-  const [poolOpen, setPoolOpen] = useState(true) // funnel expanded? collapses once a digest exists
+  const [poolOpen, setPoolOpen] = useState(false) // funnel is a disclosure — collapsed by default
   const [scanError, setScanError] = useState('')
   const [stages, setStages] = useState({})
   const [results, setResults] = useState([]) // runPaper results (live or showcase)
@@ -437,17 +437,21 @@ export default function SpineCheck() {
     })
     setCandidates(scored)
     const n = profile?.rubric?.selectCount ?? 10
-    setSelectedIds(new Set(scored.slice(0, n).map((c) => c.id)))
+    const chosenIds = new Set(scored.slice(0, n).map((c) => c.id))
+    setSelectedIds(chosenIds)
+    return { scored, chosenIds }
   }
 
-  // The product loop, step 1: search PubMed WIDE, then score every candidate against the
-  // rubric (metadata only — no extraction yet). Shows the pool with the top N pre-selected.
+  // The product loop, in ONE click: search PubMed WIDE → score every candidate against the
+  // rubric (metadata only) → run the digest immediately on the rubric's top picks. The
+  // selection funnel stays collapsed underneath the digest — open it to adjust the picks,
+  // re-rank against an edited rubric, or top up. The daily user never has to touch it.
   async function startScan() {
     setScanError('')
     setResults([])
     setTriaged({})
     setCandidates([])
-    setPoolOpen(true) // fresh scan → show the funnel expanded again
+    setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
     setSearching(true)
     let pool = []
     try {
@@ -464,12 +468,18 @@ export default function SpineCheck() {
       return
     }
     setSelecting(true)
+    let scored, chosenIds
     try {
-      await scorePool(pool)
+      ;({ scored, chosenIds } = await scorePool(pool))
     } catch (err) {
       setScanError(`Selection failed: ${err.message}`)
+      setSelecting(false)
+      return
     }
     setSelecting(false)
+    // Auto-run the digest on the top picks — one button, digest pops.
+    const chosen = scored.filter((c) => chosenIds.has(c.id))
+    if (chosen.length) await runList(chosen, { injectCorrupt: false })
   }
 
   // Live re-rank: re-score the SAME cached pool against the (edited) rubric — no re-fetch,
@@ -534,14 +544,14 @@ export default function SpineCheck() {
     <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-medium">Today's scan</h2>
+          <h2 className="text-lg font-medium">Today's digest</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             A live search of recent literature on your north stars — each headline verified
             against the source (abstract, or full text when open-access), or flagged.
           </p>
           {savedIds.size > 0 && (
             <p className="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              {savedIds.size} paper{savedIds.size === 1 ? '' : 's'} in your Knowledge Base
+              {savedIds.size} paper{savedIds.size === 1 ? '' : 's'} in your Library
             </p>
           )}
         </div>
@@ -559,7 +569,7 @@ export default function SpineCheck() {
             disabled={!keySet || running || searching || selecting}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
           >
-            {searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Scanning…' : "Run today's scan"}
+            {searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Building digest…' : "Run today's digest"}
           </button>
         </div>
       </div>
@@ -582,9 +592,9 @@ export default function SpineCheck() {
       )}
       {!running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && (
         <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-          Run today's scan to search recent literature wide, score every candidate against your
-          rubric, and pick the top papers — or hit “Verifier proof” to see the guarantees on
-          three reference trials.
+          Run today's digest — Verastar searches recent literature, scores it against your rubric,
+          and verifies the top papers into a digest. Or hit “Verifier proof” to see the guarantees
+          on three reference trials.
         </p>
       )}
 
@@ -642,7 +652,7 @@ export default function SpineCheck() {
                         onChange={() => toggleSave(res, take, verifiedRows, title)}
                         className="h-4 w-4 accent-emerald-600"
                       />
-                      {savedIds.has(paper.id) ? 'Saved' : 'Save to KB'}
+                      {savedIds.has(paper.id) ? 'Saved' : 'Save to Library'}
                     </label>
                   )}
                 </div>

@@ -1,43 +1,44 @@
-// components/LibraryPanel.jsx — the "Own Your Memory" surface: connect a real folder on disk and
-// watch Verastar write your evidence out as plain markdown you own.
+// components/LibraryPanel.jsx — the "File to Disk" block, embedded at the top of the Library.
 //
-// The pitch, made tangible: the app doesn't trap your work in IndexedDB — it writes source notes,
-// synthesized concepts, digests, and the Weekend Read ledger straight into a folder you pick, which
-// you can open in Finder. "Sync everything now" is the on-camera magic: a live list of files
-// scrolling by as they land on disk.
+// The pitch, made tangible: the app doesn't trap your work in the browser — every paper you save
+// writes out as plain markdown into a folder you pick, openable in Finder. Once you've connected a
+// folder, filing is automatic (SpineCheck's save + the Connections read write through on their own).
+// The only button the browser forces on us is the initial folder pick — showDirectoryPicker must be
+// triggered by a click for security. "Back-fill everything" is the on-camera magic + a catch-up for
+// anything saved before the folder was connected.
 
 import { useEffect, useState } from 'react'
-import { store } from '../lib/store.js'
 import {
   isSupported,
   pickLibrary,
   getStoredHandle,
   ensurePermission,
+  hasPermission,
   syncAllToLibrary,
 } from '../lib/library.js'
 
-export default function LibraryPanel() {
-  const [handle, setHandle] = useState(null) // connected FileSystemDirectoryHandle
+export default function FileToDisk() {
+  const [handle, setHandle] = useState(null) // connected + permitted FileSystemDirectoryHandle
+  const [remembered, setRemembered] = useState(null) // a stored handle that needs a re-grant click
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [log, setLog] = useState([]) // running list of files written this session
   const [progress, setProgress] = useState(null) // { done, total }
-  const [counts, setCounts] = useState({ sources: 0, concepts: 0 })
   const [error, setError] = useState('')
   const supported = isSupported()
 
-  // Reconnect a previously-picked folder (permission may need a re-grant on some sessions), and load
-  // the live counts either way so the panel reads honestly before the first sync.
+  // On mount, decide which of three states we're in. Browsers reset File System Access permission on
+  // a new session, so after a restart the folder is REMEMBERED but not permitted — we can't silently
+  // re-grant (requestPermission needs a click), so we surface a one-click "Reconnect" instead of the
+  // first-time hero. We only query permission here (gesture-free); requesting waits for the click.
   useEffect(() => {
     ;(async () => {
-      const [papers, nodes] = await Promise.all([store.all('papers'), store.all('graphNodes')])
-      setCounts({
-        sources: (papers || []).length,
-        concepts: (nodes || []).filter((n) => n.kind === 'concept').length,
-      })
       if (supported) {
         const stored = await getStoredHandle()
-        if (stored && (await ensurePermission(stored))) setHandle(stored)
+        if (stored) {
+          if (await hasPermission(stored)) setHandle(stored) // still granted (same session)
+          else setRemembered(stored) // remembered from a past session — needs a reconnect tap
+        }
       }
       setLoading(false)
     })()
@@ -47,7 +48,27 @@ export default function LibraryPanel() {
     setError('')
     try {
       const picked = await pickLibrary()
-      if (picked) setHandle(picked)
+      if (picked) {
+        setHandle(picked)
+        setRemembered(null)
+      }
+    } catch (err) {
+      setError(err?.message || String(err))
+    }
+  }
+
+  // Re-grant permission on the folder we already remember — one click, no re-pick. This runs from a
+  // user gesture, so requestPermission is allowed. If it's denied (or the folder moved/was deleted),
+  // keep the reconnect state and let them retry or pick a different folder.
+  async function handleReconnect() {
+    setError('')
+    try {
+      if (await ensurePermission(remembered)) {
+        setHandle(remembered)
+        setRemembered(null)
+      } else {
+        setError('Permission wasn’t granted — click Reconnect and choose Allow to resume filing here.')
+      }
     } catch (err) {
       setError(err?.message || String(err))
     }
@@ -69,105 +90,93 @@ export default function LibraryPanel() {
     setSyncing(false)
   }
 
-  if (loading) {
-    return <p className="mt-8 text-sm text-slate-500 dark:text-slate-400">Loading…</p>
-  }
+  if (loading) return null
 
-  // Unsupported browser: honest note, no dead buttons.
+  // Unsupported browser: one honest muted line, no dead buttons.
   if (!supported) {
     return (
-      <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-lg font-medium">Your library folder</h2>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          Writing your evidence to a folder on disk needs the File System Access API, available in
-          <span className="font-medium"> Chrome</span> or <span className="font-medium">Edge</span> on
-          desktop. Open Verastar there to own your memory as real files.
-        </p>
-      </section>
+      <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
+        Filing your Library to a folder on disk needs Chrome or Edge on desktop.
+      </div>
     )
   }
 
   return (
-    <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-medium">Own your memory</h2>
-          <p className="mt-1 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-            Verastar writes your saved papers, synthesized concepts, and Weekend Read straight into a
-            folder you pick — plain markdown you own, openable in Finder. The app only ever touches
-            that one folder.
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">File to Disk</h3>
+          <p className="mt-0.5 max-w-xl text-xs text-slate-600 dark:text-slate-400">
+            {handle
+              ? 'Every paper you save writes here automatically as plain markdown you own — openable in Finder. Nothing leaves your machine.'
+              : remembered
+                ? `Your library folder “${remembered.name}” is remembered. Browsers drop folder access on restart — reconnect to resume filing. Your files on disk are untouched.`
+                : 'Pick a folder and every paper you save writes there automatically as plain markdown you own — openable in Finder. Nothing leaves your machine.'}
           </p>
         </div>
-        {handle && (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {handle.name}
+        {handle ? (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Filing to {handle.name}
           </span>
+        ) : remembered ? (
+          <button
+            onClick={handleReconnect}
+            className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+          >
+            Reconnect “{remembered.name}”
+          </button>
+        ) : (
+          <button
+            onClick={handleConnect}
+            className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+          >
+            Choose a folder
+          </button>
         )}
       </div>
 
-      {error && <p className="mt-3 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
 
-      {!handle ? (
-        // Not connected: the hero call-to-action.
-        <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-950/40">
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Files write straight to a folder you pick and appear in Finder. Nothing leaves your machine.
-          </p>
+      {remembered && (
+        <button
+          onClick={handleConnect}
+          className="mt-2 text-[11px] font-medium text-slate-500 hover:text-slate-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          or choose a different folder
+        </button>
+      )}
+
+      {handle && (
+        <div className="mt-3 flex items-center gap-3">
           <button
-            onClick={handleConnect}
-            className="mt-4 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+            onClick={handleSync}
+            disabled={syncing}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-            Choose your library folder
+            {syncing ? 'Writing…' : 'Back-fill everything'}
           </button>
-        </div>
-      ) : (
-        // Connected: counts + the sync action + the live write log.
-        <div className="mt-6">
-          <div className="flex flex-wrap items-center gap-6 text-sm">
-            <div>
-              <span className="text-2xl font-semibold tabular-nums">{counts.sources}</span>{' '}
-              <span className="text-slate-500 dark:text-slate-400">
-                source{counts.sources === 1 ? '' : 's'}
-              </span>
-            </div>
-            <div>
-              <span className="text-2xl font-semibold tabular-nums">{counts.concepts}</span>{' '}
-              <span className="text-slate-500 dark:text-slate-400">
-                concept{counts.concepts === 1 ? '' : 's'}
-              </span>
-            </div>
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="ml-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              {syncing ? 'Syncing…' : 'Sync everything now'}
-            </button>
-          </div>
-
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-            New saves and weekend reads write here automatically. Use “Sync everything now” to back-fill
-            the whole library at once.
-          </p>
-
-          {(syncing || log.length > 0) && (
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
-              {progress && progress.total > 0 && (
-                <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                  {progress.done} / {progress.total} files written
-                </p>
-              )}
-              <ol className="max-h-64 space-y-0.5 overflow-y-auto pr-1 font-mono text-xs text-slate-600 dark:text-slate-400">
-                {log.map((label, i) => (
-                  <li key={i} className="text-emerald-700 dark:text-emerald-400">
-                    ✓ {label}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">
+            Writes your whole Library to disk at once — useful for anything saved before you connected.
+          </span>
         </div>
       )}
-    </section>
+
+      {(syncing || log.length > 0) && (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/40">
+          {progress && progress.total > 0 && (
+            <p className="mb-2 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              {progress.done} / {progress.total} files written
+            </p>
+          )}
+          <ol className="max-h-48 space-y-0.5 overflow-y-auto pr-1 font-mono text-[11px]">
+            {log.map((label, i) => (
+              <li key={i} className="text-emerald-700 dark:text-emerald-400">
+                ✓ {label}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
   )
 }

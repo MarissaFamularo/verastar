@@ -150,10 +150,10 @@ export default function WeekendRead() {
     <section className="mt-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Weekend Read</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Connections</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            How the papers you've saved connect to your projects and north stars — a suggested reading,
-            grounded in each paper's verified finding.
+            How the papers you've saved connect to your projects and north stars — the threads across
+            your Library, grounded in each paper's verified finding.
           </p>
         </div>
         {papers.length > 0 && keySet && (
@@ -162,7 +162,7 @@ export default function WeekendRead() {
             disabled={generating}
             className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
           >
-            {generating ? 'Reading…' : read ? 'Regenerate' : 'Generate weekend read'}
+            {generating ? 'Finding…' : read ? 'Regenerate' : 'Find Connections'}
           </button>
         )}
       </div>
@@ -172,8 +172,8 @@ export default function WeekendRead() {
       ) : papers.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Nothing saved yet. Save a few papers to your Knowledge Base, then come back for a weekend read
-            that threads them through your work.
+            Nothing saved yet. Save a few papers to your Library, then come back to find the connections
+            threading them through your work.
           </p>
         </div>
       ) : (
@@ -195,7 +195,7 @@ export default function WeekendRead() {
           {!hasContent && !generating && !keySet && (
             <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Set your Anthropic key above to generate the weekend read over your {papers.length} saved{' '}
+                Set your Anthropic key above to find the connections across your {papers.length} saved{' '}
                 {papers.length === 1 ? 'paper' : 'papers'}.
               </p>
             </div>
@@ -204,7 +204,7 @@ export default function WeekendRead() {
           {!hasContent && !generating && keySet && !error && (
             <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Generate a weekend read over your {papers.length} saved{' '}
+                Find the connections across your {papers.length} saved{' '}
                 {papers.length === 1 ? 'paper' : 'papers'} — Claude will surface the threads connecting them
                 to your active work, and name what none of them advanced.
               </p>

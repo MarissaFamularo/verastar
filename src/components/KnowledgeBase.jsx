@@ -1,4 +1,4 @@
-// components/KnowledgeBase.jsx — the "Knowledge Base" page: browse everything you've saved, the way
+// components/KnowledgeBase.jsx — the "Library" page: browse everything you've saved, the way
 // the clinician browses her real KG. Concepts are the top level (topic "wiki" nodes grouping source
 // papers under one synthesized summary), each in one broad DOMAIN. Search reaches title, summary,
 // and tags across the concept and its papers; a domain filter narrows by her taxonomy.
@@ -14,6 +14,7 @@ import { loadConcepts, setConceptTags, removeNode } from '../pipeline/graph.js'
 import { refileKB } from '../pipeline/deposit.js'
 import { buildKB } from '../lib/kb.js'
 import { DOMAINS, domainColor, domainLabel } from '../lib/domains.js'
+import FileToDisk from './LibraryPanel.jsx'
 
 export default function KnowledgeBase() {
   const [concepts, setConcepts] = useState([])
@@ -98,7 +99,7 @@ export default function KnowledgeBase() {
       <div className="border-b border-slate-200 p-6 dark:border-slate-800">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-medium">Knowledge Base</h2>
+            <h2 className="text-lg font-medium">Library</h2>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
               Everything you've saved, grouped into concept nodes and colored by domain. Search title,
               summary, and tags; filter by domain. Claude tags on deposit — prune what's wrong and add
@@ -173,12 +174,13 @@ export default function KnowledgeBase() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="space-y-6 p-6">
+        <FileToDisk />
         {loading ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">Loading your knowledge base…</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading your library…</p>
         ) : totalPapers === 0 ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Nothing saved yet. Run a scan and use “Save to KB” — papers group into concept nodes here.
+            Nothing saved yet. Run today's digest and use “Save to Library” — papers group into concept nodes here.
           </p>
         ) : counts.papers === 0 ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">

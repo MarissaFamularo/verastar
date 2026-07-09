@@ -23,8 +23,8 @@ export default function RubricEditor({ criteria, selectCount, onChange }) {
         </label>
       </div>
       <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-        What makes a paper worth your morning. Your scan scores every candidate against
-        this and selects the top {selectCount}. Edit it and re-scan to re-rank.
+        What makes a paper worth your morning. Your digest scores every candidate against
+        this and selects the top {selectCount}. Edit it, then re-rank the candidates to see it swing.
       </p>
       <textarea
         value={criteria}
