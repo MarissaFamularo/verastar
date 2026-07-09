@@ -110,6 +110,7 @@ export function sourceNoteMd(paper) {
     ['tier', p.tier || ''],
     ['domain', domainLabel(p.domain)],
     ['tags', p.tags || []],
+    ['pdf', p.pdfUrl || ''],
     ['saved', p.savedAt || ''],
   ])
 
@@ -133,7 +134,7 @@ export function sourceNoteMd(paper) {
 
   if (p.pmid != null && p.pmid !== '') {
     parts.push('', '## Source', '', `[PMID ${p.pmid}](${pubmedUrl(p.pmid)})`)
-    if (p.pdfUrl) parts.push('', 'The full-text PDF is filed alongside this note.')
+    if (p.pdfUrl) parts.push('', `[Open-access full text (PDF)](${p.pdfUrl})`)
   }
 
   return parts.join('\n') + '\n'

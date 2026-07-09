@@ -12,6 +12,7 @@
 // the existing `profile` object store under the key 'libraryHandle' — NO schema/DB_VERSION bump.
 
 import { store, getProfile } from './store.js'
+import { resolveOaPdf } from '../pipeline/openaccess.js'
 import {
   sourceSlug,
   conceptSlug,
@@ -140,27 +141,14 @@ async function writeConceptNote(rootHandle, node, allPapers) {
 
 // --- high-level hooks (each a no-op when no folder is connected) ----------------------------------
 
-// Deposit one saved paper to the library: write its source note; try to fetch + file its PDF (a
-// CORS/network failure NEVER blocks the note); refresh its concept note if filed; refresh README.
+// Deposit one saved paper to the library: write its source note (which carries the open-access PDF
+// LINK when we have one — bytes aren't fetchable cross-origin); refresh its concept note if filed;
+// refresh README.
 export async function depositPaperToLibrary(paper) {
   const root = await activeRoot()
   if (!root || !paper) return
   const slug = sourceSlug(paper)
   await writeFileInDir(root, `sources/${slug}.md`, sourceNoteMd(paper))
-
-  // The PDF is a bonus, not a guarantee: PMC often blocks cross-origin fetches. Isolate it so the
-  // note is already safely on disk regardless of whether the bytes come down.
-  if (paper.pdfUrl) {
-    try {
-      const resp = await fetch(paper.pdfUrl)
-      if (resp.ok) {
-        const blob = await resp.blob()
-        await writeFileInDir(root, `sources/${slug}.pdf`, blob)
-      }
-    } catch (err) {
-      console.warn('Library: PDF fetch failed (note still written):', err?.message || err)
-    }
-  }
 
   if (paper.conceptId) {
     const node = await store.get('graphNodes', paper.conceptId)
@@ -202,23 +190,25 @@ export async function syncAllToLibrary(onProgress) {
   const allPapers = papers || []
   const concepts = (nodes || []).filter((n) => n.kind === 'concept')
 
-  // Count total files up front: README + each source note (+ its optional PDF is best-effort and
-  // not counted) + each concept note + one snapshot digest when there are papers.
+  // Count total files up front: README + each source note + each concept note + one snapshot digest
+  // when there are papers.
   const total = 1 + allPapers.length + concepts.length + (allPapers.length ? 1 : 0)
   let done = 0
   const step = (label) => onProgress?.(++done, total, label)
 
   for (const paper of allPapers) {
-    const slug = sourceSlug(paper)
-    await writeFileInDir(root, `sources/${slug}.md`, sourceNoteMd(paper))
-    if (paper.pdfUrl) {
-      try {
-        const resp = await fetch(paper.pdfUrl)
-        if (resp.ok) await writeFileInDir(root, `sources/${slug}.pdf`, await resp.blob())
-      } catch {
-        // best-effort PDF — the note is what matters
+    // Backfill an open-access PDF LINK for papers saved before this existed (Unpaywall; null when
+    // there's no DOI or no OA copy). Persist it so the KB "PDF" link benefits too, not just the note.
+    let p = paper
+    if (!p.pdfUrl && p.citation?.doi) {
+      const oaPdf = await resolveOaPdf(p.citation.doi)
+      if (oaPdf) {
+        p = { ...p, pdfUrl: oaPdf }
+        await store.put('papers', p.id, p)
       }
     }
+    const slug = sourceSlug(p)
+    await writeFileInDir(root, `sources/${slug}.md`, sourceNoteMd(p))
     step(`sources/${slug}.md`)
   }
 

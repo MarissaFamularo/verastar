@@ -67,9 +67,11 @@ describe('sourceNoteMd', () => {
     expect(md).toContain('https://pubmed.ncbi.nlm.nih.gov/12345/')
   })
 
-  it('notes the PDF only when pdfUrl is present', () => {
-    expect(sourceNoteMd(paper({ pdfUrl: null }))).not.toContain('filed alongside')
-    expect(sourceNoteMd(paper({ pdfUrl: 'http://x/pdf/' }))).toContain('filed alongside')
+  it('links the open-access PDF only when pdfUrl is present', () => {
+    expect(sourceNoteMd(paper({ pdfUrl: null }))).not.toContain('Open-access full text')
+    const withPdf = sourceNoteMd(paper({ pdfUrl: 'https://host/x.pdf' }))
+    expect(withPdf).toContain('[Open-access full text (PDF)](https://host/x.pdf)')
+    expect(withPdf).toContain('pdf: "https://host/x.pdf"') // frontmatter carries the link (yaml-quoted)
   })
 
   it('does not throw on a bare record with no quantities/citation', () => {

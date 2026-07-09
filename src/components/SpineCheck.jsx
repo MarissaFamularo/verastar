@@ -11,6 +11,7 @@ import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates } from '../pipeline/select.js'
 import { filePaper, synthesizeGroup } from '../pipeline/deposit.js'
+import { resolveOaPdf } from '../pipeline/openaccess.js'
 import { depositPaperToLibrary } from '../lib/library.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
@@ -285,7 +286,6 @@ export default function SpineCheck() {
       })
       return
     }
-    const pmcid = res.source?.pmcid || null
     const record = {
       id,
       pmid: res.paper.pmid,
@@ -297,7 +297,8 @@ export default function SpineCheck() {
       quantities: verifiedRows.map((r) => ({ ...r.quantity, tier: r.verdict.tier })),
       fullText: res.sourceDoc?.text || '', // untruncated (was sliced to 6000)
       tables: res.sourceDoc?.tables || '',
-      pdfUrl: pmcid ? `https://www.ncbi.nlm.nih.gov/pmc/articles/${pmcid}/pdf/` : null,
+      pdfUrl: null, // resolved to an open-access LINK via Unpaywall in the background (the old PMC
+      // template link 404s since NCBI's host migration; byte-download is CORS-blocked anyway)
       domain: null, // one of the 6 domain keys — filled by the background analyze (colors the node)
       tags: [],
       conceptId: null, // the concept node it's filed under
@@ -317,9 +318,24 @@ export default function SpineCheck() {
       } catch (err) {
         console.warn('Concept filing failed (paper still saved):', err.message)
       }
+      // Resolve a legal open-access PDF LINK via Unpaywall (DOI → best OA pdf url) and patch it on.
+      // Null when there's no DOI or no OA copy — behaves as before. A link, not a fetched file: the
+      // bytes are CORS-blocked, but the clinician can open the link in their own browser.
+      try {
+        const doi = record.citation?.doi
+        if (doi) {
+          const oaPdf = await resolveOaPdf(doi)
+          if (oaPdf) {
+            const cur = await store.get('papers', id)
+            if (cur) await store.put('papers', id, { ...cur, pdfUrl: oaPdf })
+          }
+        }
+      } catch (err) {
+        console.warn('OA PDF resolve failed (paper still saved):', err.message)
+      }
       // If a flat-file library is connected, write the source note (+ its concept) to disk. Re-fetch
-      // so conceptId — patched by filePaper above — is set on the record we deposit. No-op when no
-      // folder is connected; never allowed to affect the save.
+      // so conceptId (patched by filePaper) and pdfUrl (patched above) are on the record we deposit.
+      // No-op when no folder is connected; never allowed to affect the save.
       try {
         const filed = await store.get('papers', id)
         if (filed) await depositPaperToLibrary(filed)
