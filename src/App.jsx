@@ -11,15 +11,15 @@ import ConstellationView from './components/ConstellationView.jsx'
 // ── Observatory shell ──────────────────────────────────────────────────────
 // The app is a dark, star-lit reading room. A fixed 88px icon rail on the left
 // switches between five surfaces; each surface owns its own scroll area. The
-// BYOK key + steering profile live in a Settings modal (opened from the rail or
-// the digest's key chip). Faithful port of design/Verastar.dc.html — the engine
+// BYOK key + steering profile live in a Settings modal (opened from the avatar
+// at the rail's foot or the digest's key chip). Faithful port of design/Verastar.dc.html — the engine
 // (pipeline/, verifier) is untouched; this file is pure presentation + routing.
 
 // Her product IA (the 4-tab simplification): Digest · Library · Star Map · Connections.
 // Library folds the concept graph + the flat-file vault into one surface; Connections is
 // the Weekend Read synthesis. The observatory visuals from the design ride on top.
 const NAV = [
-  ['digest', 'Digest'],
+  ['digest', 'Today'],
   ['library', 'Library'],
   ['starmap', 'Star Map'],
   ['connections', 'Connections'],
@@ -29,36 +29,42 @@ function NavIcon({ view }) {
   const p = { width: 21, height: 21, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7 }
   switch (view) {
     case 'digest':
+      // Rocket — today's launch into the fresh literature.
       return (
-        <svg {...p}>
-          <circle cx="12" cy="12" r="8.5" />
-          <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" />
+        <svg {...p} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 13a8 8 0 0 1 7 7 6 6 0 0 0 3-5 9 9 0 0 0 6-8 3 3 0 0 0-3-3 9 9 0 0 0-8 6 6 6 0 0 0-5 3" />
+          <path d="M7 14a6 6 0 0 0-3 6 6 6 0 0 0 6-3" />
+          <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none" />
         </svg>
       )
     case 'library':
-      // Bookmark/knowledge mark — the library of saved evidence + concepts.
+      // Star atlas — an open book with a star above the spine.
       return (
-        <svg {...p}>
-          <path d="M5 4.5h11a2 2 0 0 1 2 2V20l-2.4-1.6L13 20l-2.6-1.6L8 20V6.5a2 2 0 0 0-2-2z" strokeLinejoin="round" />
+        <svg {...p} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 19.5a9 9 0 0 1 9 0 9 9 0 0 1 9 0" />
+          <path d="M3 7a9 9 0 0 1 9 0 9 9 0 0 1 9 0" />
+          <path d="M3 7v12.5M12 7v12.5M21 7v12.5" />
+          <circle cx="12" cy="2.6" r="1.2" fill="currentColor" stroke="none" />
         </svg>
       )
     case 'starmap':
-      // Constellation of concept stars.
+      // The constellation asterism (logo option C).
       return (
         <svg {...p}>
-          <circle cx="6" cy="7" r="1.6" fill="currentColor" stroke="none" />
-          <circle cx="18" cy="6" r="1.6" fill="currentColor" stroke="none" />
-          <circle cx="15" cy="17" r="1.6" fill="currentColor" stroke="none" />
-          <circle cx="8" cy="15" r="1.6" fill="currentColor" stroke="none" />
-          <path d="M6 7l9-1M15 6l0 11M15 17l-7-2M8 15L6 7" opacity=".5" />
+          <path d="M5 18 L11 8 L17 13 L20.5 4.5" opacity=".5" />
+          <circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none" />
+          <circle cx="11" cy="8" r="2.2" fill="currentColor" stroke="none" />
+          <circle cx="17" cy="13" r="1.4" fill="currentColor" stroke="none" />
+          <circle cx="20.5" cy="4.5" r="1" fill="currentColor" stroke="none" />
         </svg>
       )
     case 'connections':
-      // Quill — the written Weekend Read that threads the papers together.
+      // Orbit — a star with a companion (logo option E).
       return (
         <svg {...p}>
-          <path d="M4 20l3-9 8-6 3 3-6 8-8 4z" strokeLinejoin="round" />
-          <path d="M14 5l3 3" />
+          <ellipse cx="12" cy="12" rx="10" ry="4.2" opacity=".55" transform="rotate(-24 12 12)" strokeWidth="1.4" />
+          <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" />
+          <circle cx="21.1" cy="7.9" r="1.3" fill="currentColor" stroke="none" />
         </svg>
       )
     default:
@@ -79,8 +85,11 @@ function IconRail({ view, setView, onSettings, initials }) {
         zIndex: 5,
       }}
     >
-      <div style={{ marginBottom: 34, fontSize: 22, color: 'var(--color-gold)', textShadow: '0 0 14px rgba(233,196,106,.55)' }}>
-        ✦
+      {/* Five-point chart star — the observatory mark, star-atlas style (not a four-point AI sparkle). */}
+      <div style={{ marginBottom: 34, color: 'var(--color-gold)', filter: 'drop-shadow(0 0 7px rgba(233,196,106,.55))' }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-label="Verastar">
+          <polygon points="12,3 14.47,9.6 21.51,9.91 15.99,14.3 17.88,21.09 12,17.2 6.12,21.09 8.01,14.3 2.49,9.91 9.53,9.6" />
+        </svg>
       </div>
       <nav className="flex flex-col items-center w-full" style={{ gap: 6 }}>
         {NAV.map(([id, label]) => {
@@ -107,24 +116,17 @@ function IconRail({ view, setView, onSettings, initials }) {
           )
         })}
       </nav>
-      <div className="flex flex-col items-center" style={{ marginTop: 'auto', gap: 16 }}>
+      <div className="flex flex-col items-center" style={{ marginTop: 'auto' }}>
+        {/* The avatar doubles as the Settings entry point — no separate rail item. */}
         <button
           onClick={onSettings}
-          className="flex flex-col items-center cursor-pointer"
-          style={{ width: 64, padding: '10px 0 8px', border: 0, borderRadius: 13, background: 'transparent', color: 'var(--color-fg-muted)', gap: 6, fontFamily: 'inherit' }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <circle cx="12" cy="12" r="3.2" />
-            <path d="M12 3.5v2.4M12 18.1v2.4M20.5 12h-2.4M5.9 12H3.5M18 6l-1.7 1.7M7.7 16.3 6 18M18 18l-1.7-1.7M7.7 7.7 6 6" />
-          </svg>
-          <span style={{ fontSize: 10.5, fontWeight: 500 }}>Settings</span>
-        </button>
-        <span
-          className="flex items-center justify-center"
-          style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#3a4150,#8a94a8)', fontSize: 12.5, fontWeight: 600, color: '#0d0f14' }}
+          title="Settings"
+          aria-label="Settings"
+          className="flex items-center justify-center cursor-pointer"
+          style={{ width: 36, height: 36, padding: 0, border: 0, borderRadius: '50%', background: 'linear-gradient(135deg,#3a4150,#8a94a8)', fontSize: 12.5, fontWeight: 600, color: '#0d0f14', fontFamily: 'inherit' }}
         >
           {initials}
-        </span>
+        </button>
       </div>
     </aside>
   )

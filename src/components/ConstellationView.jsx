@@ -271,7 +271,7 @@ function NodePanel({
           className="cursor-pointer"
           style={{ marginTop: 18, width: '100%', padding: 11, border: 0, borderRadius: 11, background: 'rgba(239,143,91,.14)', color: 'var(--color-accent-bright)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: proposing ? 0.6 : 1 }}
         >
-          {proposing ? 'Linking…' : '✦ Find more connections with Claude'}
+          {proposing ? 'Linking…' : '✶ Find more connections with Claude'}
         </button>
       )}
 
