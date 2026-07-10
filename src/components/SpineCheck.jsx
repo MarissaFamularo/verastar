@@ -515,29 +515,30 @@ export default function SpineCheck() {
   const digestedIds = new Set(results.map((r) => r.paper.id))
 
   const busy = running || searching || selecting
-  const primaryLabel = searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Building digest…' : 'Re-run scan'
+  const primaryLabel = searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Building digest…' : "Run today's digest"
   const showEmpty = !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError
 
   return (
     <section>
-      {/* Run controls — the primary orange action + the deterministic proof surface. */}
-      <div className="flex flex-wrap items-center justify-end" style={{ gap: 10 }}>
+      {/* Run controls — the big centered primary action, with the deterministic proof
+          surface as a small secondary beneath it. */}
+      <div className="flex flex-col items-center" style={{ gap: 12, marginTop: 6 }}>
+        <button
+          onClick={startScan}
+          disabled={!keySet || busy}
+          className="cursor-pointer"
+          style={{ padding: '14px 34px', borderRadius: 13, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15.5, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -10px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }}
+        >
+          {primaryLabel}
+        </button>
         <button
           onClick={runShowcase}
           disabled={!keySet || busy}
           title="Three reference trials that demonstrate the verifier's guarantees"
           className="cursor-pointer"
-          style={{ padding: '10px 15px', borderRadius: 11, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
+          style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
         >
           Verifier proof
-        </button>
-        <button
-          onClick={startScan}
-          disabled={!keySet || busy}
-          className="cursor-pointer"
-          style={{ padding: '10px 18px', borderRadius: 11, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 6px 22px -8px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }}
-        >
-          {primaryLabel}
         </button>
       </div>
 
@@ -561,7 +562,7 @@ export default function SpineCheck() {
       {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
       {showEmpty && (
         <p style={{ margin: '16px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)', lineHeight: 1.6, maxWidth: 620 }}>
-          Hit <span style={{ color: 'var(--color-accent)' }}>Re-run scan</span> — Verastar searches recent literature, scores it against your rubric, and
+          Hit <span style={{ color: 'var(--color-accent)' }}>Run today's digest</span> — Verastar searches recent literature, scores it against your rubric, and
           verifies the top papers into a digest. Or hit “Verifier proof” to see the guarantees on three reference trials.
         </p>
       )}
