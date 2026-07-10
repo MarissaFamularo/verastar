@@ -43,6 +43,29 @@ export async function savePaper(res, take, { title } = {}) {
   return record
 }
 
+// Backfill open-access PDF links for already-saved papers that don't have one yet (DOI present,
+// pdfUrl still null). Covers papers saved before enrichment existed, or whose resolve missed at save
+// time (network/rate-limit) — the Library gives them a second chance on load. Runs sequentially to
+// stay polite to Unpaywall, never throws, and calls onPatched(id, pdfUrl) as each link lands so the
+// UI can light up its PDF badge without a reload. Idempotent: a paper that already has a link, has no
+// DOI, or genuinely isn't open-access is skipped and never retried into a link that doesn't exist.
+export async function backfillOaPdfs(papers, onPatched) {
+  for (const p of papers || []) {
+    if (p?.pdfUrl || !p?.citation?.doi) continue
+    try {
+      const oaPdf = await resolveOaPdf(p.citation.doi)
+      if (!oaPdf) continue
+      const cur = await store.get('papers', p.id)
+      if (cur && !cur.pdfUrl) {
+        await store.put('papers', p.id, { ...cur, pdfUrl: oaPdf })
+        onPatched?.(p.id, oaPdf)
+      }
+    } catch {
+      /* a single miss never blocks the rest */
+    }
+  }
+}
+
 // File under a concept (+ re-synthesize its summary), resolve an OA PDF link, and deposit to the
 // on-disk library. Each step is independently try/caught so none can undo the save above.
 function enrichInBackground(record) {

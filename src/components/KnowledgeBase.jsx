@@ -14,6 +14,7 @@ import { hasApiKey } from '../lib/anthropic.js'
 import { loadConcepts, setConceptTags, removeNode } from '../pipeline/graph.js'
 import { refileKB } from '../pipeline/deposit.js'
 import { buildKB } from '../lib/kb.js'
+import { backfillOaPdfs } from '../pipeline/save.js'
 import { DOMAINS, domainColor, domainLabel } from '../lib/domains.js'
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
@@ -38,6 +39,12 @@ export default function KnowledgeBase() {
     ;(async () => {
       await refresh()
       setLoading(false)
+      // Self-heal: resolve any open-access PDF links that never got persisted, patching each
+      // paper's badge in place as its link lands. One-time per paper — resolved ones are skipped.
+      const all = await store.all('papers')
+      backfillOaPdfs(all || [], (id, pdfUrl) =>
+        setPapers((prev) => prev.map((p) => (p.id === id ? { ...p, pdfUrl } : p))),
+      )
     })()
   }, [])
 
