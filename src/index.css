@@ -99,6 +99,31 @@ a:hover {
 
 /* Faint starfield used behind hero headers. Apply .vs-stars to a positioned
    overlay element (pointer-events:none set here). */
+/* Full-canvas starfield for the onboarding night sky (denser than .vs-stars). */
+.vs-stars-deep {
+  pointer-events: none;
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 18%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1px 1px at 28% 62%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1.3px 1.3px at 44% 24%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 62% 72%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1.4px 1.4px at 78% 32%, rgba(220, 225, 240, 0.55), transparent),
+    radial-gradient(1px 1px at 88% 60%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1px 1px at 36% 86%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(1.2px 1.2px at 70% 14%, rgba(255, 255, 255, 0.45), transparent);
+  opacity: 0.75;
+}
+
+/* Onboarding animations: pulsing constellation stars + the glowing welcome mark. */
+@keyframes vs-pulse {
+  0%, 100% { opacity: 0.35; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
+}
+@keyframes vs-glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(233, 196, 106, 0.5)); }
+  50% { filter: drop-shadow(0 0 14px rgba(233, 196, 106, 0.85)); }
+}
+
 .vs-stars {
   pointer-events: none;
   background-image:

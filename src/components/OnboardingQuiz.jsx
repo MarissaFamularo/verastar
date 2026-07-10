@@ -1,12 +1,17 @@
-// components/OnboardingQuiz.jsx — "watch it build my profile in 60 seconds."
+// components/OnboardingQuiz.jsx — the first-run flow: "watch it build my profile in 60 seconds."
 //
-// A short intake → one Claude call drafts the steering profile → the clinician reviews
-// and edits → save. This replaces manual chip entry as the first-run experience. A skip
-// path seeds the real named user's profile (Dr. Famularo) so the demo starts from empty
-// and steers in one click.
+// Faithful port of design/Onboarding.dc.html onto the real pipeline. Five steps:
+// welcome → connect (BYOK — the only place a brand-new user can enter a key) →
+// intake (three questions) → drafting (constellation animation while one Claude
+// call drafts the steering profile) → review (edit everything, then enter).
+// A demo path on the welcome screen seeds DEMO_PROFILE so the app demos keyless.
+//
+// `preview` mode (App mounts this at ?firstrun=1): nothing persists — no key
+// writes, no saveProfile — and drafting is a timed animation instead of a paid
+// call, so the flow can be walked end-to-end for free.
 
-import { useState } from 'react'
-import { hasApiKey } from '../lib/anthropic.js'
+import { useEffect, useState } from 'react'
+import { hasApiKey, setApiKey, setNcbiKey, setNcbiEmail } from '../lib/anthropic.js'
 import { saveProfile } from '../lib/store.js'
 import { draftProfile, DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import ChipGroup from './ChipGroup.jsx'
@@ -15,7 +20,7 @@ import RubricEditor from './RubricEditor.jsx'
 const QUESTIONS = [
   {
     key: 'focus',
-    label: 'Your specialty and how the digest should address you',
+    label: 'Your specialty, and how the digest should address you',
     placeholder: "e.g. I'm a vascular surgeon — call me Dr. Famularo.",
   },
   {
@@ -30,166 +35,376 @@ const QUESTIONS = [
   },
 ]
 
-export default function OnboardingQuiz({ onDone }) {
-  const [phase, setPhase] = useState('quiz') // quiz | drafting | review
+// Shared observatory styles for this flow.
+const stepMark = { margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '.14em', color: '#6d7484' }
+const stepTitle = { margin: '12px 0 0', fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }
+const stepLede = { margin: '12px 0 0', fontSize: 15.5, lineHeight: 1.6, color: 'var(--color-fg-dim)', maxWidth: 520 }
+const fieldLabel = { display: 'block', fontSize: 13, color: '#aab0be', fontWeight: 500 }
+const inputStyle = {
+  marginTop: 8,
+  width: '100%',
+  padding: '12px 15px',
+  borderRadius: 11,
+  border: '1px solid rgba(255,255,255,.1)',
+  background: 'var(--surface-input)',
+  color: 'var(--color-fg)',
+  fontSize: 15,
+  fontFamily: 'inherit',
+  outline: 'none',
+}
+const primaryBtn = {
+  padding: '12px 24px',
+  border: 0,
+  borderRadius: 11,
+  background: 'var(--color-accent)',
+  color: '#1c1206',
+  fontSize: 15,
+  fontWeight: 600,
+  fontFamily: 'inherit',
+}
+const ghostLink = { border: 0, background: 'transparent', padding: 0, fontSize: 14, color: 'var(--color-fg-muted)', fontFamily: 'inherit' }
+
+// The observatory mark — five-point outline chart star (never a four-point sparkle).
+function ChartStar({ size = 44 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" strokeWidth="1.3" strokeLinejoin="round" aria-label="Verastar">
+      <polygon points="12,3 14.47,9.6 21.51,9.91 15.99,14.3 17.88,21.09 12,17.2 6.12,21.09 8.01,14.3 2.49,9.91 9.53,9.6" />
+    </svg>
+  )
+}
+
+// The drafting constellation — pulsing stars linked by faint lines, straight from the mockup.
+function DraftingConstellation() {
+  const stars = [
+    { left: 110, top: 40, size: 16, color: 'var(--color-accent-bright)', glow: 'rgba(239,143,91,.7)', delay: 0 },
+    { left: 40, top: 90, size: 11, color: 'var(--color-gold)', glow: 'rgba(233,196,106,.6)', delay: 0.3 },
+    { left: 180, top: 80, size: 10, color: 'var(--color-registry)', glow: 'rgba(143,189,230,.6)', delay: 0.6 },
+    { left: 150, top: 24, size: 8, color: 'var(--color-verified)', glow: 'rgba(127,191,154,.6)', delay: 0.9 },
+    { left: 90, top: 112, size: 7, color: 'var(--color-fg-soft)', glow: 'transparent', delay: 1.2 },
+  ]
+  return (
+    <div className="relative" style={{ height: 130, margin: '0 auto', width: 220 }}>
+      <svg viewBox="0 0 220 130" className="absolute" style={{ inset: 0, width: '100%', height: '100%' }}>
+        <line x1="40" y1="90" x2="110" y2="40" stroke="rgba(239,143,91,.4)" strokeWidth="1" />
+        <line x1="110" y1="40" x2="180" y2="80" stroke="rgba(239,143,91,.4)" strokeWidth="1" />
+        <line x1="110" y1="40" x2="150" y2="24" stroke="rgba(233,196,106,.35)" strokeWidth="1" />
+        <line x1="40" y1="90" x2="90" y2="112" stroke="rgba(255,255,255,.15)" strokeWidth="1" />
+      </svg>
+      {stars.map((s) => (
+        <span
+          key={`${s.left}-${s.top}`}
+          className="absolute"
+          style={{
+            left: s.left,
+            top: s.top,
+            transform: 'translate(-50%,-50%)',
+            width: s.size,
+            height: s.size,
+            borderRadius: '50%',
+            background: s.color,
+            boxShadow: s.glow === 'transparent' ? 'none' : `0 0 ${s.size + 2}px 3px ${s.glow}`,
+            animation: `vs-pulse 1.8s ease-in-out ${s.delay}s infinite`,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+export default function OnboardingQuiz({ onDone, preview = false }) {
+  const [step, setStep] = useState('welcome') // welcome | connect | intake | drafting | review
+  const [keyInput, setKeyInput] = useState('')
+  const [ncbiInput, setNcbiInput] = useState('')
+  const [emailInput, setEmailInput] = useState('')
   const [answers, setAnswers] = useState({})
   const [draft, setDraft] = useState(null) // { name, northStars, projects, rubric:{criteria,selectCount} }
   const [error, setError] = useState('')
   const keySet = hasApiKey()
   const answered = QUESTIONS.some((q) => (answers[q.key] || '').trim())
 
-  async function build() {
-    setError('')
-    setPhase('drafting')
-    try {
-      const labeled = Object.fromEntries(
-        QUESTIONS.map((q) => [q.label, answers[q.key] || '']),
-      )
-      const profile = await draftProfile({ answers: labeled })
-      setDraft({ name: profile.name, ...profile })
-      setPhase('review')
-    } catch (err) {
-      setError(err?.message || String(err))
-      setPhase('quiz')
+  // Drafting runs as an effect so the animation frame mounts before the call starts.
+  useEffect(() => {
+    if (step !== 'drafting') return
+    let alive = true
+    if (preview) {
+      // Preview: the animation without the spend — land on review with the demo draft.
+      const t = setTimeout(() => {
+        if (!alive) return
+        setDraft({ ...DEMO_PROFILE, rubric: { ...DEMO_PROFILE.rubric } })
+        setStep('review')
+      }, 2600)
+      return () => { alive = false; clearTimeout(t) }
     }
+    const labeled = Object.fromEntries(QUESTIONS.map((q) => [q.label, answers[q.key] || '']))
+    draftProfile({ answers: labeled })
+      .then((profile) => {
+        if (!alive) return
+        setDraft({ name: profile.name, ...profile })
+        setStep('review')
+      })
+      .catch((err) => {
+        if (!alive) return
+        setError(err?.message || String(err))
+        setStep('intake')
+      })
+    return () => { alive = false }
+  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function connectContinue(e) {
+    e.preventDefault()
+    if (!preview) {
+      if (keyInput.trim()) setApiKey(keyInput)
+      if (emailInput.trim()) setNcbiEmail(emailInput)
+      if (ncbiInput.trim()) setNcbiKey(ncbiInput)
+      if (!hasApiKey()) return // key required to interview; the demo path is on the welcome screen
+    }
+    setError('')
+    setStep('intake')
   }
 
   function useDemo() {
+    if (preview) { onDone?.(DEMO_PROFILE); return }
     saveProfile({ ...DEMO_PROFILE }).then(() => onDone?.(DEMO_PROFILE))
   }
 
   async function save() {
     const profile = {
       name: (draft.name || 'Doctor').trim(),
-      northStars: draft.northStars,
-      projects: draft.projects,
+      northStars: draft.northStars || [],
+      projects: draft.projects || [],
       rubric: {
         criteria: (draft.rubric?.criteria || DEFAULT_RUBRIC).trim(),
         selectCount: draft.rubric?.selectCount || DEFAULT_SELECT_COUNT,
       },
       onboarded: true,
     }
-    await saveProfile(profile)
+    if (!preview) await saveProfile(profile)
     onDone?.(profile)
   }
 
   // Draft edit helpers.
   const setField = (patch) => setDraft((d) => ({ ...d, ...patch }))
-  const addTo = (field) => (v) => setDraft((d) => (d[field].includes(v) ? d : { ...d, [field]: [...d[field], v] }))
-  const removeFrom = (field) => (v) => setDraft((d) => ({ ...d, [field]: d[field].filter((x) => x !== v) }))
+  const addTo = (field) => (v) => setDraft((d) => ((d[field] || []).includes(v) ? d : { ...d, [field]: [...(d[field] || []), v] }))
+  const removeFrom = (field) => (v) => setDraft((d) => ({ ...d, [field]: (d[field] || []).filter((x) => x !== v) }))
 
-  return (
-    <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-medium">Build your steering profile</h2>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Answer a few questions and Claude drafts your north stars, projects, and digest
-            rubric. You review and edit everything before it's saved.
-          </p>
+  // ===== WELCOME =====
+  if (step === 'welcome') {
+    return (
+      <div style={{ textAlign: 'center' }}>
+        <div className="inline-flex" style={{ animation: 'vs-glow 4s ease-in-out infinite' }}>
+          <ChartStar />
         </div>
-        <button
-          onClick={useDemo}
-          className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-        >
-          Skip — use demo profile
-        </button>
-      </div>
-
-      {!keySet && (
-        <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
-          Set your API key above to build a profile from your answers — or skip to the demo profile.
+        <h1 style={{ margin: '18px 0 0', fontFamily: 'var(--font-serif)', fontSize: 52, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Verastar</h1>
+        <p style={{ margin: '16px 0 0', fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 21, lineHeight: 1.5, color: 'var(--color-fg-soft)' }}>
+          A verified evidence digest, keeping you current<br />on the latest literature in your field.
         </p>
-      )}
+        <div className="flex flex-col items-center" style={{ marginTop: 36, gap: 16 }}>
+          <button
+            onClick={() => setStep('connect')}
+            className="cursor-pointer"
+            style={{ ...primaryBtn, padding: '14px 30px', borderRadius: 12, boxShadow: '0 10px 34px -10px rgba(239,143,91,.75)' }}
+          >
+            Set up my digest →
+          </button>
+          <button onClick={useDemo} className="cursor-pointer" style={ghostLink}>
+            Explore with a demo profile
+          </button>
+        </div>
+      </div>
+    )
+  }
 
-      {/* QUIZ — the intake questions. */}
-      {phase !== 'review' && (
-        <div className="mt-5 space-y-5">
+  // ===== CONNECT =====
+  if (step === 'connect') {
+    return (
+      <div>
+        <p style={stepMark}>01 / 03 · CONNECT</p>
+        <h2 style={stepTitle}>Bring your own key.</h2>
+        <p style={{ ...stepLede, maxWidth: 500 }}>
+          Verastar runs on your Anthropic key — you paste it in, and the app uses it to do the
+          work. No shared model bill, no lock-in.
+        </p>
+
+        <form onSubmit={connectContinue}>
+          <div style={{ marginTop: 28 }}>
+            <label style={fieldLabel}>Anthropic API key</label>
+            {keySet && !keyInput ? (
+              <div className="flex items-center" style={{ marginTop: 8, gap: 10, padding: '11px 14px', borderRadius: 11, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-fg-soft)', fontSize: 13, letterSpacing: '.05em' }}>sk-ant-••••••••••••••••</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-verified-soft)', fontWeight: 600 }}>Active</span>
+              </div>
+            ) : (
+              <input
+                type="password"
+                value={keyInput}
+                onChange={(e) => setKeyInput(e.target.value)}
+                placeholder="sk-ant-…"
+                autoComplete="off"
+                style={inputStyle}
+              />
+            )}
+            <label style={{ ...fieldLabel, marginTop: 18 }}>
+              NCBI email <span style={{ color: 'var(--color-fg-faint)', fontWeight: 400 }}>· optional</span>
+            </label>
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="you@institution.edu — polite identification to NCBI"
+              autoComplete="off"
+              style={inputStyle}
+            />
+            <label style={{ ...fieldLabel, marginTop: 14 }}>
+              NCBI API key <span style={{ color: 'var(--color-fg-faint)', fontWeight: 400 }}>· optional</span>
+            </label>
+            <input
+              value={ncbiInput}
+              onChange={(e) => setNcbiInput(e.target.value)}
+              placeholder="Raises PubMed rate limit 3 → 10 req/s"
+              autoComplete="off"
+              style={inputStyle}
+            />
+            <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+              Your key lives only in this browser tab — never sent to our servers, never written
+              to disk, and cleared when you close the tab.
+            </p>
+          </div>
+
+          <div className="flex items-center" style={{ marginTop: 30, gap: 18 }}>
+            <button type="submit" disabled={!preview && !keySet && !keyInput.trim()} className="cursor-pointer" style={{ ...primaryBtn, opacity: !preview && !keySet && !keyInput.trim() ? 0.5 : 1 }}>
+              Continue →
+            </button>
+            <button type="button" onClick={() => setStep('welcome')} className="cursor-pointer" style={ghostLink}>
+              Back
+            </button>
+          </div>
+        </form>
+      </div>
+    )
+  }
+
+  // ===== INTAKE =====
+  if (step === 'intake') {
+    return (
+      <div>
+        <p style={stepMark}>02 / 03 · INTERVIEW</p>
+        <h2 style={stepTitle}>Three questions.</h2>
+        <p style={stepLede}>
+          Answer in your own words — Claude drafts your north stars, projects, and ranking
+          rubric from these. You review and edit everything before it's saved.
+        </p>
+
+        <div className="flex flex-col" style={{ marginTop: 26, gap: 20 }}>
           {QUESTIONS.map((q) => (
             <div key={q.key}>
-              <label className="text-sm font-medium">{q.label}</label>
+              <label style={{ display: 'block', fontSize: 14, color: 'var(--color-fg-soft)', fontWeight: 500 }}>{q.label}</label>
               <textarea
                 value={answers[q.key] || ''}
                 onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))}
                 rows={2}
                 placeholder={q.placeholder}
-                disabled={phase === 'drafting'}
-                className="mt-2 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-slate-500 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950"
+                style={{ ...inputStyle, resize: 'vertical', padding: '11px 14px', fontSize: 14.5, lineHeight: 1.55 }}
               />
             </div>
           ))}
+        </div>
 
-          {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+        {error && (
+          <div style={{ marginTop: 18, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 600 }}>Drafting failed:</span> {error}
+          </div>
+        )}
 
+        <div className="flex items-center" style={{ marginTop: 28, gap: 18 }}>
           <button
-            onClick={build}
-            disabled={!keySet || !answered || phase === 'drafting'}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+            onClick={() => { setError(''); setStep('drafting') }}
+            disabled={!answered || (!preview && !keySet)}
+            className="cursor-pointer"
+            style={{ ...primaryBtn, opacity: !answered || (!preview && !keySet) ? 0.5 : 1 }}
           >
-            {phase === 'drafting' ? 'Claude is drafting your profile…' : 'Build my profile'}
+            ✶ Draft my profile
+          </button>
+          <button onClick={() => setStep('connect')} className="cursor-pointer" style={ghostLink}>
+            Back
           </button>
         </div>
-      )}
+      </div>
+    )
+  }
 
-      {/* REVIEW — the drafted profile, fully editable, before save. */}
-      {phase === 'review' && draft && (
-        <div className="mt-6 space-y-6">
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200">
-            Drafted your profile{draft.name ? ` for ${draft.name}` : ''} — review and edit, then save.
-          </div>
+  // ===== DRAFTING =====
+  if (step === 'drafting') {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 0' }}>
+        <DraftingConstellation />
+        <p style={{ margin: '24px 0 0', fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 22, color: 'var(--color-fg)' }}>
+          Charting your north stars…
+        </p>
+        <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)' }}>
+          Reading your answers and drafting concepts, projects, and a ranking rubric.
+        </p>
+      </div>
+    )
+  }
 
-          <div>
-            <label className="text-sm font-medium">Digest greeting</label>
-            <input
-              value={draft.name || ''}
-              onChange={(e) => setField({ name: e.target.value })}
-              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 dark:border-slate-700 dark:bg-slate-950"
-            />
-          </div>
+  // ===== REVIEW =====
+  return (
+    <div>
+      <p style={stepMark}>03 / 03 · REVIEW</p>
+      <h2 style={stepTitle}>Your steering profile.</h2>
+      <p style={stepLede}>
+        Drafted from your answers — edit anything, then enter. You can always tune it later
+        from Settings.
+      </p>
 
-          <div className="grid gap-6 sm:grid-cols-2">
-            <ChipGroup
-              label="North stars"
-              hint="Concepts you steer by (used as search terms)"
-              items={draft.northStars}
-              onAdd={addTo('northStars')}
-              onRemove={removeFrom('northStars')}
-              placeholder="e.g. CLTI outcomes"
-              accent="sky"
-            />
-            <ChipGroup
-              label="Active projects"
-              hint="What the relevance line speaks to"
-              items={draft.projects}
-              onAdd={addTo('projects')}
-              onRemove={removeFrom('projects')}
-              placeholder="e.g. Limb Preservation Program"
-              accent="violet"
-            />
-          </div>
-
-          <RubricEditor
-            criteria={draft.rubric.criteria}
-            selectCount={draft.rubric.selectCount}
-            onChange={(rubric) => setField({ rubric })}
+      <div className="flex flex-col" style={{ marginTop: 24, gap: 22 }}>
+        <div>
+          <label style={fieldLabel}>Digest greeting</label>
+          <input
+            value={draft?.name || ''}
+            onChange={(e) => setField({ name: e.target.value })}
+            style={{ ...inputStyle, padding: '11px 14px' }}
           />
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={save}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-            >
-              Save profile
-            </button>
-            <button
-              onClick={() => setPhase('quiz')}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-            >
-              Back to questions
-            </button>
-          </div>
         </div>
-      )}
-    </section>
+
+        <ChipGroup
+          label="North stars"
+          hint="Concepts you steer by (used as search terms)"
+          items={draft?.northStars || []}
+          onAdd={addTo('northStars')}
+          onRemove={removeFrom('northStars')}
+          placeholder="e.g. CLTI outcomes"
+          accent="sky"
+        />
+        <ChipGroup
+          label="Active projects"
+          hint="What the relevance line speaks to"
+          items={draft?.projects || []}
+          onAdd={addTo('projects')}
+          onRemove={removeFrom('projects')}
+          placeholder="e.g. Limb Preservation Program"
+        />
+
+        <RubricEditor
+          criteria={draft?.rubric?.criteria ?? DEFAULT_RUBRIC}
+          selectCount={draft?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT}
+          onChange={(rubric) => setField({ rubric })}
+        />
+      </div>
+
+      <div className="flex items-center" style={{ marginTop: 28, gap: 18 }}>
+        <button
+          onClick={save}
+          className="cursor-pointer"
+          style={{ ...primaryBtn, padding: '13px 26px', borderRadius: 12, boxShadow: '0 10px 34px -12px rgba(239,143,91,.7)' }}
+        >
+          Enter Verastar →
+        </button>
+        <button onClick={() => setStep('intake')} className="cursor-pointer" style={ghostLink}>
+          Back to questions
+        </button>
+      </div>
+    </div>
   )
 }

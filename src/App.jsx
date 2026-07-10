@@ -288,6 +288,8 @@ export default function App() {
   const [reply, setReply] = useState('')
   const [error, setError] = useState('')
   const [onboarded, setOnboarded] = useState(null)
+  // ?firstrun=1 previews the onboarding flow without touching the saved profile or key.
+  const [firstrunPreview, setFirstrunPreview] = useState(() => new URLSearchParams(window.location.search).has('firstrun'))
   const [view, setView] = useState('digest')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [profile, setProfile] = useState(null)
@@ -341,16 +343,31 @@ export default function App() {
 
   if (onboarded === null) return null // profile still loading
 
-  if (onboarded === false) {
-    // First run: the onboarding quiz on the dark canvas. Restyled in its own pass.
+  if (onboarded === false || firstrunPreview) {
+    // First run: the five-step onboarding flow on the night-sky canvas (design/Onboarding.dc.html).
+    const exitPreview = () => {
+      window.history.replaceState(null, '', window.location.pathname)
+      setFirstrunPreview(false)
+    }
     return (
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(165deg,#0f1218,#08090d)' }}>
-        <div className="mx-auto" style={{ maxWidth: 680, padding: '48px 24px' }}>
-          <header style={{ marginBottom: 8 }}>
-            <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, color: 'var(--color-fg)' }}>Verastar</h1>
-            <p style={{ margin: '8px 0 0', color: 'var(--color-fg-dim)' }}>A verifiable evidence digest for clinicians. Verified, never fabricated.</p>
-          </header>
-          <OnboardingQuiz onDone={() => { setOnboarded(true); getProfile().then((p) => setProfile(p || null)) }} />
+      <div className="relative flex items-center justify-center" style={{ minHeight: '100vh', overflowY: 'auto', padding: '56px 32px', background: 'radial-gradient(120% 80% at 50% -10%,#1a2138,#0b0e18 55%,#08090d)' }}>
+        <div className="vs-stars-deep absolute" style={{ inset: 0 }} />
+        <div className="absolute" style={{ top: -120, left: '50%', transform: 'translateX(-50%)', width: 680, height: 420, pointerEvents: 'none', background: 'radial-gradient(closest-side,rgba(239,143,91,.16),rgba(233,196,106,.06),transparent)', filter: 'blur(8px)' }} />
+        {firstrunPreview && onboarded !== false && (
+          <button onClick={exitPreview} className="fixed cursor-pointer" style={{ top: 16, right: 20, zIndex: 10, padding: '7px 13px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 999, background: 'rgba(8,9,13,.6)', color: 'var(--color-fg-muted)', fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '.06em' }}>
+            preview · nothing saves · exit ✕
+          </button>
+        )}
+        <div className="relative" style={{ width: 600, maxWidth: '100%' }}>
+          <OnboardingQuiz
+            preview={firstrunPreview && onboarded !== false}
+            onDone={() => {
+              if (firstrunPreview) exitPreview()
+              setSaved(hasApiKey())
+              setOnboarded(true)
+              getProfile().then((p) => setProfile(p || null))
+            }}
+          />
         </div>
       </div>
     )
