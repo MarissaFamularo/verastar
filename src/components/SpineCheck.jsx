@@ -12,6 +12,7 @@ import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates } from '../pipeline/select.js'
 import { savePaper } from '../pipeline/save.js'
+import { fmtNum } from '../lib/format.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
 
@@ -21,15 +22,6 @@ const STAGE_LABEL = {
   verifying: 'Verifying…',
   done: 'Done',
   error: 'Error',
-}
-
-function fmtNum(q) {
-  if (q.value == null) return ''
-  let s = String(q.value)
-  if (q.unit) s += ` ${q.unit}`
-  if (q.ci_low != null && q.ci_high != null) s += ` (CI ${q.ci_low}–${q.ci_high})`
-  if (q.p_value != null) s += `, P=${q.p_value}`
-  return s
 }
 
 const TIER_STYLE = {

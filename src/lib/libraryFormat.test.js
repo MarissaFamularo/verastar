@@ -67,6 +67,18 @@ describe('sourceNoteMd', () => {
     expect(md).toContain('https://pubmed.ncbi.nlm.nih.gov/12345/')
   })
 
+  it('renders a p-value with the operator the quote states — never an invented "="', () => {
+    const md = sourceNoteMd(
+      paper({
+        quantities: [
+          { name: 'Effect', value: 0.84, p_value: 0.001, source_quote: 'HR 0.84 (P<0·001)', tier: 'verified-full-text' },
+        ],
+      }),
+    )
+    expect(md).toContain('Effect:** 0.84, P<0.001')
+    expect(md).not.toContain('P=0.001')
+  })
+
   it('links the open-access PDF only when pdfUrl is present', () => {
     expect(sourceNoteMd(paper({ pdfUrl: null }))).not.toContain('Open-access full text')
     const withPdf = sourceNoteMd(paper({ pdfUrl: 'https://host/x.pdf' }))

@@ -9,6 +9,7 @@
 // the line rather than fabricate one — same honesty ethos as the verifier.
 
 import { domainLabel } from './domains.js'
+import { fmtNum } from './format.js'
 
 // --- pure helpers -------------------------------------------------------------------------------
 
@@ -40,17 +41,6 @@ function citationText(c) {
 // A PubMed link for a pmid (the canonical public home of the source).
 function pubmedUrl(pmid) {
   return `https://pubmed.ncbi.nlm.nih.gov/${String(pmid)}/`
-}
-
-// Render one verified quantity as a scannable value string (mirrors the on-screen fmtNum): the
-// value, its unit, CI and P when present. Numbers only — no invented precision.
-function formatQuantity(q) {
-  if (!q || q.value == null) return ''
-  let s = String(q.value)
-  if (q.unit) s += ` ${q.unit}`
-  if (q.ci_low != null && q.ci_high != null) s += ` (CI ${q.ci_low}–${q.ci_high})`
-  if (q.p_value != null) s += `, P=${q.p_value}`
-  return s
 }
 
 // Minimal YAML scalar: leave plain tokens (alnum, dash, dot, underscore) bare; quote anything with
@@ -126,7 +116,9 @@ export function sourceNoteMd(paper) {
     parts.push('not what a model asserted._', '')
     for (const q of quantities) {
       const name = q.name || 'Value'
-      const val = formatQuantity(q)
+      // Shared fact-channel formatter (lib/format.js) — the vault note and the on-screen
+      // digest render the same string, operator derived from the verified quote.
+      const val = fmtNum(q)
       const tier = q.tier ? ` — tier: \`${q.tier}\`` : ''
       parts.push(`- **${name}:** ${val}${tier}`)
     }

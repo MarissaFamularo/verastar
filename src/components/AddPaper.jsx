@@ -14,6 +14,7 @@ import { runPaper } from '../pipeline/pipeline.js'
 import { resolvePmid } from '../pipeline/sources.js'
 import { triage } from '../pipeline/triage.js'
 import { savePaper } from '../pipeline/save.js'
+import { fmtNum } from '../lib/format.js'
 
 const STAGE_LABEL = {
   resolving: 'Finding the paper…',
@@ -21,16 +22,6 @@ const STAGE_LABEL = {
   extracting: 'Extracting (Claude)…',
   verifying: 'Verifying…',
   saving: 'Saving…',
-}
-
-// Minimal value formatter for the triage prose channel (mirrors SpineCheck's fmtNum).
-function fmtValue(q) {
-  if (q.value == null) return ''
-  let s = String(q.value)
-  if (q.unit) s += ` ${q.unit}`
-  if (q.ci_low != null && q.ci_high != null) s += ` (CI ${q.ci_low}–${q.ci_high})`
-  if (q.p_value != null) s += `, P=${q.p_value}`
-  return s
 }
 
 export default function AddPaper({ onAdded }) {
@@ -94,7 +85,7 @@ export default function AddPaper({ onAdded }) {
               ? []
               : res.rows
                   .filter((r) => !r.verdict.flagged)
-                  .map((r) => ({ name: r.quantity.name, value: fmtValue(r.quantity) })),
+                  .map((r) => ({ name: r.quantity.name, value: fmtNum(r.quantity) })),
           },
         ],
       })
