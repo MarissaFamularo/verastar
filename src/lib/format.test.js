@@ -30,6 +30,12 @@ describe('pOperator — derive the operator from the verified quote', () => {
     expect(pOperator(q({ p_value: 0.01, source_quote: 'P⩾0.01' }))).toBe('≥')
   })
 
+  it('reads ASCII "<=" / ">=" as ≤ / ≥ — never just the "=" tail', () => {
+    // "P<=0.05" states ≤; rendering "=" would assert an equality the source never stated.
+    expect(pOperator(q({ p_value: 0.05, source_quote: 'P<=0.05' }))).toBe('≤')
+    expect(pOperator(q({ p_value: 0.05, source_quote: 'P>=0.05' }))).toBe('≥')
+  })
+
   it('returns null when the quote states no operator', () => {
     expect(pOperator(q({ p_value: 0.02, source_quote: 'a p value of 0.02 was observed' }))).toBe(null)
   })
@@ -59,6 +65,7 @@ describe('fmtNum — the fact-channel value string', () => {
     expect(fmtNum(q({ value: 0.001, p_value: 0.001, source_quote: '(P<0·001)' }))).toBe('0.001, P<0.001')
     expect(fmtNum(q({ value: 0.05, p_value: 0.05, source_quote: 'P>0.05' }))).toBe('0.05, P>0.05')
     expect(fmtNum(q({ value: 0.01, p_value: 0.01, source_quote: 'P≤0.01' }))).toBe('0.01, P≤0.01')
+    expect(fmtNum(q({ value: 0.05, p_value: 0.05, source_quote: 'P<=0.05' }))).toBe('0.05, P≤0.05')
   })
 
   it('renders "=" ONLY when the quote states it', () => {

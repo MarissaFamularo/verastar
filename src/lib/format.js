@@ -27,8 +27,17 @@ export function pOperator(quantity) {
     if (!numbersEqual(token.value, quantity.p_value)) continue
     let i = token.start - 1
     while (i >= 0 && quote[i] === ' ') i--
+    if (i < 0) return null
+    // ASCII "<=" / ">=" — the "=" is only the tail; the real operator is the char before it,
+    // so read through to it ("P<=.05" states ≤, never =). Whitespace between is tolerated.
+    if (quote[i] === '=') {
+      let j = i - 1
+      while (j >= 0 && quote[j] === ' ') j--
+      if (j >= 0 && quote[j] === '<') return '≤'
+      if (j >= 0 && quote[j] === '>') return '≥'
+    }
     // First matching token decides — a later duplicate never overrides.
-    return (i >= 0 && P_OPERATORS[quote[i]]) || null
+    return P_OPERATORS[quote[i]] || null
   }
   return null
 }
