@@ -104,7 +104,7 @@ export default function KnowledgeBase() {
   const totalPapers = papers.length
 
   return (
-    <div style={{ maxWidth: 900, padding: '46px 56px 64px' }}>
+    <div className="vs-page-pad" style={{ maxWidth: 900, padding: '46px 56px 64px' }}>
       <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Your knowledge graph</p>
       <div className="flex items-end justify-between" style={{ gap: 20, marginTop: 9 }}>
         <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Library</h1>

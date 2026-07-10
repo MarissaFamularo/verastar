@@ -159,7 +159,7 @@ export default function WeekendRead() {
   return (
     <main className="relative" style={{ minHeight: '100%' }}>
       <div className="vs-stars absolute" style={{ top: 0, left: 0, right: 0, height: 300, opacity: 0.6 }} />
-      <div className="relative" style={{ maxWidth: 720, margin: '0 auto', padding: '52px 40px 72px' }}>
+      <div className="vs-page-pad relative" style={{ maxWidth: 720, margin: '0 auto', padding: '52px 40px 72px' }}>
         <div className="flex items-center justify-between" style={{ gap: 16 }}>
           <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>
             Connections{when ? ` · ${when}` : ''}

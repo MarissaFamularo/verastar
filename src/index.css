@@ -99,6 +99,108 @@ a:hover {
 
 /* Faint starfield used behind hero headers. Apply .vs-stars to a positioned
    overlay element (pointer-events:none set here). */
+/* ── Mobile layer (≤760px) ────────────────────────────────────────────────
+   Desktop keeps its inline styles untouched; these class hooks override them
+   (hence !important) only on small screens. The icon rail becomes a bottom
+   tab bar and every two-pane surface stacks into one scrolling column. */
+@media (max-width: 760px) {
+  #root {
+    height: 100dvh;
+  }
+  .vs-shell {
+    flex-direction: column-reverse !important;
+    height: 100dvh !important;
+  }
+  /* Rail → bottom tab bar. */
+  .vs-rail {
+    width: 100% !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    padding: 3px 8px calc(3px + env(safe-area-inset-bottom)) !important;
+    border-right: 0 !important;
+    border-top: 1px solid var(--hairline);
+    background: rgba(13, 15, 20, 0.97) !important;
+  }
+  .vs-rail-logo {
+    display: none !important;
+  }
+  .vs-rail-nav {
+    flex-direction: row !important;
+    flex: 1;
+    justify-content: space-around;
+    gap: 0 !important;
+  }
+  .vs-rail-btn {
+    width: auto !important;
+    flex: 1;
+    max-width: 84px;
+    padding: 7px 0 6px !important;
+    gap: 4px !important;
+  }
+  .vs-rail-foot {
+    margin: 0 0 0 6px !important;
+    justify-content: center;
+  }
+  /* Digest: main column + right rail stack into one scroll. */
+  .vs-digest {
+    flex-direction: column !important;
+    overflow-y: auto !important;
+  }
+  .vs-digest-main {
+    flex: none !important;
+    overflow: visible !important;
+    border-right: 0 !important;
+  }
+  .vs-digest-rail {
+    width: 100% !important;
+    padding: 6px 20px 34px !important;
+    overflow: visible !important;
+  }
+  /* Star Map: field on top, detail panel below. */
+  .vs-starmap {
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-y: auto;
+  }
+  .vs-starmap-field {
+    flex: none !important;
+    min-height: 58dvh;
+  }
+  .vs-starmap-panel {
+    width: 100% !important;
+    border-left: 0 !important;
+    border-top: 1px solid var(--hairline);
+    padding: 22px 20px 40px !important;
+    overflow: visible !important;
+  }
+  /* Breathing room scaled for phones. */
+  .vs-page-pad {
+    padding: 30px 20px 48px !important;
+  }
+  .vs-hero-h1 {
+    font-size: 29px !important;
+  }
+  .vs-modal-overlay {
+    padding: 12px !important;
+  }
+  .vs-onboard-canvas {
+    padding: 36px 18px !important;
+  }
+  .vs-onboard-title {
+    font-size: 40px !important;
+  }
+  .vs-step-title {
+    font-size: 27px !important;
+  }
+}
+
+/* The onboarding nebula glow is a fixed 680px-wide absolute layer — clip it so
+   it never creates horizontal scroll on narrow screens. */
+.vs-onboard-canvas {
+  overflow-x: hidden;
+}
+
 /* Full-canvas starfield for the onboarding night sky (denser than .vs-stars). */
 .vs-stars-deep {
   pointer-events: none;

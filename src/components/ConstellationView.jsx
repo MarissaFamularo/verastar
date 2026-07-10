@@ -137,13 +137,13 @@ export default function ConstellationView() {
         : note
           ? note
           : connectionCount
-            ? 'Hover a star to light its connections; click to read its evidence.'
+            ? 'Tap or hover a star to light its connections; click to read its evidence.'
             : 'Save papers from today\'s digest — they group into concept stars that link themselves.'
 
   return (
-    <div className="flex" style={{ height: '100%', minHeight: '100%' }}>
+    <div className="vs-starmap flex" style={{ height: '100%', minHeight: '100%' }}>
       {/* star field */}
-      <div className="relative" style={{ flex: 1, minWidth: 0, overflow: 'hidden', background: 'radial-gradient(120% 90% at 60% 30%,#141a2e,#080a12 70%)' }}>
+      <div className="vs-starmap-field relative" style={{ flex: 1, minWidth: 0, overflow: 'hidden', background: 'radial-gradient(120% 90% at 60% 30%,#141a2e,#080a12 70%)' }}>
         <div className="vs-stars absolute" style={{ inset: 0, opacity: 1 }} />
         <StarMap
           nodes={nodes}
@@ -171,12 +171,12 @@ export default function ConstellationView() {
       </div>
 
       {/* detail panel */}
-      <aside style={{ width: 340, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', borderLeft: '1px solid var(--hairline)', background: 'rgba(255,255,255,.012)' }}>
+      <aside className="vs-starmap-panel" style={{ width: 340, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', borderLeft: '1px solid var(--hairline)', background: 'rgba(255,255,255,.012)' }}>
         {!selected ? (
           <div style={{ fontSize: 14, color: 'var(--color-fg-dim)' }}>
             <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-fg-soft)' }}>Roam the map</p>
             <p style={{ margin: '8px 0 0', lineHeight: 1.6 }}>
-              Drag to pan, scroll to zoom. Hover a star to light its connections; click it to read its synthesized summary and source papers. Bigger stars have more connections.
+              Drag to pan, pinch or scroll to zoom. Tap a star to light its connections and read its synthesized summary and source papers. Bigger stars have more connections.
             </p>
             <div style={{ marginTop: 20, borderTop: '1px solid var(--hairline)', paddingTop: 16 }}>
               <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--color-fg-faint)' }}>Fields</p>

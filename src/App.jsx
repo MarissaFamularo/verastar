@@ -75,7 +75,7 @@ function NavIcon({ view }) {
 function IconRail({ view, setView, onSettings, initials }) {
   return (
     <aside
-      className="flex flex-col items-center border-r"
+      className="vs-rail flex flex-col items-center border-r"
       style={{
         width: 88,
         flex: '0 0 auto',
@@ -86,19 +86,19 @@ function IconRail({ view, setView, onSettings, initials }) {
       }}
     >
       {/* Five-point chart star — the observatory mark, star-atlas style (not a four-point AI sparkle). */}
-      <div style={{ marginBottom: 34, color: 'var(--color-gold)', filter: 'drop-shadow(0 0 7px rgba(233,196,106,.55))' }}>
+      <div className="vs-rail-logo" style={{ marginBottom: 34, color: 'var(--color-gold)', filter: 'drop-shadow(0 0 7px rgba(233,196,106,.55))' }}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-label="Verastar">
           <polygon points="12,3 14.47,9.6 21.51,9.91 15.99,14.3 17.88,21.09 12,17.2 6.12,21.09 8.01,14.3 2.49,9.91 9.53,9.6" />
         </svg>
       </div>
-      <nav className="flex flex-col items-center w-full" style={{ gap: 6 }}>
+      <nav className="vs-rail-nav flex flex-col items-center w-full" style={{ gap: 6 }}>
         {NAV.map(([id, label]) => {
           const active = view === id
           return (
             <button
               key={id}
               onClick={() => setView(id)}
-              className="flex flex-col items-center cursor-pointer"
+              className="vs-rail-btn flex flex-col items-center cursor-pointer"
               style={{
                 width: 64,
                 padding: '11px 0 8px',
@@ -116,7 +116,7 @@ function IconRail({ view, setView, onSettings, initials }) {
           )
         })}
       </nav>
-      <div className="flex flex-col items-center" style={{ marginTop: 'auto' }}>
+      <div className="vs-rail-foot flex flex-col items-center" style={{ marginTop: 'auto' }}>
         {/* The avatar doubles as the Settings entry point — no separate rail item. */}
         <button
           onClick={onSettings}
@@ -137,7 +137,7 @@ function SettingsModal({ onClose, saved, onSave, onClear, onPing, status, reply,
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 flex items-center justify-center"
+      className="vs-modal-overlay fixed inset-0 flex items-center justify-center"
       style={{ zIndex: 60, padding: 32, background: 'rgba(5,6,10,.62)', backdropFilter: 'blur(3px)' }}
     >
       <div
@@ -230,7 +230,7 @@ function SettingsModal({ onClose, saved, onSave, onClear, onPing, status, reply,
 // and the Weekend Read teaser. Counts derive from real saved papers.
 function DigestRail({ saved, onSettings, counts, projects, onConnections }) {
   return (
-    <aside style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
+    <aside className="vs-digest-rail" style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div
         onClick={onSettings}
         className="flex items-center cursor-pointer"
@@ -350,7 +350,7 @@ export default function App() {
       setFirstrunPreview(false)
     }
     return (
-      <div className="relative flex items-center justify-center" style={{ minHeight: '100vh', overflowY: 'auto', padding: '56px 32px', background: 'radial-gradient(120% 80% at 50% -10%,#1a2138,#0b0e18 55%,#08090d)' }}>
+      <div className="vs-onboard-canvas relative flex items-center justify-center" style={{ minHeight: '100vh', overflowY: 'auto', padding: '56px 32px', background: 'radial-gradient(120% 80% at 50% -10%,#1a2138,#0b0e18 55%,#08090d)' }}>
         <div className="vs-stars-deep absolute" style={{ inset: 0 }} />
         <div className="absolute" style={{ top: -120, left: '50%', transform: 'translateX(-50%)', width: 680, height: 420, pointerEvents: 'none', background: 'radial-gradient(closest-side,rgba(239,143,91,.16),rgba(233,196,106,.06),transparent)', filter: 'blur(8px)' }} />
         {firstrunPreview && onboarded !== false && (
@@ -380,18 +380,18 @@ export default function App() {
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
   return (
-    <div className="flex overflow-hidden" style={{ height: '100vh', width: '100%', background: 'linear-gradient(165deg,#0f1218,#08090d)' }}>
+    <div className="vs-shell flex overflow-hidden" style={{ height: '100vh', width: '100%', background: 'linear-gradient(165deg,#0f1218,#08090d)' }}>
       <IconRail view={view} setView={setView} onSettings={() => setSettingsOpen(true)} initials={initials} />
 
       {view === 'digest' && (
-        <div className="flex" style={{ flex: 1, minWidth: 0 }}>
-          <main className="relative" style={{ flex: 1, minWidth: 0, overflowY: 'auto', borderRight: '1px solid var(--hairline)' }}>
+        <div className="vs-digest flex" style={{ flex: 1, minWidth: 0 }}>
+          <main className="vs-digest-main relative" style={{ flex: 1, minWidth: 0, overflowY: 'auto', borderRight: '1px solid var(--hairline)' }}>
             <div className="vs-stars absolute" style={{ top: 0, left: 0, right: 0, height: 340 }} />
-            <div className="relative" style={{ maxWidth: 820, padding: '46px 56px 64px' }}>
+            <div className="vs-page-pad relative" style={{ maxWidth: 820, padding: '46px 56px 64px' }}>
               <div className="flex items-start justify-between" style={{ gap: 24 }}>
                 <div>
                   <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>{today}</p>
-                  <h1 style={{ margin: '9px 0 0', fontFamily: 'var(--font-serif)', fontSize: 37, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)', lineHeight: 1.08 }}>
+                  <h1 className="vs-hero-h1" style={{ margin: '9px 0 0', fontFamily: 'var(--font-serif)', fontSize: 37, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)', lineHeight: 1.08 }}>
                     Good morning, {name}.
                   </h1>
                 </div>

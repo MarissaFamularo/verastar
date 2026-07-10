@@ -194,7 +194,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
         <div className="inline-flex" style={{ animation: 'vs-glow 4s ease-in-out infinite' }}>
           <ChartStar />
         </div>
-        <h1 style={{ margin: '18px 0 0', fontFamily: 'var(--font-serif)', fontSize: 52, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Verastar</h1>
+        <h1 className="vs-onboard-title" style={{ margin: '18px 0 0', fontFamily: 'var(--font-serif)', fontSize: 52, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Verastar</h1>
         <p style={{ margin: '16px 0 0', fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 21, lineHeight: 1.5, color: 'var(--color-fg-soft)' }}>
           A verified evidence digest, keeping you current<br />on the latest literature in your field.
         </p>
@@ -219,7 +219,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
     return (
       <div>
         <p style={stepMark}>01 / 03 · CONNECT</p>
-        <h2 style={stepTitle}>Bring your own key.</h2>
+        <h2 className="vs-step-title" style={stepTitle}>Bring your own key.</h2>
         <p style={{ ...stepLede, maxWidth: 500 }}>
           Verastar runs on your Anthropic key — you paste it in, and the app uses it to do the
           work. No shared model bill, no lock-in.
@@ -289,7 +289,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
     return (
       <div>
         <p style={stepMark}>02 / 03 · INTERVIEW</p>
-        <h2 style={stepTitle}>Three questions.</h2>
+        <h2 className="vs-step-title" style={stepTitle}>Three questions.</h2>
         <p style={stepLede}>
           Answer in your own words — Claude drafts your north stars, projects, and ranking
           rubric from these. You review and edit everything before it's saved.
@@ -352,7 +352,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
   return (
     <div>
       <p style={stepMark}>03 / 03 · REVIEW</p>
-      <h2 style={stepTitle}>Your steering profile.</h2>
+      <h2 className="vs-step-title" style={stepTitle}>Your steering profile.</h2>
       <p style={stepLede}>
         Drafted from your answers — edit anything, then enter. You can always tune it later
         from Settings.
