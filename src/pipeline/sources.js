@@ -5,7 +5,7 @@
 // Worst case is always a flag, never a throw that kills the pipeline: callers get a
 // structured result with whatever could be fetched and a `tier` hint for verify.
 
-import { getNcbiKey } from '../lib/anthropic.js'
+import { getNcbiKey, getNcbiEmail } from '../lib/anthropic.js'
 
 const EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 const IDCONV = 'https://www.ncbi.nlm.nih.gov/pmc/tools/idconv/api/v1/articles'
@@ -17,10 +17,15 @@ export const REGISTRY_OUTCOME_MAP = {
   NCT04881110: { measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: 8.0, ci_high: 14.5 },
 }
 
-// Append the optional free NCBI key (raises eutils 3 -> 10 req/s) when present.
+// Append NCBI etiquette params to eutils calls: tool always, plus the optional email
+// (their contact-before-block channel) and API key (raises 3 -> 10 req/s) when present.
 function withKey(url) {
+  let out = `${url}&tool=verastar`
+  const email = getNcbiEmail()
+  if (email) out += `&email=${encodeURIComponent(email)}`
   const key = getNcbiKey()
-  return key ? `${url}&api_key=${encodeURIComponent(key)}` : url
+  if (key) out += `&api_key=${encodeURIComponent(key)}`
+  return out
 }
 
 // Retry with backoff. NCBI eutils rate-limits at 3 req/s without an API key, and a burst

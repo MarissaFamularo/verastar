@@ -15,6 +15,7 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const KEY_STORAGE = 'verastar.anthropic_key'
 const NCBI_KEY_STORAGE = 'verastar.ncbi_key'
+const NCBI_EMAIL_STORAGE = 'verastar.ncbi_email'
 
 export const MODELS = {
   extraction: 'claude-opus-4-8',
@@ -48,6 +49,15 @@ export function setNcbiKey(key) {
 
 export function getNcbiKey() {
   return sessionStorage.getItem(NCBI_KEY_STORAGE) || ''
+}
+
+// Optional email identifies us politely to NCBI (their contact-before-block channel).
+export function setNcbiEmail(email) {
+  sessionStorage.setItem(NCBI_EMAIL_STORAGE, email.trim())
+}
+
+export function getNcbiEmail() {
+  return sessionStorage.getItem(NCBI_EMAIL_STORAGE) || ''
 }
 
 // --- client ---
