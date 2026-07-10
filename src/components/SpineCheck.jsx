@@ -24,40 +24,39 @@ const STAGE_LABEL = {
   error: 'Error',
 }
 
-const TIER_STYLE = {
-  1: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-  2: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
-  3: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+// Verification tier → the card's provenance chip. Mirrors the observatory design:
+// full text (green), registry (blue), abstract (amber). tier comes from triage.
+const TIER_CHIP = {
+  1: { label: 'Verified · full text', dot: 'var(--color-verified)', text: 'var(--color-verified-soft)', bg: 'rgba(127,191,154,.14)' },
+  2: { label: 'Verified · registry', dot: 'var(--color-registry)', text: 'var(--color-registry-soft)', bg: 'rgba(143,189,230,.15)' },
+  3: { label: 'Verified · abstract', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
 }
 
-function TierBadge({ tier }) {
-  if (!tier) return null
+function TierChip({ tier }) {
+  const t = TIER_CHIP[tier]
+  if (!t) return null
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${TIER_STYLE[tier] || TIER_STYLE[3]}`}>
-      Tier {tier}
+    <span className="inline-flex items-center" style={{ gap: 6, padding: '4px 10px', borderRadius: 999, background: t.bg, color: t.text, fontSize: 11.5, fontWeight: 600 }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.dot, boxShadow: `0 0 6px ${t.dot}` }} />
+      {t.label}
     </span>
   )
 }
 
-// The citation line — authors · journal · year · clickable PMID, plus the "citation
-// verified" mark (the app confirmed the PMID resolves to a real indexed paper).
+// The citation line — authors · journal · year · clickable PMID, in mono, with the
+// "citation verified" mark (the app confirmed the PMID resolves to a real indexed paper).
 function Citation({ citation }) {
   if (!citation) return null
   const bits = [citation.author, citation.journal, citation.year].filter(Boolean).join(' · ')
   return (
-    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+    <p style={{ margin: '7px 0 0', fontSize: 13, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>
       {bits && <span>{bits} · </span>}
-      <a
-        href={citation.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="font-medium text-sky-700 hover:underline dark:text-sky-300"
-      >
+      <a href={citation.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>
         PMID {citation.pmid} ↗
       </a>
       {citation.verified && (
-        <span className="ml-2 inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> citation verified
+        <span className="inline-flex items-center" style={{ marginLeft: 8, gap: 5, color: 'var(--color-verified-soft)' }}>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-verified)' }} /> citation verified
         </span>
       )}
     </p>
@@ -67,42 +66,41 @@ function Citation({ citation }) {
 function Row({ quantity, verdict, onOpenSource, hero }) {
   const clickable = verdict.found && onOpenSource
   return (
-    <div className="flex flex-col gap-1 border-t border-slate-100 py-3 dark:border-slate-800">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className={hero ? 'font-semibold' : 'font-medium'}>{quantity.name}</span>
+    <div className="flex flex-col" style={{ gap: 4, borderTop: '1px solid var(--hairline)', padding: '12px 0' }}>
+      <div className="flex flex-wrap items-center" style={{ columnGap: 12, rowGap: 4 }}>
+        <span style={{ fontWeight: hero ? 600 : 500, color: 'var(--color-fg-soft)' }}>{quantity.name}</span>
         {clickable ? (
           <button
             onClick={onOpenSource}
             title="Show this value in the source"
-            className={`tabular-nums font-semibold text-sky-700 underline decoration-dotted underline-offset-4 hover:decoration-solid dark:text-sky-300 ${hero ? 'text-lg' : ''}`}
+            className="cursor-pointer"
+            style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--color-fg)', borderBottom: '1px dotted rgba(239,143,91,.55)', fontSize: hero ? 17 : 14 }}
           >
             {fmtNum(quantity)}
           </button>
         ) : (
-          <span className={`tabular-nums text-slate-700 dark:text-slate-300 ${hero ? 'text-lg font-semibold' : ''}`}>
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-fg-dim)', fontSize: hero ? 17 : 14, fontWeight: hero ? 600 : 400 }}>
             {fmtNum(quantity)}
           </span>
         )}
         <ProvenanceBadge tier={verdict.tier} />
       </div>
       {quantity.source_quote && (
-        <blockquote className="border-l-2 border-slate-200 pl-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+        <blockquote style={{ margin: 0, borderLeft: '2px solid var(--hairline)', paddingLeft: 12, fontSize: 13, color: 'var(--color-fg-muted)' }}>
           “{quantity.source_quote}”
-          {quantity.location_hint ? <span className="not-italic"> — {quantity.location_hint}</span> : null}
+          {quantity.location_hint ? <span> — {quantity.location_hint}</span> : null}
         </blockquote>
       )}
-      {verdict.flagged && (
-        <p className="text-xs text-rose-600 dark:text-rose-400">{verdict.reason}</p>
-      )}
+      {verdict.flagged && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-domain-vascular)' }}>{verdict.reason}</p>}
     </div>
   )
 }
 
 // Score → chip color. Just a visual bucket; the number is the real signal.
 function scoreChip(score) {
-  if (score >= 70) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-  if (score >= 40) return 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'
-  return 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+  if (score >= 70) return { bg: 'rgba(127,191,154,.14)', color: 'var(--color-verified-soft)' }
+  if (score >= 40) return { bg: 'rgba(143,189,230,.15)', color: 'var(--color-registry-soft)' }
+  return { bg: 'rgba(255,255,255,.05)', color: 'var(--color-fg-muted)' }
 }
 
 // The selection funnel surface: the wide candidate pool ranked by rubric fit, with the top
@@ -130,15 +128,18 @@ function CandidatePool({
   const pending = candidates.filter((c) => selectedIds.has(c.id) && !digestedIds.has(c.id)).length
   const available = candidates.filter((c) => !digestedIds.has(c.id)).length
 
+  const ghostBtn = { borderRadius: 9, padding: '8px 12px', fontSize: 12, fontWeight: 500, fontFamily: 'inherit', border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-soft)', cursor: 'pointer' }
+  const accentBtn = { borderRadius: 9, padding: '8px 12px', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', border: 0, background: 'var(--color-accent)', color: '#1c1206', cursor: 'pointer' }
+
   return (
-    <div className="mt-5 rounded-lg border border-indigo-200 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div style={{ marginTop: 20, borderRadius: 14, border: '1px solid var(--hairline)', background: 'var(--surface-1)', padding: 18 }}>
+      <div className="flex flex-wrap items-start justify-between" style={{ gap: 12 }}>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">
+          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-fg-soft)' }}>
             Selection funnel — {candidates.length} candidates
             {hasDigest ? `, ${digestedIds.size} in digest` : `, ${chosen} selected`}
           </h3>
-          <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', lineHeight: 1.5, maxWidth: 560 }}>
             {hasDigest
               ? open
                 ? 'Check any others to add them to the digest — only the new ones run; the rest stay as they are.'
@@ -146,38 +147,22 @@ function CandidatePool({
               : 'Every recent match, ranked against your rubric. The top papers are pre-selected; adjust below, then run the digest on just those.'}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <button
-            onClick={onToggleOpen}
-            className="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 dark:border-indigo-800 dark:text-indigo-200 dark:hover:bg-indigo-900/40"
-          >
+        <div className="flex shrink-0 flex-wrap items-center justify-end" style={{ gap: 8 }}>
+          <button onClick={onToggleOpen} style={ghostBtn}>
             {open ? '▾ Hide list' : `▸ Show all ${candidates.length}`}
           </button>
           {open && (
-            <button
-              onClick={onRescore}
-              disabled={selecting || running}
-              title="Re-score this same pool against your current rubric — no new search"
-              className="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-200 dark:hover:bg-indigo-900/40"
-            >
+            <button onClick={onRescore} disabled={selecting || running} title="Re-score this same pool against your current rubric — no new search" style={{ ...ghostBtn, opacity: selecting || running ? 0.5 : 1 }}>
               {selecting ? 'Re-ranking…' : 'Re-rank with current rubric'}
             </button>
           )}
           {open &&
             (hasDigest ? (
-              <button
-                onClick={onAddToDigest}
-                disabled={!pending || selecting || running}
-                className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-              >
+              <button onClick={onAddToDigest} disabled={!pending || selecting || running} style={{ ...accentBtn, opacity: !pending || selecting || running ? 0.5 : 1 }}>
                 {running ? 'Adding…' : pending ? `Add ${pending} to digest` : 'Add to digest'}
               </button>
             ) : (
-              <button
-                onClick={onRunDigest}
-                disabled={!chosen || selecting || running}
-                className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-              >
+              <button onClick={onRunDigest} disabled={!chosen || selecting || running} style={{ ...accentBtn, opacity: !chosen || selecting || running ? 0.5 : 1 }}>
                 {running ? 'Running…' : `Run digest on ${chosen} selected`}
               </button>
             ))}
@@ -185,47 +170,50 @@ function CandidatePool({
       </div>
 
       {open && (
-        <ol className="mt-3 max-h-96 space-y-1.5 overflow-y-auto pr-1">
+        <ol className="overflow-y-auto" style={{ marginTop: 12, maxHeight: 384, listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {candidates.map((c, i) => {
             const inDigest = digestedIds.has(c.id)
             const picked = inDigest || selectedIds.has(c.id)
             const types = (c.pubtypes || []).filter((t) => t && t !== 'Journal Article').join(' · ')
+            const sc = scoreChip(c.score)
             return (
               <li
                 key={c.id}
-                className={`flex items-start gap-3 rounded-md border p-2.5 ${
-                  inDigest
-                    ? 'border-emerald-300 bg-white dark:border-emerald-800/70 dark:bg-slate-900'
-                    : picked
-                      ? 'border-indigo-300 bg-white dark:border-indigo-700 dark:bg-slate-900'
-                      : 'border-transparent bg-white/50 opacity-70 dark:bg-slate-900/40'
-                }`}
+                className="flex items-start"
+                style={{
+                  gap: 12,
+                  borderRadius: 10,
+                  padding: 10,
+                  border: `1px solid ${inDigest ? 'rgba(127,191,154,.4)' : picked ? 'rgba(239,143,91,.4)' : 'transparent'}`,
+                  background: picked ? 'var(--surface-1)' : 'rgba(255,255,255,.015)',
+                  opacity: picked ? 1 : 0.7,
+                }}
               >
-                <label className={`flex items-center pt-0.5 ${inDigest ? 'cursor-default' : 'cursor-pointer'}`}>
+                <label className="flex items-center" style={{ paddingTop: 2, cursor: inDigest ? 'default' : 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={picked}
                     disabled={inDigest || running}
                     onChange={() => onToggle(c.id)}
                     title={inDigest ? 'Already in the digest' : undefined}
-                    className={`h-4 w-4 ${inDigest ? 'accent-emerald-600' : 'accent-indigo-600'}`}
+                    style={{ width: 16, height: 16, accentColor: inDigest ? '#7fbf9a' : '#ef8f5b' }}
                   />
                 </label>
-                <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${scoreChip(c.score)}`}>
+                <span className="shrink-0" style={{ marginTop: 2, borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', background: sc.bg, color: sc.color }}>
                   {c.score}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium leading-snug text-slate-800 dark:text-slate-100">
-                    <span className="text-slate-400">{i + 1}.</span> {c.title}
+                  <p style={{ margin: 0, fontSize: 13.5, fontWeight: 500, lineHeight: 1.35, color: 'var(--color-fg-soft)' }}>
+                    <span style={{ color: 'var(--color-fg-faint)' }}>{i + 1}.</span> {c.title}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>
                     {[c.journal, c.year].filter(Boolean).join(' · ')}
-                    {types && <span className="text-slate-400"> · {types}</span>}
+                    {types && <span style={{ color: 'var(--color-fg-faint)' }}> · {types}</span>}
                   </p>
-                  {c.reason && <p className="mt-0.5 text-xs italic text-slate-500 dark:text-slate-400">{c.reason}</p>}
+                  {c.reason && <p style={{ margin: '2px 0 0', fontSize: 12, fontStyle: 'italic', color: 'var(--color-fg-muted)' }}>{c.reason}</p>}
                 </div>
                 {inDigest && (
-                  <span className="mt-0.5 shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  <span className="shrink-0" style={{ marginTop: 2, borderRadius: 999, background: 'rgba(127,191,154,.14)', padding: '2px 8px', fontSize: 10, fontWeight: 600, color: 'var(--color-verified-soft)' }}>
                     in digest
                   </span>
                 )}
@@ -526,71 +514,59 @@ export default function SpineCheck() {
   // Which candidates are already in the digest (locked in; can't be re-run, only added to).
   const digestedIds = new Set(results.map((r) => r.paper.id))
 
+  const busy = running || searching || selecting
+  const primaryLabel = searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Building digest…' : 'Re-run scan'
+  const showEmpty = !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError
+
   return (
-    <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-medium">Today's digest</h2>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            A live search of recent literature on your north stars — each headline verified
-            against the source (abstract, or full text when open-access), or flagged.
-          </p>
-          {savedIds.size > 0 && (
-            <p className="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              {savedIds.size} paper{savedIds.size === 1 ? '' : 's'} in your Library
-            </p>
-          )}
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <button
-            onClick={runShowcase}
-            disabled={!keySet || running || searching || selecting}
-            title="Three reference trials that demonstrate the verifier's guarantees"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
-          >
-            Verifier proof
-          </button>
-          <button
-            onClick={startScan}
-            disabled={!keySet || running || searching || selecting}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-          >
-            {searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Building digest…' : "Run today's digest"}
-          </button>
-        </div>
+    <section>
+      {/* Run controls — the primary orange action + the deterministic proof surface. */}
+      <div className="flex flex-wrap items-center justify-end" style={{ gap: 10 }}>
+        <button
+          onClick={runShowcase}
+          disabled={!keySet || busy}
+          title="Three reference trials that demonstrate the verifier's guarantees"
+          className="cursor-pointer"
+          style={{ padding: '10px 15px', borderRadius: 11, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
+        >
+          Verifier proof
+        </button>
+        <button
+          onClick={startScan}
+          disabled={!keySet || busy}
+          className="cursor-pointer"
+          style={{ padding: '10px 18px', borderRadius: 11, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 6px 22px -8px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }}
+        >
+          {primaryLabel}
+        </button>
       </div>
-      {!keySet && (
-        <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">Set your API key above first.</p>
-      )}
-      {searching && (
-        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Searching PubMed wide for recent papers…</p>
-      )}
-      {selecting && (
-        <p className="mt-3 text-sm text-indigo-600 dark:text-indigo-300">
-          Claude is scoring every candidate against your rubric…
-        </p>
-      )}
-      {scanError && <p className="mt-3 text-sm text-rose-600 dark:text-rose-400">{scanError}</p>}
-      {restored && (
-        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-          Restored your last digest — run again for fresh results.
-        </p>
-      )}
-      {ranking && (
-        <p className="mt-3 text-sm text-indigo-600 dark:text-indigo-300">
-          Claude is ranking and summarizing against your steering profile…
-        </p>
-      )}
-      {!running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && (
-        <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-          Run today's digest — Verastar searches recent literature, scores it against your rubric,
-          and verifies the top papers into a digest. Or hit “Verifier proof” to see the guarantees
-          on three reference trials.
+
+      {/* "Today's scan" section rule. */}
+      <div className="flex items-center" style={{ gap: 14, margin: '30px 0 4px' }}>
+        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontStyle: 'italic', color: 'var(--color-fg-dim)' }}>Today's scan</span>
+        <span style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
+        {candidates.length > 0 && (
+          <span style={{ fontSize: 12, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>
+            {candidates.length} candidates{results.length ? ` · ${results.length} in digest` : ''}
+          </span>
+        )}
+      </div>
+
+      {/* Status lines. */}
+      {!keySet && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Add your API key in Settings first.</p>}
+      {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed wide for recent papers…</p>}
+      {selecting && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is scoring every candidate against your rubric…</p>}
+      {scanError && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{scanError}</p>}
+      {restored && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Restored your last digest — run again for fresh results.</p>}
+      {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
+      {showEmpty && (
+        <p style={{ margin: '16px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)', lineHeight: 1.6, maxWidth: 620 }}>
+          Hit <span style={{ color: 'var(--color-accent)' }}>Re-run scan</span> — Verastar searches recent literature, scores it against your rubric, and
+          verifies the top papers into a digest. Or hit “Verifier proof” to see the guarantees on three reference trials.
         </p>
       )}
 
-      {/* The selection funnel: the wide candidate pool, scored against the rubric, with the
-          top N pre-checked. This is the ~50-candidates → ~10-selected step, on screen. */}
+      {/* The selection funnel: the wide candidate pool, scored against the rubric, top N pre-checked. */}
       {candidates.length > 0 && (
         <CandidatePool
           candidates={candidates}
@@ -607,7 +583,8 @@ export default function SpineCheck() {
         />
       )}
 
-      <div className="mt-5 space-y-5">
+      {/* The digest — one observatory card per paper. */}
+      <div className="flex flex-col" style={{ marginTop: 18, gap: 14 }}>
         {ordered.map((res, idx) => {
           const paper = res.paper
           const stage = stages[paper.id]
@@ -615,64 +592,49 @@ export default function SpineCheck() {
           const title = titleOf(res)
           const verifiedRows = !res.error ? res.rows.filter((r) => !r.verdict.flagged) : []
           const heroRow = verifiedRows[0] || null
+          const rank = String(idx + 1).padStart(2, '0')
           return (
-            <div key={paper.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
-              {/* Header — tier · rank · title · citation (the digest line). */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {take && (
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-slate-100 dark:text-slate-900">
-                        {idx + 1}
-                      </span>
-                    )}
-                    <TierBadge tier={take?.tier} />
-                    <h3 className="font-semibold leading-snug">{title}</h3>
-                  </div>
-                  <Citation citation={res.citation} />
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {stage && stage !== 'done' && (
-                    <span className="text-sm text-slate-500 dark:text-slate-400">{STAGE_LABEL[stage]}</span>
+            <article key={paper.id} style={{ padding: '24px 26px', borderRadius: 15, background: 'var(--surface-1)' }}>
+              {/* Header — rank · verification chip · fit score / save. */}
+              <div className="flex items-center" style={{ gap: 11, marginBottom: 11 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--color-fg-faint)' }}>{rank}</span>
+                {take?.tier ? <TierChip tier={take.tier} /> : stage && stage !== 'done' ? (
+                  <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>{STAGE_LABEL[stage]}</span>
+                ) : null}
+                <div className="flex items-center" style={{ marginLeft: 'auto', gap: 14 }}>
+                  {take?.score != null && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-fg-faint)' }}>fit {take.score}</span>
                   )}
                   {!res.error && (
-                    <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100">
-                      <input
-                        type="checkbox"
-                        checked={savedIds.has(paper.id)}
-                        onChange={() => toggleSave(res, take, verifiedRows, title)}
-                        className="h-4 w-4 accent-emerald-600"
-                      />
-                      {savedIds.has(paper.id) ? 'Saved' : 'Save to Library'}
+                    <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: savedIds.has(paper.id) ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)' }}>
+                      <input type="checkbox" checked={savedIds.has(paper.id)} onChange={() => toggleSave(res, take, verifiedRows, title)} style={{ width: 15, height: 15, accentColor: '#7fbf9a' }} />
+                      {savedIds.has(paper.id) ? 'Saved' : 'Save to Knowledge Base'}
                     </label>
                   )}
                 </div>
               </div>
 
-              {/* Relevance to the clinician's projects — italic, number-free. */}
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, lineHeight: 1.32, color: 'var(--color-fg)' }}>{title}</h3>
+              <Citation citation={res.citation} />
+
+              {/* Relevance to the clinician's projects — italic Spectral, number-free. */}
               {take?.relevance && (
-                <p className="mt-2 text-sm italic text-slate-600 dark:text-slate-400">{take.relevance}</p>
+                <p style={{ margin: '12px 0 0', fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 15, color: 'var(--color-fg-dim)', lineHeight: 1.55 }}>{take.relevance}</p>
               )}
 
-              {/* The finding — what the study showed, in prose, written only from verified
-                  values. "grounded in source" opens the sentence it rests on. */}
+              {/* The finding — verified prose. "grounded in source" opens the sentence it rests on. */}
               {take?.finding && (
-                <p className="mt-1.5 text-[15px] leading-6 text-slate-800 dark:text-slate-200">
+                <p style={{ margin: '11px 0 0', fontSize: 15.5, lineHeight: 1.65, color: 'var(--color-fg-soft)' }}>
                   {take.finding}{' '}
                   {heroRow && (
-                    <button
-                      onClick={() => openSource(heroRow.quantity, heroRow.verdict, res.sourceDoc, title)}
-                      className="whitespace-nowrap text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
-                    >
+                    <button onClick={() => openSource(heroRow.quantity, heroRow.verdict, res.sourceDoc, title)} className="cursor-pointer whitespace-nowrap" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-verified-soft)' }}>
                       grounded in source ↗
                     </button>
                   )}
                 </p>
               )}
 
-              {res?.error && (
-                <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">Error: {res.error}</p>
-              )}
+              {res?.error && <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>Error: {res.error}</p>}
 
               {res &&
                 !res.error &&
@@ -680,64 +642,44 @@ export default function SpineCheck() {
                   const flaggedRows = res.rows.filter((r) => r.verdict.flagged)
                   const isOpen = !!expanded[paper.id]
                   const total = verifiedRows.length
-                  // No numeric results (review / methods piece) — the finding + citation
-                  // carry the card, like a hand-written digest entry.
+                  // No numeric results (review / methods piece) — the finding + citation carry the card.
                   if (res.rows.length === 0 && !res.corrupt) return null
                   return (
-                    <div className="mt-3">
-                      {/* Numbers demoted — the verifier is the engine, not the dashboard. */}
+                    <div style={{ marginTop: 15 }}>
                       <button
                         onClick={() => setExpanded((p) => ({ ...p, [paper.id]: !isOpen }))}
-                        className="text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+                        className="cursor-pointer"
+                        style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-fg-muted)' }}
                       >
-                        {isOpen
-                          ? '▾ Hide verified evidence'
-                          : `▸ Show verified evidence (${total} value${total === 1 ? '' : 's'})`}
+                        {isOpen ? '▾ Hide verified evidence' : `▸ Show verified evidence (${total} value${total === 1 ? '' : 's'})`}
                       </button>
 
                       {isOpen && (
-                        <div className="mt-2 rounded-md border border-slate-100 bg-slate-50/70 px-3 pb-2 dark:border-slate-800 dark:bg-slate-950/40">
-                          <p className="pt-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                        <div style={{ marginTop: 10, borderRadius: 10, border: '1px solid var(--hairline)', background: 'rgba(255,255,255,.015)', padding: '0 14px 8px' }}>
+                          <p style={{ paddingTop: 12, margin: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--color-verified-soft)' }}>
                             Every value re-verified against the source — click any to see it
                           </p>
                           {verifiedRows.map((row, i) => (
-                            <Row
-                              key={i}
-                              quantity={row.quantity}
-                              verdict={row.verdict}
-                              hero={i === 0}
-                              onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)}
-                            />
+                            <Row key={i} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                           ))}
 
                           {flaggedRows.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            <div style={{ marginTop: 8 }}>
+                              <p style={{ margin: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--color-fg-muted)' }}>
                                 {flaggedRows.length} value{flaggedRows.length === 1 ? '' : 's'} flagged — greyed, never charted
                               </p>
                               {flaggedRows.map((row, i) => (
-                                <Row
-                                  key={i}
-                                  quantity={row.quantity}
-                                  verdict={row.verdict}
-                                  onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)}
-                                />
+                                <Row key={i} quantity={row.quantity} verdict={row.verdict} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                               ))}
                             </div>
                           )}
 
                           {res.corrupt && (
-                            <div className="mt-3 rounded-md bg-rose-50 p-3 dark:bg-rose-950/30">
-                              <p className="text-xs font-medium text-rose-700 dark:text-rose-300">
+                            <div style={{ marginTop: 12, borderRadius: 8, background: 'rgba(224,96,90,.12)', padding: 12 }}>
+                              <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#f0a9a4' }}>
                                 Corruption test — value {res.corrupt.original} nudged to {res.corrupt.quantity.value}:
                               </p>
-                              <Row
-                                quantity={res.corrupt.quantity}
-                                verdict={res.corrupt.verdict}
-                                onOpenSource={() =>
-                                  openSource(res.corrupt.quantity, res.corrupt.verdict, res.sourceDoc, title)
-                                }
-                              />
+                              <Row quantity={res.corrupt.quantity} verdict={res.corrupt.verdict} onOpenSource={() => openSource(res.corrupt.quantity, res.corrupt.verdict, res.sourceDoc, title)} />
                             </div>
                           )}
                         </div>
@@ -745,7 +687,7 @@ export default function SpineCheck() {
                     </div>
                   )
                 })()}
-            </div>
+            </article>
           )
         })}
       </div>

@@ -1,10 +1,111 @@
 @import "tailwindcss";
 
+/* ── Verastar design system ──────────────────────────────────────────────
+   Ported from the Claude Design "observatory" mockup (design/Verastar.dc.html).
+   A dark, star-lit reading surface: Spectral serif for headings, IBM Plex Sans
+   for body, IBM Plex Mono for metadata. Palette below is the single source of
+   truth — components reference these tokens, never raw hex. */
+
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Spectral", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Core ink + surface ramp */
+  --color-ink: #08090d;
+  --color-ink-raised: #0f1218;
+  --color-panel: #141821;
+
+  /* Text ramp (bright → muted) */
+  --color-fg: #f4f5f9;
+  --color-fg-soft: #cbd0da;
+  --color-fg-dim: #9aa1af;
+  --color-fg-muted: #7a8291;
+  --color-fg-faint: #5d6473;
+
+  /* Accents */
+  --color-accent: #ef8f5b;        /* orange — primary action */
+  --color-accent-bright: #f4a679;
+  --color-gold: #e9c46a;          /* north-star gold */
+  --color-gold-soft: #eaca7d;
+
+  /* Verification tiers */
+  --color-verified: #7fbf9a;      /* full text (green) */
+  --color-verified-soft: #9dd4b6;
+  --color-registry: #8fbde6;      /* registry (blue) */
+  --color-registry-soft: #a9cef0;
+  --color-abstract: #e6b877;      /* abstract (amber) */
+
+  /* Domain hues (knowledge graph / constellations) */
+  --color-domain-vascular: #e0605a;
+  --color-domain-ai: #29bccd;
+  --color-domain-methods: #45ac6d;
+  --color-domain-datasci: #5b93d6;
+  --color-domain-education: #a06cd5;
+  --color-domain-leadership: #e6912e;
+}
+
+/* Hairline tints reused across cards, borders, chips. Kept as raw custom
+   properties (not @theme) because they're rgba overlays, not palette colors. */
 :root {
-  color-scheme: light dark;
+  --hairline: rgba(255, 255, 255, 0.06);
+  --hairline-soft: rgba(255, 255, 255, 0.05);
+  --surface-1: rgba(255, 255, 255, 0.03);
+  --surface-2: rgba(255, 255, 255, 0.045);
+  --surface-input: rgba(255, 255, 255, 0.03);
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
 }
 
 body {
-  margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100vh;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--color-accent-bright);
+}
+
+/* Star-lit scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+  background-clip: content-box;
+}
+
+/* Faint starfield used behind hero headers. Apply .vs-stars to a positioned
+   overlay element (pointer-events:none set here). */
+.vs-stars {
+  pointer-events: none;
+  background-image:
+    radial-gradient(1.5px 1.5px at 16% 14%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1px 1px at 54% 8%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1.3px 1.3px at 82% 20%, rgba(220, 225, 240, 0.5), transparent),
+    radial-gradient(1px 1px at 38% 24%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(1.1px 1.1px at 70% 30%, rgba(255, 255, 255, 0.35), transparent);
+  opacity: 0.7;
 }
