@@ -11,7 +11,7 @@
 
 const UNPAYWALL = 'https://api.unpaywall.org/v2'
 // Unpaywall's politeness policy wants a contact email on every call. Not a secret, not stored.
-const CONTACT_EMAIL = 'caivory03@gmail.com'
+const CONTACT_EMAIL = 'statupfordocs@gmail.com'
 
 // Pure: pick the best OA *PDF* url from an Unpaywall response. Prefers a direct PDF (`url_for_pdf`);
 // returns null when the paper isn't OA, has no best location, or that location is only a landing
