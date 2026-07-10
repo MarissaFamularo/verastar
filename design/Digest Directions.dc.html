@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#05070f;color:#eaeef8;font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#93a4ff;text-decoration:none}
+  a:hover{color:#b6c1ff}
+  @keyframes tw{0%,100%{opacity:.3}50%{opacity:.85}}
+</style>
+</helmet>
+
+<section id="turn-2" style="padding:72px 64px 24px;background:#05070f">
+  <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:8px">
+    <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 9px;border-radius:7px;background:#e6b34d;color:#1a1206;font-weight:600;font-size:14px;font-family:'IBM Plex Mono',monospace">2</span>
+    <span style="font-family:Spectral,serif;font-size:22px;color:#eaeef8">Palette lab — three grounds, no purple</span>
+  </div>
+  <p style="margin:0 0 34px;color:#8b93a7;font-size:14.5px;max-width:760px;line-height:1.55">Same Briefing card in three palettes. Tiers stay meaningful in all: <span style="color:#7fe9b3">verified green</span>, <span style="color:#8fbde6">registry steel-blue</span> (was violet), <span style="color:#e6b877">abstract amber</span>. Only the ground + signature accent change. Reference them as 2A / 2B / 2C.</p>
+
+  <div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start">
+
+    <!-- 2A Brass & Ink -->
+    <div style="width:420px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#e0b24a;font-weight:500">2A</span>
+        <span style="font-family:Spectral,serif;font-size:18px;color:#eaeef8">Brass &amp; Ink</span>
+        <span style="margin-left:auto;display:flex;gap:6px">
+          <span style="width:16px;height:16px;border-radius:4px;background:#0d0a0b"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#e0b24a"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#f1ece3"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#9bbe86"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#8fbde6"></span>
+        </span>
+      </div>
+      <div style="border-radius:16px;padding:26px;border:1px solid rgba(240,232,220,.08);background:linear-gradient(165deg,#141013,#0a0809)">
+        <p style="margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a7f6f;font-weight:600">Today's digest · Jul 9</p>
+        <h4 style="margin:6px 0 0;font-family:Spectral,serif;font-size:22px;font-weight:500;color:#f2ede4">Three verified findings</h4>
+        <div style="margin:18px 0 0;padding:18px 20px;border-radius:13px;background:rgba(240,232,220,.035)">
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(155,190,134,.14);color:#b6d49f;font-size:11px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#9bbe86;box-shadow:0 0 6px #9bbe86"></span>Verified · full text</span>
+          <h5 style="margin:9px 0 0;font-family:Spectral,serif;font-size:17px;font-weight:500;line-height:1.3;color:#f1ece3">Endovascular vs surgical therapy for CLTI (BASIL-3)</h5>
+          <p style="margin:6px 0 0;font-size:12px;color:#8a7f6f;font-family:'IBM Plex Mono',monospace">BMJ · 2024 · PMID 39993822</p>
+          <p style="margin:10px 0 0;font-size:14px;line-height:1.55;color:#cfc7ba">No difference in amputation-free survival, <span style="font-family:'IBM Plex Mono',monospace;color:#f6f1e8;border-bottom:1px dotted rgba(224,178,74,.6)">HR 0.84 (97.5% CI 0.61–1.16)</span>.</p>
+        </div>
+        <div style="margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;background:rgba(224,178,74,.12);color:#eaca7d;font-size:12.5px"><span style="width:5px;height:5px;border-radius:50%;background:#e0b24a;box-shadow:0 0 8px #e0b24a"></span>CLTI outcomes</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:rgba(155,190,134,.09)"><span style="width:6px;height:6px;border-radius:50%;background:#9bbe86;box-shadow:0 0 7px #9bbe86"></span><span style="font-size:12px;color:#a9c797">Key set</span></span>
+        </div>
+      </div>
+      <p style="margin:14px 2px 0;font-size:13px;line-height:1.55;color:#9aa3b8">Warm near-black + brass, like a Victorian star atlas. Zero blue-violet — the accent reads antique and deliberate.</p>
+    </div>
+
+    <!-- 2B Slate & Ember -->
+    <div style="width:420px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#ef8f5b;font-weight:500">2B</span>
+        <span style="font-family:Spectral,serif;font-size:18px;color:#eaeef8">Slate &amp; Ember</span>
+        <span style="margin-left:auto;display:flex;gap:6px">
+          <span style="width:16px;height:16px;border-radius:4px;background:#0b0d12"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#ef8f5b"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#eef0f4"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#7fbf9a"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#8fbde6"></span>
+        </span>
+      </div>
+      <div style="border-radius:16px;padding:26px;border:1px solid rgba(255,255,255,.07);background:linear-gradient(165deg,#0f1218,#08090d)">
+        <p style="margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6d7484;font-weight:600">Today's digest · Jul 9</p>
+        <h4 style="margin:6px 0 0;font-family:Spectral,serif;font-size:22px;font-weight:500;color:#f2f3f7">Three verified findings</h4>
+        <div style="margin:18px 0 0;padding:18px 20px;border-radius:13px;background:rgba(255,255,255,.03)">
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(127,191,154,.14);color:#9dd4b6;font-size:11px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#7fbf9a;box-shadow:0 0 6px #7fbf9a"></span>Verified · full text</span>
+          <h5 style="margin:9px 0 0;font-family:Spectral,serif;font-size:17px;font-weight:500;line-height:1.3;color:#eef0f4">Endovascular vs surgical therapy for CLTI (BASIL-3)</h5>
+          <p style="margin:6px 0 0;font-size:12px;color:#6d7484;font-family:'IBM Plex Mono',monospace">BMJ · 2024 · PMID 39993822</p>
+          <p style="margin:10px 0 0;font-size:14px;line-height:1.55;color:#cbd0da">No difference in amputation-free survival, <span style="font-family:'IBM Plex Mono',monospace;color:#f2f4f8;border-bottom:1px dotted rgba(239,143,91,.6)">HR 0.84 (97.5% CI 0.61–1.16)</span>.</p>
+        </div>
+        <div style="margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;background:rgba(233,196,106,.11);color:#eaca7d;font-size:12.5px"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>CLTI outcomes</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:rgba(127,191,154,.09)"><span style="width:6px;height:6px;border-radius:50%;background:#7fbf9a;box-shadow:0 0 7px #7fbf9a"></span><span style="font-size:12px;color:#9dd4b6">Key set</span></span>
+        </div>
+      </div>
+      <p style="margin:14px 2px 0;font-size:13px;line-height:1.55;color:#9aa3b8">Neutral charcoal (low-saturation, not navy) with a single warm ember accent + gold north stars. Feels editorial and intentional.</p>
+    </div>
+
+    <!-- 2C Deep Field -->
+    <div style="width:420px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#e6b34d;font-weight:500">2C</span>
+        <span style="font-family:Spectral,serif;font-size:18px;color:#eaeef8">Deep Field</span>
+        <span style="margin-left:auto;display:flex;gap:6px">
+          <span style="width:16px;height:16px;border-radius:4px;background:#0a0e1a"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#e6b34d"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#eaeef8"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#6fc79a"></span>
+          <span style="width:16px;height:16px;border-radius:4px;background:#8fbde6"></span>
+        </span>
+      </div>
+      <div style="border-radius:16px;padding:26px;border:1px solid rgba(255,255,255,.07);background:linear-gradient(165deg,#101528,#080b16)">
+        <p style="margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6d7691;font-weight:600">Today's digest · Jul 9</p>
+        <h4 style="margin:6px 0 0;font-family:Spectral,serif;font-size:22px;font-weight:500;color:#f3f5fc">Three verified findings</h4>
+        <div style="margin:18px 0 0;padding:18px 20px;border-radius:13px;background:rgba(255,255,255,.03)">
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(111,199,154,.14);color:#8fe0b6;font-size:11px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#6fc79a;box-shadow:0 0 6px #6fc79a"></span>Verified · full text</span>
+          <h5 style="margin:9px 0 0;font-family:Spectral,serif;font-size:17px;font-weight:500;line-height:1.3;color:#f1f3fb">Endovascular vs surgical therapy for CLTI (BASIL-3)</h5>
+          <p style="margin:6px 0 0;font-size:12px;color:#7d879d;font-family:'IBM Plex Mono',monospace">BMJ · 2024 · PMID 39993822</p>
+          <p style="margin:10px 0 0;font-size:14px;line-height:1.55;color:#cdd4e4">No difference in amputation-free survival, <span style="font-family:'IBM Plex Mono',monospace;color:#eef2fb;border-bottom:1px dotted rgba(230,179,77,.6)">HR 0.84 (97.5% CI 0.61–1.16)</span>.</p>
+        </div>
+        <div style="margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;background:rgba(230,179,77,.12);color:#eaca7d;font-size:12.5px"><span style="width:5px;height:5px;border-radius:50%;background:#e6b34d;box-shadow:0 0 8px #e6b34d"></span>CLTI outcomes</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:rgba(111,199,154,.09)"><span style="width:6px;height:6px;border-radius:50%;background:#6fc79a;box-shadow:0 0 7px #6fc79a"></span><span style="font-size:12px;color:#8fe0b6">Key set</span></span>
+        </div>
+      </div>
+      <p style="margin:14px 2px 0;font-size:13px;line-height:1.55;color:#9aa3b8">Closest to what you saw — same deep-space navy, but the indigo/violet is gone: gold leads, tiers go green / steel / amber.</p>
+    </div>
+
+  </div>
+</section>
+
+<section id="turn-1" style="padding:24px 64px 72px;display:flex;gap:72px;flex-wrap:wrap;align-items:flex-start;background:#05070f;min-height:100vh">
+
+  <!-- ============ OPTION 1A — OBSERVATORY (sidebar + editorial feed) ============ -->
+  <div id="1a" style="width:1320px;flex:0 0 auto">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:20px">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 9px;border-radius:7px;background:#93a4ff;color:#0a0e1c;font-weight:600;font-size:14px;font-family:'IBM Plex Mono',monospace">1A</span>
+      <span style="font-family:Spectral,serif;font-size:22px;color:#eaeef8">Observatory</span>
+      <span style="color:#8b93a7;font-size:14px">Left rail nav · calm editorial feed · borderless</span>
+    </div>
+
+    <div style="display:flex;width:1320px;height:940px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,#0b0f1e,#070912);box-shadow:0 40px 120px -30px rgba(0,0,0,.8)">
+      <!-- sidebar -->
+      <aside style="width:236px;flex:0 0 auto;padding:30px 22px;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.015)">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:44px">
+          <span style="color:#e9c46a;font-size:19px;text-shadow:0 0 12px rgba(233,196,106,.6)">✦</span>
+          <span style="font-family:Spectral,serif;font-size:22px;font-weight:500;letter-spacing:.01em">Verastar</span>
+        </div>
+        <nav style="display:flex;flex-direction:column;gap:3px">
+          <span style="display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:9px;background:rgba(147,164,255,.11);color:#eef1fb;font-size:14.5px;font-weight:500">
+            <span style="width:6px;height:6px;border-radius:50%;background:#93a4ff;box-shadow:0 0 8px #93a4ff"></span>Digest</span>
+          <span style="display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:9px;color:#8b93a7;font-size:14.5px">
+            <span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.16)"></span>Knowledge Base</span>
+          <span style="display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:9px;color:#8b93a7;font-size:14.5px">
+            <span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.16)"></span>Weekend Read</span>
+          <span style="display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:9px;color:#8b93a7;font-size:14.5px">
+            <span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.16)"></span>Constellations</span>
+        </nav>
+        <div style="margin-top:auto;display:flex;flex-direction:column;gap:12px">
+          <div style="height:1px;background:rgba(255,255,255,.06)"></div>
+          <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:9px;background:rgba(52,211,153,.08);cursor:pointer">
+            <span style="width:6px;height:6px;border-radius:50%;background:#34d399;box-shadow:0 0 7px #34d399"></span>
+            <span style="font-size:12.5px;color:#8fe6bf;font-weight:500">API key set</span>
+            <span style="margin-left:auto;color:#5a6178;font-size:13px">⌄</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:2px 4px">
+            <span style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#3a4a8c,#7c88c9);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#eaeef8">MF</span>
+            <span style="font-size:13px;color:#aab2c6">Dr. Famularo</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- main -->
+      <main style="flex:1;position:relative;overflow:hidden">
+        <div style="position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(1.4px 1.4px at 18% 12%,rgba(255,255,255,.6),transparent),radial-gradient(1px 1px at 62% 8%,rgba(255,255,255,.5),transparent),radial-gradient(1.2px 1.2px at 85% 20%,rgba(200,210,255,.5),transparent),radial-gradient(1px 1px at 40% 22%,rgba(255,255,255,.35),transparent);opacity:.7"></div>
+        <div style="position:relative;padding:44px 52px">
+          <!-- greeting -->
+          <p style="margin:0;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#6d7691;font-weight:500">Wednesday · July 9, 2026</p>
+          <h1 style="margin:8px 0 0;font-family:Spectral,serif;font-size:36px;font-weight:500;letter-spacing:-.01em;color:#f3f5fc">Good morning, Dr. Famularo.</h1>
+          <p style="margin:10px 0 0;font-size:16px;color:#9aa3b8;max-width:620px;line-height:1.5">Six papers from the last three days move your north stars. Three carry values the app verified against source.</p>
+
+          <!-- steering strip -->
+          <div style="margin:26px 0 6px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <span style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#5a6178;font-weight:600">Steering by</span>
+            <span style="display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;background:rgba(233,196,106,.10);color:#f0d18a;font-size:13px;font-weight:500"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>CLTI outcomes</span>
+            <span style="display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;background:rgba(233,196,106,.10);color:#f0d18a;font-size:13px;font-weight:500"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>Carotid revascularization</span>
+            <span style="display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;background:rgba(233,196,106,.10);color:#f0d18a;font-size:13px;font-weight:500"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>AI in medicine</span>
+            <span style="font-size:13px;color:#93a4ff;cursor:pointer">Tune profile</span>
+          </div>
+
+          <!-- section label + feed -->
+          <div style="display:flex;align-items:center;gap:14px;margin:38px 0 4px">
+            <span style="font-family:Spectral,serif;font-size:15px;font-style:italic;color:#aab2c6">Today's scan</span>
+            <span style="flex:1;height:1px;background:rgba(255,255,255,.07)"></span>
+            <span style="font-size:12px;color:#5a6178;font-family:'IBM Plex Mono',monospace">6 candidates · 3 verified</span>
+          </div>
+
+          <!-- entry 1 -->
+          <article style="padding:26px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:9px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5a6178">01</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(52,211,153,.12);color:#7fe9b3;font-size:11.5px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399"></span>Verified · full text</span>
+            </div>
+            <h3 style="margin:0;font-family:Spectral,serif;font-size:21px;font-weight:500;line-height:1.3;color:#f1f3fb;max-width:820px">Best endovascular versus best surgical therapy for chronic limb-threatening ischaemia (BASIL-3)</h3>
+            <p style="margin:7px 0 0;font-size:13px;color:#7d879d;font-family:'IBM Plex Mono',monospace">Bradbury AW et al. · BMJ · 2024 · <span style="color:#93a4ff">PMID 39993822 ↗</span></p>
+            <p style="margin:12px 0 0;font-family:Spectral,serif;font-style:italic;font-size:15px;color:#9aa3b8;max-width:800px;line-height:1.55">Speaks directly to your Limb Preservation Program — a head-to-head on the revascularization choice you make weekly.</p>
+            <p style="margin:12px 0 0;font-size:15.5px;line-height:1.65;color:#cdd4e4;max-width:800px">No significant difference in amputation-free survival between strategies, <span style="font-family:'IBM Plex Mono',monospace;color:#eaf0ff;border-bottom:1px dotted rgba(147,164,255,.55)">HR 0.84 (97.5% CI 0.61–1.16, P=0.22)</span>. <span style="color:#6ee7b7;font-size:13px;font-weight:500;white-space:nowrap">grounded in source ↗</span></p>
+            <div style="margin-top:14px;display:flex;gap:16px;align-items:center">
+              <span style="font-size:13px;color:#8b93a7;cursor:pointer">＋ Save to Knowledge Base</span>
+              <span style="font-size:13px;color:#8b93a7;cursor:pointer">Show verified evidence</span>
+            </div>
+          </article>
+
+          <!-- entry 2 -->
+          <article style="padding:26px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:9px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5a6178">02</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(167,139,250,.15);color:#c9b8fd;font-size:11.5px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#a78bfa;box-shadow:0 0 6px #a78bfa"></span>Verified · registry</span>
+            </div>
+            <h3 style="margin:0;font-family:Spectral,serif;font-size:21px;font-weight:500;line-height:1.3;color:#f1f3fb;max-width:820px">Supervised exercise and transcutaneous oxygen pressure in peripheral artery disease (STARDUST)</h3>
+            <p style="margin:7px 0 0;font-size:13px;color:#7d879d;font-family:'IBM Plex Mono',monospace">JAMA Network Open · 2024 · <span style="color:#93a4ff">PMID 38470420 ↗</span> · NCT04881110</p>
+            <p style="margin:12px 0 0;font-family:Spectral,serif;font-style:italic;font-size:15px;color:#9aa3b8;max-width:800px;line-height:1.55">Registry-confirmed outcome — the strongest tier of proof, matched against ClinicalTrials.gov.</p>
+            <p style="margin:12px 0 0;font-size:15.5px;line-height:1.65;color:#cdd4e4;max-width:800px">Supervised exercise raised limb oxygenation over control, <span style="font-family:'IBM Plex Mono',monospace;color:#eaf0ff;border-bottom:1px dotted rgba(147,164,255,.55)">TcPO₂ diff 11.2 mmHg (95% CI 8.0–14.5, P&lt;0.001)</span>. <span style="color:#6ee7b7;font-size:13px;font-weight:500;white-space:nowrap">grounded in source ↗</span></p>
+            <div style="margin-top:14px;display:flex;gap:16px;align-items:center">
+              <span style="font-size:13px;color:#8b93a7;cursor:pointer">＋ Save to Knowledge Base</span>
+              <span style="font-size:13px;color:#8b93a7;cursor:pointer">Show verified evidence</span>
+            </div>
+          </article>
+
+          <!-- entry 3 -->
+          <article style="padding:26px 0">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:9px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5a6178">03</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(52,211,153,.12);color:#7fe9b3;font-size:11.5px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399"></span>Verified · full text</span>
+            </div>
+            <h3 style="margin:0;font-family:Spectral,serif;font-size:21px;font-weight:500;line-height:1.3;color:#f1f3fb;max-width:820px">Stenting versus endarterectomy for asymptomatic carotid stenosis (ACST-2)</h3>
+            <p style="margin:7px 0 0;font-size:13px;color:#7d879d;font-family:'IBM Plex Mono',monospace">Halliday A et al. · Lancet · 2021 · <span style="color:#93a4ff">PMID 34469763 ↗</span></p>
+            <p style="margin:12px 0 0;font-family:Spectral,serif;font-style:italic;font-size:15px;color:#9aa3b8;max-width:800px;line-height:1.55">Anchors your Carotid revascularization north star with long-term comparative data.</p>
+            <p style="margin:12px 0 0;font-size:15.5px;line-height:1.65;color:#cdd4e4;max-width:800px">Comparable serious event rates between stenting and surgery, <span style="font-family:'IBM Plex Mono',monospace;color:#eaf0ff;border-bottom:1px dotted rgba(147,164,255,.55)">RR 1.16 (95% CI 0.86–1.57, p=0.33)</span>. <span style="color:#6ee7b7;font-size:13px;font-weight:500;white-space:nowrap">grounded in source ↗</span></p>
+            <div style="margin-top:14px;display:flex;gap:16px;align-items:center">
+              <span style="font-size:13px;color:#8b93a7;cursor:pointer">＋ Save to Knowledge Base</span>
+              <span style="font-size:13px;color:#8b93a7;cursor:pointer">Show verified evidence</span>
+            </div>
+          </article>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ OPTION 1B — BRIEFING (icon rail + feed + right rail) ============ -->
+  <div id="1b" style="width:1320px;flex:0 0 auto">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:20px">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 9px;border-radius:7px;background:#93a4ff;color:#0a0e1c;font-weight:600;font-size:14px;font-family:'IBM Plex Mono',monospace">1B</span>
+      <span style="font-family:Spectral,serif;font-size:22px;color:#eaeef8">The Briefing</span>
+      <span style="color:#8b93a7;font-size:14px">Icon rail · feed · right rail with the week at a glance</span>
+    </div>
+
+    <div style="display:flex;width:1320px;height:940px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,#0b0f1e,#070912);box-shadow:0 40px 120px -30px rgba(0,0,0,.8)">
+      <!-- icon rail -->
+      <aside style="width:72px;flex:0 0 auto;padding:26px 0;display:flex;flex-direction:column;align-items:center;gap:8px;border-right:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.015)">
+        <span style="color:#e9c46a;font-size:22px;text-shadow:0 0 12px rgba(233,196,106,.6);margin-bottom:24px">✦</span>
+        <span style="width:42px;height:42px;border-radius:11px;background:rgba(147,164,255,.13);display:flex;align-items:center;justify-content:center;font-size:19px">◎</span>
+        <span style="width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#6d7691">▤</span>
+        <span style="width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#6d7691">✎</span>
+        <span style="width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#6d7691">✧</span>
+        <span style="margin-top:auto;width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#3a4a8c,#7c88c9);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">MF</span>
+      </aside>
+
+      <!-- main feed -->
+      <main style="flex:1;position:relative;overflow:hidden;border-right:1px solid rgba(255,255,255,.06)">
+        <div style="position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(1.4px 1.4px at 22% 10%,rgba(255,255,255,.55),transparent),radial-gradient(1px 1px at 70% 14%,rgba(255,255,255,.45),transparent),radial-gradient(1.1px 1.1px at 48% 6%,rgba(200,210,255,.5),transparent);opacity:.7"></div>
+        <div style="position:relative;padding:40px 44px">
+          <p style="margin:0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#6d7691;font-weight:500">Today's digest · Jul 9</p>
+          <h1 style="margin:7px 0 0;font-family:Spectral,serif;font-size:30px;font-weight:500;color:#f3f5fc">Three verified findings today</h1>
+
+          <!-- entry cards: soft raised, no hard border -->
+          <div style="margin-top:26px;display:flex;flex-direction:column;gap:14px">
+            <div style="padding:22px 24px;border-radius:14px;background:rgba(255,255,255,.028)">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(52,211,153,.12);color:#7fe9b3;font-size:11px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399"></span>Verified · full text</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5a6178;margin-left:auto">score 92</span>
+              </div>
+              <h3 style="margin:0;font-family:Spectral,serif;font-size:19px;font-weight:500;line-height:1.3;color:#f1f3fb">Best endovascular vs best surgical therapy for CLTI (BASIL-3)</h3>
+              <p style="margin:6px 0 0;font-size:12.5px;color:#7d879d;font-family:'IBM Plex Mono',monospace">BMJ · 2024 · PMID 39993822</p>
+              <p style="margin:11px 0 0;font-size:14.5px;line-height:1.6;color:#cdd4e4">No difference in amputation-free survival, <span style="font-family:'IBM Plex Mono',monospace;color:#eaf0ff;border-bottom:1px dotted rgba(147,164,255,.55)">HR 0.84 (97.5% CI 0.61–1.16)</span>.</p>
+            </div>
+            <div style="padding:22px 24px;border-radius:14px;background:rgba(255,255,255,.028)">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(167,139,250,.15);color:#c9b8fd;font-size:11px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#a78bfa;box-shadow:0 0 6px #a78bfa"></span>Verified · registry</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5a6178;margin-left:auto">score 88</span>
+              </div>
+              <h3 style="margin:0;font-family:Spectral,serif;font-size:19px;font-weight:500;line-height:1.3;color:#f1f3fb">Supervised exercise & TcPO₂ in peripheral artery disease (STARDUST)</h3>
+              <p style="margin:6px 0 0;font-size:12.5px;color:#7d879d;font-family:'IBM Plex Mono',monospace">JAMA Netw Open · 2024 · NCT04881110</p>
+              <p style="margin:11px 0 0;font-size:14.5px;line-height:1.6;color:#cdd4e4">Limb oxygenation rose over control, <span style="font-family:'IBM Plex Mono',monospace;color:#eaf0ff;border-bottom:1px dotted rgba(147,164,255,.55)">diff 11.2 mmHg (95% CI 8.0–14.5)</span>.</p>
+            </div>
+            <div style="padding:22px 24px;border-radius:14px;background:rgba(255,255,255,.028)">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(52,211,153,.12);color:#7fe9b3;font-size:11px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399"></span>Verified · full text</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5a6178;margin-left:auto">score 81</span>
+              </div>
+              <h3 style="margin:0;font-family:Spectral,serif;font-size:19px;font-weight:500;line-height:1.3;color:#f1f3fb">Stenting vs endarterectomy for asymptomatic carotid stenosis (ACST-2)</h3>
+              <p style="margin:6px 0 0;font-size:12.5px;color:#7d879d;font-family:'IBM Plex Mono',monospace">Lancet · 2021 · PMID 34469763</p>
+              <p style="margin:11px 0 0;font-size:14.5px;line-height:1.6;color:#cdd4e4">Comparable serious event rates, <span style="font-family:'IBM Plex Mono',monospace;color:#eaf0ff;border-bottom:1px dotted rgba(147,164,255,.55)">RR 1.16 (95% CI 0.86–1.57)</span>.</p>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- right rail -->
+      <aside style="width:296px;flex:0 0 auto;padding:40px 28px;position:relative">
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:10px;background:rgba(52,211,153,.08);margin-bottom:32px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#34d399;box-shadow:0 0 7px #34d399"></span>
+          <span style="font-size:12.5px;color:#8fe6bf;font-weight:500">API key set</span>
+          <span style="margin-left:auto;color:#5a6178">⌄</span>
+        </div>
+
+        <p style="margin:0 0 14px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#5a6178;font-weight:600">This week</p>
+        <div style="display:flex;gap:22px;margin-bottom:30px">
+          <div><div style="font-family:Spectral,serif;font-size:34px;color:#f3f5fc;line-height:1">12</div><div style="font-size:12px;color:#8b93a7;margin-top:3px">papers verified</div></div>
+          <div><div style="font-family:Spectral,serif;font-size:34px;color:#f3f5fc;line-height:1">5</div><div style="font-size:12px;color:#8b93a7;margin-top:3px">saved to KB</div></div>
+        </div>
+
+        <p style="margin:0 0 12px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#5a6178;font-weight:600">Steering by</p>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:30px">
+          <span style="display:inline-flex;align-items:center;gap:8px;font-size:14px;color:#f0d18a"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>CLTI outcomes</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;font-size:14px;color:#f0d18a"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>Carotid revascularization</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;font-size:14px;color:#f0d18a"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>AI in medicine</span>
+        </div>
+
+        <div style="padding:18px 20px;border-radius:14px;background:linear-gradient(160deg,rgba(147,164,255,.10),rgba(167,139,250,.05))">
+          <p style="margin:0;font-family:Spectral,serif;font-style:italic;font-size:15px;color:#c7cfe6">Weekend Read</p>
+          <p style="margin:8px 0 0;font-size:13px;line-height:1.55;color:#9aa3b8">5 saved papers thread through your Limb Preservation work. Ready Saturday.</p>
+          <p style="margin:12px 0 0;font-size:13px;color:#93a4ff">Preview ↗</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ============ OPTION 1C — READING ROOM (top bar + centered column) ============ -->
+  <div id="1c" style="width:1320px;flex:0 0 auto">
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:20px">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 9px;border-radius:7px;background:#93a4ff;color:#0a0e1c;font-weight:600;font-size:14px;font-family:'IBM Plex Mono',monospace">1C</span>
+      <span style="font-family:Spectral,serif;font-size:22px;color:#eaeef8">Reading Room</span>
+      <span style="color:#8b93a7;font-size:14px">Top bar · centered reading column · most minimal, content-first</span>
+    </div>
+
+    <div style="width:1320px;height:940px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,#0c1120,#060810);box-shadow:0 40px 120px -30px rgba(0,0,0,.8);position:relative">
+      <!-- top bar -->
+      <header style="position:relative;z-index:2;display:flex;align-items:center;gap:28px;padding:20px 40px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(7,10,20,.5)">
+        <div style="display:flex;align-items:center;gap:9px">
+          <span style="color:#e9c46a;font-size:18px;text-shadow:0 0 12px rgba(233,196,106,.6)">✦</span>
+          <span style="font-family:Spectral,serif;font-size:20px;font-weight:500">Verastar</span>
+        </div>
+        <nav style="display:flex;gap:26px;font-size:14.5px">
+          <span style="color:#eef1fb;font-weight:500;border-bottom:2px solid #93a4ff;padding-bottom:2px">Digest</span>
+          <span style="color:#8b93a7">Knowledge Base</span>
+          <span style="color:#8b93a7">Weekend Read</span>
+          <span style="color:#8b93a7">Constellations</span>
+        </nav>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:16px">
+          <span style="display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;background:rgba(52,211,153,.08)"><span style="width:6px;height:6px;border-radius:50%;background:#34d399;box-shadow:0 0 7px #34d399"></span><span style="font-size:12.5px;color:#8fe6bf;font-weight:500">Key set</span></span>
+          <span style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3a4a8c,#7c88c9);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">MF</span>
+        </div>
+      </header>
+
+      <!-- starfield header glow -->
+      <div style="position:absolute;top:69px;left:0;right:0;height:280px;pointer-events:none;background:radial-gradient(700px 240px at 50% -40px,rgba(60,74,140,.35),transparent);background-blend-mode:screen"></div>
+      <div style="position:absolute;top:69px;left:0;right:0;height:320px;pointer-events:none;background-image:radial-gradient(1.5px 1.5px at 30% 30%,rgba(255,255,255,.6),transparent),radial-gradient(1px 1px at 55% 18%,rgba(255,255,255,.5),transparent),radial-gradient(1.3px 1.3px at 72% 40%,rgba(200,210,255,.55),transparent),radial-gradient(1px 1px at 44% 52%,rgba(255,255,255,.35),transparent),radial-gradient(1.1px 1.1px at 82% 22%,rgba(255,255,255,.45),transparent);opacity:.8"></div>
+
+      <!-- centered column -->
+      <div style="position:relative;z-index:1;height:calc(940px - 69px);overflow:hidden;display:flex;justify-content:center">
+        <div style="width:720px;padding:56px 0 0">
+          <div style="text-align:center">
+            <p style="margin:0;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:#6d7691;font-weight:500">Wednesday · July 9, 2026</p>
+            <h1 style="margin:12px 0 0;font-family:Spectral,serif;font-size:38px;font-weight:500;letter-spacing:-.01em;color:#f4f6fd">Good morning, Dr. Famularo.</h1>
+            <p style="margin:12px 0 0;font-size:16px;color:#9aa3b8;line-height:1.55">Six papers moved your north stars this morning.<br>Three carry values the app verified against source.</p>
+            <div style="margin:20px auto 0;display:inline-flex;gap:10px;flex-wrap:wrap;justify-content:center">
+              <span style="display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;background:rgba(233,196,106,.10);color:#f0d18a;font-size:13px"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>CLTI outcomes</span>
+              <span style="display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;background:rgba(233,196,106,.10);color:#f0d18a;font-size:13px"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>Carotid revascularization</span>
+              <span style="display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;background:rgba(233,196,106,.10);color:#f0d18a;font-size:13px"><span style="width:5px;height:5px;border-radius:50%;background:#e9c46a;box-shadow:0 0 8px #e9c46a"></span>AI in medicine</span>
+            </div>
+          </div>
+
+          <div style="height:1px;background:rgba(255,255,255,.07);margin:44px 0 8px"></div>
+
+          <!-- reading entry 1 -->
+          <article style="padding:30px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+            <div style="margin-bottom:10px">
+              <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(52,211,153,.12);color:#7fe9b3;font-size:11.5px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399"></span>Verified · full text</span>
+            </div>
+            <h3 style="margin:0;font-family:Spectral,serif;font-size:24px;font-weight:500;line-height:1.32;color:#f2f4fc">Best endovascular versus best surgical therapy for chronic limb-threatening ischaemia</h3>
+            <p style="margin:9px 0 0;font-size:13px;color:#7d879d;font-family:'IBM Plex Mono',monospace">BASIL-3 · Bradbury AW et al. · BMJ 2024 · <span style="color:#93a4ff">PMID 39993822 ↗</span></p>
+            <p style="margin:16px 0 0;font-size:16.5px;line-height:1.7;color:#cdd4e4">No significant difference in amputation-free survival between best endovascular and best surgical therapy, <span style="font-family:'IBM Plex Mono',monospace;color:#eaf0ff;border-bottom:1px dotted rgba(147,164,255,.55)">HR 0.84 (97.5% CI 0.61–1.16, P=0.22)</span>.</p>
+            <div style="margin-top:16px;display:flex;gap:18px;align-items:center">
+              <span style="color:#6ee7b7;font-size:13px;font-weight:500">grounded in source ↗</span>
+              <span style="font-size:13px;color:#8b93a7">＋ Save to Knowledge Base</span>
+            </div>
+          </article>
+
+          <!-- reading entry 2 -->
+          <article style="padding:30px 0">
+            <div style="margin-bottom:10px">
+              <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(167,139,250,.15);color:#c9b8fd;font-size:11.5px;font-weight:600"><span style="width:5px;height:5px;border-radius:50%;background:#a78bfa;box-shadow:0 0 6px #a78bfa"></span>Verified · registry</span>
+            </div>
+            <h3 style="margin:0;font-family:Spectral,serif;font-size:24px;font-weight:500;line-height:1.32;color:#f2f4fc">Supervised exercise and transcutaneous oxygen pressure in peripheral artery disease</h3>
+            <p style="margin:9px 0 0;font-size:13px;color:#7d879d;font-family:'IBM Plex Mono',monospace">STARDUST · JAMA Network Open 2024 · <span style="color:#93a4ff">NCT04881110 ↗</span></p>
+            <p style="margin:16px 0 0;font-size:16.5px;line-height:1.7;color:#cdd4e4">Supervised exercise raised limb oxygenation over control, <span style="font-family:'IBM Plex Mono',monospace;color:#eaf0ff;border-bottom:1px dotted rgba(147,164,255,.55)">TcPO₂ diff 11.2 mmHg (95% CI 8.0–14.5, P&lt;0.001)</span>.</p>
+            <div style="margin-top:16px;display:flex;gap:18px;align-items:center">
+              <span style="color:#6ee7b7;font-size:13px;font-weight:500">grounded in source ↗</span>
+              <span style="font-size:13px;color:#8b93a7">＋ Save to Knowledge Base</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+</x-dc>
+</body>
+</html>
