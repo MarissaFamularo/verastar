@@ -146,7 +146,7 @@ export default function WeekendRead() {
       <div className="relative" style={{ maxWidth: 720, margin: '0 auto', padding: '52px 40px 72px' }}>
         <div className="flex items-center justify-between" style={{ gap: 16 }}>
           <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>
-            Weekend Read{when ? ` · ${when}` : ''}
+            Connections{when ? ` · ${when}` : ''}
           </p>
           {papers.length > 0 && keySet && (
             <button
@@ -168,7 +168,7 @@ export default function WeekendRead() {
           <p style={{ marginTop: 24, fontSize: 14, color: 'var(--color-fg-muted)' }}>Loading…</p>
         ) : papers.length === 0 ? (
           <div style={{ ...emptyCard, border: '1px dashed rgba(255,255,255,.12)', background: 'transparent', textAlign: 'center', padding: 40 }}>
-            Nothing saved yet. Save a few papers to your Knowledge Base, then come back to find the connections
+            Nothing saved yet. Save a few papers to your Library, then come back to find the connections
             threading them through your work.
           </div>
         ) : (

@@ -5,7 +5,6 @@ import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
 import SpineCheck from './components/SpineCheck.jsx'
 import KnowledgeBase from './components/KnowledgeBase.jsx'
-import LibraryPanel from './components/LibraryPanel.jsx'
 import WeekendRead from './components/WeekendRead.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
 
@@ -16,12 +15,14 @@ import ConstellationView from './components/ConstellationView.jsx'
 // the digest's key chip). Faithful port of design/Verastar.dc.html — the engine
 // (pipeline/, verifier) is untouched; this file is pure presentation + routing.
 
+// Her product IA (the 4-tab simplification): Digest · Library · Star Map · Connections.
+// Library folds the concept graph + the flat-file vault into one surface; Connections is
+// the Weekend Read synthesis. The observatory visuals from the design ride on top.
 const NAV = [
   ['digest', 'Digest'],
-  ['knowledge', 'Knowledge'],
-  ['weekend', 'Weekend'],
   ['library', 'Library'],
-  ['stars', 'Stars'],
+  ['starmap', 'Star Map'],
+  ['connections', 'Connections'],
 ]
 
 function NavIcon({ view }) {
@@ -34,26 +35,15 @@ function NavIcon({ view }) {
           <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" />
         </svg>
       )
-    case 'knowledge':
+    case 'library':
+      // Bookmark/knowledge mark — the library of saved evidence + concepts.
       return (
         <svg {...p}>
           <path d="M5 4.5h11a2 2 0 0 1 2 2V20l-2.4-1.6L13 20l-2.6-1.6L8 20V6.5a2 2 0 0 0-2-2z" strokeLinejoin="round" />
         </svg>
       )
-    case 'weekend':
-      return (
-        <svg {...p}>
-          <path d="M4 20l3-9 8-6 3 3-6 8-8 4z" strokeLinejoin="round" />
-          <path d="M14 5l3 3" />
-        </svg>
-      )
-    case 'library':
-      return (
-        <svg {...p}>
-          <path d="M4 7.5a2 2 0 0 1 2-2h3.2l1.8 2H18a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" strokeLinejoin="round" />
-        </svg>
-      )
-    case 'stars':
+    case 'starmap':
+      // Constellation of concept stars.
       return (
         <svg {...p}>
           <circle cx="6" cy="7" r="1.6" fill="currentColor" stroke="none" />
@@ -61,6 +51,14 @@ function NavIcon({ view }) {
           <circle cx="15" cy="17" r="1.6" fill="currentColor" stroke="none" />
           <circle cx="8" cy="15" r="1.6" fill="currentColor" stroke="none" />
           <path d="M6 7l9-1M15 6l0 11M15 17l-7-2M8 15L6 7" opacity=".5" />
+        </svg>
+      )
+    case 'connections':
+      // Quill — the written Weekend Read that threads the papers together.
+      return (
+        <svg {...p}>
+          <path d="M4 20l3-9 8-6 3 3-6 8-8 4z" strokeLinejoin="round" />
+          <path d="M14 5l3 3" />
         </svg>
       )
     default:
@@ -228,7 +226,7 @@ function SettingsModal({ onClose, saved, onSave, onClear, onPing, status, reply,
 
 // Right rail on the Digest surface: key status, weekly counts, active projects,
 // and the Weekend Read teaser. Counts derive from real saved papers.
-function DigestRail({ saved, onSettings, counts, projects, onWeekend }) {
+function DigestRail({ saved, onSettings, counts, projects, onConnections }) {
   return (
     <aside style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div
@@ -266,12 +264,12 @@ function DigestRail({ saved, onSettings, counts, projects, onWeekend }) {
       )}
 
       <div style={{ height: 1, background: 'var(--hairline)', marginBottom: 26 }} />
-      <div onClick={onWeekend} className="cursor-pointer" style={{ padding: 20, borderRadius: 15, background: 'linear-gradient(160deg,rgba(239,143,91,.12),rgba(239,143,91,.03))' }}>
+      <div onClick={onConnections} className="cursor-pointer" style={{ padding: 20, borderRadius: 15, background: 'linear-gradient(160deg,rgba(239,143,91,.12),rgba(239,143,91,.03))' }}>
         <div className="flex items-center" style={{ gap: 8 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-bright)" strokeWidth="1.8">
             <path d="M4 20l3-9 8-6 3 3-6 8-8 4z" strokeLinejoin="round" />
           </svg>
-          <p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 16, color: '#f0d3c2' }}>Weekend Read</p>
+          <p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 16, color: '#f0d3c2' }}>Connections</p>
         </div>
         <p style={{ margin: '10px 0 0', fontSize: 13, lineHeight: 1.55, color: 'var(--color-fg-dim)' }}>
           Your saved papers thread through this week's work. A synthesis you judge, ready to read.
@@ -396,16 +394,15 @@ export default function App() {
               </div>
             </div>
           </main>
-          <DigestRail saved={saved} counts={counts} projects={projects} onSettings={() => setSettingsOpen(true)} onWeekend={() => setView('weekend')} />
+          <DigestRail saved={saved} counts={counts} projects={projects} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
         </div>
       )}
 
       {view !== 'digest' && (
         <main style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
-          {view === 'knowledge' && <KnowledgeBase key="knowledge" />}
-          {view === 'weekend' && <WeekendRead key="weekend" />}
-          {view === 'library' && <LibraryPanel key="library" />}
-          {view === 'stars' && <ConstellationView key="stars" />}
+          {view === 'library' && <KnowledgeBase key="library" />}
+          {view === 'starmap' && <ConstellationView key="starmap" />}
+          {view === 'connections' && <WeekendRead key="connections" />}
         </main>
       )}
 

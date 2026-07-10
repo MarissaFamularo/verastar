@@ -608,7 +608,7 @@ export default function SpineCheck() {
                   {!res.error && (
                     <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: savedIds.has(paper.id) ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)' }}>
                       <input type="checkbox" checked={savedIds.has(paper.id)} onChange={() => toggleSave(res, take, verifiedRows, title)} style={{ width: 15, height: 15, accentColor: '#7fbf9a' }} />
-                      {savedIds.has(paper.id) ? 'Saved' : 'Save to Knowledge Base'}
+                      {savedIds.has(paper.id) ? 'Saved' : 'Save to Library'}
                     </label>
                   )}
                 </div>

@@ -27,7 +27,7 @@ const FOLDER_MAP = [
   ['connections.md', 'The running Weekend Read ledger, newest first.'],
 ]
 
-export default function FileToDisk() {
+export default function FileToDisk({ embedded = false }) {
   const [handle, setHandle] = useState(null) // connected + permitted FileSystemDirectoryHandle
   const [remembered, setRemembered] = useState(null) // a stored handle that needs a re-grant click
   const [loading, setLoading] = useState(true)
@@ -110,22 +110,35 @@ export default function FileToDisk() {
 
   const accentGreen = { border: 0, borderRadius: 11, background: 'var(--color-verified)', color: '#0c1710', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', boxShadow: '0 6px 22px -8px rgba(127,191,154,.7)' }
 
-  return (
-    <div style={{ maxWidth: 860, padding: '46px 56px 64px' }}>
-      <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Own your memory</p>
-      <div className="flex items-end justify-between" style={{ gap: 20, marginTop: 9 }}>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Library</h1>
-        {handle && (
-          <span className="inline-flex items-center" style={{ gap: 8, padding: '6px 13px', borderRadius: 999, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 12.5, fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
-            {handle.name}
-          </span>
-        )}
-      </div>
-      <p style={{ margin: '12px 0 0', fontSize: 15, color: 'var(--color-fg-dim)', maxWidth: 640, lineHeight: 1.6 }}>
-        Verastar writes your saved papers, synthesized concepts, and Weekend Read straight into a folder you pick —
-        plain markdown you own, openable in Finder. The app only ever touches that one folder. Nothing leaves your machine.
-      </p>
+  // The connected-folder chip, shown next to whichever heading is in play.
+  const folderChip = handle && (
+    <span className="inline-flex items-center" style={{ gap: 8, padding: '6px 13px', borderRadius: 999, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 12.5, fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
+      {handle.name}
+    </span>
+  )
+
+  const body = (
+    <>
+      {embedded ? (
+        // Folded into the Library surface below the concepts — a section, not a page.
+        <div className="flex items-center justify-between" style={{ gap: 16 }}>
+          <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Own your memory · files on disk</p>
+          {folderChip}
+        </div>
+      ) : (
+        <>
+          <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Own your memory</p>
+          <div className="flex items-end justify-between" style={{ gap: 20, marginTop: 9 }}>
+            <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Library</h1>
+            {folderChip}
+          </div>
+          <p style={{ margin: '12px 0 0', fontSize: 15, color: 'var(--color-fg-dim)', maxWidth: 640, lineHeight: 1.6 }}>
+            Verastar writes your saved papers, synthesized concepts, and Weekend Read straight into a folder you pick —
+            plain markdown you own, openable in Finder. The app only ever touches that one folder. Nothing leaves your machine.
+          </p>
+        </>
+      )}
 
       {!supported ? (
         <p style={{ margin: '26px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>
@@ -201,6 +214,9 @@ export default function FileToDisk() {
           </p>
         </>
       )}
-    </div>
+    </>
   )
+
+  // Standalone (its own surface) gets the page frame; embedded drops into the Library page.
+  return embedded ? body : <div style={{ maxWidth: 860, padding: '46px 56px 64px' }}>{body}</div>
 }

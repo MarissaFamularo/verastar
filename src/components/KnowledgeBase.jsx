@@ -16,6 +16,7 @@ import { refileKB } from '../pipeline/deposit.js'
 import { buildKB } from '../lib/kb.js'
 import { DOMAINS, domainColor, domainLabel } from '../lib/domains.js'
 import AddPaper from './AddPaper.jsx'
+import FileToDisk from './LibraryPanel.jsx'
 
 export default function KnowledgeBase() {
   const [concepts, setConcepts] = useState([])
@@ -99,7 +100,7 @@ export default function KnowledgeBase() {
     <div style={{ maxWidth: 900, padding: '46px 56px 64px' }}>
       <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Your knowledge graph</p>
       <div className="flex items-end justify-between" style={{ gap: 20, marginTop: 9 }}>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Knowledge Base</h1>
+        <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Library</h1>
         <div className="flex items-center" style={{ gap: 14 }}>
           {keySet && totalPapers > 0 &&
             (refiling ? (
@@ -159,7 +160,7 @@ export default function KnowledgeBase() {
           <p style={{ fontSize: 14, color: 'var(--color-fg-muted)' }}>Loading your knowledge base…</p>
         ) : totalPapers === 0 ? (
           <p style={{ fontSize: 14, color: 'var(--color-fg-muted)' }}>
-            Nothing saved yet. Run today's digest and use “Save to Knowledge Base” — papers group into concept nodes here.
+            Nothing saved yet. Run today's digest and use “Save to Library” — papers group into concept nodes here.
           </p>
         ) : counts.papers === 0 ? (
           <p style={{ fontSize: 14, color: 'var(--color-fg-muted)' }}>
@@ -194,6 +195,11 @@ export default function KnowledgeBase() {
             )}
           </>
         )}
+      </div>
+
+      {/* The flat-file vault — folded into the Library surface below the concepts. */}
+      <div style={{ marginTop: 40, borderTop: '1px solid var(--hairline)', paddingTop: 32 }}>
+        <FileToDisk embedded />
       </div>
     </div>
   )
