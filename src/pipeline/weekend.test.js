@@ -62,6 +62,25 @@ describe('shapeWeekendRead', () => {
     expect(shapeWeekendRead(null, { papers })).toEqual({ opener: '', threads: [], gaps: [] })
     expect(shapeWeekendRead({}, {})).toEqual({ opener: '', threads: [], gaps: [] })
   })
+
+  it('accepts library pmids as valid citations alongside the focus set', () => {
+    const raw = { threads: [{ anchor: 'X', pmids: ['111', '777'], narrative: 'new meets shelf' }], gaps: [] }
+    const out = shapeWeekendRead(raw, { papers, libraryPapers: [paper('777')] })
+    expect(out.threads[0].pmids).toEqual(['111', '777'])
+  })
+
+  it('drops a shelf-only thread — every thread must cite at least one focus paper', () => {
+    const raw = {
+      threads: [
+        { anchor: 'X', pmids: ['777', '888'], narrative: 'old papers only' },
+        { anchor: 'Y', pmids: ['222', '777'], narrative: 'anchored on this week' },
+      ],
+      gaps: [],
+    }
+    const out = shapeWeekendRead(raw, { papers, libraryPapers: [paper('777'), paper('888')] })
+    expect(out.threads).toHaveLength(1)
+    expect(out.threads[0].anchor).toBe('Y')
+  })
 })
 
 describe('buildWeekendContent', () => {
@@ -81,5 +100,24 @@ describe('buildWeekendContent', () => {
   it('handles an empty profile without crashing', () => {
     const content = buildWeekendContent({ papers: [paper('1')], northStars: [], projects: [] })
     expect(content).toContain('(none set)')
+  })
+
+  it('splits into a this-week focus set and a compact library shelf when given both', () => {
+    const content = buildWeekendContent({
+      papers: [paper('111', { title: 'New this week' })],
+      libraryPapers: [paper('777', { title: 'Old friend', finding: 'Endovascular-first held up.', tags: ['clti'] })],
+      northStars: [],
+      projects: [],
+    })
+    expect(content).toContain('SAVED THIS WEEK (1)')
+    expect(content).toContain('[111] New this week')
+    expect(content).toContain('LIBRARY — already on the shelf (1)')
+    expect(content).toContain('[777] Old friend — Endovascular-first held up. (clti)')
+  })
+
+  it('keeps the flat single-set format when no library is given', () => {
+    const content = buildWeekendContent({ papers: [paper('111')], northStars: [], projects: [] })
+    expect(content).toContain('SAVED PAPERS (1)')
+    expect(content).not.toContain('LIBRARY')
   })
 })

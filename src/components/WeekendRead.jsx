@@ -1,8 +1,11 @@
-// components/WeekendRead.jsx — the "Weekend Read" page: a narrative brief that threads the papers
-// you've saved through your projects & north stars. The "connected" thesis told as prose — the
-// narrative sibling of the Constellations map. Same trust ethos as the verifier: every thread is a
-// SUGGESTED reading Claude proposes and you judge, grounded in the papers' own findings, written
-// number-free (statistics stay the app's verified channel), and it names the gaps it can't fill.
+// components/WeekendRead.jsx — the "Weekend Read" page: a narrative brief that threads THIS
+// WEEK's saved papers through your projects, north stars, and the library you already had (the
+// older shelf rides along as context a thread can reach back into; with nothing saved this week
+// the whole library becomes the subject so the page still works). The "connected" thesis told as
+// prose — the narrative sibling of the Constellations map. Same trust ethos as the verifier:
+// every thread is a SUGGESTED reading Claude proposes and you judge, grounded in the papers' own
+// findings, written number-free (statistics stay the app's verified channel), and it names the
+// gaps it can't fill.
 //
 // synthesizeWeekendRead (pipeline/weekend.js) does the one cheap Sonnet call + shaping; this
 // component owns loading the saved papers/profile, persisting the read to the `digests` store, and
@@ -100,12 +103,24 @@ export default function WeekendRead() {
     return m
   }, [papers])
 
+  // This week's saves are the subject; everything older (or legacy records without a savedAt)
+  // is the shelf they connect back to. Nothing saved this week → the whole library is the
+  // subject, same as the original behavior, so the page never goes dark.
+  const { focus, shelf } = useMemo(() => {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+    const recent = papers.filter((p) => p.savedAt && Date.parse(p.savedAt) >= cutoff)
+    if (!recent.length) return { focus: papers, shelf: [] }
+    const recentIds = new Set(recent.map((p) => p.id))
+    return { focus: recent, shelf: papers.filter((p) => !recentIds.has(p.id)) }
+  }, [papers])
+
   async function handleGenerate() {
     setGenerating(true)
     setError('')
     try {
       const result = await synthesizeWeekendRead({
-        papers,
+        papers: focus,
+        libraryPapers: shelf,
         northStars: profile?.northStars || [],
         projects: profile?.projects || [],
       })
@@ -117,7 +132,8 @@ export default function WeekendRead() {
       await store.put('digests', dayKey, {
         type: 'weekend',
         createdAt,
-        paperCount: papers.length,
+        paperCount: focus.length,
+        libraryCount: shelf.length,
         read: result,
       })
       // If a flat-file library is connected, prepend this read to connections.md (newest-first).
@@ -180,7 +196,11 @@ export default function WeekendRead() {
             )}
 
             {generating && !hasContent && (
-              <p style={{ marginTop: 24, fontSize: 14, color: 'var(--color-fg-muted)' }}>Threading your {papers.length} saved papers through your projects…</p>
+              <p style={{ marginTop: 24, fontSize: 14, color: 'var(--color-fg-muted)' }}>
+                {shelf.length
+                  ? `Threading this week's ${focus.length} ${focus.length === 1 ? 'paper' : 'papers'} through your library of ${shelf.length} and your projects…`
+                  : `Threading your ${papers.length} saved papers through your projects…`}
+              </p>
             )}
 
             {!hasContent && !generating && !keySet && (
@@ -191,8 +211,9 @@ export default function WeekendRead() {
 
             {!hasContent && !generating && keySet && !error && (
               <div style={emptyCard}>
-                Find the connections across your {papers.length} saved {papers.length === 1 ? 'paper' : 'papers'} — Claude surfaces the threads
-                connecting them to your active work, and names what none of them advanced.
+                {shelf.length
+                  ? `You saved ${focus.length} ${focus.length === 1 ? 'paper' : 'papers'} this week. Claude threads ${focus.length === 1 ? 'it' : 'them'} through your active work and the ${shelf.length} ${shelf.length === 1 ? 'paper' : 'papers'} already in your library — and names what this week didn't advance.`
+                  : `Find the connections across your ${papers.length} saved ${papers.length === 1 ? 'paper' : 'papers'} — Claude surfaces the threads connecting them to your active work, and names what none of them advanced.`}
               </div>
             )}
 
@@ -232,7 +253,11 @@ export default function WeekendRead() {
 
                 {when && (
                   <p style={{ margin: '22px 2px 0', fontSize: 12.5, color: 'var(--color-fg-faint)' }}>
-                    Generated {when} · over {papers.length} saved {papers.length === 1 ? 'paper' : 'papers'} · a suggested reading you judge.
+                    Generated {when} ·{' '}
+                    {shelf.length
+                      ? `${focus.length} saved this week, threaded against ${shelf.length} in your library`
+                      : `over ${papers.length} saved ${papers.length === 1 ? 'paper' : 'papers'}`}{' '}
+                    · a suggested reading you judge.
                   </p>
                 )}
               </>

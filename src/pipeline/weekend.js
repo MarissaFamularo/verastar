@@ -1,5 +1,8 @@
-// pipeline/weekend.js — the Weekend Read: a narrative that threads the saved papers through
-// the clinician's projects & north stars.
+// pipeline/weekend.js — the Weekend Read: a narrative that threads THIS WEEK's saved papers
+// through the clinician's projects, north stars, and the library they already had. The week's
+// saves are the subject; older papers ride along as compact shelf context a thread may reach
+// back into. With no library context given (fresh install, or nothing saved this week and the
+// caller passes everything as the focus set) it degrades to threading one flat set.
 //
 // This is the "connected" thesis told as PROSE — the narrative sibling of connect.js. Same
 // trust ethos as the verifier: Claude PROPOSES a reading of how the saved literature converges
@@ -42,7 +45,7 @@ export const WEEKEND_SCHEMA = {
 
 const SYSTEM = `You write a busy clinician-researcher's "weekend read": a short reflective brief that threads the papers they've saved through their active projects and north stars, surfacing how this body of literature connects to their work — especially the non-obvious, cross-paper threads they might not have drawn themselves.
 
-You are given their north stars (recurring concepts), their active projects, and the papers they've saved (each with a title, the app-verified finding, why it was relevant, and topic tags).
+You are given their north stars (recurring concepts), their active projects, and the papers they've saved (each with a title, the app-verified finding, why it was relevant, and topic tags). When the papers come as two sets — SAVED THIS WEEK and LIBRARY (already on the shelf) — the week's papers are the subject: thread them through the projects, the north stars, and the shelf. A library paper joins a thread only where it genuinely connects to one of the week's papers.
 
 Write:
 - opener: 1–2 sentences naming what emerged across these papers as a whole.
@@ -52,11 +55,14 @@ Write:
 Rules:
 - This is a SUGGESTED reading the clinician will judge — never state a connection as established fact. Ground every thread in the papers' own findings; do not force a link that isn't there. Zero threads is a valid answer if nothing genuinely connects.
 - NUMBER-FREE PROSE. Do not put any statistics, effect sizes, sample sizes, p-values, percentages, or numeric results in the narrative or opener — those live in the app's verified channel, not here. Describe direction and meaning in words.
-- Use a paper only where it genuinely fits; a paper may appear in more than one thread. Every pmid MUST be copied from the given paper list — never invent one.
+- Use a paper only where it genuinely fits; a paper may appear in more than one thread. Every pmid MUST be copied from the given paper lists — never invent one.
+- When a LIBRARY set is present, every thread must include at least one of THIS WEEK's papers — library papers are supporting context, never a thread of their own. The gaps line stays about this week: what none of the week's papers advanced.
 - anchor MUST be copied verbatim from the north-star / project lists, or the literal string "Cross-cutting".`
 
-// Assemble the model input from the saved papers + profile. Exported for testing/inspection.
-export function buildWeekendContent({ papers, northStars = [], projects = [] }) {
+// Assemble the model input from the saved papers + profile. `papers` is the focus set (this
+// week's saves); `libraryPapers` is the older shelf, folded in as one compact line each so a
+// large library doesn't balloon the prompt. Exported for testing/inspection.
+export function buildWeekendContent({ papers, libraryPapers = [], northStars = [], projects = [] }) {
   const stars = northStars.length ? northStars.map((s) => `- ${s}`).join('\n') : '(none set)'
   const projs = projects.length ? projects.map((p) => `- ${p}`).join('\n') : '(none set)'
   const list = papers
@@ -71,14 +77,30 @@ export function buildWeekendContent({ papers, northStars = [], projects = [] }) 
       ).trimEnd()
     })
     .join('\n\n')
-  return `NORTH STARS:\n${stars}\n\nACTIVE PROJECTS:\n${projs}\n\nSAVED PAPERS (${papers.length}):\n\n${list}`
+  const focusHeader = libraryPapers.length ? `SAVED THIS WEEK (${papers.length})` : `SAVED PAPERS (${papers.length})`
+  let content = `NORTH STARS:\n${stars}\n\nACTIVE PROJECTS:\n${projs}\n\n${focusHeader}:\n\n${list}`
+  if (libraryPapers.length) {
+    const shelf = libraryPapers
+      .map((p) => {
+        const id = String(p.pmid || p.id)
+        const finding = (p.finding || '').replace(/\s+/g, ' ').slice(0, 200)
+        const tags = (p.tags || []).slice(0, 4).join(', ')
+        return `[${id}] ${p.title || '(untitled)'}${finding ? ` — ${finding}` : ''}${tags ? ` (${tags})` : ''}`
+      })
+      .join('\n')
+    content += `\n\nLIBRARY — already on the shelf (${libraryPapers.length}):\n${shelf}`
+  }
+  return content
 }
 
 // Validate + clean the model's raw output against the real papers: drop invented pmids, drop
-// threads left with no valid paper, trim empties. Pure so it can be unit-tested without a call.
+// threads left with no valid paper, trim empties. When a library shelf was given, a thread must
+// also cite at least one focus (this-week) paper — shelf-only threads are dropped, enforcing in
+// code what the prompt asks for. Pure so it can be unit-tested without a call.
 // Returns { opener, threads: [{ anchor, pmids, narrative }], gaps }.
-export function shapeWeekendRead(raw, { papers = [] } = {}) {
-  const valid = new Set(papers.map((p) => String(p.pmid || p.id)))
+export function shapeWeekendRead(raw, { papers = [], libraryPapers = [] } = {}) {
+  const focus = new Set(papers.map((p) => String(p.pmid || p.id)))
+  const valid = new Set([...focus, ...libraryPapers.map((p) => String(p.pmid || p.id))])
   const threads = (raw?.threads || [])
     .map((t) => ({
       anchor: (t.anchor || '').trim() || 'Cross-cutting',
@@ -86,21 +108,24 @@ export function shapeWeekendRead(raw, { papers = [] } = {}) {
       narrative: (t.narrative || '').trim(),
     }))
     .filter((t) => t.pmids.length && t.narrative)
+    .filter((t) => !libraryPapers.length || t.pmids.some((id) => focus.has(id)))
   const gaps = (raw?.gaps || []).map((g) => String(g).trim()).filter(Boolean)
   return { opener: (raw?.opener || '').trim(), threads, gaps }
 }
 
-// Synthesize the weekend read over the clinician's saved papers. One cheap structured Sonnet
-// call, thinking disabled. Returns the shaped { opener, threads, gaps }; empty on no papers.
+// Synthesize the weekend read: `papers` = this week's saves (the subject), `libraryPapers` =
+// the older shelf they may connect back to. One cheap structured Sonnet call, thinking
+// disabled. Returns the shaped { opener, threads, gaps }; empty on no papers.
 export async function synthesizeWeekendRead({
   papers,
+  libraryPapers = [],
   northStars = [],
   projects = [],
   model = MODELS.triage,
   maxTokens = 4096,
 }) {
   if (!papers?.length) return { opener: '', threads: [], gaps: [] }
-  const content = buildWeekendContent({ papers, northStars, projects })
+  const content = buildWeekendContent({ papers, libraryPapers, northStars, projects })
   const raw = await extractStructured({
     model,
     system: SYSTEM,
@@ -109,5 +134,5 @@ export async function synthesizeWeekendRead({
     maxTokens,
     thinking: { type: 'disabled' },
   })
-  return shapeWeekendRead(raw, { papers })
+  return shapeWeekendRead(raw, { papers, libraryPapers })
 }
