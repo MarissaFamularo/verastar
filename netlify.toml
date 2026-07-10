@@ -1,0 +1,12 @@
+# Netlify config — Verastar is a pure static SPA (vite build → dist).
+# No backend, no env secrets: the Anthropic key is user-entered in the browser.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Single-page app: serve index.html for any path (e.g. /?firstrun=1 deep links).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
