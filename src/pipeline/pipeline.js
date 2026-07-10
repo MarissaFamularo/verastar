@@ -12,14 +12,15 @@ import {
   fetchPmcFullText,
   fetchAbstracts,
   fetchRegistry,
-  registryValue,
+  parseRegistryOutcomes,
+  REGISTRY_OUTCOME_MAP,
   fetchCitation,
   fetchCitations,
   pmidToPmcid,
   searchPubmed,
 } from './sources.js'
 import { extractQuantities } from './extract.js'
-import { verify } from './verify.js'
+import { verify, normalize, extractNumbers, numbersEqual } from './verify.js'
 
 // Public identifiers only — the app re-verifies every value live (docs/FACTS.md).
 export const DEMO_PAPERS = [
@@ -129,14 +130,19 @@ export async function runPaper(paper, { onStage } = {}) {
     notify('fetching')
     const source = await fetchSource(paper)
 
-    // Registry outcome (drives verified-registry) — only for trials we can value-match.
-    let regValue = null
+    // Registry outcomes (drive verified-registry). Parse the LIVE CT.gov posted analyses
+    // into value+CI rows; fall back to the locked map only when parsing yields nothing
+    // (network flake / no analyses). verify() upgrades a quantity that triple-matches ANY row.
+    let registry = null
     if (paper.nct) {
       try {
-        await fetchRegistry(paper.nct) // proves hasResults live; posted value from the locked map
-        regValue = registryValue(paper.nct)
+        const reg = await fetchRegistry(paper.nct)
+        const parsed = parseRegistryOutcomes(reg.outcomeMeasures)
+        registry = parsed.length ? parsed : reg.posted ? [reg.posted] : null
       } catch (err) {
         console.warn(`CT.gov failed for ${paper.nct}:`, err.message)
+        const fallback = REGISTRY_OUTCOME_MAP[paper.nct]
+        registry = fallback ? [fallback] : null
       }
     }
 
@@ -150,7 +156,7 @@ export async function runPaper(paper, { onStage } = {}) {
       quantity,
       verdict: verify(quantity, { text: source.text, tables: source.tables }, {
         sourceTier: source.tier,
-        registryValue: regValue,
+        registry,
       }),
     }))
 
@@ -175,8 +181,20 @@ export async function runPaper(paper, { onStage } = {}) {
 export function corruptAndReverify(paperResult, sourceForReverify) {
   const clean = paperResult.rows.find((r) => !r.verdict.flagged && r.quantity.value != null)
   if (!clean) return null
-  // Nudge the last significant digit so it can't accidentally still match the source.
-  const corruptedValue = Number((clean.quantity.value + 0.1).toFixed(6))
+  // The corrupted value must not collide with ANY real number in the quote (or the row's
+  // own CI/p fields) — a blind +0.1 routinely lands on a CI bound (0.7 -> 0.8 inside
+  // "0.7 (95% CI 0.5-0.8)"), which re-verifies green and defeats the whole demonstration.
+  const quoteNums = extractNumbers(normalize(clean.quantity.source_quote || ''))
+  const taken = [clean.quantity.ci_low, clean.quantity.ci_high, clean.quantity.p_value, ...quoteNums]
+    .filter((n) => n != null)
+  let corruptedValue = Number((clean.quantity.value * 1.7 + 0.13).toFixed(6)) // fallback, never expected
+  for (let k = 1; k <= 50; k++) {
+    const candidate = Number((clean.quantity.value + 0.1 * k).toFixed(6))
+    if (!taken.some((n) => numbersEqual(n, candidate))) {
+      corruptedValue = candidate
+      break
+    }
+  }
   const corrupted = { ...clean.quantity, value: corruptedValue }
   return {
     quantity: corrupted,

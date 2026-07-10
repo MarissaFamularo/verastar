@@ -171,22 +171,74 @@ describe('verify — tier assignment', () => {
     expect(v.flagged).toBe(false)
   })
 
-  it('registry value-match -> verified-registry (strongest)', () => {
+  it('registry triple-match (value + both CI bounds) -> verified-registry, reason names the measure', () => {
     const source = 'The between-group difference in TcPO2 was 11.2 mmHg (95% CI 8.0–14.5).'
     const v = verify(
       q({ value: 11.2, ci_low: 8.0, ci_high: 14.5, source_quote: 'difference in TcPO2 was 11.2 mmHg (95% CI 8.0–14.5)' }),
       source,
-      { registryValue: 11.2 },
+      { registry: [{ measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: 8.0, ci_high: 14.5 }] },
     )
     expect(v.tier).toBe(TIERS.REGISTRY)
+    expect(v.reason).toContain('Peripheral Transcutaneous Oxygen Pressure')
+    expect(v.reason).toContain('95% CI')
   })
 
-  it('registry provided but value differs from posted outcome -> falls back to full-text', () => {
+  it('registry value-only posted (no CI) + value match -> verified-registry', () => {
+    // When the registry row posts no CI, the value-only gate applies.
     const source = 'The between-group difference in TcPO2 was 11.2 mmHg.'
     const v = verify(
       q({ value: 11.2, source_quote: 'difference in TcPO2 was 11.2 mmHg' }),
       source,
-      { registryValue: 9.9 }, // posted outcome disagrees -> not the strongest badge
+      { registry: [{ measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: null, ci_high: null }] },
+    )
+    expect(v.tier).toBe(TIERS.REGISTRY)
+    expect(v.reason).toContain('Peripheral Transcutaneous Oxygen Pressure')
+  })
+
+  it('registry triple-match against ANY of several posted rows -> verified-registry', () => {
+    // A trial posts many analyses; the quantity need match only one of them.
+    const source = 'The risk ratio for the primary end point was 1.91 (95% CI 1.26–2.90).'
+    const v = verify(
+      q({ value: 1.91, ci_low: 1.26, ci_high: 2.9, source_quote: 'risk ratio for the primary end point was 1.91 (95% CI 1.26–2.90)' }),
+      source,
+      {
+        registry: [
+          { measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: 8.0, ci_high: 14.5 },
+          { measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 1.91, ci_low: 1.26, ci_high: 2.9 },
+        ],
+      },
+    )
+    expect(v.tier).toBe(TIERS.REGISTRY)
+  })
+
+  it('[false-verify guard] value matches a CI-bearing registry row but quantity has NO CI -> full-text, not registry', () => {
+    // A "mean follow-up 11.2 months" row would numerically equal the TcPO2 outcome value.
+    // The registry row posts a CI, so a bare value must NOT earn the strongest badge.
+    const source = 'The mean follow-up was 11.2 months across the cohort.'
+    const v = verify(
+      q({ value: 11.2, source_quote: 'mean follow-up was 11.2 months' }),
+      source,
+      { registry: [{ measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: 8.0, ci_high: 14.5 }] },
+    )
+    expect(v.tier).toBe(TIERS.FULL_TEXT)
+  })
+
+  it('[false-verify guard] value matches but one CI bound differs -> full-text, not registry', () => {
+    const source = 'The between-group difference in TcPO2 was 11.2 mmHg (95% CI 8.0–14.9).'
+    const v = verify(
+      q({ value: 11.2, ci_low: 8.0, ci_high: 14.9, source_quote: 'difference in TcPO2 was 11.2 mmHg (95% CI 8.0–14.9)' }),
+      source,
+      { registry: [{ measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: 8.0, ci_high: 14.5 }] },
+    )
+    expect(v.tier).toBe(TIERS.FULL_TEXT)
+  })
+
+  it('registry provided but value differs from every posted outcome -> falls back to full-text', () => {
+    const source = 'The between-group difference in TcPO2 was 11.2 mmHg.'
+    const v = verify(
+      q({ value: 11.2, source_quote: 'difference in TcPO2 was 11.2 mmHg' }),
+      source,
+      { registry: [{ measure: 'Some Other Outcome', value: 9.9, ci_low: null, ci_high: null }] },
     )
     expect(v.tier).toBe(TIERS.FULL_TEXT)
   })
@@ -222,6 +274,50 @@ describe('verify — extra precision guards', () => {
     const v = verify(q({ value: 0.84, source_quote: 'HR was 0.84 overall' }), source)
     expect(v.found).toBe(true)
     expect(v.tier).toBe(TIERS.FULL_TEXT)
+  })
+
+  it('[false-verify guard] fuzzy match on a truncated value: source 0.842, quote 0.84 -> flagged', () => {
+    // Exact fails on the comma; stripped-alnum containment holds ("hrwas084" in
+    // "hrwas0842"). The source token 0.842 extends past the mapped span, so it is not
+    // credited and the truncated 0.84 never verifies.
+    const source = 'HR, was 0.842'
+    const v = verify(q({ value: 0.84, source_quote: 'HR was 0.84' }), source)
+    expect(v.tier).toBe(TIERS.FLAGGED)
+    expect(v.consistent).toBe(false)
+    expect(v.badNums).toContain(0.84)
+  })
+
+  it('[false-verify guard] fuzzy match on a re-punctuated value: source 84, quote 8.4 -> flagged', () => {
+    // Alnum-stripped forms are identical; the numbers must come from the SOURCE span,
+    // where the token is 84, not the quote, where it is 8.4.
+    const source = 'rate of 84 overall'
+    const v = verify(q({ value: 8.4, source_quote: 'rate of 8.4 overall' }), source)
+    expect(v.tier).toBe(TIERS.FLAGGED)
+    expect(v.consistent).toBe(false)
+    expect(v.badNums).toContain(8.4)
+  })
+
+  it('fuzzy match still credits CI bounds inside the matched source span', () => {
+    // Quote drops the comma after "CI" -> exact fails, fuzzy locates a real span that
+    // fully contains all three source tokens.
+    const source = 'HR 0.84 (95% CI, 0.61–1.16), overall favorable.'
+    const v = verify(
+      q({ value: 0.84, ci_low: 0.61, ci_high: 1.16, source_quote: 'HR 0.84 (95% CI 0.61–1.16) overall' }),
+      source,
+    )
+    expect(v.matched.fuzzy).toBe(true)
+    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.badNums).toEqual([])
+  })
+
+  it('fuzzy match recovers a real corpus offset for highlighting', () => {
+    const source = 'The result, HR was 0.84, overall favorable.'
+    const v = verify(q({ value: 0.84, source_quote: 'HR was 0.84 overall' }), source)
+    expect(v.matched.fuzzy).toBe(true)
+    expect(v.matched.index).toBeGreaterThanOrEqual(0)
+    // The mapped span must actually contain the value in source text.
+    const norm = 'the result, hr was 0.84, overall favorable.'
+    expect(norm.slice(v.matched.index, v.matched.index + v.matched.length)).toContain('0.84')
   })
 
   it('[false-verify guard] one bad CI bound flags the whole tuple', () => {

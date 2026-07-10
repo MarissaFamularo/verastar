@@ -104,6 +104,38 @@ function someEqual(nums, target) {
   return nums.some((n) => numbersEqual(n, target))
 }
 
+// --- Registry (CT.gov posted outcome) match -----------------------------------
+
+// Decision ②: the strongest badge (verified-registry) carries the strongest proof — the
+// extracted quantity must match a CT.gov POSTED outcome row, not merely sit in a trial
+// that has results. A row is { measure, value, ci_low, ci_high } (any field but value may
+// be null). opts.registry is an ARRAY of such rows (a single trial posts many analyses);
+// upgrade when the quantity triple-matches ANY row.
+//
+// The gate is value + CI, NEVER a name/abbreviation match on `measure` ("TcPO2" vs
+// "Peripheral Transcutaneous Oxygen Pressure" must not break a real case). The value+CI
+// triple is the strong evidence: it stops a "mean follow-up 11.2 months" row from stealing
+// the badge minted for an 11.2 mmHg TcPO2 outcome (8.0/14.5). When the registry row posts
+// CI bounds, the quantity must carry BOTH bounds and match them — a bare value that happens
+// to equal a CI-bearing posted value does NOT upgrade (falls back to full-text; a tolerable
+// false-flag, never a fatal false-verify). When the registry row posts value only, a value
+// match suffices. Returns the matched row (for the reason string) or null.
+function registryMatch(quantity, rows) {
+  if (!Array.isArray(rows) || quantity.value == null) return null
+  for (const row of rows) {
+    if (!row || row.value == null) continue
+    if (!numbersEqual(quantity.value, row.value)) continue
+    const rowHasCi = row.ci_low != null || row.ci_high != null
+    if (rowHasCi) {
+      if (quantity.ci_low == null || quantity.ci_high == null) continue
+      if (row.ci_low != null && !numbersEqual(quantity.ci_low, row.ci_low)) continue
+      if (row.ci_high != null && !numbersEqual(quantity.ci_high, row.ci_high)) continue
+    }
+    return row
+  }
+  return null
+}
+
 // --- Locate the quote in the source ------------------------------------------
 
 // Returns { found, index, length } into the chosen normalized corpus, or found:false.
@@ -116,12 +148,31 @@ function locate(normQuote, normCorpus) {
 
   // 2b. Fuzzy: strip both to alphanumerics and test containment. Tolerates stray
   // punctuation and line-reflow. Require length > 6 to avoid trivial matches.
-  const alnum = (s) => s.replace(/[^a-z0-9]/g, '')
-  const q = alnum(normQuote)
-  if (q.length > 6 && alnum(normCorpus).includes(q)) {
-    // No reliable offset back into the original span; highlight falls back to a text
-    // search in the viewer. Verdict correctness does not depend on the offset.
-    return { found: true, index: -1, length: normQuote.length, fuzzy: true }
+  //
+  // The stripped-corpus hit is mapped BACK to real offsets in the normalized corpus, so
+  // the numeric check always runs against source tokens, never the model's own quote.
+  // (Stripping deletes decimal points — "0.84" and "084" and "8.4"/"84" collapse — so a
+  // quote-token fallback here false-verified truncated and re-punctuated values.)
+  const q = normQuote.replace(/[^a-z0-9]/g, '')
+  if (q.length > 6) {
+    // map[i] = offset in normCorpus of the i-th alphanumeric character.
+    const map = []
+    let stripped = ''
+    for (let i = 0; i < normCorpus.length; i++) {
+      if (/[a-z0-9]/.test(normCorpus[i])) {
+        map.push(i)
+        stripped += normCorpus[i]
+      }
+    }
+    const hit = stripped.indexOf(q)
+    if (hit !== -1) {
+      // Span ends right after the last matched character — NOT widened to token
+      // boundaries. A source number only partially covered by the quote (e.g. "0.842"
+      // under a quote of "0.84") then correctly fails numbersInRange containment.
+      const start = map[hit]
+      const end = map[hit + q.length - 1] + 1
+      return { found: true, index: start, length: end - start, fuzzy: true }
+    }
   }
   return { found: false }
 }
@@ -132,12 +183,11 @@ function locate(normQuote, normCorpus) {
 //   quantity : { value, ci_low?, ci_high?, p_value?, source_quote, location_hint? }
 //   source   : string  OR  { text?: string, tables?: string }
 //   opts     : { sourceTier?: 'full_text' | 'abstract_only',  // default 'full_text'
-//                registryValue?: number | null }              // CT.gov posted outcome
+//                registry?: Array<{ measure, value, ci_low, ci_high }> } // CT.gov posted rows
 //
 // Returns a verdict: { tier, flagged, found, consistent, matched, quoteNums, badNums, reason }
 export function verify(quantity, source, opts = {}) {
   const sourceTier = opts.sourceTier || 'full_text'
-  const registryValue = opts.registryValue ?? null
 
   const src = typeof source === 'string' ? { text: source, tables: '' } : (source || {})
   const normProse = normalize(src.text || '')
@@ -164,16 +214,14 @@ export function verify(quantity, source, opts = {}) {
   }
   const found = matched !== null
 
-  // 3. Numeric consistency. Extract numeric tokens from the MATCHED SOURCE SPAN (not the
-  // isolated quote) so source-level boundaries are respected: a quote "8" located inside
-  // "2008" credits no number. For an exact match we have offsets and filter corpus tokens
-  // to the span; for a fuzzy match (len>6, no offsets) we fall back to the quote's tokens.
+  // 3. Numeric consistency. Extract numeric tokens from the MATCHED SOURCE SPAN (never
+  // the isolated quote) so source-level boundaries are respected: a quote "8" located
+  // inside "2008" credits no number. Both exact and fuzzy matches carry corpus offsets,
+  // so the same containment rule applies to both paths.
   let quoteNums = []
-  if (matched && matched.index >= 0) {
+  if (matched) {
     const corpusText = matched.corpus === 'tables' ? normTables : normProse
     quoteNums = numbersInRange(corpusText, matched.index, matched.index + matched.length)
-  } else if (matched) {
-    quoteNums = extractNumbers(normQuote)
   }
   const present = []
   if (quantity.value != null) present.push(['value', quantity.value])
@@ -188,7 +236,10 @@ export function verify(quantity, source, opts = {}) {
   // If the quote wasn't located, consistency is moot — it's flagged regardless.
   const consistent = found && badNums.length === 0
 
-  // 4. Assign tier.
+  // 4. Assign tier. Registry is the strongest tier and outranks abstract-only, so it is
+  // checked first — a registry-matched value posted by CT.gov is proven regardless of which
+  // corpus located the quote.
+  const regRow = found && consistent ? registryMatch(quantity, opts.registry) : null
   let tier
   let reason
   if (!found) {
@@ -197,9 +248,13 @@ export function verify(quantity, source, opts = {}) {
   } else if (!consistent) {
     tier = TIERS.FLAGGED
     reason = `Quote located, but ${badNums.join(', ')} is not present in it — the value does not match the source.`
-  } else if (registryValue != null && quantity.value != null && numbersEqual(quantity.value, registryValue)) {
+  } else if (regRow) {
     tier = TIERS.REGISTRY
-    reason = 'Value matches the ClinicalTrials.gov posted outcome.'
+    const label = regRow.measure ? ` ("${regRow.measure}")` : ''
+    const hasCi = regRow.ci_low != null || regRow.ci_high != null
+    reason = hasCi
+      ? `Value and 95% CI match the ClinicalTrials.gov posted outcome${label}.`
+      : `Value matches the ClinicalTrials.gov posted outcome${label}.`
   } else if (sourceTier === 'abstract_only') {
     tier = TIERS.ABSTRACT
     reason = 'Verified against the abstract; full text not in the OA subset.'

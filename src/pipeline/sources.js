@@ -258,7 +258,8 @@ export async function fetchCrossref(doi) {
 // --- ClinicalTrials.gov ------------------------------------------------------
 
 // Fetch a trial's results outcome data. Returns { hasResults, outcomeMeasures, posted }
-// where `posted` is the locked map row when we know it (drives verified-registry).
+// where `posted` is the locked map row, used only as a fallback when live parsing yields
+// nothing (network flake / no analyses). The live rows drive verified-registry.
 export async function fetchRegistry(nct) {
   const fields = 'hasResults,resultsSection.outcomeMeasuresModule'
   const url = `${CTGOV}/${encodeURIComponent(nct)}?fields=${encodeURIComponent(fields)}`
@@ -268,7 +269,38 @@ export async function fetchRegistry(nct) {
   return { hasResults, outcomeMeasures, posted: REGISTRY_OUTCOME_MAP[nct] ?? null }
 }
 
-// Convenience: the registry-posted numeric value for a trial, or null.
-export function registryValue(nct) {
-  return REGISTRY_OUTCOME_MAP[nct]?.value ?? null
+// Coerce a CT.gov string field ("11.2", "8.0", "-0.4") to a finite number, or null. CT.gov
+// posts numbers as strings; non-numeric forms ("<0.001", "", null) collapse to null.
+function toNum(x) {
+  if (x == null) return null
+  const n = typeof x === 'number' ? x : parseFloat(String(x))
+  return Number.isFinite(n) ? n : null
+}
+
+// Parse the LIVE CT.gov v2 outcomeMeasures array into candidate registry rows the verifier
+// can value+CI match against: { measure, value, ci_low, ci_high }. The between-group result
+// (e.g. STARDUST's 11.2, 95% CI 8.0–14.5) lives in each measure's `analyses[]` as
+// paramValue / ciLowerLimit / ciUpperLimit. One measure can post several analyses (a mean
+// difference AND a risk ratio), so this fans out to one row per analysis. Rows whose
+// paramValue is non-numeric are skipped. PURE and defensive: never throws on malformed
+// input — returns [] so a bad payload degrades to the locked-map fallback, never a crash.
+export function parseRegistryOutcomes(outcomeMeasures) {
+  try {
+    if (!Array.isArray(outcomeMeasures)) return []
+    const rows = []
+    for (const om of outcomeMeasures) {
+      if (!om || typeof om !== 'object') continue
+      const measure = typeof om.title === 'string' ? om.title : ''
+      const analyses = Array.isArray(om.analyses) ? om.analyses : []
+      for (const a of analyses) {
+        if (!a || typeof a !== 'object') continue
+        const value = toNum(a.paramValue)
+        if (value == null) continue // non-numeric estimate — nothing to match
+        rows.push({ measure, value, ci_low: toNum(a.ciLowerLimit), ci_high: toNum(a.ciUpperLimit) })
+      }
+    }
+    return rows
+  } catch {
+    return []
+  }
 }
