@@ -4,9 +4,10 @@
 // each proven value with its badge, plus a deliberately corrupted value that the gate
 // flags. This is the "cool to watch" 45s of the demo video.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, store } from '../lib/store.js'
+import { saveDailyDigest, loadDailyDigest, clearDailyDigest } from '../lib/digestStore.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates } from '../pipeline/select.js'
@@ -260,13 +261,42 @@ export default function SpineCheck() {
   const [expanded, setExpanded] = useState({}) // id -> bool: show verified values
   const [viewer, setViewer] = useState(null) // { title, corpusLabel, corpusText, quote, valueLabel }
   const [savedIds, setSavedIds] = useState(() => new Set()) // ids deposited to the Knowledge Base
+  const [restored, setRestored] = useState(false) // digest rehydrated from IndexedDB this mount
   const keySet = hasApiKey()
+
+  // Latest digest state, mirrored every render — async runs would otherwise persist stale
+  // closed-over values. ranRef stops a slow restore from clobbering a run already started.
+  const digestRef = useRef(null)
+  digestRef.current = { results, triaged, candidates, selectedIds }
+  const ranRef = useRef(false)
+
+  // Persist the digest snapshot. Fire-and-forget — never blocks the UI, never throws.
+  function persistDigest(overrides = {}) {
+    saveDailyDigest({ ...digestRef.current, ...overrides }).catch(console.warn)
+  }
 
   const titleOf = (res) => res.paper.title || res.citation?.title || `PMID ${res.paper.pmid}`
 
   // Load which papers are already in the Knowledge Base (persisted in IndexedDB).
   useEffect(() => {
     store.all('papers').then((papers) => setSavedIds(new Set((papers || []).map((p) => p.id))))
+  }, [])
+
+  // Rehydrate the last digest — App unmounts this component on every tab switch, and
+  // re-running would re-pay the extraction calls. Stages stay empty: labels only render
+  // while a stage is in flight.
+  useEffect(() => {
+    loadDailyDigest()
+      .then((saved) => {
+        if (!saved || ranRef.current) return
+        if (!saved.results.length && !saved.candidates.length) return
+        setResults(saved.results)
+        setTriaged(saved.triaged)
+        setCandidates(saved.candidates)
+        setSelectedIds(saved.selectedIds)
+        setRestored(true)
+      })
+      .catch(console.warn)
   }, [])
 
   // Deposit / withdraw a paper to the Knowledge Base — the citation, finding, relevance, the
@@ -315,6 +345,8 @@ export default function SpineCheck() {
   // up later never re-extracts (the expensive Opus step) the papers already done.
   async function runList(papers, { injectCorrupt = false, append = false } = {}) {
     setRunning(true)
+    ranRef.current = true
+    setRestored(false)
     const base = append ? results : []
     if (!append) {
       setResults([])
@@ -344,6 +376,9 @@ export default function SpineCheck() {
     // (reviews, methods pieces) still belong in the digest. A failure here never touches
     // the proven facts.
     const ok = collected.filter((r) => !r.error)
+    // What actually landed in triage — fresh runs cleared it, appends keep the old map
+    // until the combined re-rank replaces it.
+    let triagedNow = append ? triaged : {}
     if (ok.length) {
       setRanking(true)
       try {
@@ -368,11 +403,14 @@ export default function SpineCheck() {
           byId[rk.id] = { score: rk.score, tier: rk.tier, finding: rk.finding, relevance: rk.relevance }
         }
         setTriaged(byId)
+        triagedNow = byId
       } catch (err) {
         console.warn('Triage failed (facts unaffected):', err.message)
       }
       setRanking(false)
     }
+    // Persist so a tab switch (which unmounts this component) never costs a re-run.
+    persistDigest({ results: collected, triaged: triagedNow })
   }
 
   // Score a candidate pool against the current rubric and pre-check the top N. Shared by
@@ -389,6 +427,8 @@ export default function SpineCheck() {
     const n = profile?.rubric?.selectCount ?? 10
     const chosenIds = new Set(scored.slice(0, n).map((c) => c.id))
     setSelectedIds(chosenIds)
+    // The pool + picks survive a tab switch even before any digest runs.
+    persistDigest({ candidates: scored, selectedIds: chosenIds })
     return { scored, chosenIds }
   }
 
@@ -398,9 +438,13 @@ export default function SpineCheck() {
   // re-rank against an edited rubric, or top up. The daily user never has to touch it.
   async function startScan() {
     setScanError('')
+    ranRef.current = true
+    setRestored(false)
     setResults([])
     setTriaged({})
     setCandidates([])
+    // Clear the persisted digest too — closing mid-scan must not resurrect stale results.
+    clearDailyDigest().catch(console.warn)
     setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
     setSearching(true)
     let pool = []
@@ -535,6 +579,11 @@ export default function SpineCheck() {
         </p>
       )}
       {scanError && <p className="mt-3 text-sm text-rose-600 dark:text-rose-400">{scanError}</p>}
+      {restored && (
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          Restored your last digest — run again for fresh results.
+        </p>
+      )}
       {ranking && (
         <p className="mt-3 text-sm text-indigo-600 dark:text-indigo-300">
           Claude is ranking and summarizing against your steering profile…
