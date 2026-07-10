@@ -45,14 +45,13 @@ export default function NorthStars() {
   const removeFrom = (setter, list) => (v) => setter(list.filter((x) => x !== v))
 
   return (
-    <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <h2 className="text-lg font-medium">Your steering profile</h2>
-      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+    <section style={{ marginTop: 14 }}>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--color-fg-muted)', lineHeight: 1.55 }}>
         The concepts you steer by, the projects you're driving, and the rubric your digest
         ranks against. Your daily digest surfaces and selects papers using these.
       </p>
 
-      <div className="mt-5 grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2" style={{ marginTop: 20 }}>
         <ChipGroup
           label="North stars"
           hint="Concepts you steer by"
@@ -75,7 +74,7 @@ export default function NorthStars() {
         />
       </div>
 
-      <div className="mt-6 border-t border-slate-100 pt-6 dark:border-slate-800">
+      <div style={{ marginTop: 24, borderTop: '1px solid var(--hairline)', paddingTop: 24 }}>
         <RubricEditor criteria={rubric.criteria} selectCount={rubric.selectCount} onChange={setRubric} />
       </div>
     </section>

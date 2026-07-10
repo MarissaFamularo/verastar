@@ -1,40 +1,32 @@
 // components/ChipGroup.jsx — an add/remove list of labeled chips.
 //
 // Shared by the steering-profile editor (NorthStars) and the onboarding review screen so
-// north stars and projects edit identically wherever they appear.
+// north stars and projects edit identically wherever they appear. Styled to the observatory
+// design: north-star chips glow gold, project chips sit on a neutral panel tint.
 
 import { useState } from 'react'
 
 export default function ChipGroup({ label, hint, seed = [], items, onAdd, onRemove, placeholder, accent }) {
   const [draft, setDraft] = useState('')
-  const chip =
-    accent === 'sky'
-      ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200'
-      : 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200'
-  const chipBtn =
-    accent === 'sky'
-      ? 'text-sky-500 hover:bg-sky-200 hover:text-sky-900 dark:hover:bg-sky-800'
-      : 'text-violet-500 hover:bg-violet-200 hover:text-violet-900 dark:hover:bg-violet-800'
+  const gold = accent === 'sky' // north stars use the gold accent; projects use neutral
+  const chipStyle = gold
+    ? { background: 'rgba(233,196,106,.11)', color: 'var(--color-gold-soft)' }
+    : { background: 'var(--surface-2)', color: 'var(--color-fg-soft)' }
+  const closeColor = gold ? '#b89a5a' : 'var(--color-fg-muted)'
 
   return (
     <div>
-      <h3 className="text-sm font-medium">{label}</h3>
-      {hint && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
+      <h3 style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--color-fg-soft)' }}>{label}</h3>
+      {hint && <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-fg-muted)' }}>{hint}</p>}
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="flex flex-wrap" style={{ marginTop: 12, gap: 8 }}>
         {items.map((s) => (
-          <span key={s} className={`inline-flex items-center gap-1.5 rounded-full py-1 pl-3 pr-1.5 text-sm font-medium ${chip}`}>
+          <span key={s} className="inline-flex items-center" style={{ gap: 8, borderRadius: 999, padding: '6px 8px 6px 12px', fontSize: 13, ...chipStyle }}>
             {s}
-            <button
-              onClick={() => onRemove(s)}
-              aria-label={`Remove ${s}`}
-              className={`flex h-4 w-4 items-center justify-center rounded-full ${chipBtn}`}
-            >
-              ×
-            </button>
+            <button onClick={() => onRemove(s)} aria-label={`Remove ${s}`} className="cursor-pointer" style={{ color: closeColor, background: 'transparent', border: 0, lineHeight: 1 }}>×</button>
           </span>
         ))}
-        {items.length === 0 && <span className="text-sm text-slate-400">None yet.</span>}
+        {items.length === 0 && <span style={{ fontSize: 13, color: 'var(--color-fg-faint)' }}>None yet.</span>}
       </div>
 
       <form
@@ -45,27 +37,25 @@ export default function ChipGroup({ label, hint, seed = [], items, onAdd, onRemo
             setDraft('')
           }
         }}
-        className="mt-3 flex gap-2"
+        className="flex"
+        style={{ marginTop: 12, gap: 8 }}
       >
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder={placeholder}
-          className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 dark:border-slate-700 dark:bg-slate-950"
+          className="flex-1"
+          style={{ borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', padding: '8px 12px', fontSize: 14, color: 'var(--color-fg)', fontFamily: 'inherit', outline: 'none' }}
         />
-        <button type="submit" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+        <button type="submit" className="cursor-pointer" style={{ borderRadius: 10, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-soft)', padding: '8px 14px', fontSize: 14, fontWeight: 500, fontFamily: 'inherit' }}>
           Add
         </button>
       </form>
 
       {items.length === 0 && seed.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="flex flex-wrap" style={{ marginTop: 8, gap: 8 }}>
           {seed.map((s) => (
-            <button
-              key={s}
-              onClick={() => onAdd(s)}
-              className="rounded-full border border-dashed border-slate-300 px-3 py-1 text-xs text-slate-600 hover:border-slate-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-slate-100"
-            >
+            <button key={s} onClick={() => onAdd(s)} className="cursor-pointer" style={{ borderRadius: 999, border: '1px dashed rgba(255,255,255,.18)', padding: '5px 12px', fontSize: 12, color: 'var(--color-fg-muted)', background: 'transparent' }}>
               + {s}
             </button>
           ))}

@@ -8,9 +8,9 @@
 export default function RubricEditor({ criteria, selectCount, onChange }) {
   return (
     <div>
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium">Digest rubric</h3>
-        <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+      <div className="flex items-center justify-between" style={{ gap: 12 }}>
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--color-fg-soft)' }}>Digest rubric</h3>
+        <label className="flex items-center" style={{ gap: 8, fontSize: 12, color: 'var(--color-fg-muted)' }}>
           Papers per day
           <input
             type="number"
@@ -18,11 +18,11 @@ export default function RubricEditor({ criteria, selectCount, onChange }) {
             max="30"
             value={selectCount}
             onChange={(e) => onChange({ criteria, selectCount: clampCount(e.target.value) })}
-            className="w-16 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm tabular-nums outline-none focus:border-slate-500 dark:border-slate-700 dark:bg-slate-950"
+            style={{ width: 58, borderRadius: 9, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', padding: '6px 10px', fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', color: 'var(--color-fg)', outline: 'none' }}
           />
         </label>
       </div>
-      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', lineHeight: 1.5 }}>
         What makes a paper worth your morning. Your digest scores every candidate against
         this and selects the top {selectCount}. Edit it, then re-rank the candidates to see it swing.
       </p>
@@ -31,7 +31,7 @@ export default function RubricEditor({ criteria, selectCount, onChange }) {
         onChange={(e) => onChange({ criteria: e.target.value, selectCount })}
         rows={7}
         placeholder="Prioritize… Rank lower… Skip…"
-        className="mt-3 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-slate-500 dark:border-slate-700 dark:bg-slate-950"
+        style={{ marginTop: 12, width: '100%', resize: 'vertical', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', padding: '11px 13px', fontSize: 13.5, lineHeight: 1.55, color: 'var(--color-fg-soft)', fontFamily: 'inherit', outline: 'none' }}
       />
     </div>
   )
