@@ -299,6 +299,7 @@ export default function App() {
   const [firstrunPreview, setFirstrunPreview] = useState(() => new URLSearchParams(window.location.search).has('firstrun'))
   const [view, setView] = useState('digest')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [starsOpen, setStarsOpen] = useState(false) // north-star chips: collapsed by default
   const [profile, setProfile] = useState(null)
   const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0 })
 
@@ -429,12 +430,30 @@ export default function App() {
               {stars.length > 0 && (
                 <div className="flex items-center" style={{ margin: '26px 0 0', gap: 12, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Steering by</span>
-                  {stars.map((s) => (
-                    <span key={s} className="inline-flex items-center" style={{ gap: 7, padding: '6px 13px', borderRadius: 999, background: 'rgba(233,196,106,.11)', color: 'var(--color-gold-soft)', fontSize: 13, fontWeight: 500 }}>
+                  {/* Collapsed by default — the chip list gets tall as north stars grow (esp. on phones). */}
+                  {starsOpen ? (
+                    <>
+                      {stars.map((s) => (
+                        <span key={s} className="inline-flex items-center" style={{ gap: 7, padding: '6px 13px', borderRadius: 999, background: 'rgba(233,196,106,.11)', color: 'var(--color-gold-soft)', fontSize: 13, fontWeight: 500 }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-gold)', boxShadow: '0 0 8px var(--color-gold)' }} />
+                          {s}
+                        </span>
+                      ))}
+                      <button onClick={() => setStarsOpen(false)} className="cursor-pointer" style={{ border: 0, background: 'transparent', padding: 0, fontSize: 13, color: 'var(--color-fg-muted)', fontFamily: 'inherit' }}>
+                        Hide
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setStarsOpen(true)}
+                      className="inline-flex items-center cursor-pointer"
+                      title="Show your north stars"
+                      style={{ gap: 7, padding: '6px 13px', border: 0, borderRadius: 999, background: 'rgba(233,196,106,.11)', color: 'var(--color-gold-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}
+                    >
                       <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-gold)', boxShadow: '0 0 8px var(--color-gold)' }} />
-                      {s}
-                    </span>
-                  ))}
+                      {stars.length} north star{stars.length === 1 ? '' : 's'}
+                    </button>
+                  )}
                   <span onClick={() => setSettingsOpen(true)} className="cursor-pointer" style={{ fontSize: 13, color: 'var(--color-accent)' }}>Tune profile</span>
                 </div>
               )}
