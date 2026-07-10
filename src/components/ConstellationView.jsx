@@ -21,7 +21,7 @@ import {
   confirmAllEdges,
 } from '../pipeline/graph.js'
 import { proposeConnections } from '../pipeline/connect.js'
-import { DOMAINS, PROJECT_COLOR, domainColor, domainLabel } from '../lib/domains.js'
+import { listDomains, PROJECT_COLOR, domainColor, domainLabel } from '../lib/domains.js'
 import StarMap from './StarMap.jsx'
 
 const KIND_LABEL = { northStar: 'North star', project: 'Project', concept: 'Concept' }
@@ -181,7 +181,7 @@ export default function ConstellationView() {
             <div style={{ marginTop: 20, borderTop: '1px solid var(--hairline)', paddingTop: 16 }}>
               <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--color-fg-faint)' }}>Fields</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 7 }}>
-                {DOMAINS.map((d) => (
+                {listDomains().map((d) => (
                   <span key={d.key} className="inline-flex items-center" style={{ gap: 9, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
                     <ColorDot color={d.color} /> {d.label}
                   </span>

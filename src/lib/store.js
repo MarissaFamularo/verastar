@@ -10,13 +10,14 @@
 //   - digests   : generated daily/weekend digests, keyed by date
 //   - graphNodes: knowledge-graph nodes (papers + projects), keyed by id
 //   - graphEdges: knowledge-graph edges, keyed by id
+//   - domains   : the user's domain taxonomy { key, label, color }, keyed by key
 //
 // The API is deliberately generic (get/put/all/delete/clear) so the Supabase impl is a
 // drop-in: same method names, same return contracts.
 
 const DB_NAME = 'verastar'
-const DB_VERSION = 1
-export const COLLECTIONS = ['profile', 'papers', 'digests', 'graphNodes', 'graphEdges']
+const DB_VERSION = 2 // v2: + domains collection
+export const COLLECTIONS = ['profile', 'papers', 'digests', 'graphNodes', 'graphEdges', 'domains']
 
 let _dbPromise = null
 

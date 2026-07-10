@@ -15,7 +15,7 @@ import { loadConcepts, setConceptTags, removeNode } from '../pipeline/graph.js'
 import { refileKB } from '../pipeline/deposit.js'
 import { buildKB } from '../lib/kb.js'
 import { backfillOaPdfs } from '../pipeline/save.js'
-import { DOMAINS, domainColor, domainLabel } from '../lib/domains.js'
+import { listDomains, domainColor, domainLabel } from '../lib/domains.js'
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 
@@ -153,7 +153,7 @@ export default function KnowledgeBase() {
       </div>
       <div className="flex flex-wrap" style={{ marginTop: 14, gap: 8 }}>
         <FilterChip active={domain === 'all'} onClick={() => setDomain('all')}>All domains</FilterChip>
-        {DOMAINS.map((d) => (
+        {listDomains().map((d) => (
           <FilterChip key={d.key} active={domain === d.key} color={d.color} onClick={() => setDomain(d.key)}>{d.label}</FilterChip>
         ))}
       </div>

@@ -11,7 +11,7 @@
 //     same evidence-careful instinct as the verifier; specific numbers stay with each source).
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
-import { DOMAINS, DOMAIN_KEYS } from '../lib/domains.js'
+import { listDomains, ensureDomain } from '../lib/domains.js'
 
 // concept id from its name — stable slug so re-using the same name collapses to one node.
 export function conceptId(name) {
@@ -39,12 +39,15 @@ export const ANALYZE_SCHEMA = {
   },
 }
 
-const ANALYZE_SYSTEM = `You file papers into a vascular surgeon-scientist's concept-based knowledge graph. The graph has TWO tiers, mirroring her real one: broad "hub" topics that gather many papers (e.g. "Carotid Revascularization", "CLTI Management", "Clinical AI in Vascular Care"), and specific "concept" satellites beneath them (e.g. "Transcarotid Revascularization Stroke Risk", "Pedal Bypass Patency"). A paper is a SOURCE under one specific concept, and that concept hangs off one broad hub. This is what makes the map read like a constellation — big hubs with small satellites orbiting them — instead of a handful of lonely stars. For the given paper return:
+const analyzeSystem = (domains) => `You file papers into a clinician-scientist's concept-based knowledge graph. The graph has TWO tiers: broad "hub" topics that gather many papers (e.g. "Carotid Revascularization", "CLTI Management", "Clinical AI in Vascular Care"), and specific "concept" satellites beneath them (e.g. "Transcarotid Revascularization Stroke Risk", "Pedal Bypass Patency"). A paper is a SOURCE under one specific concept, and that concept hangs off one broad hub. This is what makes the map read like a constellation — big hubs with small satellites orbiting them — instead of a handful of lonely stars. For the given paper return:
 
 - concept: the paper's SPECIFIC topic — a small, reusable node capturing its actual angle (technique, endpoint, cohort). Reuse an EXISTING concept name VERBATIM only if the paper is truly the SAME specific topic; otherwise mint a new specific concept. Do NOT collapse everything into the hub, and do NOT use the paper's exact title — name the topic it exemplifies (e.g. a paper on TCAR 30-day stroke → "Transcarotid Revascularization Outcomes", not the title). Keeping specific concepts as their own satellites is intended: singletons stay visible.
 - hub: the BROAD parent topic this concept belongs under. STRONGLY prefer an existing hub from the list — a TCAR paper, a CEA-vs-CAS paper, and an asymptomatic-stenosis paper all share the hub "Carotid Revascularization". Only mint a new hub when none fits. A hub is broad enough to gather a dozen concepts. If the paper's specific topic already IS that broad (no finer angle), you may return the same string for both concept and hub.
-- domain: the single best-fit domain, returned as its key. Domains:
-${DOMAINS.map((d) => `  - "${d.key}": ${d.label}`).join('\n')}
+- domain: the broad RESEARCH FIELD this paper belongs to — one tier wider than a hub (a domain gathers several hubs; think department or discipline, e.g. "Vascular Surgery", "Health Data Science", "Medical Education"). ${
+  domains.length
+    ? `STRONGLY prefer an existing domain, returned as its key:\n${domains.map((d) => `  - "${d.key}": ${d.label}`).join('\n')}\nOnly when the paper genuinely belongs to none of them, propose a NEW domain as a short field-level name (2–4 words, Title Case) — never a paper- or disease-specific topic.`
+    : `This reader's taxonomy is empty so far — propose the domain as a short field-level name (2–4 words, Title Case), broad enough that a dozen hubs could live under it.`
+}
 - tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by. Tags carry the finest angle; the concept is specific and the hub is broad.`
 
 // Analyze a paper. `paper` = { title, finding, relevance, text? }; `concepts` = existing
@@ -65,13 +68,15 @@ export async function analyzePaper({ paper, concepts = [], model = MODELS.triage
 
   const r = await extractStructured({
     model,
-    system: ANALYZE_SYSTEM,
+    system: analyzeSystem(listDomains()),
     content,
     schema: ANALYZE_SCHEMA,
     maxTokens,
     thinking: { type: 'disabled' },
   })
-  const domain = DOMAIN_KEYS.includes(r.domain) ? r.domain : DOMAIN_KEYS[0]
+  // Existing key → reused as-is; anything else is a proposed new field → minted with the
+  // next palette color. Either way the paper gets a real key.
+  const domain = await ensureDomain(r.domain)
   const seen = new Set()
   const tags = (r.tags || [])
     .map((t) => (t || '').trim().toLowerCase())

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { setApiKey, hasApiKey, clearApiKey, ping } from './lib/anthropic.js'
 import { getProfile, store } from './lib/store.js'
+import { loadDomains } from './lib/domains.js'
+import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
 import SpineCheck from './components/SpineCheck.jsx'
@@ -220,6 +222,11 @@ function SettingsModal({ onClose, saved, onSave, onClear, onPing, status, reply,
 
           <p style={{ margin: '0 0 4px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Steering profile</p>
           <NorthStars />
+
+          <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
+
+          <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Library grouping</p>
+          <DomainEditor />
         </div>
       </div>
     </div>
@@ -296,7 +303,8 @@ export default function App() {
   const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0 })
 
   useEffect(() => {
-    getProfile().then((p) => {
+    // Domains hydrate before any view mounts so sync color/label lookups are ready.
+    Promise.all([getProfile(), loadDomains()]).then(([p]) => {
       setOnboarded(!!p?.onboarded)
       setProfile(p || null)
     })
