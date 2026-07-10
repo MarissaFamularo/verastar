@@ -21,10 +21,19 @@ export const COLLECTIONS = ['profile', 'papers', 'digests', 'graphNodes', 'graph
 
 let _dbPromise = null
 
+// How long a DB open may take before we call it failed. Opens are normally instant;
+// a hang here means another tab holds an old-version connection (or the browser's
+// storage queue is stuck) — surface that instead of a silent black screen.
+const OPEN_TIMEOUT_MS = 6000
+
 function openDb() {
   if (_dbPromise) return _dbPromise
   _dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
+    const timer = setTimeout(() => {
+      _dbPromise = null // let a later call retry
+      reject(new Error('Storage did not open — another Verastar tab may be holding it. Close other tabs and reload.'))
+    }, OPEN_TIMEOUT_MS)
     req.onupgradeneeded = () => {
       const db = req.result
       for (const name of COLLECTIONS) {
@@ -33,8 +42,22 @@ function openDb() {
         }
       }
     }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    req.onsuccess = () => {
+      clearTimeout(timer)
+      const db = req.result
+      // A newer tab bumping DB_VERSION sends versionchange — close so it can upgrade
+      // instead of blocking it into a black screen. Next call here reopens fresh.
+      db.onversionchange = () => {
+        db.close()
+        _dbPromise = null
+      }
+      resolve(db)
+    }
+    req.onerror = () => {
+      clearTimeout(timer)
+      _dbPromise = null
+      reject(req.error)
+    }
   })
   return _dbPromise
 }

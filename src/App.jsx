@@ -302,12 +302,14 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0 })
 
+  const [bootError, setBootError] = useState('')
+
   useEffect(() => {
     // Domains hydrate before any view mounts so sync color/label lookups are ready.
     Promise.all([getProfile(), loadDomains()]).then(([p]) => {
       setOnboarded(!!p?.onboarded)
       setProfile(p || null)
-    })
+    }).catch((err) => setBootError(err?.message || String(err)))
   }, [])
 
   // Derive weekly counts from real saved papers (defensive on shape).
@@ -347,6 +349,26 @@ export default function App() {
       setError(err?.message || String(err))
       setStatus('error')
     }
+  }
+
+  if (bootError) {
+    // Storage failed to open (usually another tab holding an older schema) — say so
+    // instead of a silent black screen.
+    return (
+      <div className="flex items-center justify-center" style={{ minHeight: '100vh', padding: 32, background: 'linear-gradient(165deg,#0f1218,#08090d)' }}>
+        <div style={{ maxWidth: 440, textAlign: 'center' }}>
+          <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 26, fontWeight: 500, color: 'var(--color-fg)' }}>Verastar can't reach its storage</h1>
+          <p style={{ margin: '12px 0 0', fontSize: 14.5, lineHeight: 1.6, color: 'var(--color-fg-dim)' }}>{bootError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="cursor-pointer"
+            style={{ marginTop: 22, padding: '11px 22px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit' }}
+          >
+            Reload
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (onboarded === null) return null // profile still loading
