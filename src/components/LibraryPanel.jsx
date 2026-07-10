@@ -1,11 +1,11 @@
-// components/LibraryPanel.jsx — the "File to Disk" block, embedded at the top of the Library.
+// components/LibraryPanel.jsx — the "Own Your Memory" Library surface: the flat-file vault.
 //
 // The pitch, made tangible: the app doesn't trap your work in the browser — every paper you save
 // writes out as plain markdown into a folder you pick, openable in Finder. Once you've connected a
 // folder, filing is automatic (SpineCheck's save + the Connections read write through on their own).
 // The only button the browser forces on us is the initial folder pick — showDirectoryPicker must be
 // triggered by a click for security. "Back-fill everything" is the on-camera magic + a catch-up for
-// anything saved before the folder was connected.
+// anything saved before the folder was connected. Styled to the observatory design.
 
 import { useEffect, useState } from 'react'
 import {
@@ -16,6 +16,16 @@ import {
   hasPermission,
   syncAllToLibrary,
 } from '../lib/library.js'
+import { store } from '../lib/store.js'
+import { loadConcepts } from '../pipeline/graph.js'
+
+// The folder-map explainer — what lives in the vault. Static; mirrors the on-disk layout.
+const FOLDER_MAP = [
+  ['sources/', 'One note per saved paper, with its PDF when open-access.'],
+  ['concepts/', 'Synthesized topic notes, each linking its sources.'],
+  ['digests/', 'Dated snapshots of a scan.'],
+  ['connections.md', 'The running Weekend Read ledger, newest first.'],
+]
 
 export default function FileToDisk() {
   const [handle, setHandle] = useState(null) // connected + permitted FileSystemDirectoryHandle
@@ -25,6 +35,7 @@ export default function FileToDisk() {
   const [log, setLog] = useState([]) // running list of files written this session
   const [progress, setProgress] = useState(null) // { done, total }
   const [error, setError] = useState('')
+  const [counts, setCounts] = useState({ sources: 0, concepts: 0 })
   const supported = isSupported()
 
   // On mount, decide which of three states we're in. Browsers reset File System Access permission on
@@ -43,6 +54,13 @@ export default function FileToDisk() {
       setLoading(false)
     })()
   }, [supported])
+
+  // Real counts for the header — sources = saved papers, concepts = graph concept nodes.
+  useEffect(() => {
+    Promise.all([store.all('papers'), loadConcepts()])
+      .then(([papers = [], concepts = []]) => setCounts({ sources: papers.length, concepts: concepts.length }))
+      .catch(() => {})
+  }, [])
 
   async function handleConnect() {
     setError('')
@@ -90,92 +108,98 @@ export default function FileToDisk() {
     setSyncing(false)
   }
 
-  if (loading) return null
-
-  // Unsupported browser: one honest muted line, no dead buttons.
-  if (!supported) {
-    return (
-      <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
-        Filing your Library to a folder on disk needs Chrome or Edge on desktop.
-      </div>
-    )
-  }
+  const accentGreen = { border: 0, borderRadius: 11, background: 'var(--color-verified)', color: '#0c1710', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', boxShadow: '0 6px 22px -8px rgba(127,191,154,.7)' }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">File to Disk</h3>
-          <p className="mt-0.5 max-w-xl text-xs text-slate-600 dark:text-slate-400">
-            {handle
-              ? 'Every paper you save writes here automatically as plain markdown you own — openable in Finder. Nothing leaves your machine.'
-              : remembered
-                ? `Your library folder “${remembered.name}” is remembered. Browsers drop folder access on restart — reconnect to resume filing. Your files on disk are untouched.`
-                : 'Pick a folder and every paper you save writes there automatically as plain markdown you own — openable in Finder. Nothing leaves your machine.'}
-          </p>
-        </div>
-        {handle ? (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Filing to {handle.name}
+    <div style={{ maxWidth: 860, padding: '46px 56px 64px' }}>
+      <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Own your memory</p>
+      <div className="flex items-end justify-between" style={{ gap: 20, marginTop: 9 }}>
+        <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Library</h1>
+        {handle && (
+          <span className="inline-flex items-center" style={{ gap: 8, padding: '6px 13px', borderRadius: 999, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 12.5, fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
+            {handle.name}
           </span>
-        ) : remembered ? (
-          <button
-            onClick={handleReconnect}
-            className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-          >
-            Reconnect “{remembered.name}”
-          </button>
-        ) : (
-          <button
-            onClick={handleConnect}
-            className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-          >
-            Choose a folder
-          </button>
         )}
       </div>
+      <p style={{ margin: '12px 0 0', fontSize: 15, color: 'var(--color-fg-dim)', maxWidth: 640, lineHeight: 1.6 }}>
+        Verastar writes your saved papers, synthesized concepts, and Weekend Read straight into a folder you pick —
+        plain markdown you own, openable in Finder. The app only ever touches that one folder. Nothing leaves your machine.
+      </p>
 
-      {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      {!supported ? (
+        <p style={{ margin: '26px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>
+          Filing your Library to a folder on disk needs a Chromium browser (Chrome / Edge) on desktop.
+        </p>
+      ) : loading ? null : (
+        <>
+          {/* counts + connect / sync */}
+          <div className="flex items-center flex-wrap" style={{ marginTop: 28, gap: 30, padding: '22px 26px', borderRadius: 16, background: 'var(--surface-1)' }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 34, color: 'var(--color-fg)', lineHeight: 1 }}>{counts.sources}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', marginTop: 4 }}>sources</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 34, color: 'var(--color-fg)', lineHeight: 1 }}>{counts.concepts}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', marginTop: 4 }}>concepts</div>
+            </div>
+            <div style={{ marginLeft: 'auto' }}>
+              {handle ? (
+                <button onClick={handleSync} disabled={syncing} style={{ ...accentGreen, padding: '11px 20px', opacity: syncing ? 0.6 : 1 }}>
+                  {syncing ? 'Writing…' : 'Sync everything now'}
+                </button>
+              ) : remembered ? (
+                <button onClick={handleReconnect} style={{ ...accentGreen, padding: '11px 20px' }}>Reconnect “{remembered.name}”</button>
+              ) : (
+                <button onClick={handleConnect} style={{ ...accentGreen, padding: '11px 20px' }}>Choose a folder</button>
+              )}
+            </div>
+          </div>
+          <p style={{ margin: '12px 2px 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+            {handle
+              ? 'New saves and weekend reads write here automatically. Use “Sync everything now” to back-fill the whole library at once.'
+              : remembered
+                ? `Your library folder “${remembered.name}” is remembered — browsers drop folder access on restart. Reconnect to resume filing; your files on disk are untouched.`
+                : 'Pick a folder once. Every paper you save then writes there automatically — plain markdown you own.'}
+          </p>
 
-      {remembered && (
-        <button
-          onClick={handleConnect}
-          className="mt-2 text-[11px] font-medium text-slate-500 hover:text-slate-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
-        >
-          or choose a different folder
-        </button>
-      )}
-
-      {handle && (
-        <div className="mt-3 flex items-center gap-3">
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            {syncing ? 'Writing…' : 'Back-fill everything'}
-          </button>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">
-            Writes your whole Library to disk at once — useful for anything saved before you connected.
-          </span>
-        </div>
-      )}
-
-      {(syncing || log.length > 0) && (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/40">
-          {progress && progress.total > 0 && (
-            <p className="mb-2 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-              {progress.done} / {progress.total} files written
-            </p>
+          {error && <p style={{ margin: '10px 2px 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{error}</p>}
+          {remembered && (
+            <button onClick={handleConnect} className="cursor-pointer" style={{ margin: '8px 2px 0', display: 'block', fontSize: 12, color: 'var(--color-fg-muted)', background: 'transparent', border: 0 }}>or choose a different folder</button>
           )}
-          <ol className="max-h-48 space-y-0.5 overflow-y-auto pr-1 font-mono text-[11px]">
-            {log.map((label, i) => (
-              <li key={i} className="text-emerald-700 dark:text-emerald-400">
-                ✓ {label}
-              </li>
+
+          {/* live write log */}
+          {(syncing || log.length > 0) && (
+            <div style={{ marginTop: 20, borderRadius: 16, background: 'rgba(255,255,255,.02)', border: '1px solid var(--hairline)', overflow: 'hidden' }}>
+              <div className="flex items-center" style={{ gap: 10, padding: '13px 18px', borderBottom: '1px solid var(--hairline)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
+                <span style={{ fontSize: 12.5, color: 'var(--color-verified-soft)', fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
+                  {progress && progress.total > 0 ? `${progress.done} / ${progress.total} files written` : 'Writing…'}
+                </span>
+                <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>just now</span>
+              </div>
+              <ol className="overflow-y-auto" style={{ margin: 0, padding: '14px 18px', listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 200, fontFamily: 'var(--font-mono)', fontSize: 12.5, color: '#8fbfa2', lineHeight: 1.5 }}>
+                {log.map((label, i) => (
+                  <li key={i}>✓ {label}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {/* folder map */}
+          <p style={{ margin: '32px 0 12px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>What lives in your folder</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, borderRadius: 14, overflow: 'hidden', background: 'rgba(255,255,255,.02)', border: '1px solid var(--hairline)' }}>
+            {FOLDER_MAP.map(([name, desc], i) => (
+              <div key={name} className="flex" style={{ alignItems: 'baseline', gap: 16, padding: '13px 18px', borderTop: i === 0 ? 'none' : '1px solid var(--hairline-soft)' }}>
+                <span style={{ flex: '0 0 168px', fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--color-gold-soft)' }}>{name}</span>
+                <span style={{ fontSize: 13.5, color: 'var(--color-fg-dim)', lineHeight: 1.5 }}>{desc}</span>
+              </div>
             ))}
-          </ol>
-        </div>
+          </div>
+          <p style={{ margin: '16px 2px 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--color-fg-muted)' }}>
+            Plain markdown files you own. Point any editor, notebook, or tool at this folder later — nothing here is locked inside an app.
+          </p>
+        </>
       )}
     </div>
   )

@@ -120,40 +120,38 @@ export default function AddPaper({ onAdded }) {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Add a paper</h3>
-      <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+    <div style={{ borderRadius: 14, border: '1px solid var(--hairline)', background: 'var(--surface-1)', padding: 18 }}>
+      <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>Add a paper</h3>
+      <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--color-fg-muted)', lineHeight: 1.5 }}>
         Reading something outside the digest? Paste a PMID, DOI, or PubMed / PMC link — it runs through
-        the same verifier and lands in your Library.
+        the same verifier and lands in your Knowledge Base.
       </p>
 
-      <form onSubmit={handleAdd} className="mt-3 flex gap-2">
+      <form onSubmit={handleAdd} className="flex" style={{ marginTop: 12, gap: 8 }}>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="e.g. 39993822, 10.1136/bmj-2024-079013, or a pubmed.ncbi.nlm.nih.gov link"
           disabled={!keySet || busy}
-          className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
+          className="min-w-0 flex-1"
+          style={{ borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', padding: '10px 13px', fontSize: 14, color: 'var(--color-fg)', fontFamily: 'inherit', outline: 'none', opacity: !keySet || busy ? 0.5 : 1 }}
         />
         <button
           type="submit"
           disabled={!keySet || busy || !input.trim()}
-          className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+          className="shrink-0 cursor-pointer"
+          style={{ borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', padding: '9px 18px', fontSize: 14, fontWeight: 600, border: 0, fontFamily: 'inherit', opacity: !keySet || busy || !input.trim() ? 0.5 : 1 }}
         >
           {busy ? 'Adding…' : 'Add'}
         </button>
       </form>
 
       {!keySet && (
-        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-          Set your API key above to add a paper — extraction runs on your key.
-        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-abstract)' }}>Set your API key in Settings to add a paper — extraction runs on your key.</p>
       )}
-      {busy && (
-        <p className="mt-2 text-xs text-indigo-600 dark:text-indigo-300">{STAGE_LABEL[stage] || 'Working…'}</p>
-      )}
-      {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
-      {done && <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">{done}</p>}
+      {busy && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-accent)' }}>{STAGE_LABEL[stage] || 'Working…'}</p>}
+      {error && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-domain-vascular)' }}>{error}</p>}
+      {done && <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 500, color: 'var(--color-verified-soft)' }}>{done}</p>}
     </div>
   )
 }

@@ -7,6 +7,7 @@
 // synthesizeWeekendRead (pipeline/weekend.js) does the one cheap Sonnet call + shaping; this
 // component owns loading the saved papers/profile, persisting the read to the `digests` store, and
 // rendering it. Regenerating overwrites the day's read; the latest is reloaded on every visit.
+// Styled to the observatory design (Verastar.dc.html).
 
 import { useEffect, useMemo, useState } from 'react'
 import { store, getProfile } from '../lib/store.js'
@@ -15,7 +16,7 @@ import { synthesizeWeekendRead } from '../pipeline/weekend.js'
 import { appendConnectionsToLibrary } from '../lib/library.js'
 
 // Which kind of anchor a thread hangs off — colors the pill so projects/north stars/cross-cutting
-// read distinctly (echoing the map: north stars gold, projects yellow).
+// read distinctly. Projects and north stars both glow gold (echoing the map); cross-cutting greys.
 function anchorKind(anchor, profile) {
   const eq = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase()
   if ((profile?.projects || []).some((p) => eq(p, anchor))) return 'project'
@@ -24,9 +25,9 @@ function anchorKind(anchor, profile) {
 }
 
 const ANCHOR_STYLE = {
-  project: { dot: '#eec13a', cls: 'text-amber-700 dark:text-amber-300' },
-  northStar: { dot: '#f4c542', cls: 'text-yellow-700 dark:text-yellow-300' },
-  cross: { dot: '#94a3b8', cls: 'text-slate-600 dark:text-slate-300' },
+  project: { dot: 'var(--color-gold)', text: 'var(--color-gold-soft)' },
+  northStar: { dot: 'var(--color-gold)', text: 'var(--color-gold-soft)' },
+  cross: { dot: '#94a3b8', text: 'var(--color-fg-soft)' },
 }
 
 function AnchorPill({ anchor, profile }) {
@@ -34,42 +35,33 @@ function AnchorPill({ anchor, profile }) {
   const s = ANCHOR_STYLE[kind]
   const kindLabel = kind === 'project' ? 'Project' : kind === 'northStar' ? 'North star' : 'Cross-cutting'
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${s.cls}`}>
-      <span className="h-2 w-2 rounded-full" style={{ background: s.dot }} />
+    <span className="inline-flex items-center" style={{ gap: 8, fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: s.text }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.dot, boxShadow: `0 0 8px ${s.dot}` }} />
       {anchor}
-      <span className="font-normal text-slate-400 dark:text-slate-500">· {kindLabel}</span>
+      <span style={{ fontWeight: 400, color: 'var(--color-fg-muted)', letterSpacing: 0, textTransform: 'none' }}>· {kindLabel}</span>
     </span>
   )
 }
 
-// One paper cited inside a thread: title, citation line, the app-verified finding.
+// One paper cited inside a thread: title, mono citation line, the app-verified finding.
 function PaperRow({ paper }) {
   const c = paper?.citation
   const bits = c ? [c.author, c.journal, c.year].filter(Boolean).join(' · ') : ''
   return (
-    <li className="border-l-2 border-slate-200 py-1.5 pl-3 dark:border-slate-700">
-      <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{paper?.title || 'Untitled paper'}</p>
+    <li style={{ borderLeft: '2px solid rgba(255,255,255,.12)', paddingLeft: 16 }}>
+      <p style={{ margin: 0, fontSize: 14.5, fontWeight: 500, color: 'var(--color-fg-soft)' }}>{paper?.title || 'Untitled paper'}</p>
       {c && (
-        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>
           {bits && <span>{bits} · </span>}
-          <a
-            href={c.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-sky-700 hover:underline dark:text-sky-300"
-          >
-            PMID {c.pmid} ↗
-          </a>
+          <a href={c.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>PMID {c.pmid} ↗</a>
           {c.verified && (
-            <span className="ml-2 inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> citation verified
+            <span className="inline-flex items-center" style={{ marginLeft: 8, gap: 5, color: 'var(--color-verified-soft)' }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-verified)' }} /> citation verified
             </span>
           )}
         </p>
       )}
-      {paper?.finding && (
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{paper.finding}</p>
-      )}
+      {paper?.finding && <p style={{ margin: '7px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--color-fg-dim)' }}>{paper.finding}</p>}
     </li>
   )
 }
@@ -146,124 +138,108 @@ export default function WeekendRead() {
     : ''
   const hasContent = read && (read.opener || read.threads?.length || read.gaps?.length)
 
+  const emptyCard = { marginTop: 24, borderRadius: 16, background: 'var(--surface-1)', padding: 24, fontSize: 14, color: 'var(--color-fg-dim)', lineHeight: 1.6 }
+
   return (
-    <section className="mt-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Connections</h2>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            How the papers you've saved connect to your projects and north stars — the threads across
-            your Library, grounded in each paper's verified finding.
+    <main className="relative" style={{ minHeight: '100%' }}>
+      <div className="vs-stars absolute" style={{ top: 0, left: 0, right: 0, height: 300, opacity: 0.6 }} />
+      <div className="relative" style={{ maxWidth: 720, margin: '0 auto', padding: '52px 40px 72px' }}>
+        <div className="flex items-center justify-between" style={{ gap: 16 }}>
+          <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>
+            Weekend Read{when ? ` · ${when}` : ''}
           </p>
+          {papers.length > 0 && keySet && (
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="cursor-pointer"
+              style={{ padding: '9px 15px', border: '1px solid rgba(239,143,91,.4)', borderRadius: 10, background: 'transparent', color: 'var(--color-accent-bright)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit', opacity: generating ? 0.6 : 1 }}
+            >
+              {generating ? 'Finding…' : read ? 'Regenerate' : 'Find Connections'}
+            </button>
+          )}
         </div>
-        {papers.length > 0 && keySet && (
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-          >
-            {generating ? 'Finding…' : read ? 'Regenerate' : 'Find Connections'}
-          </button>
+
+        <h1 style={{ margin: '16px 0 0', fontFamily: 'var(--font-serif)', fontSize: 30, fontWeight: 500, lineHeight: 1.25, color: 'var(--color-fg)' }}>
+          The threads across your reading.
+        </h1>
+
+        {loading ? (
+          <p style={{ marginTop: 24, fontSize: 14, color: 'var(--color-fg-muted)' }}>Loading…</p>
+        ) : papers.length === 0 ? (
+          <div style={{ ...emptyCard, border: '1px dashed rgba(255,255,255,.12)', background: 'transparent', textAlign: 'center', padding: 40 }}>
+            Nothing saved yet. Save a few papers to your Knowledge Base, then come back to find the connections
+            threading them through your work.
+          </div>
+        ) : (
+          <>
+            {error && (
+              <div style={{ marginTop: 24, borderRadius: 12, background: 'rgba(224,96,90,.12)', padding: '12px 16px', fontSize: 14, color: '#f0a9a4' }}>
+                <span style={{ fontWeight: 600 }}>Couldn't generate:</span> {error}
+              </div>
+            )}
+
+            {generating && !hasContent && (
+              <p style={{ marginTop: 24, fontSize: 14, color: 'var(--color-fg-muted)' }}>Threading your {papers.length} saved papers through your projects…</p>
+            )}
+
+            {!hasContent && !generating && !keySet && (
+              <div style={emptyCard}>
+                Set your Anthropic key in Settings to find the connections across your {papers.length} saved {papers.length === 1 ? 'paper' : 'papers'}.
+              </div>
+            )}
+
+            {!hasContent && !generating && keySet && !error && (
+              <div style={emptyCard}>
+                Find the connections across your {papers.length} saved {papers.length === 1 ? 'paper' : 'papers'} — Claude surfaces the threads
+                connecting them to your active work, and names what none of them advanced.
+              </div>
+            )}
+
+            {hasContent && (
+              <>
+                {read.opener && (
+                  <p style={{ margin: '18px 0 0', fontFamily: 'var(--font-serif)', fontSize: 19, fontStyle: 'italic', lineHeight: 1.6, color: 'var(--color-fg-soft)' }}>{read.opener}</p>
+                )}
+
+                {read.threads?.length > 0 && (
+                  <div className="flex flex-col" style={{ marginTop: 40, gap: 20 }}>
+                    {read.threads.map((t, i) => (
+                      <div key={i} style={{ padding: 26, borderRadius: 16, background: 'var(--surface-1)' }}>
+                        <AnchorPill anchor={t.anchor} profile={profile} />
+                        <p style={{ margin: '14px 0 0', fontSize: 16, lineHeight: 1.7, color: 'var(--color-fg-soft)' }}>{t.narrative}</p>
+                        <ul style={{ margin: '18px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          {t.pmids.map((id) => {
+                            const paper = byId.get(String(id))
+                            return paper ? <PaperRow key={id} paper={paper} /> : null
+                          })}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {read.gaps?.length > 0 && (
+                  <div style={{ marginTop: 24, padding: '22px 26px', borderRadius: 16, background: 'rgba(255,255,255,.02)', border: '1px dashed rgba(255,255,255,.1)' }}>
+                    <p style={{ margin: 0, fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-muted)', fontWeight: 600 }}>Not advanced this week</p>
+                    <ul style={{ margin: '12px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {read.gaps.map((g, i) => (
+                        <li key={i} style={{ fontSize: 14.5, color: 'var(--color-fg-dim)', lineHeight: 1.5 }}>{g}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {when && (
+                  <p style={{ margin: '22px 2px 0', fontSize: 12.5, color: 'var(--color-fg-faint)' }}>
+                    Generated {when} · over {papers.length} saved {papers.length === 1 ? 'paper' : 'papers'} · a suggested reading you judge.
+                  </p>
+                )}
+              </>
+            )}
+          </>
         )}
       </div>
-
-      {loading ? (
-        <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">Loading…</p>
-      ) : papers.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Nothing saved yet. Save a few papers to your Library, then come back to find the connections
-            threading them through your work.
-          </p>
-        </div>
-      ) : (
-        <>
-          {error && (
-            <div className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200">
-              <span className="font-medium">Couldn't generate:</span> {error}
-            </div>
-          )}
-
-          {generating && !hasContent && (
-            <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
-              Threading your {papers.length} saved papers through your projects…
-            </p>
-          )}
-
-          {/* A persisted read is viewable without a key — only GENERATING needs one. So show the
-              read whenever we have it; fall back to the key/generate prompt only when we don't. */}
-          {!hasContent && !generating && !keySet && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Set your Anthropic key above to find the connections across your {papers.length} saved{' '}
-                {papers.length === 1 ? 'paper' : 'papers'}.
-              </p>
-            </div>
-          )}
-
-          {!hasContent && !generating && keySet && !error && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Find the connections across your {papers.length} saved{' '}
-                {papers.length === 1 ? 'paper' : 'papers'} — Claude will surface the threads connecting them
-                to your active work, and name what none of them advanced.
-              </p>
-            </div>
-          )}
-
-          {hasContent && (
-            <div className="mt-6 space-y-6">
-              {read.opener && (
-                <p className="text-lg leading-relaxed text-slate-800 dark:text-slate-100">{read.opener}</p>
-              )}
-
-              {read.threads?.length > 0 && (
-                <div className="space-y-4">
-                  {read.threads.map((t, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-                    >
-                      <AnchorPill anchor={t.anchor} profile={profile} />
-                      <p className="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-                        {t.narrative}
-                      </p>
-                      <ul className="mt-3 space-y-2">
-                        {t.pmids.map((id) => {
-                          const paper = byId.get(String(id))
-                          return paper ? <PaperRow key={id} paper={paper} /> : null
-                        })}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {read.gaps?.length > 0 && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/50">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Not advanced this week
-                  </h3>
-                  <ul className="mt-2 space-y-1">
-                    {read.gaps.map((g, i) => (
-                      <li key={i} className="text-sm text-slate-600 dark:text-slate-400">
-                        {g}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {when && (
-                <p className="text-xs text-slate-400 dark:text-slate-500">
-                  Generated {when} · over {papers.length} saved {papers.length === 1 ? 'paper' : 'papers'} · a
-                  suggested reading you judge
-                </p>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </section>
+    </main>
   )
 }
