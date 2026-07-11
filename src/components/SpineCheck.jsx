@@ -12,6 +12,7 @@ import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates } from '../pipeline/select.js'
 import { savePaper } from '../pipeline/save.js'
+import { resolveOaLink } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
@@ -44,8 +45,10 @@ function TierChip({ tier }) {
 }
 
 // The citation line — authors · journal · year · clickable PMID, in mono, with the
-// "citation verified" mark (the app confirmed the PMID resolves to a real indexed paper).
-function Citation({ citation }) {
+// "citation verified" mark (the app confirmed the PMID resolves to a real indexed paper)
+// and, when Unpaywall found one, the free-full-text link — the digest workflow is
+// read-the-paper-first, so the link belongs here, before Save.
+function Citation({ citation, oa }) {
   if (!citation) return null
   const bits = [citation.author, citation.journal, citation.year].filter(Boolean).join(' · ')
   return (
@@ -54,6 +57,11 @@ function Citation({ citation }) {
       <a href={citation.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>
         PMID {citation.pmid} ↗
       </a>
+      {oa?.url && (
+        <a href={oa.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8, color: 'var(--color-accent)' }}>
+          {oa.isPdf ? 'PDF ↗' : 'Free full text ↗'}
+        </a>
+      )}
       {citation.verified && (
         <span className="inline-flex items-center" style={{ marginLeft: 8, gap: 5, color: 'var(--color-verified-soft)' }}>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-verified)' }} /> citation verified
@@ -278,6 +286,31 @@ export default function SpineCheck() {
       })
       .catch(console.warn)
   }, [])
+
+  // Resolve free-full-text links for the digest cards — the workflow is read-the-paper-first,
+  // save-later, so the link belongs on the card, not just the Library. One Unpaywall call per
+  // paper, sequential (polite), attempted once: `oa: null` marks a miss so a paper with no OA
+  // copy never re-fires. Results are patched in place and persisted with the digest snapshot,
+  // so a restored digest keeps its links without re-resolving.
+  const oaBusy = useRef(false)
+  const oaTried = useRef(new Set()) // paper ids attempted this mount — never re-hit Unpaywall
+  useEffect(() => {
+    if (oaBusy.current) return
+    const pending = results.filter(
+      (r) => r.oa === undefined && !r.error && r.citation?.doi && !oaTried.current.has(r.paper.id),
+    )
+    if (!pending.length) return
+    oaBusy.current = true
+    ;(async () => {
+      for (const r of pending) {
+        oaTried.current.add(r.paper.id)
+        const oa = await resolveOaLink(r.citation.doi).catch(() => null)
+        setResults((prev) => prev.map((x) => (x.paper.id === r.paper.id ? { ...x, oa: oa || null } : x)))
+      }
+      oaBusy.current = false
+      persistDigest()
+    })()
+  }, [results])
 
   // Deposit / withdraw a paper to the Knowledge Base — the citation, finding, relevance, the
   // app-verified numbers, and the FULL fetched source text (no longer truncated), persisted
@@ -616,7 +649,7 @@ export default function SpineCheck() {
               </div>
 
               <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, lineHeight: 1.32, color: 'var(--color-fg)' }}>{title}</h3>
-              <Citation citation={res.citation} />
+              <Citation citation={res.citation} oa={res.oa} />
 
               {/* Relevance to the clinician's projects — italic Spectral, number-free. */}
               {take?.relevance && (
