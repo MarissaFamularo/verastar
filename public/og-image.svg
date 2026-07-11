@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <!-- Link-preview card (rasterized to og-image.png at build/commit time via qlmanage). -->
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="30%" r="90%">
+      <stop offset="0%" stop-color="#141a2e"/>
+      <stop offset="65%" stop-color="#0a0c14"/>
+      <stop offset="100%" stop-color="#08090d"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#e9c46a" stop-opacity="0.28"/>
+      <stop offset="55%" stop-color="#e9c46a" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#e9c46a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#sky)"/>
+  <!-- scattered stars -->
+  <circle cx="150" cy="110" r="2.5" fill="#f4f5f9" opacity="0.3"/>
+  <circle cx="1050" cy="90" r="3" fill="#e9c46a" opacity="0.4"/>
+  <circle cx="960" cy="500" r="2.5" fill="#f4f5f9" opacity="0.25"/>
+  <circle cx="230" cy="520" r="3" fill="#e9c46a" opacity="0.3"/>
+  <circle cx="820" cy="170" r="2" fill="#f4f5f9" opacity="0.3"/>
+  <circle cx="380" cy="130" r="2" fill="#e9c46a" opacity="0.28"/>
+  <!-- the star mark, centered above the wordmark -->
+  <circle cx="600" cy="185" r="130" fill="url(#halo)"/>
+  <g transform="translate(600,185) scale(5.4) translate(-12,-12)">
+    <polygon points="12,3 14.47,9.6 21.51,9.91 15.99,14.3 17.88,21.09 12,17.2 6.12,21.09 8.01,14.3 2.49,9.91 9.53,9.6"
+             fill="rgba(233,196,106,0.12)" stroke="#e9c46a" stroke-width="1.6" stroke-linejoin="round"/>
+  </g>
+  <text x="600" y="415" text-anchor="middle" font-family="Spectral, Georgia, serif" font-size="92" font-weight="500" fill="#f4f5f9" letter-spacing="2">Verastar</text>
+  <text x="600" y="487" text-anchor="middle" font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif" font-size="30" fill="#9aa1af" letter-spacing="0.5">A verifiable evidence digest for clinicians</text>
+  <text x="600" y="535" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="21" fill="#e9c46a" opacity="0.85" letter-spacing="1">every number click-traceable to its source — or flagged</text>
+</svg>

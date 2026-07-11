@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Verastar mark: the observatory's five-point chart star (src/App.jsx rail logo),
+       gold on the ink surface from the design system in src/index.css. -->
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#141a2e"/>
+      <stop offset="70%" stop-color="#080a12"/>
+      <stop offset="100%" stop-color="#08090d"/>
+    </radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#sky)"/>
+  <!-- faint companion stars -->
+  <circle cx="128" cy="122" r="4" fill="#e9c46a" opacity="0.35"/>
+  <circle cx="398" cy="150" r="3" fill="#f4f5f9" opacity="0.28"/>
+  <circle cx="366" cy="396" r="4" fill="#e9c46a" opacity="0.3"/>
+  <circle cx="112" cy="368" r="3" fill="#f4f5f9" opacity="0.22"/>
+  <!-- glow pass -->
+  <polygon points="256,86 308.7,226.8 458.9,233.4 341.1,327.1 381.4,472 256,389 130.6,472 170.9,327.1 53.1,233.4 203.3,226.8"
+           fill="none" stroke="#e9c46a" stroke-width="30" stroke-linejoin="round"
+           filter="url(#glow)" opacity="0.75"/>
+  <!-- the star itself -->
+  <polygon points="256,86 308.7,226.8 458.9,233.4 341.1,327.1 381.4,472 256,389 130.6,472 170.9,327.1 53.1,233.4 203.3,226.8"
+           fill="rgba(233,196,106,0.14)" stroke="#e9c46a" stroke-width="22" stroke-linejoin="round"/>
+</svg>
