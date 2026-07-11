@@ -104,7 +104,9 @@ export default function KnowledgeBase() {
   const totalPapers = papers.length
 
   return (
-    <div className="vs-page-pad" style={{ maxWidth: 900, padding: '46px 56px 64px' }}>
+    <div className="vs-page-pad" style={{ maxWidth: 1240, padding: '46px 56px 64px' }}>
+      <div style={{ display: 'flex', gap: 40, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div style={{ flex: '1 1 440px', minWidth: 0, maxWidth: 720 }}>
       <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Your knowledge graph</p>
       <div className="flex items-end justify-between" style={{ gap: 20, marginTop: 9 }}>
         <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Library</h1>
@@ -204,10 +206,13 @@ export default function KnowledgeBase() {
         )}
       </div>
 
-      {/* The flat-file vault — folded into the Library surface below the concepts. */}
-      <div style={{ marginTop: 40, borderTop: '1px solid var(--hairline)', paddingTop: 32 }}>
+      </div>{/* /main column */}
+
+      {/* The flat-file vault — a sticky right rail, so "what's in your folder" is always in view (no scroll to the bottom). */}
+      <aside style={{ flex: '1 1 300px', maxWidth: 360, position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
         <FileToDisk embedded />
-      </div>
+      </aside>
+      </div>{/* /library columns */}
     </div>
   )
 }
