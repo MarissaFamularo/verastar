@@ -3,12 +3,14 @@
 // node like "Multidisciplinary Team for Diabetic Foot" aggregates many source articles under
 // one synthesized evidence summary. Papers are the SOURCES that hang under a concept.
 //
-// Two cheap Claude calls (Sonnet, structured, thinking disabled — the triage/select gotcha):
+// Three cheap Claude calls (Sonnet, structured, thinking disabled — the triage/select gotcha):
 //   - analyzePaper: on deposit, assign the paper to a concept (reuse an existing one or name a
 //     new topic-level concept), plus its domain + topic tags.
 //   - synthesizeConcept: (re)write the concept's evidence summary from its source papers'
 //     VERIFIED findings — number-free prose that also names what's NOT yet established (the
 //     same evidence-careful instinct as the verifier; specific numbers stay with each source).
+//   - proposeDomainMerges: taxonomy tidying — when the field set grows past a handful, decide
+//     which sparse fields are needless splinters of another and should merge into it.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 import { listDomains, ensureDomain } from '../lib/domains.js'
@@ -43,9 +45,9 @@ const analyzeSystem = (domains) => `You file papers into a clinician-scientist's
 
 - concept: the paper's SPECIFIC topic — a small, reusable node capturing its actual angle (technique, endpoint, cohort). Reuse an EXISTING concept name VERBATIM only if the paper is truly the SAME specific topic; otherwise mint a new specific concept. Do NOT collapse everything into the hub, and do NOT use the paper's exact title — name the topic it exemplifies (e.g. a paper on TCAR 30-day stroke → "Transcarotid Revascularization Outcomes", not the title). Keeping specific concepts as their own satellites is intended: singletons stay visible.
 - hub: the BROAD parent topic this concept belongs under. STRONGLY prefer an existing hub from the list — a TCAR paper, a CEA-vs-CAS paper, and an asymptomatic-stenosis paper all share the hub "Carotid Revascularization". Only mint a new hub when none fits. A hub is broad enough to gather a dozen concepts. If the paper's specific topic already IS that broad (no finer angle), you may return the same string for both concept and hub.
-- domain: the broad RESEARCH FIELD this paper belongs to — one tier wider than a hub (a domain gathers several hubs; think department or discipline, e.g. "Vascular Surgery", "Health Data Science", "Medical Education"). ${
+- domain: the broad RESEARCH FIELD this paper belongs to — one tier wider than a hub (a domain gathers several hubs; think department or discipline, e.g. "Vascular Surgery", "Health Data Science", "AI & Technology in Medicine", "Medical Education"). Choose the domain by the paper's DISCIPLINE — the kind of expertise it contributes — not merely its clinical subject. A machine-learning model for aneurysm growth is "AI & Technology in Medicine" (its contribution is AI methods) even though its subject is vascular; a data-interoperability or genomic-database paper is "Health Data Science"; a training-curriculum paper is "Medical Education". A clinician-scientist's library normally spans SEVERAL such fields — if you find yourself filing methods, data, AI, and education papers all under the clinical specialty, you are collapsing the taxonomy. ${
   domains.length
-    ? `STRONGLY prefer an existing domain, returned as its key:\n${domains.map((d) => `  - "${d.key}": ${d.label}`).join('\n')}\nOnly when the paper genuinely belongs to none of them, propose a NEW domain as a short field-level name (2–4 words, Title Case) — never a paper- or disease-specific topic.`
+    ? `Reuse an existing domain — returned as its key — when the paper's discipline genuinely matches it:\n${domains.map((d) => `  - "${d.key}": ${d.label}`).join('\n')}\nBut do NOT force a paper into an existing domain just because its clinical subject overlaps; when its discipline is different, propose a NEW domain as a short field-level name (2–4 words, Title Case) — never a paper- or disease-specific topic.`
     : `This reader's taxonomy is empty so far — propose the domain as a short field-level name (2–4 words, Title Case), broad enough that a dozen hubs could live under it.`
 }
 - tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by. Tags carry the finest angle; the concept is specific and the hub is broad.`
@@ -97,6 +99,50 @@ export const SYNTH_SCHEMA = {
 }
 
 const SYNTH_SYSTEM = `You write the evidence summary for one node of a clinician's knowledge graph. You get the concept name and its source papers (each with a title and an app-verified finding). Write 2–4 sentences that synthesize what the evidence COLLECTIVELY shows about this concept: the direction and consistency of findings, and — critically — what is NOT yet established from these sources (e.g. "No data found on quality of life or long-term durability."). Be measured; do not overstate. Write in clean prose WITHOUT specific numbers or statistics (those live with each source article, not here). This is a synthesis a careful clinician would trust.`
+
+// --- tidy the field taxonomy: merge sparse near-duplicate domains ---
+
+export const MERGE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['merges'],
+  properties: {
+    merges: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['from', 'into'],
+        properties: {
+          from: { type: 'string' }, // key of the sparse field being merged away
+          into: { type: 'string' }, // key of the field that absorbs it
+        },
+      },
+    },
+  },
+}
+
+const MERGE_SYSTEM = `You tidy the FIELD taxonomy of a clinician-scientist's knowledge graph. Fields are broad research disciplines — department-level, like "Vascular Surgery" or "Health Data Science" — that color the map's stars. A good taxonomy is a handful of well-populated fields (roughly 4–8), not a long tail of one-paper micro-fields. You get every field with its paper count; the papers themselves are listed under the SPARSE fields. Decide which sparse fields (if any) should MERGE into another field. Merge when a sparse field is a near-duplicate, a subset, or a needless splinter of another (e.g. "Clinical AI" into "AI & Technology in Medicine"). KEEP a sparse field that is a genuinely distinct discipline likely to accrue more papers — every new field starts with one paper, so small is not, by itself, a reason to merge. Never merge two healthy distinct fields. Return merges: [] when the taxonomy is already right.`
+
+// Propose taxonomy merges. `fields` = [{ key, label, count, papers }] — papers (titles) are
+// provided only for the sparse fields. Returns raw [{ from, into }] by key; the caller
+// sanitizes (deposit.pickMerges) and applies. Claude proposes; the code disposes.
+export async function proposeDomainMerges({ fields, model = MODELS.triage, maxTokens = 1024 }) {
+  const lines = fields.map(
+    (f) =>
+      `- "${f.key}" (${f.label}) — ${f.count} paper${f.count === 1 ? '' : 's'}` +
+      (f.papers?.length ? `\n${f.papers.map((t) => `    · ${t}`).join('\n')}` : ''),
+  )
+  const r = await extractStructured({
+    model,
+    system: MERGE_SYSTEM,
+    content: `FIELDS (papers listed under the sparse ones):\n${lines.join('\n')}`,
+    schema: MERGE_SCHEMA,
+    maxTokens,
+    thinking: { type: 'disabled' },
+  })
+  return r.merges || []
+}
 
 // Synthesize a concept summary. `concept` = { label }; `papers` = [{ title, finding }].
 // Returns a plain string summary. Number-free by contract (two-channel rule preserved).
