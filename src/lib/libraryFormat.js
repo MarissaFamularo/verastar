@@ -127,6 +127,7 @@ export function sourceNoteMd(paper) {
   if (p.pmid != null && p.pmid !== '') {
     parts.push('', '## Source', '', `[PMID ${p.pmid}](${pubmedUrl(p.pmid)})`)
     if (p.pdfUrl) parts.push('', `[Open-access full text (PDF)](${p.pdfUrl})`)
+    else if (p.oaUrl) parts.push('', `[Free full text](${p.oaUrl})`)
   }
 
   return parts.join('\n') + '\n'

@@ -86,6 +86,15 @@ describe('sourceNoteMd', () => {
     expect(withPdf).toContain('pdf: "https://host/x.pdf"') // frontmatter carries the link (yaml-quoted)
   })
 
+  it('falls back to a free-full-text link when the OA copy has no direct PDF', () => {
+    const withOa = sourceNoteMd(paper({ pdfUrl: null, oaUrl: 'https://doi.org/free' }))
+    expect(withOa).toContain('[Free full text](https://doi.org/free)')
+    // a direct PDF wins over the landing page — only one full-text link per note
+    const both = sourceNoteMd(paper({ pdfUrl: 'https://host/x.pdf', oaUrl: 'https://doi.org/free' }))
+    expect(both).toContain('Open-access full text')
+    expect(both).not.toContain('[Free full text]')
+  })
+
   it('does not throw on a bare record with no quantities/citation', () => {
     expect(() => sourceNoteMd({ pmid: '9', title: 'X', savedAt: '2026-01-01T00:00:00Z' })).not.toThrow()
   })

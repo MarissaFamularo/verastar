@@ -252,7 +252,7 @@ export default function ConstellationView() {
 }
 
 // A node's detail — mirrors the clinician's KG panel: colored category header, title, synthesized
-// summary, source papers (each with a Summary toggle + Open source / PDF), tags, and connections.
+// summary, source papers (each with a Summary toggle + View article / free-full-text badge), tags, and connections.
 function NodePanel({
   node,
   color,
@@ -325,8 +325,8 @@ function NodePanel({
                   {cite && <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>{cite}</p>}
                   <div className="flex flex-wrap items-center" style={{ marginTop: 9, gap: 8 }}>
                     {p.finding && <button onClick={() => onTogglePaper(p.pmid)} style={pill}>{isOpen ? 'Hide summary' : 'Summary'}</button>}
-                    <a href={p.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: 'var(--color-accent)' }}>Open source ↗</a>
-                    {p.pdfUrl && <a href={p.pdfUrl} target="_blank" rel="noopener noreferrer" style={{ borderRadius: 7, padding: '3px 9px', fontSize: 11, fontWeight: 600, color: '#fff', background: 'rgba(224,96,90,.85)' }}>PDF</a>}
+                    <a href={p.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: 'var(--color-accent)' }}>View article ↗</a>
+                    {(p.pdfUrl || p.oaUrl) && <a href={p.pdfUrl || p.oaUrl} target="_blank" rel="noopener noreferrer" style={{ borderRadius: 7, padding: '3px 9px', fontSize: 11, fontWeight: 600, color: '#fff', background: 'rgba(224,96,90,.85)' }}>{p.pdfUrl ? 'PDF' : 'Free full text'}</a>}
                   </div>
                   {isOpen && p.finding && <p style={{ margin: '9px 0 0', borderTop: '1px solid var(--hairline)', paddingTop: 9, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>{p.finding}</p>}
                 </li>

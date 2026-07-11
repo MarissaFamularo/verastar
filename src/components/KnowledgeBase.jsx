@@ -39,11 +39,11 @@ export default function KnowledgeBase() {
     ;(async () => {
       await refresh()
       setLoading(false)
-      // Self-heal: resolve any open-access PDF links that never got persisted, patching each
+      // Self-heal: resolve any open-access links that never got persisted, patching each
       // paper's badge in place as its link lands. One-time per paper — resolved ones are skipped.
       const all = await store.all('papers')
-      backfillOaPdfs(all || [], (id, pdfUrl) =>
-        setPapers((prev) => prev.map((p) => (p.id === id ? { ...p, pdfUrl } : p))),
+      backfillOaPdfs(all || [], (id, patch) =>
+        setPapers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p))),
       )
     })()
   }, [])
@@ -297,7 +297,8 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete }) {
         await navigator.share({ title: paper.title, text, url })
       } catch {}
     } else {
-      const body = [text, url, paper.pdfUrl && `PDF: ${paper.pdfUrl}`].filter(Boolean).join('\n')
+      const ft = paper.pdfUrl || paper.oaUrl
+      const body = [text, url, ft && `Full text: ${ft}`].filter(Boolean).join('\n')
       window.location.href = `mailto:?subject=${encodeURIComponent(paper.title)}&body=${encodeURIComponent(body)}`
     }
   }
@@ -312,11 +313,13 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete }) {
           <button onClick={() => setShowFinding((s) => !s)} style={pill}>{showFinding ? 'Hide summary' : 'Summary'}</button>
         )}
         <a href={paper.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: 'var(--color-accent)' }}>
-          Open source ↗
+          View article ↗
         </a>
         <button onClick={share} style={{ ...pill, background: 'rgba(239,143,91,.14)', color: 'var(--color-accent-bright)', fontWeight: 600 }}>Share ↑</button>
-        {paper.pdfUrl && (
-          <a href={paper.pdfUrl} target="_blank" rel="noopener noreferrer" style={{ borderRadius: 7, padding: '3px 9px', fontSize: 11, fontWeight: 600, color: '#fff', background: 'rgba(224,96,90,.85)' }}>PDF</a>
+        {(paper.pdfUrl || paper.oaUrl) && (
+          <a href={paper.pdfUrl || paper.oaUrl} target="_blank" rel="noopener noreferrer" style={{ borderRadius: 7, padding: '3px 9px', fontSize: 11, fontWeight: 600, color: '#fff', background: 'rgba(224,96,90,.85)' }}>
+            {paper.pdfUrl ? 'PDF' : 'Free full text'}
+          </a>
         )}
         <button onClick={onDelete} className="cursor-pointer" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-fg-faint)', background: 'transparent', border: 0 }}>Delete</button>
       </div>

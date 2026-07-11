@@ -12,7 +12,7 @@
 // the existing `profile` object store under the key 'libraryHandle' — NO schema/DB_VERSION bump.
 
 import { store, getProfile } from './store.js'
-import { resolveOaPdf } from '../pipeline/openaccess.js'
+import { resolveOaLink, oaPatch } from '../pipeline/openaccess.js'
 import {
   sourceSlug,
   conceptSlug,
@@ -211,13 +211,13 @@ export async function syncAllToLibrary(onProgress) {
   const step = (label) => onProgress?.(++done, total, label)
 
   for (const paper of allPapers) {
-    // Backfill an open-access PDF LINK for papers saved before this existed (Unpaywall; null when
-    // there's no DOI or no OA copy). Persist it so the KB "PDF" link benefits too, not just the note.
+    // Backfill an open-access LINK for papers saved before this existed (Unpaywall; null when
+    // there's no DOI or no OA copy). Persist it so the KB badge benefits too, not just the note.
     let p = paper
-    if (!p.pdfUrl && p.citation?.doi) {
-      const oaPdf = await resolveOaPdf(p.citation.doi)
-      if (oaPdf) {
-        p = { ...p, pdfUrl: oaPdf }
+    if (!p.pdfUrl && !p.oaUrl && p.citation?.doi) {
+      const patch = oaPatch(await resolveOaLink(p.citation.doi))
+      if (patch) {
+        p = { ...p, ...patch }
         await store.put('papers', p.id, p)
       }
     }
