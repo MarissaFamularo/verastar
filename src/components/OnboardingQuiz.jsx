@@ -378,7 +378,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
           accent="sky"
         />
         <ChipGroup
-          label="Active projects"
+          label="Active Work"
           hint="What the relevance line speaks to"
           items={draft?.projects || []}
           onAdd={addTo('projects')}

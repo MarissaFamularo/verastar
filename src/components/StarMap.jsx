@@ -362,8 +362,9 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
         ctx.beginPath()
         ctx.arc(s.x, s.y, R, 0, 6.2832)
         ctx.fill()
-        // 4-point glint for the bright hubs (projects + well-connected concepts)
-        if (n.kind === 'project' || deg >= 5) {
+        // 4-point glint marks ACTIVE WORK only — the shape is the encoding (a project is a
+        // circle with rays; every paper-derived concept is a plain circle, however connected).
+        if (n.kind === 'project') {
           drawGlint(ctx, s.x, s.y, R * 2.4, hexA('#ffffff', 0.5 * tw))
         }
         if (isFocus) {

@@ -24,7 +24,7 @@ import { proposeConnections } from '../pipeline/connect.js'
 import { listDomains, PROJECT_COLOR, domainColor, domainLabel } from '../lib/domains.js'
 import StarMap from './StarMap.jsx'
 
-const KIND_LABEL = { northStar: 'North star', project: 'Project', concept: 'Concept' }
+const KIND_LABEL = { northStar: 'North star', project: 'Active Work', concept: 'Concept' }
 
 export default function ConstellationView() {
   const [nodes, setNodes] = useState([])
@@ -223,7 +223,12 @@ export default function ConstellationView() {
                   </span>
                 ))}
                 <span className="inline-flex items-center" style={{ gap: 9, fontSize: 12.5, color: 'var(--color-fg-soft)', marginTop: 4, borderTop: '1px solid var(--hairline)', paddingTop: 8 }}>
-                  <ColorDot color={PROJECT_COLOR} /> Project (anchor)
+                  {/* circle-with-rays, matching the map: only Active Work stars carry the glint */}
+                  <svg width="13" height="13" viewBox="0 0 13 13" style={{ flex: '0 0 auto' }} aria-hidden="true">
+                    <path d="M6.5 0v3M6.5 10v3M0 6.5h3M10 6.5h3" stroke={PROJECT_COLOR} strokeWidth="1.2" />
+                    <circle cx="6.5" cy="6.5" r="2.6" fill={PROJECT_COLOR} />
+                  </svg>
+                  Active Work
                 </span>
               </div>
             </div>

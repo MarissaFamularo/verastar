@@ -260,7 +260,7 @@ function DigestRail({ saved, onSettings, counts, projects, onConnections }) {
 
       {projects.length > 0 && (
         <>
-          <p style={{ margin: '0 0 12px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Active projects</p>
+          <p style={{ margin: '0 0 12px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Active Work</p>
           <div className="flex flex-col" style={{ gap: 9, marginBottom: 34 }}>
             {projects.map((p) => (
               <span key={p} className="inline-flex items-center" style={{ gap: 9, fontSize: 14, color: 'var(--color-fg-soft)' }}>

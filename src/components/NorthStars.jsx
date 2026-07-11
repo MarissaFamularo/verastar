@@ -63,7 +63,7 @@ export default function NorthStars() {
           accent="sky"
         />
         <ChipGroup
-          label="Active projects"
+          label="Active Work"
           hint="What the relevance line speaks to"
           seed={PROJECT_SEED}
           items={projects}

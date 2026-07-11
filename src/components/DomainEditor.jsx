@@ -9,6 +9,30 @@ import { useEffect, useState } from 'react'
 import { listDomains, addDomain, renameDomain, removeDomain } from '../lib/domains.js'
 import { store } from '../lib/store.js'
 
+// Uncontrolled-while-typing rename field. Editing state is LOCAL; the store rename commits on
+// blur or Enter only. Committing per keystroke raced the async rename against the cache refresh —
+// the input kept snapping back to the stale label mid-word and "fought" the user's typing.
+function RenameInput({ label, onCommit }) {
+  const [draft, setDraft] = useState(label)
+  useEffect(() => setDraft(label), [label]) // an outside rename (e.g. a merge) refreshes the row
+  function commit() {
+    const next = draft.trim()
+    if (!next || next === label) return setDraft(label)
+    onCommit(next)
+  }
+  return (
+    <input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      aria-label={`Rename ${label}`}
+      style={{ flex: 1, minWidth: 0, borderRadius: 9, border: '1px solid transparent', background: 'transparent', padding: '6px 9px', fontSize: 13.5, color: 'var(--color-fg-soft)', fontFamily: 'inherit', outline: 'none' }}
+      onFocus={(e) => { e.target.style.border = '1px solid rgba(255,255,255,.14)'; e.target.style.background = 'var(--surface-input)' }}
+      onBlur={(e) => { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent'; commit() }}
+    />
+  )
+}
+
 export default function DomainEditor() {
   const [domains, setDomains] = useState(listDomains())
   const [draft, setDraft] = useState('')
@@ -56,14 +80,7 @@ export default function DomainEditor() {
         {domains.map((d) => (
           <div key={d.key} className="flex items-center" style={{ gap: 10 }}>
             <span style={{ width: 9, height: 9, borderRadius: '50%', flex: '0 0 auto', background: d.color, boxShadow: `0 0 7px ${d.color}` }} />
-            <input
-              value={d.label}
-              onChange={(e) => { renameDomain(d.key, e.target.value); refresh() }}
-              aria-label={`Rename ${d.label}`}
-              style={{ flex: 1, minWidth: 0, borderRadius: 9, border: '1px solid transparent', background: 'transparent', padding: '6px 9px', fontSize: 13.5, color: 'var(--color-fg-soft)', fontFamily: 'inherit', outline: 'none' }}
-              onFocus={(e) => { e.target.style.border = '1px solid rgba(255,255,255,.14)'; e.target.style.background = 'var(--surface-input)' }}
-              onBlur={(e) => { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent' }}
-            />
+            <RenameInput label={d.label} onCommit={(next) => renameDomain(d.key, next).then(refresh)} />
             {(inUse[d.key] || 0) > 0 && (
               <span style={{ fontSize: 11, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)', flex: '0 0 auto' }}>{inUse[d.key]}</span>
             )}
