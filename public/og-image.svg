@@ -26,7 +26,6 @@
     <polygon points="12,3 14.47,9.6 21.51,9.91 15.99,14.3 17.88,21.09 12,17.2 6.12,21.09 8.01,14.3 2.49,9.91 9.53,9.6"
              fill="rgba(233,196,106,0.12)" stroke="#e9c46a" stroke-width="1.6" stroke-linejoin="round"/>
   </g>
-  <text x="600" y="415" text-anchor="middle" font-family="Spectral, Georgia, serif" font-size="92" font-weight="500" fill="#f4f5f9" letter-spacing="2">Verastar</text>
-  <text x="600" y="487" text-anchor="middle" font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif" font-size="30" fill="#9aa1af" letter-spacing="0.5">A verifiable evidence digest for clinicians</text>
-  <text x="600" y="535" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="21" fill="#e9c46a" opacity="0.85" letter-spacing="1">every number click-traceable to its source — or flagged</text>
+  <text x="600" y="430" text-anchor="middle" font-family="Spectral, Georgia, serif" font-size="92" font-weight="500" fill="#f4f5f9" letter-spacing="2">Verastar</text>
+  <text x="600" y="505" text-anchor="middle" font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif" font-size="30" fill="#9aa1af" letter-spacing="0.5">A verifiable evidence digest for clinicians</text>
 </svg>
