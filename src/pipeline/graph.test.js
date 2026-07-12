@@ -4,7 +4,7 @@
 // suggester never fabricating a duplicate or overriding a confirmed link.
 
 import { describe, it, expect } from 'vitest'
-import { anchorId, conceptId, edgeId, structuralSuggestions } from './graph.js'
+import { anchorId, conceptId, edgeId, structuralSuggestions, coreAnchorPhrase } from './graph.js'
 
 describe('ids', () => {
   it('anchor ids are kind-prefixed and case-normalized', () => {
@@ -91,5 +91,37 @@ describe('structuralSuggestions', () => {
     const common = Array.from({ length: 7 }, (_, i) => ({ ...concept('C' + i, 'x'), tags: ['pad'] }))
     const out = structuralSuggestions(common, [])
     expect(out.length).toBe(0)
+  })
+})
+
+describe('anchor core-phrase matching', () => {
+  const anchor = (label, kind = 'project') => ({ id: anchorId(kind, label), kind, label, text: label })
+  const concept = (name, text = name) => ({ id: conceptId(name), kind: 'concept', label: name, text })
+
+  it('coreAnchorPhrase strips generic effort-words from the ends', () => {
+    expect(coreAnchorPhrase('Carotid Revascularization Initiative')).toBe('carotid revascularization')
+    expect(coreAnchorPhrase('COSMOS utilization study')).toBe('cosmos utilization')
+    expect(coreAnchorPhrase('Limb Preservation Program')).toBe('limb preservation')
+    expect(coreAnchorPhrase('Diabetic Foot')).toBe('diabetic foot') // nothing generic to strip
+    expect(coreAnchorPhrase('Program')).toBe('program') // never strips down to nothing
+  })
+
+  it('an org-flavored project label still lands on its topic hub', () => {
+    // The verbatim label "Carotid Revascularization Initiative" never appears in concept
+    // text — the core phrase must carry the match.
+    const proj = anchor('Carotid Revascularization Initiative')
+    const hub = { ...concept('Carotid Revascularization', 'carotid revascularization cea cas tcar'), isHub: true }
+    const out = structuralSuggestions([proj, hub], [])
+    expect(out.some((o) => edgeId(o.source, o.target) === edgeId(hub.id, proj.id))).toBe(true)
+  })
+
+  it('anchors tie to the hub, not to every satellite under it', () => {
+    const proj = anchor('Carotid Revascularization Initiative')
+    const hub = { ...concept('Carotid Revascularization', 'carotid revascularization'), isHub: true }
+    const sat = concept('TCAR Outcomes', 'carotid revascularization stroke risk')
+    const taxonomy = [{ id: edgeId(sat.id, hub.id), source: sat.id, target: hub.id, status: 'confirmed', origin: 'taxonomy' }]
+    const out = structuralSuggestions([proj, hub, sat], taxonomy)
+    expect(out.some((o) => edgeId(o.source, o.target) === edgeId(hub.id, proj.id))).toBe(true)
+    expect(out.some((o) => edgeId(o.source, o.target) === edgeId(sat.id, proj.id))).toBe(false)
   })
 })

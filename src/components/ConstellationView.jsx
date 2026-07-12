@@ -110,10 +110,12 @@ export default function ConstellationView() {
     await refresh()
   }
 
-  // Ask Claude to propose semantic connections for the selected concept. Framed as
-  // suggestions: every returned link lands as a dashed "maybe" to confirm.
+  // Ask Claude to propose semantic connections for the selected star — a concept OR a
+  // project (a project's links can't come from name-matching alone: "Limb Preservation
+  // Program" ↔ "Diabetic Foot Wound Management" shares no words). Framed as suggestions:
+  // every returned link lands as a dashed "maybe" to confirm.
   async function askClaude() {
-    if (!selected || selected.kind !== 'concept' || !keySet) return
+    if (!selected || !['concept', 'project'].includes(selected.kind) || !keySet) return
     setBusy('proposing')
     setError('')
     try {
@@ -123,6 +125,7 @@ export default function ConstellationView() {
       const conns = await proposeConnections({
         paper: { title: selected.label, finding: selected.summary, relevance: '' },
         candidates,
+        subjectKind: selected.kind === 'project' ? 'project' : 'paper',
       })
       const existingIds = new Set(edges.map((e) => e.id))
       let added = 0
@@ -139,7 +142,7 @@ export default function ConstellationView() {
       setNote(
         added
           ? `Claude linked ${added} new connection${added === 1 ? '' : 's'}.`
-          : 'Claude found no new connections for this concept.',
+          : `Claude found no new connections for this ${selected.kind === 'project' ? 'project' : 'concept'}.`,
       )
     } catch (err) {
       setError(`Connection proposal failed: ${err.message}`)
@@ -264,7 +267,7 @@ export default function ConstellationView() {
             onRemove={() => handleRemoveNode(selected.id)}
             keySet={keySet}
             proposing={busy === 'proposing'}
-            canAsk={selected.kind === 'concept'}
+            canAsk={selected.kind === 'concept' || selected.kind === 'project'}
             canRemove={selected.kind === 'concept'}
           />
         )}

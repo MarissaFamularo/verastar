@@ -40,8 +40,12 @@ Rules:
 
 // Propose edges from a paper to existing graph nodes. `paper` = { title, finding, relevance,
 // abstract? }. `candidates` = [{ id, kind, label }] (the anchors + other papers, NOT the
-// paper itself). Returns [{ target_id, rationale }] filtered to real candidate ids.
-export async function proposeConnections({ paper, candidates, model = MODELS.triage, maxTokens = 2048 }) {
+// subject itself). `subjectKind: 'project'` reframes the ask — the subject is one of the
+// reader's own projects and the question is which saved topics/papers inform or advance it
+// (how a project star earns its connections; a name-match alone can't bridge "Limb
+// Preservation Program" ↔ "Diabetic Foot Wound Management").
+// Returns [{ target_id, rationale }] filtered to real candidate ids.
+export async function proposeConnections({ paper, candidates, subjectKind = 'paper', model = MODELS.triage, maxTokens = 2048 }) {
   if (!candidates?.length) return []
 
   const kindLabel = { northStar: 'north star', project: 'project', paper: 'saved paper' }
@@ -49,8 +53,13 @@ export async function proposeConnections({ paper, candidates, model = MODELS.tri
     .map((c) => `[${c.id}] (${kindLabel[c.kind] || c.kind}) ${c.label}`)
     .join('\n')
 
+  const head =
+    subjectKind === 'project'
+      ? `ACTIVE PROJECT — one of the reader's own efforts. Propose which existing nodes meaningfully inform or advance THIS project.\nProject`
+      : `NEW PAPER\nTitle`
+
   const content =
-    `NEW PAPER\nTitle: ${paper.title || '(untitled)'}\n` +
+    `${head}: ${paper.title || '(untitled)'}\n` +
     (paper.finding ? `Finding: ${paper.finding}\n` : '') +
     (paper.relevance ? `Relevance: ${paper.relevance}\n` : '') +
     (paper.abstract ? `\nAbstract:\n${paper.abstract.slice(0, 2500)}\n` : '') +

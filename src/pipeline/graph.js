@@ -236,6 +236,20 @@ function includesLabel(text, label) {
   return text.toLowerCase().includes(label.trim().toLowerCase())
 }
 
+// Anchor labels are org-flavored ("Carotid Revascularization Initiative") while concept text
+// speaks science ("carotid revascularization") — so a verbatim-label match never fires. Strip
+// generic effort-words from the label's ends and match on the remaining core phrase.
+const GENERIC_ANCHOR_WORDS = new Set([
+  'initiative', 'program', 'programme', 'project', 'study', 'effort',
+  'center', 'centre', 'group', 'lab', 'plan', 'pilot', 'committee',
+])
+export function coreAnchorPhrase(label) {
+  const words = (label || '').trim().toLowerCase().split(/\s+/).filter(Boolean)
+  while (words.length > 1 && GENERIC_ANCHOR_WORDS.has(words[words.length - 1])) words.pop()
+  while (words.length > 1 && GENERIC_ANCHOR_WORDS.has(words[0])) words.shift()
+  return words.join(' ')
+}
+
 // Compute NEW suggested edges from structure alone — never touching confirmed edges or
 // re-proposing pairs that already exist. Two kinds:
 //   1. paper → anchor : the paper's text names the north star / project.
@@ -255,10 +269,16 @@ export function structuralSuggestions(nodes, edges) {
     out.push({ source: a, target: b, rationale, origin: 'structural' })
   }
 
-  // 1. name mentions
+  // 1. name mentions — matched on the anchor's CORE phrase (see coreAnchorPhrase), and only
+  //    against hubs or hub-less concepts: a project ties to the topic star, not to every
+  //    satellite under it (which would hairball the map with near-duplicate dashed edges).
+  const satellites = new Set(edges.filter((e) => e.origin === 'taxonomy').map((e) => e.source))
   for (const p of papers) {
+    if (satellites.has(p.id)) continue
     for (const a of anchors) {
-      if (includesLabel(p.text, a.label)) push(p.id, a.id, `mentions “${a.label}”`)
+      const core = coreAnchorPhrase(a.label)
+      const phrase = core.length >= 6 ? core : (a.label || '').trim().toLowerCase()
+      if (includesLabel(p.text, phrase)) push(p.id, a.id, `mentions “${phrase}”`)
     }
   }
 
