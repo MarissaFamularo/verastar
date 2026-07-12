@@ -2,7 +2,7 @@
 // reaching title/summary/tags/notes across concept and papers, the domain filter, unfiled bucket.
 
 import { describe, it, expect } from 'vitest'
-import { buildKB } from './kb.js'
+import { buildKB, listTopics, hubMap } from './kb.js'
 
 const concept = (id, over = {}) => ({
   id,
@@ -111,5 +111,61 @@ describe('buildKB domain filter', () => {
   it('filters unfiled papers by domain too', () => {
     const kb = buildKB([], [paper('1', { domain: 'vascular' }), paper('2', { domain: 'ai' })], { domain: 'ai' })
     expect(kb.unfiled.map((x) => x.id)).toEqual(['2'])
+  })
+})
+
+describe('topics (the hub tier)', () => {
+  // Carotid hub with two satellites; a standalone hub holding a paper directly;
+  // one satellite with no hub edge (pre-hub-era concept).
+  const hub = concept('concept:carotid', { label: 'Carotid Revascularization' })
+  const satTcar = concept('concept:tcar', { label: 'TCAR Outcomes' })
+  const satCeaCas = concept('concept:cea-cas', { label: 'CEA vs CAS' })
+  const hubPop = concept('concept:pop-aneurysm', { label: 'Popliteal Aneurysm' })
+  const orphan = concept('concept:orphan', { label: 'No Hub Yet' })
+  const edges = [
+    { id: 'e1', source: 'concept:tcar', target: 'concept:carotid', origin: 'taxonomy' },
+    { id: 'e2', source: 'concept:cea-cas', target: 'concept:carotid', origin: 'taxonomy' },
+    { id: 'e3', source: 'concept:tcar', target: 'concept:orphan', origin: 'weekend' }, // non-taxonomy: ignored
+  ]
+  const hubs = [hub, satTcar, satCeaCas, { ...hubPop, isHub: true }, orphan].map((c, i) =>
+    ['concept:carotid'].includes(c.id) ? { ...c, isHub: true } : c,
+  )
+  const allPapers = [
+    paper('1', { conceptId: 'concept:tcar' }),
+    paper('2', { conceptId: 'concept:cea-cas' }),
+    paper('3', { conceptId: 'concept:pop-aneurysm' }),
+    paper('4', { conceptId: 'concept:orphan' }),
+    paper('5'), // unfiled
+  ]
+
+  it('hubMap keeps only taxonomy edges', () => {
+    const m = hubMap(edges)
+    expect(m.get('concept:tcar')).toBe('concept:carotid')
+    expect(m.size).toBe(2)
+  })
+
+  it('listTopics counts papers under each hub, most-populated first', () => {
+    const topics = listTopics(hubs, allPapers, edges)
+    expect(topics.map((t) => [t.label, t.count])).toEqual([
+      ['Carotid Revascularization', 2],
+      ['Popliteal Aneurysm', 1],
+    ])
+  })
+
+  it('topic filter keeps the hub itself and its satellites, hides the rest', () => {
+    const kb = buildKB(hubs, allPapers, { topic: 'concept:carotid', edges })
+    expect(kb.groups.map((g) => g.group.id).sort()).toEqual(['concept:cea-cas', 'concept:tcar'])
+    expect(kb.unfiled).toHaveLength(0) // unfiled papers hang under no hub
+  })
+
+  it('a hub holding papers directly is its own topic', () => {
+    const kb = buildKB(hubs, allPapers, { topic: 'concept:pop-aneurysm', edges })
+    expect(kb.groups.map((g) => g.group.id)).toEqual(['concept:pop-aneurysm'])
+  })
+
+  it('"all" (or empty) topic keeps everything, unfiled included', () => {
+    const kb = buildKB(hubs, allPapers, { topic: 'all', edges })
+    expect(kb.groups).toHaveLength(4)
+    expect(kb.unfiled).toHaveLength(1)
   })
 })

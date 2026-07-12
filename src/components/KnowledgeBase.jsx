@@ -13,7 +13,7 @@ import { store } from '../lib/store.js'
 import { hasApiKey } from '../lib/anthropic.js'
 import { loadConcepts, setConceptTags, removeNode } from '../pipeline/graph.js'
 import { refileKB } from '../pipeline/deposit.js'
-import { buildKB } from '../lib/kb.js'
+import { buildKB, listTopics } from '../lib/kb.js'
 import { backfillOaPdfs } from '../pipeline/save.js'
 import { pmcUrl } from '../pipeline/openaccess.js'
 import { listDomains, domainColor, domainLabel } from '../lib/domains.js'
@@ -23,17 +23,20 @@ import FileToDisk from './LibraryPanel.jsx'
 export default function KnowledgeBase() {
   const [concepts, setConcepts] = useState([])
   const [papers, setPapers] = useState([])
+  const [edges, setEdges] = useState([])
   const [query, setQuery] = useState('')
   const [domain, setDomain] = useState('all')
+  const [topic, setTopic] = useState('all')
   const [loading, setLoading] = useState(true)
   const [refiling, setRefiling] = useState('') // '' | progress string
   const [confirmRefile, setConfirmRefile] = useState(false)
   const keySet = hasApiKey()
 
   async function refresh() {
-    const [c, p] = await Promise.all([loadConcepts(), store.all('papers')])
+    const [c, p, e] = await Promise.all([loadConcepts(), store.all('papers'), store.all('graphEdges')])
     setConcepts(c || [])
     setPapers(p || [])
+    setEdges(e || [])
   }
 
   useEffect(() => {
@@ -50,9 +53,10 @@ export default function KnowledgeBase() {
   }, [])
 
   const { groups, unfiled, counts } = useMemo(
-    () => buildKB(concepts, papers, { query, domain }),
-    [concepts, papers, query, domain],
+    () => buildKB(concepts, papers, { query, domain, topic, edges }),
+    [concepts, papers, edges, query, domain, topic],
   )
+  const topics = useMemo(() => listTopics(concepts, papers, edges), [concepts, papers, edges])
 
   // --- mutations (persist, then patch local state so edits feel instant) ---
 
@@ -138,7 +142,7 @@ export default function KnowledgeBase() {
       </div>
       <p style={{ margin: '12px 0 0', fontSize: 15, color: 'var(--color-fg-dim)', maxWidth: 640, lineHeight: 1.55 }}>
         Everything you've saved, grouped into concept nodes and colored by domain. Search title, summary, and tags;
-        filter by domain. Claude tags each paper on deposit — prune what's wrong and add your own notes.
+        filter by topic. Claude tags each paper on deposit — prune what's wrong and add your own notes.
       </p>
 
       {/* search + domain filter */}
@@ -154,12 +158,29 @@ export default function KnowledgeBase() {
           <button onClick={() => setQuery('')} className="cursor-pointer" style={{ fontSize: 12, color: 'var(--color-fg-muted)', background: 'transparent', border: 0 }}>clear</button>
         )}
       </div>
-      <div className="flex flex-wrap" style={{ marginTop: 14, gap: 8 }}>
-        <FilterChip active={domain === 'all'} onClick={() => setDomain('all')}>All domains</FilterChip>
-        {listDomains().map((d) => (
-          <FilterChip key={d.key} active={domain === d.key} color={d.color} onClick={() => setDomain(d.key)}>{d.label}</FilterChip>
-        ))}
-      </div>
+      {/* Topic chips — the hub tier ("Carotid Revascularization"-level), the altitude a
+          single-specialty reader actually browses by. The classifier caps hub growth by
+          strongly preferring existing hubs, so this stays a handful of chips. */}
+      {topics.length > 0 && (
+        <div className="flex flex-wrap" style={{ marginTop: 14, gap: 8 }}>
+          <FilterChip active={topic === 'all'} onClick={() => setTopic('all')}>All topics</FilterChip>
+          {topics.map((t) => (
+            <FilterChip key={t.id} active={topic === t.id} onClick={() => setTopic(t.id)}>
+              {t.label} · {t.count}
+            </FilterChip>
+          ))}
+        </div>
+      )}
+      {/* Domain chips only earn a row when the library actually spans disciplines — a
+          single-domain library would render one always-on chip that filters nothing. */}
+      {listDomains().length > 1 && (
+        <div className="flex flex-wrap" style={{ marginTop: 10, gap: 8 }}>
+          <FilterChip active={domain === 'all'} onClick={() => setDomain('all')}>All domains</FilterChip>
+          {listDomains().map((d) => (
+            <FilterChip key={d.key} active={domain === d.key} color={d.color} onClick={() => setDomain(d.key)}>{d.label}</FilterChip>
+          ))}
+        </div>
+      )}
 
       <div style={{ marginTop: 26 }}>
         <AddPaper onAdded={refresh} />
