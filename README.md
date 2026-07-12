@@ -7,14 +7,16 @@ you steer by.
 
 You tell Verastar your *north-star concepts* and your active research projects.
 Every morning it hands you a digest of the last 1–3 days of literature that actually
-moves those north stars forward. Click the DOI, read it, download the PDF (if open
-access or your institution allows). If a paper earns its salt, save it into your
-Knowledge Base. Once a week, a weekend digest surfaces the connections — between what
-you read this week and the concepts you care about most.
+moves those north stars forward. Open the PubMed page, or the full-text PDF when the
+paper is open access. If a paper earns its salt, save it into your **Library**. The
+**Connections** view then surfaces the links between what you've read and the projects
+you're working on. And everything you save is written as plain markdown into a folder
+you own — your reading and your memory, on your own machine, never locked inside an app.
 
 It is the app version of a system I already run by hand: a personal knowledge base, a
-context portfolio, and a daily/weekend research briefing. Verastar makes it
-something any clinician can pick up.
+context portfolio, and a daily research briefing. Verastar makes it something any
+clinician can pick up — and I built it end-to-end with Claude Code, as a physician who
+never wrote a line of code before late 2025.
 
 Built for **Built with Claude: Life Sciences** (Anthropic × Gladstone Institutes),
 July 7–13, 2026 — **Build track**.
@@ -50,10 +52,10 @@ This is the whole point. Provenance is the product, not a footer.
 3. **Daily digest.** Each morning: papers from the last 1–3 days that advance your
    north stars, ranked by your rubric. Each item links to the DOI and offers the PDF
    when access allows.
-4. **Save what earns it.** One click deposits a paper into your Knowledge Base with its
-   verified extractions attached.
-5. **Weekend synthesis.** Once a week, a digest surfaces connections and throughlines
-   across the week's reading and your north-star concepts.
+4. **Save what earns it.** One click deposits a paper into your **Library** with its
+   verified extractions attached — and writes it as plain markdown to a folder you own.
+5. **Connections.** The Connections view surfaces throughlines across the week's
+   reading, your existing library, and your active projects.
 
 ---
 
@@ -87,7 +89,9 @@ adversarial false-verify cases).
 
 ## Status
 
-Hackathon build in progress. Planning docs:
+Built during **Built with Claude: Life Sciences** (July 7–13, 2026) and live at
+**[verastar.netlify.app](https://verastar.netlify.app)** — bring your own Anthropic key
+to run it. Design + planning docs:
 
 - [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) — scope, build order, never-cut list, demo script.
 - [docs/VERIFICATION_SPEC.md](docs/VERIFICATION_SPEC.md) — the sacred core: the gate, algorithm, tiers, integrity rules.
