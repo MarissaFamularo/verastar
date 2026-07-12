@@ -12,7 +12,7 @@ import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates } from '../pipeline/select.js'
 import { savePaper } from '../pipeline/save.js'
-import { resolveOaLink } from '../pipeline/openaccess.js'
+import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
@@ -48,18 +48,26 @@ function TierChip({ tier }) {
 // "citation verified" mark (the app confirmed the PMID resolves to a real indexed paper)
 // and, when Unpaywall found one, the free-full-text link — the digest workflow is
 // read-the-paper-first, so the link belongs here, before Save.
-function Citation({ citation, oa }) {
+function Citation({ citation, oa, pmcid }) {
   if (!citation) return null
   const bits = [citation.author, citation.journal, citation.year].filter(Boolean).join(' · ')
+  // Read-the-paper-first: prefer Unpaywall's direct link, but fall back to the PMC article
+  // page — if the pipeline fetched the body from PMC, the free copy is proven to exist even
+  // when Unpaywall hasn't indexed a days-old paper yet.
+  const free = oa?.url
+    ? { url: oa.url, label: oa.isPdf ? 'PDF ↗' : 'Free full text ↗' }
+    : pmcid
+      ? { url: pmcUrl(pmcid), label: 'Full text (PMC) ↗' }
+      : null
   return (
     <p style={{ margin: '7px 0 0', fontSize: 13, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>
       {bits && <span>{bits} · </span>}
       <a href={citation.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>
         PMID {citation.pmid} ↗
       </a>
-      {oa?.url && (
-        <a href={oa.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8, color: 'var(--color-accent)' }}>
-          {oa.isPdf ? 'PDF ↗' : 'Free full text ↗'}
+      {free && (
+        <a href={free.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8, color: 'var(--color-accent)' }}>
+          {free.label}
         </a>
       )}
       {citation.verified && (
@@ -649,7 +657,7 @@ export default function SpineCheck() {
               </div>
 
               <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, lineHeight: 1.32, color: 'var(--color-fg)' }}>{title}</h3>
-              <Citation citation={res.citation} oa={res.oa} />
+              <Citation citation={res.citation} oa={res.oa} pmcid={res.source?.pmcid} />
 
               {/* Relevance to the clinician's projects — italic Spectral, number-free. */}
               {take?.relevance && (

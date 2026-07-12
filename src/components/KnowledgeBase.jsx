@@ -15,6 +15,7 @@ import { loadConcepts, setConceptTags, removeNode } from '../pipeline/graph.js'
 import { refileKB } from '../pipeline/deposit.js'
 import { buildKB } from '../lib/kb.js'
 import { backfillOaPdfs } from '../pipeline/save.js'
+import { pmcUrl } from '../pipeline/openaccess.js'
 import { listDomains, domainColor, domainLabel } from '../lib/domains.js'
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
@@ -302,7 +303,7 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete }) {
         await navigator.share({ title: paper.title, text, url })
       } catch {}
     } else {
-      const ft = paper.pdfUrl || paper.oaUrl
+      const ft = paper.pdfUrl || paper.oaUrl || pmcUrl(paper.pmcid)
       const body = [text, url, ft && `Full text: ${ft}`].filter(Boolean).join('\n')
       window.location.href = `mailto:?subject=${encodeURIComponent(paper.title)}&body=${encodeURIComponent(body)}`
     }
@@ -321,9 +322,9 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete }) {
           View article ↗
         </a>
         <button onClick={share} style={{ ...pill, background: 'rgba(239,143,91,.14)', color: 'var(--color-accent-bright)', fontWeight: 600 }}>Share ↑</button>
-        {(paper.pdfUrl || paper.oaUrl) && (
-          <a href={paper.pdfUrl || paper.oaUrl} target="_blank" rel="noopener noreferrer" style={{ borderRadius: 7, padding: '3px 9px', fontSize: 11, fontWeight: 600, color: '#fff', background: 'rgba(224,96,90,.85)' }}>
-            {paper.pdfUrl ? 'PDF' : 'Free full text'}
+        {(paper.pdfUrl || paper.oaUrl || paper.pmcid) && (
+          <a href={paper.pdfUrl || paper.oaUrl || pmcUrl(paper.pmcid)} target="_blank" rel="noopener noreferrer" style={{ borderRadius: 7, padding: '3px 9px', fontSize: 11, fontWeight: 600, color: '#fff', background: 'rgba(224,96,90,.85)' }}>
+            {paper.pdfUrl ? 'PDF' : paper.oaUrl ? 'Free full text' : 'Full text (PMC)'}
           </a>
         )}
         <button onClick={onDelete} className="cursor-pointer" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-fg-faint)', background: 'transparent', border: 0 }}>Delete</button>

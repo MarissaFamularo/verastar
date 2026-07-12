@@ -35,6 +35,15 @@ export function oaPatch(link) {
   return link.isPdf ? { pdfUrl: link.url } : { oaUrl: link.url }
 }
 
+// The PMC article page for a paper. When the pipeline ran at full-text tier it FETCHED the body
+// from PMC, so the app already knows a free copy exists there — no Unpaywall lookup needed. This
+// matters for the digest: Unpaywall lags days–weeks behind publication, and the digest is
+// specifically the last few days of literature. Accepts 'PMC11848676' or bare '11848676'.
+export function pmcUrl(pmcid) {
+  if (!pmcid) return null
+  return `https://pmc.ncbi.nlm.nih.gov/articles/PMC${String(pmcid).replace(/^PMC/i, '')}/`
+}
+
 // Resolve a DOI to its best open-access link — { url, isPdf } — or null. Never throws: a missing
 // DOI, a network hiccup, a non-OA paper, or a rate-limit all resolve to null, so the caller
 // behaves exactly as it did before this feature existed (no free-full-text link).

@@ -17,6 +17,7 @@ export function buildPaperRecord(res, take, { title } = {}) {
   return {
     id: res.paper.id,
     pmid: res.paper.pmid,
+    pmcid: res.source?.pmcid || null, // proven-free PMC copy — the Library's full-text fallback
     title: title || res.paper.title || res.citation?.title || `PMID ${res.paper.pmid}`,
     citation: res.citation || null,
     tier: take?.tier ?? null,

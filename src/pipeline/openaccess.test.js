@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickOaLink, oaPatch } from './openaccess.js'
+import { pickOaLink, oaPatch, pmcUrl } from './openaccess.js'
 
 describe('pickOaLink', () => {
   it('prefers the direct PDF url when the best OA location has one', () => {
@@ -40,5 +40,22 @@ describe('oaPatch', () => {
   it('returns null for a missing link', () => {
     expect(oaPatch(null)).toBeNull()
     expect(oaPatch({ url: '', isPdf: true })).toBeNull()
+  })
+})
+
+describe('pmcUrl', () => {
+  it('builds the article page from a prefixed PMCID', () => {
+    expect(pmcUrl('PMC11848676')).toBe('https://pmc.ncbi.nlm.nih.gov/articles/PMC11848676/')
+  })
+
+  it('normalizes a bare numeric id and a lowercase prefix', () => {
+    expect(pmcUrl('11848676')).toBe('https://pmc.ncbi.nlm.nih.gov/articles/PMC11848676/')
+    expect(pmcUrl('pmc11848676')).toBe('https://pmc.ncbi.nlm.nih.gov/articles/PMC11848676/')
+  })
+
+  it('returns null when there is no PMCID', () => {
+    expect(pmcUrl(null)).toBeNull()
+    expect(pmcUrl(undefined)).toBeNull()
+    expect(pmcUrl('')).toBeNull()
   })
 })
