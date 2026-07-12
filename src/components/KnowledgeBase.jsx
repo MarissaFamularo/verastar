@@ -13,7 +13,7 @@ import { store } from '../lib/store.js'
 import { hasApiKey } from '../lib/anthropic.js'
 import { loadConcepts, setConceptTags, removeNode } from '../pipeline/graph.js'
 import { refileKB } from '../pipeline/deposit.js'
-import { buildKB, listTopics } from '../lib/kb.js'
+import { buildKB, listTopics, topicIndex } from '../lib/kb.js'
 import { backfillOaPdfs } from '../pipeline/save.js'
 import { pmcUrl } from '../pipeline/openaccess.js'
 import { listDomains, domainColor, domainLabel } from '../lib/domains.js'
@@ -57,6 +57,7 @@ export default function KnowledgeBase() {
     [concepts, papers, edges, query, domain, topic],
   )
   const topics = useMemo(() => listTopics(concepts, papers, edges), [concepts, papers, edges])
+  const tIdx = useMemo(() => topicIndex(concepts, edges), [concepts, edges])
 
   // --- mutations (persist, then patch local state so edits feel instant) ---
 
@@ -165,7 +166,7 @@ export default function KnowledgeBase() {
         <div className="flex flex-wrap" style={{ marginTop: 14, gap: 8 }}>
           <FilterChip active={topic === 'all'} onClick={() => setTopic('all')}>All topics</FilterChip>
           {topics.map((t) => (
-            <FilterChip key={t.id} active={topic === t.id} onClick={() => setTopic(t.id)}>
+            <FilterChip key={t.id} active={topic === t.id} color={tIdx.colorOf(t.id)} onClick={() => setTopic(t.id)}>
               {t.label} · {t.count}
             </FilterChip>
           ))}
@@ -201,6 +202,8 @@ export default function KnowledgeBase() {
           <>
             {groups.map(({ group, papers }) => (
               <ConceptCard
+                topicColor={tIdx.colorOf(group.id)}
+                topicLabel={tIdx.labelOf(group.id)}
                 key={group.id}
                 concept={group}
                 papers={papers}
@@ -239,11 +242,12 @@ export default function KnowledgeBase() {
   )
 }
 
-// One concept node: colored DOMAIN eyebrow + glow dot, Spectral title, synthesized summary,
-// prunable concept tags, and the source papers under it (each with an editable note + tags).
-function ConceptCard({ concept, papers, query, onRemoveConceptTag, onRemovePaperTag, onSaveNote, onDeleteConcept, onDeletePaper }) {
+// One concept node: colored TOPIC eyebrow + glow dot (the hub tier — falls back to the domain
+// for a hub-less concept), Spectral title, synthesized summary, prunable concept tags, and the
+// source papers under it (each with an editable note + tags).
+function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveConceptTag, onRemovePaperTag, onSaveNote, onDeleteConcept, onDeletePaper }) {
   const [open, setOpen] = useState(true)
-  const color = domainColor(concept.domain)
+  const color = topicColor || domainColor(concept.domain)
   return (
     <div style={{ borderRadius: 16, overflow: 'hidden', background: 'var(--surface-1)' }}>
       <div style={{ padding: '24px 26px 22px' }}>
@@ -251,7 +255,7 @@ function ConceptCard({ concept, papers, query, onRemoveConceptTag, onRemovePaper
           <div className="min-w-0">
             <span className="inline-flex items-center" style={{ gap: 7, fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}` }} />
-              {domainLabel(concept.domain)}
+              {topicLabel || domainLabel(concept.domain)}
             </span>
             <h3 style={{ margin: '8px 0 0', fontFamily: 'var(--font-serif)', fontSize: 20, fontWeight: 500, color: 'var(--color-fg)' }}>{concept.label}</h3>
           </div>

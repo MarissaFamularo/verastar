@@ -41,7 +41,7 @@ export const ANALYZE_SCHEMA = {
   },
 }
 
-const analyzeSystem = (domains) => `You file papers into a clinician-scientist's concept-based knowledge graph. The reader may be from ANY specialty — derive every topic name from the papers themselves, never from these examples. The graph has TWO tiers: broad "hub" topics that gather many papers (a vascular surgeon might accrue "Carotid Revascularization" and "CLTI Management"; an orthopedic surgeon "Knee Arthroplasty" and "Resident Education"), and specific "concept" satellites beneath them (e.g. "Transcarotid Revascularization Stroke Risk" under the former, "Cementless Fixation Outcomes" under the latter). A paper is a SOURCE under one specific concept, and that concept hangs off one broad hub. This is what makes the map read like a constellation — big hubs with small satellites orbiting them — instead of a handful of lonely stars. For the given paper return:
+const analyzeSystem = (domains, projects) => `You file papers into a clinician-scientist's concept-based knowledge graph. The reader may be from ANY specialty — derive every topic name from the papers themselves, never from these examples. The graph has TWO tiers: broad "hub" topics that gather many papers (a vascular surgeon might accrue "Carotid Revascularization" and "CLTI Management"; an orthopedic surgeon "Knee Arthroplasty" and "Resident Education"), and specific "concept" satellites beneath them (e.g. "Transcarotid Revascularization Stroke Risk" under the former, "Cementless Fixation Outcomes" under the latter). A paper is a SOURCE under one specific concept, and that concept hangs off one broad hub. This is what makes the map read like a constellation — big hubs with small satellites orbiting them — instead of a handful of lonely stars. For the given paper return:
 
 - concept: the paper's SPECIFIC topic — a small, reusable node capturing its actual angle (technique, endpoint, cohort). Reuse an EXISTING concept name VERBATIM only if the paper is truly the SAME specific topic; otherwise mint a new specific concept. Do NOT collapse everything into the hub, and do NOT use the paper's exact title — name the topic it exemplifies (e.g. a paper on TCAR 30-day stroke → "Transcarotid Revascularization Outcomes", not the title). Keeping specific concepts as their own satellites is intended: singletons stay visible.
 - hub: the BROAD parent topic this concept belongs under. STRONGLY prefer an existing hub from the list — a TCAR paper, a CEA-vs-CAS paper, and an asymptomatic-stenosis paper all share the hub "Carotid Revascularization". Only mint a new hub when none fits. A hub is broad enough to gather a dozen concepts. If the paper's specific topic already IS that broad (no finer angle), you may return the same string for both concept and hub.
@@ -50,12 +50,35 @@ const analyzeSystem = (domains) => `You file papers into a clinician-scientist's
     ? `Reuse an existing domain — returned as its key — when the paper's discipline genuinely matches it:\n${domains.map((d) => `  - "${d.key}": ${d.label}`).join('\n')}\nBut do NOT force a paper into an existing domain just because its clinical subject overlaps; when its discipline is different, propose a NEW domain as a short field-level name (2–4 words, Title Case) — never a paper- or disease-specific topic.`
     : `This reader's taxonomy is empty so far — propose the domain as a short field-level name (2–4 words, Title Case), broad enough that a dozen hubs could live under it.`
 }
-- tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by. Tags carry the finest angle; the concept is specific and the hub is broad.`
+- tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by. Tags carry the finest angle; the concept is specific and the hub is broad.${projectBan(projects)}`
+
+// The reader's own projects leak into filing via the paper's Relevance line ("…informs your
+// Limb Preservation Program") — the model then mints a topic named after the project, which
+// duplicates the map's yellow project star as a red concept star. Ban them explicitly.
+const projectBan = (projects) =>
+  projects?.length
+    ? `\n\nThe reader's own projects/programs are CONTEXT, not topics — the Relevance line may mention them, but topics are named by scientific subject matter. NEVER name the concept or hub after any of these:\n${projects.map((p) => `  - "${p}"`).join('\n')}`
+    : ''
+
+// Deterministic guard behind the prompt (the model proposes; the code disposes): a filing that
+// still names a topic after a project is repaired — a banned hub collapses onto the concept, a
+// banned concept files directly under its hub, both banned falls back to Uncategorized. Pure.
+export function sanitizeFiling({ concept, hub }, projects = []) {
+  const banned = new Set(projects.map((p) => (p || '').trim().toLowerCase()).filter(Boolean))
+  const bad = (name) => banned.has((name || '').trim().toLowerCase())
+  let c = concept
+  let h = hub
+  if (bad(h)) h = c
+  if (bad(c)) c = bad(h) ? 'Uncategorized' : h
+  if (bad(h)) h = c
+  return { concept: c, hub: h }
+}
 
 // Analyze a paper. `paper` = { title, finding, relevance, text? }; `concepts` = existing
-// [{ name, domain, isHub }]. Returns { concept, hub, domain, tags } — the paper's specific
-// concept (satellite) AND the broad hub it hangs under. domain validated to a real key.
-export async function analyzePaper({ paper, concepts = [], model = MODELS.triage, maxTokens = 1024 }) {
+// [{ name, domain, isHub }]; `projects` = the reader's project names (banned as topic names).
+// Returns { concept, hub, domain, tags } — the paper's specific concept (satellite) AND the
+// broad hub it hangs under. domain validated to a real key.
+export async function analyzePaper({ paper, concepts = [], projects = [], model = MODELS.triage, maxTokens = 1024 }) {
   const hubs = concepts.filter((c) => c.isHub)
   const sats = concepts.filter((c) => !c.isHub)
   const listOf = (arr) =>
@@ -70,7 +93,7 @@ export async function analyzePaper({ paper, concepts = [], model = MODELS.triage
 
   const r = await extractStructured({
     model,
-    system: analyzeSystem(listDomains()),
+    system: analyzeSystem(listDomains(), projects),
     content,
     schema: ANALYZE_SCHEMA,
     maxTokens,
@@ -84,8 +107,9 @@ export async function analyzePaper({ paper, concepts = [], model = MODELS.triage
     .map((t) => (t || '').trim().toLowerCase())
     .filter((t) => t && !seen.has(t) && seen.add(t))
     .slice(0, 6)
-  const concept = (r.concept || '').trim() || 'Uncategorized'
-  const hub = (r.hub || '').trim() || concept
+  const rawConcept = (r.concept || '').trim() || 'Uncategorized'
+  const rawHub = (r.hub || '').trim() || rawConcept
+  const { concept, hub } = sanitizeFiling({ concept: rawConcept, hub: rawHub }, projects)
   return { concept, hub, domain, tags }
 }
 

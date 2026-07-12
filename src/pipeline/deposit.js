@@ -26,9 +26,14 @@ import {
 // synthesizeGroup so a batch re-file doesn't re-synthesize per paper). Returns { groupId } or null.
 export async function filePaper(paper) {
   const existing = await loadConcepts()
+  // The reader's projects are banned as topic names — the Relevance line names them
+  // ("…informs your Limb Preservation Program") and the model would otherwise mint a
+  // topic that duplicates the map's yellow project star.
+  const profile = await getProfile()
   const { concept, hub, domain, tags } = await analyzePaper({
     paper: { title: paper.title, finding: paper.finding, relevance: paper.relevance, text: paper.fullText },
     concepts: existing.map((c) => ({ name: c.label, domain: c.domain, isHub: c.isHub })),
+    projects: profile?.projects || [],
   })
   const node = await upsertConcept({ name: concept, domain, tags, sourcePmids: [paper.id] })
   // The broad hub is a grouping node (no papers of its own, same domain color); the satellite

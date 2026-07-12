@@ -11,11 +11,12 @@
 import { useEffect, useRef } from 'react'
 import { domainColor, PROJECT_COLOR, DEFAULT_PAPER_COLOR } from '../lib/domains.js'
 
-// --- star colors: concepts take their DOMAIN color (her taxonomy); projects are the "Projects"
-// yellow with a warm-white core so they read as bright hubs. North stars aren't map nodes. ---
+// --- star colors: concepts take their TOPIC color (`topicColor`, annotated by the caller —
+// one hue per hub constellation), falling back to the domain color for a hub-less concept;
+// projects are the "Projects" yellow with a warm-white core so they read as bright anchors. ---
 function starColor(node) {
   if (node.kind === 'project') return { core: '#fff6d8', glow: PROJECT_COLOR }
-  const c = node.domain ? domainColor(node.domain) : DEFAULT_PAPER_COLOR
+  const c = node.topicColor || (node.domain ? domainColor(node.domain) : DEFAULT_PAPER_COLOR)
   return { core: c, glow: c }
 }
 const EDGE_BASE = '150,170,210' // cool, faint — the resting web recedes until you look at a star

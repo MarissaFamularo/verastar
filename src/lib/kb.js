@@ -5,6 +5,8 @@
 // that hold papers (optionally narrowed to one domain) and search title/summary/tags across both
 // the concept and its source papers. Kept pure (no store, no React) so it's unit-testable.
 
+import { PALETTE } from './domains.js'
+
 function hit(text, q) {
   if (!q) return true
   return String(text || '').toLowerCase().includes(q)
@@ -33,6 +35,33 @@ export function hubMap(edges) {
     if (e?.origin === 'taxonomy' && e.source && e.target) m.set(e.source, e.target)
   }
   return m
+}
+
+// Stable per-library topic colors: hub nodes take palette hues in id order, and every
+// satellite inherits its hub's color — each constellation reads as ONE hue on the map, in
+// the legend, and on Library cards. Derived (not stored), so the same graph always colors
+// the same way; a brand-new hub can shift later hues, which is acceptable churn.
+export function topicIndex(concepts, edges) {
+  const m = hubMap(edges)
+  const byId = new Map((concepts || []).map((c) => [c.id, c]))
+  const hubIds = (concepts || [])
+    .filter((c) => c.isHub)
+    .map((c) => c.id)
+    .sort()
+  const colorByHub = new Map(hubIds.map((id, i) => [id, PALETTE[i % PALETTE.length]]))
+  const hubIdOf = (id) => {
+    const c = byId.get(id)
+    if (!c) return null
+    return c.isHub ? c.id : m.get(c.id) || null
+  }
+  return {
+    topics: hubIds.map((id) => ({ id, label: byId.get(id).label, color: colorByHub.get(id) })),
+    colorOf: (id) => colorByHub.get(hubIdOf(id)) || null,
+    labelOf: (id) => {
+      const h = hubIdOf(id)
+      return h ? byId.get(h)?.label || null : null
+    },
+  }
 }
 
 // The topic chips: hubs that (transitively) hold ≥1 filed paper, with counts,

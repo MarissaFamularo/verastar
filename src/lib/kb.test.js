@@ -2,7 +2,7 @@
 // reaching title/summary/tags/notes across concept and papers, the domain filter, unfiled bucket.
 
 import { describe, it, expect } from 'vitest'
-import { buildKB, listTopics, hubMap } from './kb.js'
+import { buildKB, listTopics, hubMap, topicIndex } from './kb.js'
 
 const concept = (id, over = {}) => ({
   id,
@@ -167,5 +167,33 @@ describe('topics (the hub tier)', () => {
     const kb = buildKB(hubs, allPapers, { topic: 'all', edges })
     expect(kb.groups).toHaveLength(4)
     expect(kb.unfiled).toHaveLength(1)
+  })
+})
+
+describe('topicIndex (constellation colors)', () => {
+  const cs = [
+    { id: 'concept:carotid', label: 'Carotid Revascularization', isHub: true },
+    { id: 'concept:tcar', label: 'TCAR Outcomes' },
+    { id: 'concept:pop', label: 'Popliteal Aneurysm', isHub: true },
+    { id: 'concept:orphan', label: 'No Hub Yet' },
+  ]
+  const edges = [{ id: 'e1', source: 'concept:tcar', target: 'concept:carotid', origin: 'taxonomy' }]
+  const idx = topicIndex(cs, edges)
+
+  it('every hub gets a distinct stable palette color', () => {
+    const colors = idx.topics.map((t) => t.color)
+    expect(colors).toHaveLength(2)
+    expect(new Set(colors).size).toBe(2)
+    expect(topicIndex(cs, edges).topics.map((t) => t.color)).toEqual(colors) // deterministic
+  })
+
+  it('a satellite inherits its hub color and label', () => {
+    expect(idx.colorOf('concept:tcar')).toBe(idx.colorOf('concept:carotid'))
+    expect(idx.labelOf('concept:tcar')).toBe('Carotid Revascularization')
+  })
+
+  it('a hub-less concept gets no topic color or label (callers fall back to domain)', () => {
+    expect(idx.colorOf('concept:orphan')).toBeNull()
+    expect(idx.labelOf('concept:orphan')).toBeNull()
   })
 })

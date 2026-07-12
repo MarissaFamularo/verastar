@@ -8,7 +8,7 @@
 // dashed, pulsing "maybe" until the clinician clicks it — then StarMap charts the line.
 // Styled to the observatory design (Verastar.dc.html): a full-bleed star field + right detail rail.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, store } from '../lib/store.js'
 import {
@@ -22,6 +22,7 @@ import {
 } from '../pipeline/graph.js'
 import { proposeConnections } from '../pipeline/connect.js'
 import { listDomains, PROJECT_COLOR, domainColor, domainLabel } from '../lib/domains.js'
+import { topicIndex } from '../lib/kb.js'
 import StarMap from './StarMap.jsx'
 
 const KIND_LABEL = { northStar: 'North star', project: 'Active Work', concept: 'Concept' }
@@ -46,6 +47,18 @@ export default function ConstellationView() {
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
+
+  // Topic (hub) colors — one hue per constellation; satellites inherit their hub's color.
+  // Every star being one "Vascular Surgery" red made the map an undifferentiated blob for a
+  // single-specialty reader, so the visible category is the topic tier, not the domain.
+  const tIdx = useMemo(
+    () => topicIndex(nodes.filter((n) => n.kind === 'concept'), edges),
+    [nodes, edges],
+  )
+  const mapNodes = useMemo(
+    () => nodes.map((n) => (n.kind === 'concept' ? { ...n, topicColor: tIdx.colorOf(n.id) } : n)),
+    [nodes, tIdx],
+  )
 
   async function refresh() {
     const { nodes, edges } = await loadGraph()
@@ -182,7 +195,7 @@ export default function ConstellationView() {
       <div className="vs-starmap-field relative" style={{ flex: 1, minWidth: 0, overflow: 'hidden', background: 'radial-gradient(120% 90% at 60% 30%,#141a2e,#080a12 70%)' }}>
         <div className="vs-stars absolute" style={{ inset: 0, opacity: 1 }} />
         <StarMap
-          nodes={nodes}
+          nodes={mapNodes}
           edges={edges}
           selectedId={selectedId}
           onSelectNode={(n) => {
@@ -215,11 +228,15 @@ export default function ConstellationView() {
               Drag to pan, pinch or scroll to zoom. Tap a star to light its connections and read its synthesized summary and source papers. Bigger stars have more connections.
             </p>
             <div style={{ marginTop: 20, borderTop: '1px solid var(--hairline)', paddingTop: 16 }}>
-              <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--color-fg-faint)' }}>Fields</p>
+              <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--color-fg-faint)' }}>
+                {tIdx.topics.length ? 'Topics' : 'Fields'}
+              </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 7 }}>
-                {listDomains().map((d) => (
-                  <span key={d.key} className="inline-flex items-center" style={{ gap: 9, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
-                    <ColorDot color={d.color} /> {d.label}
+                {/* Topics (the hub tier Claude mints per reader) color the constellations; a
+                    library with no hubs yet falls back to the domain legend. */}
+                {(tIdx.topics.length ? tIdx.topics : listDomains().map((d) => ({ id: d.key, label: d.label, color: d.color }))).map((t) => (
+                  <span key={t.id} className="inline-flex items-center" style={{ gap: 9, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
+                    <ColorDot color={t.color} /> {t.label}
                   </span>
                 ))}
                 <span className="inline-flex items-center" style={{ gap: 9, fontSize: 12.5, color: 'var(--color-fg-soft)', marginTop: 4, borderTop: '1px solid var(--hairline)', paddingTop: 8 }}>
@@ -236,8 +253,8 @@ export default function ConstellationView() {
         ) : (
           <NodePanel
             node={selected}
-            color={selected.kind === 'concept' ? domainColor(selected.domain) : PROJECT_COLOR}
-            categoryLabel={selected.kind === 'concept' ? domainLabel(selected.domain) : KIND_LABEL[selected.kind]}
+            color={selected.kind === 'concept' ? tIdx.colorOf(selected.id) || domainColor(selected.domain) : PROJECT_COLOR}
+            categoryLabel={selected.kind === 'concept' ? tIdx.labelOf(selected.id) || domainLabel(selected.domain) : KIND_LABEL[selected.kind]}
             sources={sourcePapersOf(selected)}
             connections={neighborsOf(selected.id)}
             openPaper={openPaper}
