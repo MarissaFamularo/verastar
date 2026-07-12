@@ -41,11 +41,13 @@ free-form output. Three properties make it real:
      must be a tuple that went through the gate. Model opinion is never dressed up as
      verified fact.
 
-**The gate defeats three distinct failure modes (name all three in the demo):**
+**The gate defeats two distinct failure modes (name both in the demo):**
 - **Hallucinated number/citation** → quote not located → flagged.
 - **Faithful quote, wrong number** (real sentence, mistranscribed value in the tuple) →
   numeric-consistency (§3) catches it → flagged.
-- **Misleading aggregation** (pooling incompatible designs) → refuse-to-pool card.
+- *A third — misleading aggregation (pooling incompatible designs) → refuse-to-pool
+  card — was **cut 2026-07-08**: the app never draws cross-study charts, so this
+  failure mode never arises (see [BUILD_PLAN → Scope](BUILD_PLAN.md#scope)).*
 
 ## Algorithm
 
@@ -96,9 +98,10 @@ full-text tier. The strongest badge carries the strongest proof.
 ## Integrity rules (enforced above the badge)
 - **Flagged values are never charted and never rendered as fact** — shown greyed, with
   what was and wasn't found.
-- **Refuse-to-pool guard:** `figures.js` will not pool values across differing `design`
-  fields. It renders a plain-language "these designs differ; pooling would mislead"
-  card instead of a combined chart.
+- **Refuse-to-pool guard — cut 2026-07-08, never built.** As specced, a `figures.js`
+  would decline to pool values across differing `design` fields. Cut with the charting
+  it guarded: the shipped app never draws cross-study charts, so there is nothing to
+  refuse (see [BUILD_PLAN → Scope](BUILD_PLAN.md#scope)).
 - **No fabrication:** if extraction returns a source_quote the app can't locate, the
   app does not substitute a plausible citation. It flags.
 

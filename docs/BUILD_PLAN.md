@@ -4,6 +4,11 @@
 **Build track.** Solo + Claude Code, fresh repo, all product code written live during
 the event per the "new work only" rule.*
 
+*Planning artifact — kept as written during the event. What shipped is described in the
+[README](../README.md); the one notable cut (refuse-to-pool) is documented under
+[Scope](#scope). The shipped IA simplified to four tabs: Digest · Library · Star Map ·
+Connections.*
+
 ## Event facts (confirmed from the participant guide)
 - **Hacking window:** Tue Jul 7, 12:30 PM ET → **submissions due Mon Jul 13, 9:00 PM ET**
   via the CV platform (~6.5 days).

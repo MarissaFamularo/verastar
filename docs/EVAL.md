@@ -64,6 +64,26 @@ sentence makes each row self-auditing. Small N, high quality, built fresh.
 Keep it human-reviewed — no unattended overnight runs deciding correctness. The suite is
 a means to a trustworthy core and one honest number, not an end in itself.
 
+## Outcome (recorded 2026-07-12, near ship)
+
+What actually shipped, against the plan above:
+
+- **181 passing tests** repo-wide (`npm test`), of which **43 are verifier cases** in
+  `verify.test.js` — every synthetic-adversarial case type listed in source #1 is
+  present (interpunct decimal, number-inside-a-number, integer collision, corrupted
+  faithful quote, hallucinated quote, table-cell, p-value forms, dash/zero variants),
+  plus cases found during the build: thousands separators, negative effect values with
+  negative CI bounds, sign flips, truncated/re-punctuated fuzzy matches, and
+  registry-tier boundary cases.
+- **16 cases are explicitly labeled `[false-verify guard]`** — each constructs a wrong
+  value the verifier must refuse to badge. **All pass: zero false verifies in the
+  suite.** `corrupt.test.js` additionally corrupts a real verified row end-to-end and
+  confirms it lands `flagged`.
+- Source #2 shipped as the `verified-registry` tier itself (STARDUST / NCT04881110,
+  tested against a cached CT.gov fixture). Source #3 (the ~15-paper human-spot-checked
+  set) was not formalized as a labeled dataset — verification happens live on every
+  digest run instead.
+
 ## Scope discipline
 - Source #1 is **required, on spine day** — it is not polish; it is how the badge earns
   trust.
