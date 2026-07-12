@@ -2,6 +2,8 @@
 
 **A verifiable evidence digest for clinicians.**
 
+**▶ Demo:** https://youtu.be/RmT7JjTTqeM · **Live:** https://verastar.netlify.app
+
 *Vera* (truth) + *star* (your north stars): verified evidence, aimed at the concepts
 you steer by.
 
