@@ -64,6 +64,27 @@ do the work. No shared model bill, no lock-in, and your key and reading stay you
 
 ---
 
+## Run it locally
+
+Verastar is a static React + Vite app — no backend, nothing to deploy.
+
+```bash
+git clone https://github.com/MarissaFamularo/verastar.git
+cd verastar
+npm install
+npm run dev
+```
+
+Open the printed `localhost` URL, open **Settings**, and paste your Anthropic API
+key. That's it — the digest, verifier, and library all run in your browser on your
+key. **Chrome or Edge recommended:** the "file your library to disk" feature uses the
+File System Access API, which Safari and Firefox don't support.
+
+Requires Node 18+. Run the test suite with `npm test` (181 tests, including
+adversarial false-verify cases).
+
+---
+
 ## Status
 
 Hackathon build in progress. Planning docs:
