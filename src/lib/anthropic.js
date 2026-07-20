@@ -1,8 +1,10 @@
 // lib/anthropic.js — BYOK Anthropic client factory.
 //
-// The API key lives in sessionStorage ONLY (never repo, file, IndexedDB, logs, or a
-// server). It is cleared when the tab closes. Every model call in Verastar goes through
-// this module so there is exactly one place that touches the key.
+// The API key lives in browser storage ONLY (never repo, file, IndexedDB, logs, or a
+// server). Default is sessionStorage — cleared when the tab closes. "Remember on this
+// device" opts into localStorage instead, so daily use doesn't mean re-pasting the key
+// every morning. Every model call in Verastar goes through this module so there is
+// exactly one place that touches the key.
 //
 // Facts locked in docs/FACTS.md:
 //   - new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
@@ -24,22 +26,38 @@ export const MODELS = {
   fast: 'claude-haiku-4-5-20251001',
 }
 
-// --- key management (sessionStorage-backed) ---
+// --- key management (session-backed by default, localStorage when remembered) ---
 
-export function setApiKey(key) {
-  sessionStorage.setItem(KEY_STORAGE, key.trim())
+// The key lives in exactly ONE of the two stores at a time: remember=true moves it to
+// localStorage (survives tab close, this device only), remember=false keeps it in
+// sessionStorage (gone on tab close).
+export function setApiKey(key, { remember = false } = {}) {
+  const trimmed = key.trim()
+  if (remember) {
+    localStorage.setItem(KEY_STORAGE, trimmed)
+    sessionStorage.removeItem(KEY_STORAGE)
+  } else {
+    sessionStorage.setItem(KEY_STORAGE, trimmed)
+    localStorage.removeItem(KEY_STORAGE)
+  }
 }
 
 export function getApiKey() {
-  return sessionStorage.getItem(KEY_STORAGE) || ''
+  return sessionStorage.getItem(KEY_STORAGE) || localStorage.getItem(KEY_STORAGE) || ''
 }
 
 export function hasApiKey() {
   return getApiKey().length > 0
 }
 
+// True when the saved key persists across tab close (localStorage).
+export function isKeyRemembered() {
+  return !!localStorage.getItem(KEY_STORAGE)
+}
+
 export function clearApiKey() {
   sessionStorage.removeItem(KEY_STORAGE)
+  localStorage.removeItem(KEY_STORAGE)
 }
 
 // Optional free NCBI key raises eutils from 3 -> 10 req/s. Also sessionStorage-only.

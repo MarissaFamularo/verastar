@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { setApiKey, hasApiKey, clearApiKey, ping } from './lib/anthropic.js'
-import { getProfile, store } from './lib/store.js'
+import { setApiKey, hasApiKey, clearApiKey, isKeyRemembered, ping } from './lib/anthropic.js'
+import { getProfile, store, COLLECTIONS } from './lib/store.js'
 import { loadDomains } from './lib/domains.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
@@ -134,8 +134,12 @@ function IconRail({ view, setView, onSettings, initials }) {
   )
 }
 
-function SettingsModal({ onClose, saved, onSave, onClear, onPing, status, reply, error }) {
+function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, onStartOver, status, reply, error }) {
   const [keyInput, setKeyInput] = useState('')
+  const [remember, setRemember] = useState(false)
+  // Start over is two-step: the button reveals a confirm block with the erase choice.
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [eraseAll, setEraseAll] = useState(false)
   return (
     <div
       onClick={onClose}
@@ -171,7 +175,7 @@ function SettingsModal({ onClose, saved, onSave, onClear, onPing, status, reply,
               <div className="flex items-center" style={{ marginTop: 8, gap: 10, padding: '10px 13px', borderRadius: 10, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-fg-soft)', fontSize: 13, letterSpacing: '.05em' }}>sk-ant-••••••••••••••••</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-verified-soft)', fontWeight: 600 }}>Active</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-verified-soft)', fontWeight: 600 }}>{remembered ? 'Active · remembered' : 'Active'}</span>
               </div>
               <div className="flex" style={{ marginTop: 10, gap: 9 }}>
                 <button onClick={onPing} disabled={status === 'pinging'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
@@ -196,26 +200,33 @@ function SettingsModal({ onClose, saved, onSave, onClear, onPing, status, reply,
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                if (keyInput.trim()) onSave(keyInput)
+                if (keyInput.trim()) onSave(keyInput, remember)
               }}
-              className="flex"
-              style={{ marginTop: 8, gap: 9 }}
+              style={{ marginTop: 8 }}
             >
-              <input
-                type="password"
-                value={keyInput}
-                onChange={(e) => setKeyInput(e.target.value)}
-                placeholder="sk-ant-…"
-                autoComplete="off"
-                style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
-              />
-              <button type="submit" className="cursor-pointer" style={{ padding: '9px 18px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
-                Save
-              </button>
+              <div className="flex" style={{ gap: 9 }}>
+                <input
+                  type="password"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  placeholder="sk-ant-…"
+                  autoComplete="off"
+                  style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
+                />
+                <button type="submit" className="cursor-pointer" style={{ padding: '9px 18px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+                  Save
+                </button>
+              </div>
+              <label className="flex items-center cursor-pointer" style={{ gap: 8, marginTop: 10, fontSize: 13, color: 'var(--color-fg-soft)' }}>
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ accentColor: 'var(--color-accent)' }} />
+                Remember on this device
+              </label>
             </form>
           )}
           <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
-            Your key lives only in this browser tab — never sent to our servers, never written to disk, and cleared when you close the tab.
+            {saved && remembered
+              ? 'Your key is remembered in this browser’s local storage on this device — never sent to our servers. Clear it any time.'
+              : 'Your key lives only in this browser tab — never sent to our servers, never written to disk, and cleared when you close the tab. Check “Remember on this device” to keep it across restarts.'}
           </p>
 
           <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
@@ -227,6 +238,41 @@ function SettingsModal({ onClose, saved, onSave, onClear, onPing, status, reply,
 
           <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Library grouping</p>
           <DomainEditor />
+
+          <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
+
+          <p style={{ margin: '0 0 4px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Start over</p>
+          {!confirmReset ? (
+            <>
+              <p style={{ margin: '10px 0 12px', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+                Redo setup from the welcome screen. Your library, star map, and API key stay unless you choose to erase them.
+              </p>
+              <button onClick={() => setConfirmReset(true)} className="cursor-pointer" style={{ padding: '9px 15px', border: '1px solid rgba(224,96,90,.4)', borderRadius: 10, background: 'transparent', color: '#f0a9a4', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}>
+                Start over…
+              </button>
+            </>
+          ) : (
+            <div style={{ marginTop: 10, padding: '14px 16px', borderRadius: 12, border: '1px solid rgba(224,96,90,.3)', background: 'rgba(224,96,90,.06)' }}>
+              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: 'var(--color-fg-soft)' }}>
+                This clears your steering profile and returns you to the welcome screen.
+              </p>
+              <label className="flex items-start cursor-pointer" style={{ gap: 8, marginTop: 12, fontSize: 13, lineHeight: 1.5, color: 'var(--color-fg-soft)' }}>
+                <input type="checkbox" checked={eraseAll} onChange={(e) => setEraseAll(e.target.checked)} style={{ marginTop: 3, accentColor: '#e0605a' }} />
+                <span>
+                  Also erase everything in this browser — saved papers, star map, digests, and the API key.
+                  Files already written to your disk folder are never touched.
+                </span>
+              </label>
+              <div className="flex" style={{ marginTop: 14, gap: 9 }}>
+                <button onClick={() => onStartOver(eraseAll)} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: '#e0605a', color: '#1c0908', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+                  {eraseAll ? 'Erase & start over' : 'Start over'}
+                </button>
+                <button onClick={() => { setConfirmReset(false); setEraseAll(false) }} className="cursor-pointer" style={{ padding: '9px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -291,6 +337,7 @@ function DigestRail({ saved, onSettings, counts, projects, onConnections }) {
 
 export default function App() {
   const [saved, setSaved] = useState(hasApiKey())
+  const [remembered, setRemembered] = useState(isKeyRemembered())
   const [status, setStatus] = useState('idle')
   const [reply, setReply] = useState('')
   const [error, setError] = useState('')
@@ -325,9 +372,10 @@ export default function App() {
     }).catch(() => {})
   }, [onboarded, view])
 
-  function handleSave(k) {
-    setApiKey(k)
+  function handleSave(k, remember) {
+    setApiKey(k, { remember })
     setSaved(true)
+    setRemembered(remember)
     setStatus('idle')
     setReply('')
     setError('')
@@ -335,9 +383,27 @@ export default function App() {
   function handleClear() {
     clearApiKey()
     setSaved(false)
+    setRemembered(false)
     setStatus('idle')
     setReply('')
     setError('')
+  }
+  // Start over: drop the steering profile so the welcome screen returns. eraseAll
+  // additionally clears every browser-side collection + the key, then reloads for a
+  // clean boot (module caches like domains hydrate from empty). Files on disk are
+  // never touched — the vault only ever writes, and only on save/sync.
+  async function handleStartOver(eraseAll) {
+    if (eraseAll) {
+      await Promise.all(COLLECTIONS.map((c) => store.clear(c)))
+      clearApiKey()
+      window.location.reload()
+      return
+    }
+    await store.delete('profile', 'me')
+    setSettingsOpen(false)
+    setProfile(null)
+    setView('digest')
+    setOnboarded(false)
   }
   async function handlePing() {
     setStatus('pinging')
@@ -478,9 +544,11 @@ export default function App() {
         <SettingsModal
           onClose={() => { setSettingsOpen(false); setStatus('idle') }}
           saved={saved}
+          remembered={remembered}
           onSave={handleSave}
           onClear={handleClear}
           onPing={handlePing}
+          onStartOver={handleStartOver}
           status={status}
           reply={reply}
           error={error}
