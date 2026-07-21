@@ -87,6 +87,27 @@ File System Access API, which Safari and Firefox don't support.
 Requires Node 18+. Run the test suite with `npm test` (181 tests, including
 adversarial false-verify cases).
 
+### Accounts & sync (optional)
+
+**Cloning and running needs zero setup beyond `npm install`** — with no configuration,
+Verastar is fully local: everything stays in your browser's IndexedDB, no account, no
+backend, and the app shows no sign-in UI at all.
+
+**To run your own instance with accounts and cross-device sync:**
+
+1. Create a free [Supabase](https://supabase.com) project.
+2. Apply [`supabase/migrations/20260721000000_kv_events_with_rls.sql`](supabase/migrations/20260721000000_kv_events_with_rls.sql)
+   (paste into the SQL editor, or `supabase db push`) — that one file is the entire
+   backend schema, row-level security included.
+3. Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` and
+   `VITE_SUPABASE_ANON_KEY` (Project Settings → API — use the *publishable/anon* key;
+   it is safe in the bundle because RLS is the security boundary. Never put a
+   `service_role` key in env or client code).
+
+Signed in, your library lives in your account so it works on every device — and the
+disk folder remains your own plain-files copy. Your Anthropic key is never stored
+server-side either way.
+
 ---
 
 ## Status

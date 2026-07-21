@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { setApiKey, hasApiKey, clearApiKey, isKeyRemembered, ping } from './lib/anthropic.js'
-import { getProfile, store, COLLECTIONS } from './lib/store.js'
+import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
+import { supabase, supabaseConfigured, currentUser, sendMagicLink, signOut } from './lib/supabase.js'
+import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
@@ -134,7 +136,97 @@ function IconRail({ view, setView, onSettings, initials }) {
   )
 }
 
-function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, onStartOver, status, reply, error }) {
+// Account & sync — magic-link sign-in (no passwords, consistent with the
+// no-credential ethos). Renders nothing when Supabase env isn't configured, so a
+// cloned repo without keys keeps the original local-only app. The consent line is
+// required groundwork for the adoption study: one sentence, visible, honest.
+function AccountSection({ account }) {
+  const [email, setEmail] = useState('')
+  const [sendState, setSendState] = useState('idle') // idle | sending | sent | error
+  const [sendError, setSendError] = useState('')
+  if (!supabaseConfigured) return null
+
+  async function send(e) {
+    e.preventDefault()
+    if (!email.trim()) return
+    setSendState('sending')
+    setSendError('')
+    try {
+      await sendMagicLink(email.trim())
+      setSendState('sent')
+    } catch (err) {
+      setSendError(err?.message || String(err))
+      setSendState('error')
+    }
+  }
+
+  return (
+    <>
+      <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
+      <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Account &amp; sync</p>
+      {account ? (
+        <>
+          <div className="flex items-center" style={{ gap: 10, padding: '10px 13px', borderRadius: 10, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
+            <span style={{ color: 'var(--color-fg-soft)', fontSize: 13 }}>{account.email}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-verified-soft)', fontWeight: 600 }}>Signed in</span>
+          </div>
+          <p style={{ margin: '12px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+            Your library lives in your account so it works on every device — and you always hold
+            your own copy on disk, in plain files any agent can read. Your API key and your disk
+            folder stay on this device, never in your account.
+          </p>
+          <button
+            onClick={async () => { await signOut(); window.location.reload() }}
+            className="cursor-pointer"
+            style={{ marginTop: 12, padding: '9px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}
+          >
+            Sign out
+          </button>
+        </>
+      ) : (
+        <>
+          <p style={{ margin: '0 0 12px', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+            Sign in and your library follows you — we keep it so it works on every device, and you
+            always hold your own copy on disk, in plain files any agent can read. Your API key
+            stays on this device, never in your account.
+          </p>
+          {sendState === 'sent' ? (
+            <div style={{ padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
+              <span style={{ fontWeight: 600 }}>Link sent to {email.trim()}</span> — open it on this device to finish signing in.
+            </div>
+          ) : (
+            <form onSubmit={send} className="flex" style={{ gap: 9 }}>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
+              />
+              <button type="submit" disabled={sendState === 'sending'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: sendState === 'sending' ? 0.6 : 1 }}>
+                {sendState === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
+              </button>
+            </form>
+          )}
+          {sendState === 'error' && (
+            <div style={{ marginTop: 10, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+              <span style={{ fontWeight: 600 }}>Couldn't send the link:</span> {sendError}
+            </div>
+          )}
+          <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
+            Signing in stores your literature library and usage events on our servers —
+            never patient data, and never sold. You always hold your own flat-file copy
+            on disk. Usage data may be analyzed, in aggregate, for research.
+          </p>
+        </>
+      )}
+    </>
+  )
+}
+
+function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, onStartOver, status, reply, error, account }) {
   const [keyInput, setKeyInput] = useState('')
   const [remember, setRemember] = useState(false)
   // Start over is two-step: the button reveals a confirm block with the erase choice.
@@ -229,6 +321,8 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
               : 'Your key lives only in this browser tab — never sent to our servers, never written to disk, and cleared when you close the tab. Check “Remember on this device” to keep it across restarts.'}
           </p>
 
+          <AccountSection account={account} />
+
           <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
 
           <p style={{ margin: '0 0 4px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Steering profile</p>
@@ -259,8 +353,9 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
               <label className="flex items-start cursor-pointer" style={{ gap: 8, marginTop: 12, fontSize: 13, lineHeight: 1.5, color: 'var(--color-fg-soft)' }}>
                 <input type="checkbox" checked={eraseAll} onChange={(e) => setEraseAll(e.target.checked)} style={{ marginTop: 3, accentColor: '#e0605a' }} />
                 <span>
-                  Also erase everything in this browser — saved papers, star map, digests, and the API key.
-                  Files already written to your disk folder are never touched.
+                  {account
+                    ? 'Also sign out and erase everything in this browser — saved papers, star map, digests, and the API key. Your account library is untouched: nothing is deleted from the cloud, and signing back in brings it all back. Files on disk are never touched either.'
+                    : 'Also erase everything in this browser — saved papers, star map, digests, and the API key. Files already written to your disk folder are never touched.'}
                 </span>
               </label>
               <div className="flex" style={{ marginTop: 14, gap: 9 }}>
@@ -279,20 +374,79 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
   )
 }
 
+// First signed-in boot, empty cloud, local library present: offer to carry it in.
+// One decision, two honest buttons — after a move the app reloads onto cloud data.
+function MigrationOffer({ account, paperCount, onDecline }) {
+  const [state, setState] = useState('idle') // idle | moving | error
+  const [error, setError] = useState('')
+
+  async function move() {
+    setState('moving')
+    setError('')
+    try {
+      await migrateLocalToAccount({ client: supabase, userId: currentUser().id })
+      window.location.reload()
+    } catch (err) {
+      setError(err?.message || String(err))
+      setState('error')
+    }
+  }
+
+  return (
+    <div className="relative flex items-center justify-center" style={{ minHeight: '100vh', padding: '56px 32px', background: 'radial-gradient(120% 80% at 50% -10%,#1a2138,#0b0e18 55%,#08090d)' }}>
+      <div className="vs-stars-deep absolute" style={{ inset: 0 }} />
+      <div className="relative" style={{ width: 560, maxWidth: '100%' }}>
+        <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '.14em', color: '#6d7484' }}>SIGNED IN · {account.email}</p>
+        <h1 style={{ margin: '14px 0 0', fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>
+          Move this library into your account?
+        </h1>
+        <p style={{ margin: '14px 0 0', fontSize: 15.5, lineHeight: 1.6, color: 'var(--color-fg-dim)' }}>
+          This browser holds {paperCount === 1 ? 'a saved paper' : `${paperCount} saved papers`} plus your star map and profile.
+          Your account is empty — move the library in once, and it works on every device you sign in on.
+          Files already written to your disk folder stay where they are.
+        </p>
+        {state === 'error' && (
+          <div style={{ marginTop: 16, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 600 }}>Move failed:</span> {error} — nothing was lost; your library is still in this browser.
+          </div>
+        )}
+        <div className="flex items-center" style={{ marginTop: 28, gap: 18 }}>
+          <button
+            onClick={move}
+            disabled={state === 'moving'}
+            className="cursor-pointer"
+            style={{ padding: '13px 26px', border: 0, borderRadius: 12, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -12px rgba(239,143,91,.7)', opacity: state === 'moving' ? 0.6 : 1 }}
+          >
+            {state === 'moving' ? 'Moving…' : 'Move my library in'}
+          </button>
+          <button onClick={onDecline} disabled={state === 'moving'} className="cursor-pointer" style={{ border: 0, background: 'transparent', padding: 0, fontSize: 14, color: 'var(--color-fg-muted)', fontFamily: 'inherit' }}>
+            Start fresh instead
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Right rail on the Digest surface: key status, weekly counts, active projects,
 // and the Weekend Read teaser. Counts derive from real saved papers.
-function DigestRail({ saved, onSettings, counts, projects, onConnections }) {
+function DigestRail({ saved, onSettings, counts, projects, onConnections, demo }) {
   return (
     <aside className="vs-digest-rail" style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div
         onClick={onSettings}
         className="flex items-center cursor-pointer"
-        style={{ gap: 9, padding: '10px 13px', borderRadius: 11, marginBottom: 34, background: saved ? 'rgba(127,191,154,.08)' : 'rgba(230,184,119,.10)' }}
+        style={{ gap: 9, padding: '10px 13px', borderRadius: 11, marginBottom: demo ? 12 : 34, background: saved ? 'rgba(127,191,154,.08)' : 'rgba(230,184,119,.10)' }}
       >
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: saved ? 'var(--color-verified)' : 'var(--color-abstract)', boxShadow: `0 0 7px ${saved ? 'var(--color-verified)' : 'var(--color-abstract)'}` }} />
         <span style={{ fontSize: 12.5, color: saved ? 'var(--color-verified-soft)' : 'var(--color-abstract)', fontWeight: 500 }}>{saved ? 'API key active' : 'Add your API key'}</span>
         <span style={{ marginLeft: 'auto', color: 'var(--color-fg-faint)', fontSize: 13 }}>⚙</span>
       </div>
+      {demo && (
+        <p style={{ margin: '0 0 34px', padding: '8px 13px', borderRadius: 10, background: 'rgba(143,189,230,.08)', fontSize: 12, lineHeight: 1.5, color: 'var(--color-registry)' }}>
+          Demo profile — sample data. In demo mode nothing leaves this browser.
+        </p>
+      )}
 
       <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>This week</p>
       <div className="flex" style={{ gap: 26, marginBottom: 34 }}>
@@ -351,10 +505,38 @@ export default function App() {
   const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0 })
 
   const [bootError, setBootError] = useState('')
+  const [account, setAccount] = useState(null) // { email } when signed in
+  // First signed-in boot with a local library and an empty cloud → the one-time
+  // "move this library into your account" offer. { paperCount } while showing.
+  const [migrationOffer, setMigrationOffer] = useState(null)
 
   useEffect(() => {
-    // Domains hydrate before any view mounts so sync color/label lookups are ready.
-    Promise.all([getProfile(), loadDomains()]).then(([p]) => {
+    // initStore() resolves auth and picks the backend (cloud vs IndexedDB) — it must
+    // finish before the first read. Domains hydrate before any view mounts so sync
+    // color/label lookups are ready.
+    initStore().then(async (user) => {
+      setAccount(user ? { email: user.email } : null)
+      const [p] = await Promise.all([getProfile(), loadDomains()])
+      if (user && !p?.onboarded) {
+        // Cloud has no profile yet — check whether this browser holds a library to
+        // carry in. Cloud wins when it has anything; local import is offered only
+        // into an empty account.
+        const [localProfile, localPapers, cloudPapers] = await Promise.all([
+          idbStore.get('profile', 'me'),
+          idbStore.all('papers'),
+          store.all('papers'),
+        ])
+        if (
+          shouldOfferMigration({
+            localPapersCount: (localPapers || []).length,
+            localProfile,
+            cloudProfile: p,
+            cloudPapersCount: (cloudPapers || []).length,
+          })
+        ) {
+          setMigrationOffer({ paperCount: (localPapers || []).length })
+        }
+      }
       setOnboarded(!!p?.onboarded)
       setProfile(p || null)
     }).catch((err) => setBootError(err?.message || String(err)))
@@ -392,9 +574,13 @@ export default function App() {
   // additionally clears every browser-side collection + the key, then reloads for a
   // clean boot (module caches like domains hydrate from empty). Files on disk are
   // never touched — the vault only ever writes, and only on save/sync.
+  // Signed in, eraseAll is deliberately LOCAL-ONLY: sign out + clear this browser.
+  // The account library is never deletable from this button (her call: an
+  // all-devices erase here is way too easy to hit by accident).
   async function handleStartOver(eraseAll) {
     if (eraseAll) {
-      await Promise.all(COLLECTIONS.map((c) => store.clear(c)))
+      if (account) await signOut()
+      await Promise.all(COLLECTIONS.map((c) => idbStore.clear(c)))
       clearApiKey()
       window.location.reload()
       return
@@ -439,6 +625,10 @@ export default function App() {
   }
 
   if (onboarded === null) return null // profile still loading
+
+  if (migrationOffer && account) {
+    return <MigrationOffer account={account} paperCount={migrationOffer.paperCount} onDecline={() => setMigrationOffer(null)} />
+  }
 
   if (onboarded === false || firstrunPreview) {
     // First run: the five-step onboarding flow on the night-sky canvas (design/Onboarding.dc.html).
@@ -528,7 +718,7 @@ export default function App() {
               </div>
             </div>
           </main>
-          <DigestRail saved={saved} counts={counts} projects={projects} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
+          <DigestRail saved={saved} counts={counts} projects={projects} demo={!!profile?.demo && !account} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
         </div>
       )}
 
@@ -552,6 +742,7 @@ export default function App() {
           status={status}
           reply={reply}
           error={error}
+          account={account}
         />
       )}
     </div>

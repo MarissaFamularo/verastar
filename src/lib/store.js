@@ -1,8 +1,10 @@
 // lib/store.js — the ONE storage interface for Verastar.
 //
-// Locked decision (BUILD_PLAN): local-first / IndexedDB, behind a single interface so
-// Supabase can be swapped in later (P2) without touching any page. Nothing else in the
-// app talks to IndexedDB directly — everyone imports `store`.
+// Since day 1 this file promised the Supabase swap would happen behind this
+// interface — this is that swap. `store` is now a facade: signed OUT it is the
+// original IndexedDB impl, byte-for-byte the old behavior (keyless demo, judges,
+// ?firstrun=1 all untouched). Signed IN it is the Supabase-backed impl and the
+// cloud is the source of truth. App boot calls initStore() before any read.
 //
 // Shape is a small set of named collections, each a keyed object store:
 //   - profile   : singleton steering profile (north stars, projects, rubric)  [key 'me']
@@ -12,8 +14,14 @@
 //   - graphEdges: knowledge-graph edges, keyed by id
 //   - domains   : the user's domain taxonomy { key, label, color }, keyed by key
 //
-// The API is deliberately generic (get/put/all/delete/clear) so the Supabase impl is a
-// drop-in: same method names, same return contracts.
+// Device-local exception: `libraryHandle` (a FileSystemDirectoryHandle in the
+// profile collection) is structured-clone-only — it cannot serialize to JSON and
+// is meaningless on another device. It ALWAYS routes to IndexedDB, signed in or
+// not. The Anthropic key never touches this module at all (sessionStorage/
+// localStorage only — see lib/anthropic.js).
+
+import { supabase, initAuth } from './supabase.js'
+import { makeSupabaseStore } from './storeSupabase.js'
 
 const DB_NAME = 'verastar'
 const DB_VERSION = 2 // v2: + domains collection
@@ -76,30 +84,102 @@ function tx(collection, mode, fn) {
   )
 }
 
-export const store = {
-  // Read one record by key. Resolves to the value or undefined.
+// The original IndexedDB impl, unchanged — the signed-out backend and the home
+// of device-local keys. Exported for the one-time account migration, which reads
+// local data directly regardless of which backend is active.
+export const idbStore = {
   get(collection, key) {
     return tx(collection, 'readonly', (os) => os.get(key))
   },
-
-  // Write one record under key. Value is stored as-is (structured clone).
   put(collection, key, value) {
     return tx(collection, 'readwrite', (os) => os.put(value, key))
   },
-
-  // Read every record in a collection as an array (values only).
   all(collection) {
     return tx(collection, 'readonly', (os) => os.getAll())
+  },
+  delete(collection, key) {
+    return tx(collection, 'readwrite', (os) => os.delete(key))
+  },
+  clear(collection) {
+    return tx(collection, 'readwrite', (os) => os.clear())
+  },
+}
+
+// [key, value] pairs for one local collection — the migration needs keys, which
+// getAll() alone doesn't give. Two reads in one readonly tx keeps them aligned.
+export function idbEntries(collection) {
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const transaction = db.transaction(collection, 'readonly')
+        const os = transaction.objectStore(collection)
+        const keysReq = os.getAllKeys()
+        const valsReq = os.getAll()
+        transaction.oncomplete = () => resolve(keysReq.result.map((k, i) => [k, valsReq.result[i]]))
+        transaction.onerror = () => reject(transaction.error)
+        transaction.onabort = () => reject(transaction.error)
+      }),
+  )
+}
+
+// --- device-local routing ---
+
+// Keys that must never reach the cloud backend. libraryHandle is a
+// FileSystemDirectoryHandle: structured-clone-only, meaningless off this device.
+const DEVICE_LOCAL_KEYS = new Set(['libraryHandle'])
+
+export function isDeviceLocal(collection, key) {
+  return collection === 'profile' && DEVICE_LOCAL_KEYS.has(key)
+}
+
+// --- the facade ---
+
+// Set by initStore() when a session exists; null means signed out → IndexedDB.
+let _cloud = null
+
+// Resolve auth and pick the backend. Must complete before the first store read —
+// App's boot effect awaits it ahead of getProfile()/loadDomains().
+export async function initStore() {
+  const user = await initAuth()
+  _cloud = user ? makeSupabaseStore({ client: supabase, userId: user.id }) : null
+  return user
+}
+
+function backend() {
+  return _cloud || idbStore
+}
+
+export const store = {
+  // Read one record by key. Resolves to the value or undefined.
+  get(collection, key) {
+    return isDeviceLocal(collection, key) ? idbStore.get(collection, key) : backend().get(collection, key)
+  },
+
+  // Write one record under key.
+  put(collection, key, value) {
+    return isDeviceLocal(collection, key) ? idbStore.put(collection, key, value) : backend().put(collection, key, value)
+  },
+
+  // Read every record in a collection as an array (values only). Signed in, this
+  // reads the cloud — device-local keys live only in IndexedDB, so they never
+  // appear here (nothing depends on them appearing; library.js gets the handle by key).
+  all(collection) {
+    return backend().all(collection)
   },
 
   // Delete one record by key.
   delete(collection, key) {
-    return tx(collection, 'readwrite', (os) => os.delete(key))
+    return isDeviceLocal(collection, key) ? idbStore.delete(collection, key) : backend().delete(collection, key)
   },
 
-  // Empty a collection.
+  // Empty a collection. Signed in, clearing `profile` also clears the device-local
+  // slot so "erase everything" can't leave a stale folder handle behind — parity
+  // with what the signed-out clear has always done.
   clear(collection) {
-    return tx(collection, 'readwrite', (os) => os.clear())
+    if (_cloud && collection === 'profile') {
+      return Promise.all([_cloud.clear(collection), idbStore.clear(collection)]).then(() => undefined)
+    }
+    return backend().clear(collection)
   },
 }
 

@@ -17,6 +17,7 @@ import {
   syncAllToLibrary,
 } from '../lib/library.js'
 import { store } from '../lib/store.js'
+import { isSignedIn } from '../lib/supabase.js'
 import { loadConcepts } from '../pipeline/graph.js'
 
 // The folder-map explainer — what lives in the vault. Static; mirrors the on-disk layout.
@@ -135,7 +136,10 @@ export default function FileToDisk({ embedded = false }) {
           </div>
           <p style={{ margin: '12px 0 0', fontSize: 15, color: 'var(--color-fg-dim)', maxWidth: 640, lineHeight: 1.6 }}>
             Verastar writes your saved papers, synthesized concepts, and Weekend Read straight into a folder you pick —
-            plain markdown you own, openable in Finder. The app only ever touches that one folder. Nothing leaves your machine.
+            plain markdown you own, openable in Finder. The app only ever touches that one folder.{' '}
+            {isSignedIn()
+              ? 'Your account keeps the library in sync on every device — this folder is your own copy, in files any agent can read.'
+              : 'Nothing leaves your machine.'}
           </p>
         </>
       )}
