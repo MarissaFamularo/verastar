@@ -252,3 +252,15 @@ export function readmeMd({ profileName, counts } = {}) {
     '',
   ].join('\n')
 }
+
+// Remove one week's section from the connections ledger (everything from its
+// heading up to the next week heading, or the end). Lets a re-drained or
+// same-day-regenerated Weekend Read replace its entry instead of stacking a
+// duplicate under the fresh prepend — the ledger stays one section per week.
+export function removeWeekSection(text, date) {
+  const marker = `## Week of ${date}`
+  const start = (text || '').indexOf(marker)
+  if (start === -1) return text || ''
+  const next = text.indexOf('\n## Week of ', start + marker.length)
+  return next === -1 ? text.slice(0, start).replace(/\n+$/, '') : text.slice(0, start) + text.slice(next + 1)
+}

@@ -12,6 +12,7 @@ import {
   digestMd,
   connectionsEntryMd,
   readmeMd,
+  removeWeekSection,
 } from './libraryFormat.js'
 
 const paper = (over = {}) => ({
@@ -173,5 +174,46 @@ describe('readmeMd', () => {
   it('defaults counts to zero without throwing', () => {
     expect(() => readmeMd({})).not.toThrow()
     expect(readmeMd({})).toContain('**0** sources')
+  })
+})
+
+describe('removeWeekSection', () => {
+  const ledger = [
+    '## Week of 2026-07-21',
+    '',
+    'New opener.',
+    '',
+    '## Week of 2026-07-14',
+    '',
+    'Old opener.',
+    '',
+  ].join('\n')
+
+  it('removes exactly one week, leaving the others intact', () => {
+    const out = removeWeekSection(ledger, '2026-07-21')
+    expect(out).not.toContain('New opener.')
+    expect(out).toContain('## Week of 2026-07-14')
+    expect(out).toContain('Old opener.')
+  })
+
+  it('removes a middle/last week without touching the newest', () => {
+    const out = removeWeekSection(ledger, '2026-07-14')
+    expect(out).toContain('New opener.')
+    expect(out).not.toContain('2026-07-14')
+  })
+
+  it('returns the text unchanged when the week is absent, and tolerates empty input', () => {
+    expect(removeWeekSection(ledger, '2026-01-01')).toBe(ledger)
+    expect(removeWeekSection('', '2026-07-21')).toBe('')
+    expect(removeWeekSection(null, '2026-07-21')).toBe('')
+  })
+
+  it('re-prepending after removal yields one section for the week (idempotent ledger)', () => {
+    const entry = connectionsEntryMd('2026-07-21', { opener: 'Regenerated opener.' }, new Map())
+    const rest = removeWeekSection(ledger, '2026-07-21')
+    const out = rest ? `${entry}\n${rest}` : entry
+    expect(out.match(/## Week of 2026-07-21/g)).toHaveLength(1)
+    expect(out).toContain('Regenerated opener.')
+    expect(out).toContain('Old opener.')
   })
 })

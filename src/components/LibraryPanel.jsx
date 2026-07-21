@@ -15,6 +15,9 @@ import {
   ensurePermission,
   hasPermission,
   syncAllToLibrary,
+  drainVault,
+  getLastDrain,
+  onDrainResult,
 } from '../lib/library.js'
 import { store } from '../lib/store.js'
 import { isSignedIn } from '../lib/supabase.js'
@@ -37,7 +40,12 @@ export default function FileToDisk({ embedded = false }) {
   const [progress, setProgress] = useState(null) // { done, total }
   const [error, setError] = useState('')
   const [counts, setCounts] = useState({ sources: 0, concepts: 0 })
+  // The most recent vault drain (this session) — the quiet "Caught up N notes" line.
+  // The drain itself runs from App boot / window focus / the Reconnect click below.
+  const [drained, setDrained] = useState(getLastDrain)
   const supported = isSupported()
+
+  useEffect(() => onDrainResult(setDrained), [])
 
   // On mount, decide which of three states we're in. Browsers reset File System Access permission on
   // a new session, so after a restart the folder is REMEMBERED but not permitted — we can't silently
@@ -85,6 +93,9 @@ export default function FileToDisk({ embedded = false }) {
       if (await ensurePermission(remembered)) {
         setHandle(remembered)
         setRemembered(null)
+        // Same folder, permission back — catch up anything saved since it disconnected
+        // (phone saves, or desktop saves from before the reconnect). Quiet, idempotent.
+        drainVault().catch(() => {})
       } else {
         setError('Permission wasn’t granted — click Reconnect and choose Allow to resume filing here.')
       }
@@ -145,8 +156,12 @@ export default function FileToDisk({ embedded = false }) {
       )}
 
       {!supported ? (
-        <p style={{ margin: '26px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>
-          Filing your Library to a folder on disk needs a Chromium browser (Chrome / Edge) on desktop.
+        // Phones can't write the folder (File System Access is desktop-only) — and that's the
+        // design, not a limitation to apologize for: the computer is the librarian.
+        <p style={{ margin: '26px 0 0', fontSize: 13.5, lineHeight: 1.6, color: 'var(--color-fg-muted)', maxWidth: 560 }}>
+          {isSignedIn()
+            ? 'Your computer is the librarian here. Papers you save on this phone go straight to your account — and the next time Verastar opens on your computer (Chrome or Edge), it files them into your folder on disk automatically.'
+            : 'Filing to a folder on disk is your computer’s job — open Verastar in Chrome or Edge on a desktop to connect a folder there. Papers saved on this phone stay in this browser.'}
         </p>
       ) : loading ? null : (
         <>
@@ -180,6 +195,15 @@ export default function FileToDisk({ embedded = false }) {
                 : 'Pick a folder once. Every paper you save then writes there automatically — plain markdown you own.'}
           </p>
 
+          {drained && (drained.written > 0 || drained.weekends > 0) && (
+            <p style={{ margin: '10px 2px 0', fontSize: 12.5, fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>
+              ✓ Caught up{' '}
+              {drained.written > 0 && `${drained.written} note${drained.written === 1 ? '' : 's'}`}
+              {drained.written > 0 && drained.weekends > 0 && ' and '}
+              {drained.weekends > 0 && 'your weekend read'}
+              {' '}from your phone.
+            </p>
+          )}
           {error && <p style={{ margin: '10px 2px 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{error}</p>}
           {remembered && (
             <button onClick={handleConnect} className="cursor-pointer" style={{ margin: '8px 2px 0', display: 'block', fontSize: 12, color: 'var(--color-fg-muted)', background: 'transparent', border: 0 }}>or choose a different folder</button>

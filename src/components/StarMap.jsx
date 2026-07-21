@@ -110,17 +110,61 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
       }
       return null
     }
-    // --- input: pan / zoom / drag / hover / click ---
-    let down = null // { sx, sy, moved, node }
-    canvas.addEventListener('mousedown', (ev) => {
-      const node = nodeAt(ev.offsetX, ev.offsetY)
-      down = { sx: ev.offsetX, sy: ev.offsetY, moved: false, node }
+    // --- input: pan / zoom / drag / tap / hover ---
+    // Pointer Events so mouse and touch share one path (the canvas is touch-action:none,
+    // so the page never scroll-fights the map). One pointer pans, drags a star, or taps
+    // to select — hover→tap is exactly this: on a phone the tap does what hover+click do
+    // on desktop. A second finger turns the gesture into a pinch-zoom around the midpoint.
+    const pointers = new Map() // pointerId -> { x, y }
+    let down = null // { sx, sy, slop, moved, node }
+    let pinch = null // { dist, cx, cy }
+    const pinchState = () => {
+      const [a, b] = [...pointers.values()]
+      return { dist: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }
+    }
+    canvas.addEventListener('pointerdown', (ev) => {
+      // Capture so a drag that leaves the canvas still ends cleanly. Guarded: capturing
+      // an already-released pointer throws, and that must never kill the tap handling.
+      try {
+        canvas.setPointerCapture(ev.pointerId)
+      } catch {
+        /* fine — events still arrive while the pointer stays over the canvas */
+      }
+      pointers.set(ev.pointerId, { x: ev.offsetX, y: ev.offsetY })
+      if (pointers.size === 2) {
+        // Second finger: whatever the first was doing becomes a pinch.
+        if (down?.node) {
+          const s = eng.sim.get(down.node.id)
+          if (s) s.pinned = false
+        }
+        down = null
+        pinch = pinchState()
+      } else if (pointers.size === 1) {
+        const node = nodeAt(ev.offsetX, ev.offsetY)
+        // Fingers wobble more than mice — a looser slop keeps a touch tap a tap.
+        down = { sx: ev.offsetX, sy: ev.offsetY, slop: ev.pointerType === 'touch' ? 9 : 3, moved: false, node }
+      }
     })
-    canvas.addEventListener('mousemove', (ev) => {
+    canvas.addEventListener('pointermove', (ev) => {
+      if (pointers.has(ev.pointerId)) pointers.set(ev.pointerId, { x: ev.offsetX, y: ev.offsetY })
+      if (pinch && pointers.size >= 2) {
+        const next = pinchState()
+        if (pinch.dist > 0 && next.dist > 0) {
+          const before = toWorld(next.cx, next.cy)
+          eng.camera.scale = Math.min(3, Math.max(0.35, eng.camera.scale * (next.dist / pinch.dist)))
+          const after = toWorld(next.cx, next.cy)
+          eng.camera.x += after.x - before.x
+          eng.camera.y += after.y - before.y
+          eng.camera.x += (next.cx - pinch.cx) / eng.camera.scale
+          eng.camera.y += (next.cy - pinch.cy) / eng.camera.scale
+        }
+        pinch = next
+        return
+      }
       if (down) {
         const dx = ev.offsetX - down.sx
         const dy = ev.offsetY - down.sy
-        if (Math.abs(dx) + Math.abs(dy) > 3) down.moved = true
+        if (Math.abs(dx) + Math.abs(dy) > down.slop) down.moved = true
         if (down.moved) {
           if (down.node) {
             const s = eng.sim.get(down.node.id)
@@ -141,11 +185,18 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
         }
         return
       }
-      // hover
-      eng.hoverNode = nodeAt(ev.offsetX, ev.offsetY)
-      canvas.style.cursor = eng.hoverNode ? 'pointer' : 'grab'
+      // hover — a mouse-only nicety; touch selects by tapping
+      if (ev.pointerType === 'mouse') {
+        eng.hoverNode = nodeAt(ev.offsetX, ev.offsetY)
+        canvas.style.cursor = eng.hoverNode ? 'pointer' : 'grab'
+      }
     })
-    window.addEventListener('mouseup', () => {
+    const endPointer = (ev) => {
+      if (!pointers.delete(ev.pointerId)) return
+      if (pinch) {
+        if (pointers.size < 2) pinch = null
+        return
+      }
       if (!down) return
       const wasDrag = down.moved
       const node = down.node
@@ -153,12 +204,14 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
         const s = eng.sim.get(node.id)
         if (s) s.pinned = false
       }
-      if (!wasDrag) {
+      if (!wasDrag && ev.type !== 'pointercancel') {
         if (node) cbRef.current.onSelectNode?.(node)
         else cbRef.current.onBackground?.()
       }
       down = null
-    })
+    }
+    canvas.addEventListener('pointerup', endPointer)
+    canvas.addEventListener('pointercancel', endPointer)
     canvas.addEventListener(
       'wheel',
       (ev) => {
@@ -444,9 +497,12 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
   }, [edges])
 
   return (
+    // Absolutely fill the field: on the stacked phone layout the field's height comes
+    // from min-height, where a child's percentage height collapses — absolute
+    // positioning resolves against the field's real box on both layouts.
     <canvas
       ref={canvasRef}
-      className="h-full w-full touch-none select-none rounded-xl"
+      className="absolute inset-0 h-full w-full touch-none select-none rounded-xl"
       style={{ display: 'block', cursor: 'grab' }}
     />
   )

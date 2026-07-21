@@ -134,8 +134,16 @@ a:hover {
     width: auto !important;
     flex: 1;
     max-width: 84px;
+    min-height: 52px; /* comfortable thumb target on the tab bar */
     padding: 7px 0 6px !important;
     gap: 4px !important;
+  }
+  /* iOS Safari zooms the page when a focused field is under 16px — keep phone
+     inputs at 16 so the key/email/search fields never jolt the layout. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
   .vs-rail-foot {
     margin: 0 0 0 6px !important;
@@ -181,8 +189,16 @@ a:hover {
   .vs-hero-h1 {
     font-size: 29px !important;
   }
+  /* iOS: 86vh can be taller than the *visible* viewport (dynamic toolbars), which
+     pushed the modal's top — and its ✕ — off-screen with no way to scroll to it.
+     Anchor the modal to the top and size it in dvh (the visible height unit). */
   .vs-modal-overlay {
     padding: 12px !important;
+    align-items: flex-start !important;
+    padding-top: max(14px, env(safe-area-inset-top)) !important;
+  }
+  .vs-modal-overlay > div {
+    max-height: 86dvh !important;
   }
   .vs-onboard-canvas {
     padding: 36px 18px !important;
