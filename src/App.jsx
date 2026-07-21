@@ -354,7 +354,7 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
                 <input type="checkbox" checked={eraseAll} onChange={(e) => setEraseAll(e.target.checked)} style={{ marginTop: 3, accentColor: '#e0605a' }} />
                 <span>
                   {account
-                    ? 'Also erase your library everywhere — saved papers, star map, and digests come out of your account (all devices), and the API key out of this browser. Files already written to your disk folder are never touched.'
+                    ? 'Also sign out and erase everything in this browser — saved papers, star map, digests, and the API key. Your account library is untouched: nothing is deleted from the cloud, and signing back in brings it all back. Files on disk are never touched either.'
                     : 'Also erase everything in this browser — saved papers, star map, digests, and the API key. Files already written to your disk folder are never touched.'}
                 </span>
               </label>
@@ -574,9 +574,13 @@ export default function App() {
   // additionally clears every browser-side collection + the key, then reloads for a
   // clean boot (module caches like domains hydrate from empty). Files on disk are
   // never touched — the vault only ever writes, and only on save/sync.
+  // Signed in, eraseAll is deliberately LOCAL-ONLY: sign out + clear this browser.
+  // The account library is never deletable from this button (her call: an
+  // all-devices erase here is way too easy to hit by accident).
   async function handleStartOver(eraseAll) {
     if (eraseAll) {
-      await Promise.all(COLLECTIONS.map((c) => store.clear(c)))
+      if (account) await signOut()
+      await Promise.all(COLLECTIONS.map((c) => idbStore.clear(c)))
       clearApiKey()
       window.location.reload()
       return
