@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react'
 import { hasApiKey, setApiKey, setNcbiKey, setNcbiEmail } from '../lib/anthropic.js'
+import { supabaseConfigured, sendMagicLink } from '../lib/supabase.js'
 import { saveProfile } from '../lib/store.js'
 import { draftProfile, DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import ChipGroup from './ChipGroup.jsx'
@@ -112,13 +113,17 @@ function DraftingConstellation() {
 }
 
 export default function OnboardingQuiz({ onDone, preview = false }) {
-  const [step, setStep] = useState('welcome') // welcome | connect | intake | drafting | review
+  const [step, setStep] = useState('welcome') // welcome | signin | connect | intake | drafting | review
   const [keyInput, setKeyInput] = useState('')
   const [ncbiInput, setNcbiInput] = useState('')
   const [emailInput, setEmailInput] = useState('')
   const [answers, setAnswers] = useState({})
   const [draft, setDraft] = useState(null) // { name, northStars, projects, rubric:{criteria,selectCount} }
   const [error, setError] = useState('')
+  // Returning-user sign-in from the welcome screen (accounts configured only).
+  const [signinEmail, setSigninEmail] = useState('')
+  const [signinState, setSigninState] = useState('idle') // idle | sending | sent | error
+  const [signinError, setSigninError] = useState('')
   const keySet = hasApiKey()
   const answered = QUESTIONS.some((q) => (answers[q.key] || '').trim())
 
@@ -160,6 +165,23 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
     }
     setError('')
     setStep('intake')
+  }
+
+  // Send the returning-user magic link. Finishing sign-in is the emailed link's job:
+  // opening it lands a session, App reboots onto the cloud profile, and this flow
+  // never resumes — so there's nothing to persist or call back here.
+  async function sendSigninLink(e) {
+    e.preventDefault()
+    if (!signinEmail.trim()) return
+    setSigninState('sending')
+    setSigninError('')
+    try {
+      await sendMagicLink(signinEmail.trim())
+      setSigninState('sent')
+    } catch (err) {
+      setSigninError(err?.message || String(err))
+      setSigninState('error')
+    }
   }
 
   function useDemo() {
@@ -215,7 +237,66 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
           <p style={{ margin: '-6px 0 0', fontSize: 12, color: 'var(--color-fg-faint)' }}>
             A sample profile, no key needed — in demo mode nothing leaves this browser.
           </p>
+          {/* Returning users skip setup entirely — their library lives in their account.
+              Hidden in ?firstrun=1 preview: sending a link is a real action, and preview saves nothing. */}
+          {supabaseConfigured && !preview && (
+            <button onClick={() => setStep('signin')} className="cursor-pointer" style={{ ...ghostLink, marginTop: 6, color: 'var(--color-fg-soft)' }}>
+              Have an account? <span style={{ color: 'var(--color-accent)' }}>Sign in</span>
+            </button>
+          )}
         </div>
+      </div>
+    )
+  }
+
+  // ===== SIGN IN (returning user on a new device) =====
+  if (step === 'signin') {
+    return (
+      <div>
+        <p style={stepMark}>SIGN IN</p>
+        <h2 className="vs-step-title" style={stepTitle}>Welcome back.</h2>
+        <p style={stepLede}>
+          Your library lives in your account. Enter the email you signed up with and we&rsquo;ll
+          send a one-time sign-in link — open it on this device and your library follows you here.
+          No password, ever.
+        </p>
+        {signinState === 'sent' ? (
+          <div style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
+            <span style={{ fontWeight: 600 }}>Link sent to {signinEmail.trim()}</span> — open it on this
+            device to finish signing in.
+          </div>
+        ) : (
+          <form onSubmit={sendSigninLink} style={{ marginTop: 24, maxWidth: 520 }}>
+            <label style={fieldLabel}>Account email</label>
+            <input
+              type="email"
+              value={signinEmail}
+              onChange={(e) => setSigninEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              autoFocus
+              style={inputStyle}
+            />
+            {signinState === 'error' && (
+              <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the link:</span> {signinError}
+              </div>
+            )}
+            <div className="flex items-center" style={{ marginTop: 20, gap: 18 }}>
+              <button type="submit" disabled={signinState === 'sending'} className="cursor-pointer" style={{ ...primaryBtn, opacity: signinState === 'sending' ? 0.6 : 1 }}>
+                {signinState === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
+              </button>
+              <button type="button" onClick={() => { setStep('welcome'); setSigninState('idle'); setSigninError('') }} className="cursor-pointer" style={ghostLink}>
+                ← Back
+              </button>
+            </div>
+          </form>
+        )}
+        {signinState === 'sent' && (
+          <button onClick={() => { setStep('welcome'); setSigninState('idle') }} className="cursor-pointer" style={{ ...ghostLink, marginTop: 18 }}>
+            ← Back
+          </button>
+        )}
       </div>
     )
   }
