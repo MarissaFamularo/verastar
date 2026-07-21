@@ -23,6 +23,8 @@ import {
 import { proposeConnections } from '../pipeline/connect.js'
 import { listDomains, PROJECT_COLOR, domainColor, domainLabel } from '../lib/domains.js'
 import { topicIndex } from '../lib/kb.js'
+import { isSignedIn } from '../lib/supabase.js'
+import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 import StarMap from './StarMap.jsx'
 
 const KIND_LABEL = { northStar: 'North star', project: 'Active Work', concept: 'Concept' }
@@ -38,15 +40,6 @@ export default function ConstellationView() {
   const [error, setError] = useState('')
   const keySet = hasApiKey()
   const didInit = useRef(false)
-  // The map is a pan/zoom/hover surface — on a phone it's cramped and labels collide, so
-  // small screens get a friendly pointer to the desktop instead (for now).
-  const [smallScreen, setSmallScreen] = useState(() => window.matchMedia('(max-width: 760px)').matches)
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 760px)')
-    const onChange = (e) => setSmallScreen(e.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
 
   // Topic (hub) colors — one hue per constellation; satellites inherit their hub's color.
   // Every star being one "Vascular Surgery" red made the map an undifferentiated blob for a
@@ -68,6 +61,13 @@ export default function ConstellationView() {
     setPapers(kb)
     return { nodes, edges }
   }
+
+  // Signed in, papers saved on the phone grow the map while this tab is
+  // backgrounded — refetch on focus. Data-level (setState into the live map),
+  // never while a propose/load is in flight.
+  useWindowFocusRefresh(() => {
+    if (isSignedIn() && !busy) refresh().catch(() => {})
+  })
 
   // On mount: sync anchors from the profile, notice the free structural connections between
   // the concept stars, then render. (Concept stars are created at deposit time.)
@@ -162,36 +162,12 @@ export default function ConstellationView() {
         : note
           ? note
           : connectionCount
-            ? 'Tap or hover a star to light its connections; click to read its evidence.'
+            ? 'Tap a star to light its connections and read its evidence; drag to roam, pinch or scroll to zoom.'
             : 'Save papers from today\'s digest — they group into concept stars that link themselves.'
 
-  if (smallScreen) {
-    const conceptN = nodes.filter((n) => n.kind === 'concept').length
-    return (
-      <div className="relative flex items-center justify-center" style={{ minHeight: '100%', padding: '48px 24px', background: 'radial-gradient(120% 90% at 60% 30%,#141a2e,#080a12 70%)' }}>
-        <div className="vs-stars absolute" style={{ inset: 0, opacity: 1, pointerEvents: 'none' }} />
-        <div className="relative" style={{ maxWidth: 380, textAlign: 'center' }}>
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" strokeWidth="1.5" style={{ opacity: 0.9 }}>
-            <path d="M5 18 L11 8 L17 13 L20.5 4.5" opacity=".5" />
-            <circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none" />
-            <circle cx="11" cy="8" r="2.2" fill="currentColor" stroke="none" />
-            <circle cx="17" cy="13" r="1.4" fill="currentColor" stroke="none" />
-            <circle cx="20.5" cy="4.5" r="1" fill="currentColor" stroke="none" />
-          </svg>
-          <h2 style={{ margin: '14px 0 0', fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 500, color: 'var(--color-fg)' }}>
-            The Star Map needs a bigger sky.
-          </h2>
-          <p style={{ margin: '12px 0 0', fontSize: 14.5, lineHeight: 1.6, color: 'var(--color-fg-dim)' }}>
-            {conceptN > 0
-              ? `Your ${conceptN} concept star${conceptN === 1 ? '' : 's'} ${conceptN === 1 ? 'is' : 'are'} mapped and waiting — open Verastar on a computer to roam the constellation.`
-              : 'Open Verastar on a computer to roam the constellation as your library grows.'}{' '}
-            Everything else works right here on your phone.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
+  // Phones get the real map too (the mobile pass): StarMap speaks Pointer Events, so
+  // tap selects, drag pans, pinch zooms — and the CSS stacks the field over the detail
+  // panel. Hover is just the mouse's shortcut for what a tap does.
   return (
     <div className="vs-starmap flex" style={{ height: '100%', minHeight: '100%' }}>
       {/* star field */}

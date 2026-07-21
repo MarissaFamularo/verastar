@@ -17,6 +17,8 @@ import { buildKB, listTopics, topicIndex } from '../lib/kb.js'
 import { backfillOaPdfs } from '../pipeline/save.js'
 import { pmcUrl } from '../pipeline/openaccess.js'
 import { listDomains, domainColor, domainLabel } from '../lib/domains.js'
+import { isSignedIn } from '../lib/supabase.js'
+import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 
@@ -51,6 +53,13 @@ export default function KnowledgeBase() {
       )
     })()
   }, [])
+
+  // Signed in, the phone may have saved papers while this tab was backgrounded —
+  // pull fresh data on focus. Pure setState refresh; nothing remounts. Skipped
+  // during a re-file so the progress flow can't have records swapped under it.
+  useWindowFocusRefresh(() => {
+    if (isSignedIn() && !refiling) refresh().catch(() => {})
+  })
 
   const { groups, unfiled, counts } = useMemo(
     () => buildKB(concepts, papers, { query, domain, topic, edges }),

@@ -13,6 +13,7 @@
 
 import { store, getProfile } from './store.js'
 import { resolveOaLink, oaPatch } from '../pipeline/openaccess.js'
+import { computeDrain, stampVaultWritten, weekendKey } from './drain.js'
 import {
   sourceSlug,
   conceptSlug,
@@ -21,6 +22,7 @@ import {
   digestMd,
   connectionsEntryMd,
   readmeMd,
+  removeWeekSection,
 } from './libraryFormat.js'
 
 const HANDLE_KEY = 'libraryHandle'
@@ -120,6 +122,20 @@ async function readFileText(rootHandle, path) {
   }
 }
 
+// --- vault-written stamps -------------------------------------------------------------------------
+
+// Mark a record's note as landed on disk (see lib/drain.js — the drain is derived from these
+// stamps, not a queue). Re-reads the live record so a background enrichment patch that raced the
+// write is never clobbered. Quietly skips records that vanished meanwhile.
+async function stampRecord(collection, key, nowIso) {
+  try {
+    const cur = await store.get(collection, key)
+    if (cur) await store.put(collection, key, stampVaultWritten(cur, nowIso))
+  } catch {
+    /* an unstamped record just means one redundant rewrite on the next drain */
+  }
+}
+
 // --- internal shared writers ---------------------------------------------------------------------
 
 // The papers filed under a concept (mirrors deposit.js membership: conceptId match OR sourcePmids).
@@ -170,6 +186,7 @@ export async function depositPaperToLibrary(paper) {
   }
 
   await refreshReadme(root)
+  await stampRecord('papers', paper.id, new Date().toISOString())
 }
 
 // Freeze a digest (a list of { title, citation, tier, finding }) to digests/<date>_digest.md.
@@ -181,6 +198,9 @@ export async function writeDigestToLibrary(date, entries) {
 
 // Prepend this week's Weekend Read to connections.md (newest-first). Builds the pmid→paper lookup
 // from the store so each thread's converging papers resolve to a title + citation + link.
+// Idempotent per week: an existing section for the same date is replaced, not stacked — so the
+// vault drain and a same-day regenerate both refresh the entry instead of duplicating it. Stamps
+// the weekend record afterwards so the drain knows this read has landed on disk.
 export async function appendConnectionsToLibrary(date, weekend) {
   const root = await activeRoot()
   if (!root) return
@@ -188,9 +208,10 @@ export async function appendConnectionsToLibrary(date, weekend) {
   const lookup = new Map()
   for (const p of papers) lookup.set(String(p.pmid || p.id), { title: p.title, citation: p.citation })
   const entry = connectionsEntryMd(date, weekend, lookup)
-  const existing = (await readFileText(root, CONNECTIONS_FILE)) || ''
+  const existing = removeWeekSection((await readFileText(root, CONNECTIONS_FILE)) || '', date)
   const body = existing ? `${entry}\n${existing}` : entry
   await writeFileInDir(root, CONNECTIONS_FILE, body)
+  await stampRecord('digests', `weekend:${date}`, new Date().toISOString())
 }
 
 // The demo backfill / bulletproof filming path: write EVERY saved paper, every concept note, a
@@ -223,6 +244,7 @@ export async function syncAllToLibrary(onProgress) {
     }
     const slug = sourceSlug(p)
     await writeFileInDir(root, `sources/${slug}.md`, sourceNoteMd(p))
+    await stampRecord('papers', p.id, new Date().toISOString())
     step(`sources/${slug}.md`)
   }
 
@@ -247,4 +269,70 @@ export async function syncAllToLibrary(onProgress) {
   step('README.md')
 
   return { written: done }
+}
+
+// --- the vault drain ------------------------------------------------------------------------------
+
+// Catch the folder up with everything saved away from this desktop (the phone, or a session with
+// the folder disconnected). Which records need writing is pure, tested logic (lib/drain.js) over
+// the vaultWrittenAt stamps; this function is only the disk side-effect. Permission is QUERIED,
+// never requested — no gesture, no prompt: a remembered-but-not-regranted folder simply waits for
+// the Reconnect click in File to Disk, which calls this again. Idempotent (each write stamps its
+// record), so a second open — or boot + focus firing together — writes nothing new.
+
+let _lastDrain = null // { written, weekends, at } of the most recent non-empty drain this session
+const _drainListeners = new Set()
+
+export function getLastDrain() {
+  return _lastDrain
+}
+
+// Subscribe File to Disk's quiet "Caught up N notes" line. Returns an unsubscribe.
+export function onDrainResult(fn) {
+  _drainListeners.add(fn)
+  return () => _drainListeners.delete(fn)
+}
+
+let _draining = null // concurrent triggers (boot + window focus) share one run
+
+export function drainVault() {
+  if (_draining) return _draining
+  _draining = (async () => {
+    if (!isSupported()) return { written: 0 }
+    const handle = await getStoredHandle()
+    if (!handle || !(await hasPermission(handle))) return { written: 0 }
+
+    const [papers, digests, nodes] = await Promise.all([
+      store.all('papers'),
+      store.all('digests'),
+      store.all('graphNodes'),
+    ])
+    const drain = computeDrain({ papers, digests })
+    if (!drain.papers.length && !drain.weekends.length) return { written: 0 }
+
+    let written = 0
+    for (const p of drain.papers) {
+      const slug = sourceSlug(p)
+      await writeFileInDir(handle, `sources/${slug}.md`, sourceNoteMd(p))
+      await stampRecord('papers', p.id, new Date().toISOString())
+      written++
+    }
+    for (const id of drain.conceptIds) {
+      const node = (nodes || []).find((n) => n.id === id)
+      if (node) await writeConceptNote(handle, node, papers)
+    }
+    // Oldest first, so the newest-first ledger ends up in order. appendConnectionsToLibrary
+    // replaces-then-prepends and stamps the record itself.
+    for (const w of drain.weekends) {
+      await appendConnectionsToLibrary(weekendKey(w).slice('weekend:'.length), w.read)
+    }
+    if (written) await refreshReadme(handle)
+
+    _lastDrain = { written, weekends: drain.weekends.length, at: new Date().toISOString() }
+    for (const fn of _drainListeners) fn(_lastDrain)
+    return _lastDrain
+  })().finally(() => {
+    _draining = null
+  })
+  return _draining
 }

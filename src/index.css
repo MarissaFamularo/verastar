@@ -134,8 +134,16 @@ a:hover {
     width: auto !important;
     flex: 1;
     max-width: 84px;
+    min-height: 52px; /* comfortable thumb target on the tab bar */
     padding: 7px 0 6px !important;
     gap: 4px !important;
+  }
+  /* iOS Safari zooms the page when a focused field is under 16px — keep phone
+     inputs at 16 so the key/email/search fields never jolt the layout. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
   .vs-rail-foot {
     margin: 0 0 0 6px !important;

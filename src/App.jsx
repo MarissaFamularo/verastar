@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { setApiKey, hasApiKey, clearApiKey, isKeyRemembered, ping } from './lib/anthropic.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
-import { supabase, supabaseConfigured, currentUser, sendMagicLink, signOut } from './lib/supabase.js'
+import { supabase, supabaseConfigured, currentUser, sendMagicLink, signOut, isSignedIn } from './lib/supabase.js'
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
+import { drainVault } from './lib/library.js'
+import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
@@ -539,12 +541,15 @@ export default function App() {
       }
       setOnboarded(!!p?.onboarded)
       setProfile(p || null)
+      // Vault drain: catch the flat-file folder up with anything saved away from
+      // this desktop (phone saves land here). Quiet no-op unless a folder is still
+      // permitted this session; the Reconnect click in File to Disk re-triggers it.
+      drainVault().catch(() => {})
     }).catch((err) => setBootError(err?.message || String(err)))
   }, [])
 
   // Derive weekly counts from real saved papers (defensive on shape).
-  useEffect(() => {
-    if (onboarded !== true) return
+  function refreshCounts() {
     store.all('papers').then((papers = []) => {
       setCounts({
         verified: papers.filter((p) => p?.verified || p?.tier).length,
@@ -552,7 +557,18 @@ export default function App() {
         flagged: papers.filter((p) => p?.flagged).length,
       })
     }).catch(() => {})
+  }
+  useEffect(() => {
+    if (onboarded === true) refreshCounts()
   }, [onboarded, view])
+
+  // Coming back to this window: drain the vault again (the phone may have saved
+  // meanwhile) and, signed in, refetch the rail counts at the data level. No
+  // remounts — SpineCheck especially must survive a focus mid-digest-run.
+  useWindowFocusRefresh(() => {
+    drainVault().catch(() => {})
+    if (onboarded === true && isSignedIn()) refreshCounts()
+  })
 
   function handleSave(k, remember) {
     setApiKey(k, { remember })

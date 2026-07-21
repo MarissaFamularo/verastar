@@ -17,6 +17,8 @@ import { store, getProfile } from '../lib/store.js'
 import { hasApiKey } from '../lib/anthropic.js'
 import { synthesizeWeekendRead } from '../pipeline/weekend.js'
 import { appendConnectionsToLibrary } from '../lib/library.js'
+import { isSignedIn } from '../lib/supabase.js'
+import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 
 // Which kind of anchor a thread hangs off — colors the pill so projects/north stars/cross-cutting
 // read distinctly. Projects and north stars both glow gold (echoing the map); cross-cutting greys.
@@ -95,6 +97,24 @@ export default function WeekendRead() {
       setLoading(false)
     })()
   }, [])
+
+  // Signed in, a weekend read generated on the phone should appear here on focus.
+  // Data-level only, and never while THIS device is mid-generation — a paid Sonnet
+  // call's pending result must not race a stale reload.
+  useWindowFocusRefresh(() => {
+    if (!isSignedIn() || generating) return
+    ;(async () => {
+      const [p, digests] = await Promise.all([store.all('papers'), store.all('digests')])
+      setPapers(p || [])
+      const latest = (digests || [])
+        .filter((d) => d?.type === 'weekend' && d?.read)
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0]
+      if (latest && latest.createdAt !== generatedAt) {
+        setRead(latest.read)
+        setGeneratedAt(latest.createdAt || '')
+      }
+    })().catch(() => {})
+  })
 
   // pmid/id -> paper, so a thread's pmids resolve to full records for rendering.
   const byId = useMemo(() => {
