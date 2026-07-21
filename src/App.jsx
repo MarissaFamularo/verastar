@@ -216,7 +216,9 @@ function AccountSection({ account }) {
             </div>
           )}
           <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
-            Usage data may be analyzed, in aggregate, for research.
+            Signing in stores your literature library and usage events on our servers —
+            never patient data, and never sold. You always hold your own flat-file copy
+            on disk. Usage data may be analyzed, in aggregate, for research.
           </p>
         </>
       )}
