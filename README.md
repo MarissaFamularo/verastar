@@ -87,6 +87,16 @@ File System Access API, which Safari and Firefox don't support.
 Requires Node 18+. Run the test suite with `npm test` (181 tests, including
 adversarial false-verify cases).
 
+### Accounts & sync (optional)
+
+Without configuration, Verastar is local-only: everything stays in your browser's
+IndexedDB. To enable sign-in and cross-device sync, create a Supabase project with a
+`kv` + `events` schema (row-level security scoped to `auth.uid()`) and set
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (see `.env.example`). Signed in, your
+library lives in your account so it works on every device — and the disk folder
+remains your own plain-files copy. Your Anthropic key is never stored server-side
+either way.
+
 ---
 
 ## Status

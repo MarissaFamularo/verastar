@@ -163,8 +163,11 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
   }
 
   function useDemo() {
-    if (preview) { onDone?.(DEMO_PROFILE); return }
-    saveProfile({ ...DEMO_PROFILE }).then(() => onDone?.(DEMO_PROFILE))
+    // The demo flag is stamped here (not in pipeline/onboard.js) so the app can
+    // label demo mode honestly — pipeline stays untouched.
+    const demoProfile = { ...DEMO_PROFILE, demo: true }
+    if (preview) { onDone?.(demoProfile); return }
+    saveProfile(demoProfile).then(() => onDone?.(demoProfile))
   }
 
   async function save() {
@@ -209,6 +212,9 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
           <button onClick={useDemo} className="cursor-pointer" style={ghostLink}>
             Explore with a demo profile
           </button>
+          <p style={{ margin: '-6px 0 0', fontSize: 12, color: 'var(--color-fg-faint)' }}>
+            A sample profile, no key needed — in demo mode nothing leaves this browser.
+          </p>
         </div>
       </div>
     )
