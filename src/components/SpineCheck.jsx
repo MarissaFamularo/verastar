@@ -6,11 +6,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
-import { getProfile, store } from '../lib/store.js'
+import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import { saveDailyDigest, loadDailyDigest, clearDailyDigest } from '../lib/digestStore.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
-import { selectCandidates } from '../pipeline/select.js'
+import { selectCandidates, applyScoreFloor, normalizeScoreFloor, floorSummary } from '../pipeline/select.js'
+import { filterUnseen, seenIds, mergeSeen, capLedger } from '../pipeline/seen.js'
+import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { savePaper } from '../pipeline/save.js'
 import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
@@ -250,6 +252,9 @@ export default function SpineCheck() {
   const [selectedIds, setSelectedIds] = useState(() => new Set()) // ids chosen for the digest
   const [poolOpen, setPoolOpen] = useState(false) // funnel is a disclosure — collapsed by default
   const [scanError, setScanError] = useState('')
+  // Honest non-failures — "nothing new since yesterday", "4 of 38 cleared your bar".
+  // Kept apart from scanError so a legitimate short day never renders in the error red.
+  const [scanNote, setScanNote] = useState('')
   const [stages, setStages] = useState({})
   const [results, setResults] = useState([]) // runPaper results (live or showcase)
   const [triaged, setTriaged] = useState({}) // id -> { score, tier, finding, relevance }
@@ -434,8 +439,10 @@ export default function SpineCheck() {
     persistDigest({ results: collected, triaged: triagedNow })
   }
 
-  // Score a candidate pool against the current rubric and pre-check the top N. Shared by
-  // the initial scan and the re-rank button. `pool` is candidate stubs (metadata only).
+  // Score a candidate pool against the current rubric and pre-check the ones that EARNED a
+  // slot. Shared by the initial scan and the re-rank button. `pool` is candidate stubs
+  // (metadata only). Floor first, then the count cap — a thin day yields a short digest,
+  // never ten slots padded out with whatever scored highest among the mediocre.
   async function scorePool(pool) {
     const profile = await getProfile()
     const scored = await selectCandidates({
@@ -445,12 +452,32 @@ export default function SpineCheck() {
       candidates: pool,
     })
     setCandidates(scored)
-    const n = profile?.rubric?.selectCount ?? 10
-    const chosenIds = new Set(scored.slice(0, n).map((c) => c.id))
+    const { picked, cleared, total, floor } = applyScoreFloor(scored, {
+      floor: normalizeScoreFloor(profile?.rubric?.scoreFloor),
+      count: profile?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT,
+    })
+    const chosenIds = new Set(picked.map((c) => c.id))
     setSelectedIds(chosenIds)
+    setScanNote(floorSummary({ total, cleared, picked: picked.length, floor }))
     // The pool + picks survive a tab switch even before any digest runs.
     persistDigest({ candidates: scored, selectedIds: chosenIds })
-    return { scored, chosenIds }
+    return { scored, chosenIds, cleared, floor }
+  }
+
+  // Stamp a pool as shown. Called ONLY after a digest run has finished — an orphan stamp
+  // from a failed or abandoned run silently buries papers she never saw, which is the one
+  // failure here with no recovery. A repeat costs her two seconds; a false stamp costs a
+  // paper. The write is best-effort: a ledger that didn't save means a day of repeats, and
+  // that must never surface as a digest failure.
+  async function recordSeen(pool) {
+    if (!pool?.length) return
+    try {
+      const ledger = await store.get('seen', SEEN_KEY)
+      const next = capLedger(mergeSeen(ledger, pool, new Date().toISOString()))
+      await store.put('seen', SEEN_KEY, next)
+    } catch (err) {
+      console.warn('Seen ledger update failed (digest unaffected):', err.message)
+    }
   }
 
   // The product loop, in ONE click: search PubMed WIDE → score every candidate against the
@@ -459,6 +486,7 @@ export default function SpineCheck() {
   // re-rank against an edited rubric, or top up. The daily user never has to touch it.
   async function startScan() {
     setScanError('')
+    setScanNote('')
     ranRef.current = true
     setRestored(false)
     setResults([])
@@ -468,33 +496,52 @@ export default function SpineCheck() {
     clearDailyDigest().catch(console.warn)
     setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
     setSearching(true)
-    let pool = []
+    let fresh = []
     try {
       const profile = await getProfile()
-      pool = await searchCandidates({ northStars: profile?.northStars ?? [], retmax: 40, days: 90 })
+      const pool = await searchCandidates({ northStars: profile?.northStars ?? [], retmax: 40, days: 90 })
+      if (!pool.length) {
+        setSearching(false)
+        setScanError('No recent papers matched your north stars — broaden them or widen the window.')
+        return
+      }
+      // Cross-day dedup, BEFORE the scoring call: PubMed's newest-40 barely turns over
+      // overnight, so without this she re-reads yesterday's list. Papers already in her
+      // library count as seen too. Filtering here (not after scoring) means we never pay
+      // to score a paper we were always going to discard. The library read is fresh rather
+      // than the mounted savedIds state — a stale set here would re-serve a saved paper.
+      const [ledger, saved] = await Promise.all([store.get('seen', SEEN_KEY), store.all('papers')])
+      fresh = filterUnseen(pool, seenIds(ledger), saved || [])
     } catch (err) {
       setScanError(`PubMed search failed: ${err.message}`)
       setSearching(false)
       return
     }
     setSearching(false)
-    if (!pool.length) {
-      setScanError('No recent papers matched your north stars — broaden them or widen the window.')
+    if (!fresh.length) {
+      setScanNote(
+        'Nothing new since your last digest — every recent paper in your areas is already in your library or has been shown before.',
+      )
       return
     }
     setSelecting(true)
     let scored, chosenIds
     try {
-      ;({ scored, chosenIds } = await scorePool(pool))
+      ;({ scored, chosenIds } = await scorePool(fresh))
     } catch (err) {
       setScanError(`Selection failed: ${err.message}`)
       setSelecting(false)
       return
     }
     setSelecting(false)
-    // Auto-run the digest on the top picks — one button, digest pops.
+    // Auto-run the digest on the papers that cleared the floor — one button, digest pops.
+    // Nobody clearing it is a legitimate morning: scorePool has already said so plainly,
+    // the pool stays open below, and nothing is stamped seen (she was never shown a digest
+    // of them, so tomorrow may well surface them again against a lower bar).
     const chosen = scored.filter((c) => chosenIds.has(c.id))
-    if (chosen.length) await runList(chosen, { injectCorrupt: false })
+    if (!chosen.length) return
+    await runList(chosen, { injectCorrupt: false })
+    await recordSeen(scored) // LAST — the run finished, so the whole pool counts as shown
   }
 
   // Live re-rank: re-score the SAME cached pool against the (edited) rubric — no re-fetch,
@@ -503,6 +550,7 @@ export default function SpineCheck() {
     if (!candidates.length || selecting) return
     setSelecting(true)
     setScanError('')
+    setScanNote('')
     try {
       await scorePool(candidates.map(({ score, reason, ...c }) => c)) // strip old scores
     } catch (err) {
@@ -519,6 +567,11 @@ export default function SpineCheck() {
     if (!chosen.length) return
     await runList(chosen, { injectCorrupt: false })
     setPoolOpen(false)
+    // The WHOLE pool is stamped, not just the papers she ran: she was offered all of them
+    // in the funnel and passed on the rest, so re-offering them tomorrow is the repeat this
+    // ledger exists to stop. Also covers the hand-run path where the floor cleared nobody
+    // and startScan's auto-run never fired.
+    await recordSeen(candidates)
   }
 
   // Top up an existing digest: run ONLY the newly-checked candidates and append them, then
@@ -528,6 +581,8 @@ export default function SpineCheck() {
     const additions = candidates.filter((c) => selectedIds.has(c.id) && !digested.has(c.id))
     if (!additions.length) return
     await runList(additions, { append: true })
+    // mergeSeen keeps first-seen stamps, so re-stamping the pool on every top-up is a no-op.
+    await recordSeen(candidates)
   }
 
   function toggleCandidate(id) {
@@ -544,7 +599,10 @@ export default function SpineCheck() {
   // (registry match, the corruption catch) deterministically.
   async function runShowcase() {
     setScanError('')
+    setScanNote('')
     setCandidates([])
+    // Deliberately NOT recorded as seen: the three reference trials are a proof surface,
+    // not her morning, and burying them would break the demo on the second run.
     await runList(DEMO_PAPERS, { injectCorrupt: true })
   }
 
@@ -557,7 +615,8 @@ export default function SpineCheck() {
 
   const busy = running || searching || selecting
   const primaryLabel = searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Building digest…' : "Run today's digest"
-  const showEmpty = !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError
+  const showEmpty =
+    !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote
 
   return (
     <section>
@@ -599,6 +658,8 @@ export default function SpineCheck() {
       {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed wide for recent papers…</p>}
       {selecting && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is scoring every candidate against your rubric…</p>}
       {scanError && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{scanError}</p>}
+      {/* A short day and a nothing-new day are outcomes, not errors — muted, never red. */}
+      {scanNote && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: 'var(--color-fg-dim)', lineHeight: 1.55, maxWidth: 620 }}>{scanNote}</p>}
       {restored && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Restored your last digest — run again for fresh results.</p>}
       {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
       {showEmpty && (

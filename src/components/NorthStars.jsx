@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
+import { normalizeScoreFloor } from '../pipeline/select.js'
 import ChipGroup from './ChipGroup.jsx'
 import RubricEditor from './RubricEditor.jsx'
 
@@ -17,7 +18,11 @@ const PROJECT_SEED = ['Limb Preservation Program', 'COSMOS utilization study']
 export default function NorthStars() {
   const [stars, setStars] = useState([])
   const [projects, setProjects] = useState([])
-  const [rubric, setRubric] = useState({ criteria: DEFAULT_RUBRIC, selectCount: DEFAULT_SELECT_COUNT })
+  const [rubric, setRubric] = useState({
+    criteria: DEFAULT_RUBRIC,
+    selectCount: DEFAULT_SELECT_COUNT,
+    scoreFloor: normalizeScoreFloor(undefined),
+  })
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -27,6 +32,9 @@ export default function NorthStars() {
       setRubric({
         criteria: profile?.rubric?.criteria ?? DEFAULT_RUBRIC,
         selectCount: profile?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT,
+        // Profiles written before the floor existed have no scoreFloor — normalize
+        // rather than let `undefined` reach the input and blank the field.
+        scoreFloor: normalizeScoreFloor(profile?.rubric?.scoreFloor),
       })
       setLoaded(true)
     })
@@ -75,7 +83,12 @@ export default function NorthStars() {
       </div>
 
       <div style={{ marginTop: 24, borderTop: '1px solid var(--hairline)', paddingTop: 24 }}>
-        <RubricEditor criteria={rubric.criteria} selectCount={rubric.selectCount} onChange={setRubric} />
+        <RubricEditor
+          criteria={rubric.criteria}
+          selectCount={rubric.selectCount}
+          scoreFloor={rubric.scoreFloor}
+          onChange={setRubric}
+        />
       </div>
     </section>
   )

@@ -15,6 +15,7 @@ import { hasApiKey, setApiKey, setNcbiKey, setNcbiEmail } from '../lib/anthropic
 import { supabaseConfigured, sendMagicLink } from '../lib/supabase.js'
 import { saveProfile } from '../lib/store.js'
 import { draftProfile, DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
+import { normalizeScoreFloor } from '../pipeline/select.js'
 import ChipGroup from './ChipGroup.jsx'
 import RubricEditor from './RubricEditor.jsx'
 
@@ -200,6 +201,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
       rubric: {
         criteria: (draft.rubric?.criteria || DEFAULT_RUBRIC).trim(),
         selectCount: draft.rubric?.selectCount || DEFAULT_SELECT_COUNT,
+        scoreFloor: normalizeScoreFloor(draft.rubric?.scoreFloor),
       },
       onboarded: true,
     }
@@ -476,6 +478,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
         <RubricEditor
           criteria={draft?.rubric?.criteria ?? DEFAULT_RUBRIC}
           selectCount={draft?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT}
+          scoreFloor={normalizeScoreFloor(draft?.rubric?.scoreFloor)}
           onChange={(rubric) => setField({ rubric })}
         />
       </div>

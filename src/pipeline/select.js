@@ -6,6 +6,9 @@
 // no extraction. Only the selected top N go on to the expensive verify pipeline, so
 // searching wider costs almost nothing extra. Editing the rubric re-scores the SAME cached
 // pool (no re-fetch), which is what makes the live re-rank cheap.
+//
+// Selection is floor-then-cap, not top-N: a score floor decides who EARNED a slot and
+// selectCount only caps a good day. See applyScoreFloor at the bottom of this file.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 
@@ -77,4 +80,47 @@ export async function selectCandidates({
       return { ...c, score: s?.score ?? 0, reason: s?.reason ?? '' }
     })
     .sort((a, b) => b.score - a.score)
+}
+
+// --- the score floor: a slot has to be EARNED ---
+//
+// Taking the top N unconditionally means a thin day still fills ten slots, and slots
+// six through ten are padding she has to read to discover they were padding. Her own
+// rubric norm is the opposite: if two papers pass, the digest has two. The floor is the
+// bar; selectCount is only a ceiling on how much of a good day she wants.
+
+export const DEFAULT_SCORE_FLOOR = 60
+
+// Profiles predate this field, and the number arrives from a text input — anything
+// unusable falls back to the default rather than silently becoming a floor of 0 (which
+// would restore the padding this exists to stop).
+export function normalizeScoreFloor(raw) {
+  // null and '' both coerce to 0 through Number() — an absent field must not read as
+  // "she set the floor to zero", which is exactly the padding case.
+  if (raw === null || raw === undefined || raw === '') return DEFAULT_SCORE_FLOOR
+  const n = Math.round(Number(raw))
+  if (!Number.isFinite(n)) return DEFAULT_SCORE_FLOOR
+  return Math.min(Math.max(n, 0), 100)
+}
+
+// Floor first, THEN cap. `scored` is already sorted highest-first. Returns the picks
+// plus the counts the UI needs to say plainly what the floor did.
+export function applyScoreFloor(scored, { floor = DEFAULT_SCORE_FLOOR, count } = {}) {
+  const bar = normalizeScoreFloor(floor)
+  const ceiling = Number.isFinite(Number(count)) && Number(count) > 0 ? Math.round(Number(count)) : Infinity
+  const cleared = (scored || []).filter((c) => Number(c?.score ?? 0) >= bar)
+  return { picked: cleared.slice(0, ceiling), cleared: cleared.length, total: (scored || []).length, floor: bar }
+}
+
+// The one honest sentence about today's funnel. Empty when the floor did nothing worth
+// reporting (everything scored cleared it and fit). A zero day is stated as the floor
+// working, not as a failure — that distinction is the whole point of having a floor.
+export function floorSummary({ total = 0, cleared = 0, picked = 0, floor = DEFAULT_SCORE_FLOOR } = {}) {
+  if (!total) return ''
+  if (!cleared) return `Nothing cleared your bar today — ${total} paper${total === 1 ? '' : 's'} scored, none reached ${floor}. A thin day is a real answer, not an error.`
+  if (cleared < total) {
+    const trimmed = `${cleared} of ${total} cleared your bar today (score ${floor}+).`
+    return picked < cleared ? `${trimmed} The top ${picked} made the digest.` : trimmed
+  }
+  return picked < cleared ? `All ${total} cleared your bar — the top ${picked} made the digest.` : ''
 }
