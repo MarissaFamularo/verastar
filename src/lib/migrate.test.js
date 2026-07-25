@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { migrationRows, shouldOfferMigration, chunk, jsonSafe, MIGRATION_BATCH_SIZE } from './migrate.js'
-import { isDeviceLocal } from './store.js'
+import { isDeviceLocal, COLLECTIONS, SEEN_KEY } from './store.js'
 
 const USER = 'user-uuid-1'
 const NOW = '2026-07-21T12:00:00.000Z'
@@ -55,6 +55,16 @@ describe('migrationRows', () => {
 
   it('tolerates missing collections', () => {
     expect(migrationRows({ papers: undefined }, USER, NOW)).toEqual([])
+  })
+
+  // The migration walks COLLECTIONS, so a new collection is carried the moment it is
+  // declared — this locks that the seen ledger is declared and survives the move. Losing
+  // it on sign-in would resurface every paper she has already been shown.
+  it('carries the cross-day seen ledger into the account', () => {
+    expect(COLLECTIONS).toContain('seen')
+    const ledger = { ids: { 111: '2026-07-20' }, updatedAt: '2026-07-20' }
+    const rows = migrationRows({ seen: [[SEEN_KEY, ledger]] }, USER, NOW)
+    expect(rows).toEqual([{ user_id: USER, collection: 'seen', key: 'pmids', value: ledger, updated_at: NOW }])
   })
 })
 

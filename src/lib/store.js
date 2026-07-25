@@ -13,6 +13,7 @@
 //   - graphNodes: knowledge-graph nodes (papers + projects), keyed by id
 //   - graphEdges: knowledge-graph edges, keyed by id
 //   - domains   : the user's domain taxonomy { key, label, color }, keyed by key
+//   - seen      : ONE row — the cross-day dedup ledger of pmids already shown  [key 'pmids']
 //
 // Device-local exception: `libraryHandle` (a FileSystemDirectoryHandle in the
 // profile collection) is structured-clone-only — it cannot serialize to JSON and
@@ -24,8 +25,13 @@ import { supabase, initAuth } from './supabase.js'
 import { makeSupabaseStore } from './storeSupabase.js'
 
 const DB_NAME = 'verastar'
-const DB_VERSION = 2 // v2: + domains collection
-export const COLLECTIONS = ['profile', 'papers', 'digests', 'graphNodes', 'graphEdges', 'domains']
+const DB_VERSION = 3 // v3: + seen collection (v2: + domains)
+export const COLLECTIONS = ['profile', 'papers', 'digests', 'graphNodes', 'graphEdges', 'domains', 'seen']
+
+// The single row in `seen`. One record, not one per pmid: the ledger is read and written
+// whole on every digest run, and a per-pmid keyspace would mean thousands of cloud rows
+// for what is conceptually one document.
+export const SEEN_KEY = 'pmids'
 
 let _dbPromise = null
 
