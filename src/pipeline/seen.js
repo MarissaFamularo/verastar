@@ -78,6 +78,28 @@ export function mergeSeen(ledger, pmids, nowIso) {
   return { ids, updatedAt: stamp || base.updatedAt }
 }
 
+// What a finished run has actually earned the right to stamp. `outcomes` is one entry per
+// paper the pipeline ran, `{ id, error }`.
+//
+// A paper that ERRORED is never stamped. runPaper reports failure by returning `{ error }`
+// rather than throwing, so without this a network wobble mid-run would bury exactly the
+// papers it broke — she'd see a digest of error cards and never be offered those papers
+// again. The rest of the pool still counts: papers that ran clean, and papers she was
+// offered in the funnel and passed on (below the floor, or left unchecked) are papers she
+// saw. And a run where NOTHING succeeded is not a digest she was shown at all — it stamps
+// nothing, not even the untouched remainder of the pool.
+export function stampableIds(pool, outcomes) {
+  const ran = outcomes || []
+  if (!ran.some((o) => !o?.error)) return []
+  const failed = new Set(ran.filter((o) => o?.error).map((o) => candidateId(o)))
+  const out = []
+  for (const candidate of pool || []) {
+    const id = candidateId(candidate)
+    if (id && !failed.has(id)) out.push(id)
+  }
+  return out
+}
+
 // Keep the newest `max` entries by stamp. Ties break on pmid so eviction is
 // deterministic — a whole day's pool shares one stamp, and a ledger that reorders
 // itself between runs would evict different papers on every read.

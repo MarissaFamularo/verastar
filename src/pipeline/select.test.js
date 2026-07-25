@@ -92,10 +92,15 @@ describe('floorSummary', () => {
     expect(floorSummary({ total: 38, cleared: 14, picked: 10, floor: 60 })).toContain('The top 10 made the digest.')
   })
 
-  it('frames a zero day as the floor working, not a failure', () => {
-    const msg = floorSummary({ total: 12, cleared: 0, picked: 0, floor: 70 })
-    expect(msg).toContain('none reached 70')
-    expect(msg).toContain('not an error')
+  // A zero day states the count and stops — the muted note slot already says it isn't an
+  // error, and prose reassuring her that a short digest is legitimate reads as defensive.
+  it('reports a zero day as a bare fact', () => {
+    expect(floorSummary({ total: 12, cleared: 0, picked: 0, floor: 70 })).toBe(
+      'Nothing cleared your bar today — 12 papers scored, none reached 70.',
+    )
+    expect(floorSummary({ total: 1, cleared: 0, picked: 0, floor: 60 })).toBe(
+      'Nothing cleared your bar today — 1 paper scored, none reached 60.',
+    )
   })
 
   it('stays silent when the floor changed nothing', () => {

@@ -11,7 +11,7 @@ import { saveDailyDigest, loadDailyDigest, clearDailyDigest } from '../lib/diges
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates, applyScoreFloor, normalizeScoreFloor, floorSummary } from '../pipeline/select.js'
-import { filterUnseen, seenIds, mergeSeen, capLedger } from '../pipeline/seen.js'
+import { filterUnseen, seenIds, mergeSeen, capLedger, stampableIds } from '../pipeline/seen.js'
 import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { savePaper } from '../pipeline/save.js'
 import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
@@ -369,6 +369,10 @@ export default function SpineCheck() {
   // live scan, the reference-proof showcase, and incremental "add to digest". In append mode
   // we keep the existing results and only run papers not already in the digest — so topping
   // up later never re-extracts (the expensive Opus step) the papers already done.
+  //
+  // Returns the run's outcomes as [{ id, error }] — the seen ledger needs to know which
+  // papers actually made it, and runPaper reports failure in its return value rather than
+  // by throwing, so "runList resolved" does NOT mean "every paper ran".
   async function runList(papers, { injectCorrupt = false, append = false } = {}) {
     setRunning(true)
     ranRef.current = true
@@ -437,6 +441,7 @@ export default function SpineCheck() {
     }
     // Persist so a tab switch (which unmounts this component) never costs a re-run.
     persistDigest({ results: collected, triaged: triagedNow })
+    return collected.map((r) => ({ id: r.paper.id, error: r.error }))
   }
 
   // Score a candidate pool against the current rubric and pre-check the ones that EARNED a
@@ -467,13 +472,16 @@ export default function SpineCheck() {
   // Stamp a pool as shown. Called ONLY after a digest run has finished — an orphan stamp
   // from a failed or abandoned run silently buries papers she never saw, which is the one
   // failure here with no recovery. A repeat costs her two seconds; a false stamp costs a
-  // paper. The write is best-effort: a ledger that didn't save means a day of repeats, and
-  // that must never surface as a digest failure.
-  async function recordSeen(pool) {
-    if (!pool?.length) return
+  // paper. stampableIds enforces the rest of that rule: papers that errored are excluded,
+  // and a run where nothing succeeded stamps nothing. The write itself is best-effort — a
+  // ledger that didn't save means a day of repeats, and that must never surface as a
+  // digest failure.
+  async function recordSeen(pool, outcomes) {
+    const ids = stampableIds(pool, outcomes)
+    if (!ids.length) return
     try {
       const ledger = await store.get('seen', SEEN_KEY)
-      const next = capLedger(mergeSeen(ledger, pool, new Date().toISOString()))
+      const next = capLedger(mergeSeen(ledger, ids, new Date().toISOString()))
       await store.put('seen', SEEN_KEY, next)
     } catch (err) {
       console.warn('Seen ledger update failed (digest unaffected):', err.message)
@@ -540,8 +548,8 @@ export default function SpineCheck() {
     // of them, so tomorrow may well surface them again against a lower bar).
     const chosen = scored.filter((c) => chosenIds.has(c.id))
     if (!chosen.length) return
-    await runList(chosen, { injectCorrupt: false })
-    await recordSeen(scored) // LAST — the run finished, so the whole pool counts as shown
+    const outcomes = await runList(chosen, { injectCorrupt: false })
+    await recordSeen(scored, outcomes) // LAST — and only what actually ran or was passed over
   }
 
   // Live re-rank: re-score the SAME cached pool against the (edited) rubric — no re-fetch,
@@ -565,13 +573,13 @@ export default function SpineCheck() {
   async function runDigest() {
     const chosen = candidates.filter((c) => selectedIds.has(c.id))
     if (!chosen.length) return
-    await runList(chosen, { injectCorrupt: false })
+    const outcomes = await runList(chosen, { injectCorrupt: false })
     setPoolOpen(false)
-    // The WHOLE pool is stamped, not just the papers she ran: she was offered all of them
-    // in the funnel and passed on the rest, so re-offering them tomorrow is the repeat this
-    // ledger exists to stop. Also covers the hand-run path where the floor cleared nobody
-    // and startScan's auto-run never fired.
-    await recordSeen(candidates)
+    // The whole pool is offered up, not just the papers she ran: she saw the rest in the
+    // funnel and passed on them, so re-offering those tomorrow is the repeat this ledger
+    // exists to stop. Also covers the hand-run path where the floor cleared nobody and
+    // startScan's auto-run never fired. Papers that errored are dropped by stampableIds.
+    await recordSeen(candidates, outcomes)
   }
 
   // Top up an existing digest: run ONLY the newly-checked candidates and append them, then
@@ -580,9 +588,11 @@ export default function SpineCheck() {
     const digested = new Set(results.map((r) => r.paper.id))
     const additions = candidates.filter((c) => selectedIds.has(c.id) && !digested.has(c.id))
     if (!additions.length) return
-    await runList(additions, { append: true })
+    // Append mode returns outcomes for the WHOLE digest, so a paper that errored on an
+    // earlier run stays excluded here too — it still hasn't been shown to her.
+    const outcomes = await runList(additions, { append: true })
     // mergeSeen keeps first-seen stamps, so re-stamping the pool on every top-up is a no-op.
-    await recordSeen(candidates)
+    await recordSeen(candidates, outcomes)
   }
 
   function toggleCandidate(id) {

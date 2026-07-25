@@ -113,11 +113,13 @@ export function applyScoreFloor(scored, { floor = DEFAULT_SCORE_FLOOR, count } =
 }
 
 // The one honest sentence about today's funnel. Empty when the floor did nothing worth
-// reporting (everything scored cleared it and fit). A zero day is stated as the floor
-// working, not as a failure — that distinction is the whole point of having a floor.
+// reporting (everything scored cleared it and fit). A zero day states the count and stops:
+// it renders in the muted note slot rather than the error red, which is what says it isn't
+// a failure. Reassuring her in prose that a short digest is legitimate would read as the
+// app defending itself.
 export function floorSummary({ total = 0, cleared = 0, picked = 0, floor = DEFAULT_SCORE_FLOOR } = {}) {
   if (!total) return ''
-  if (!cleared) return `Nothing cleared your bar today — ${total} paper${total === 1 ? '' : 's'} scored, none reached ${floor}. A thin day is a real answer, not an error.`
+  if (!cleared) return `Nothing cleared your bar today — ${total} paper${total === 1 ? '' : 's'} scored, none reached ${floor}.`
   if (cleared < total) {
     const trimmed = `${cleared} of ${total} cleared your bar today (score ${floor}+).`
     return picked < cleared ? `${trimmed} The top ${picked} made the digest.` : trimmed

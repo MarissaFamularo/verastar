@@ -11,6 +11,7 @@ import {
   filterUnseen,
   mergeSeen,
   capLedger,
+  stampableIds,
   LEDGER_CAP,
   EMPTY_LEDGER,
 } from './seen.js'
@@ -130,6 +131,48 @@ describe('mergeSeen', () => {
   it('ignores empty and unidentifiable entries', () => {
     expect(mergeSeen(EMPTY_LEDGER, ['111', '', null, {}], T1).ids).toEqual({ 111: T1 })
     expect(mergeSeen(EMPTY_LEDGER, undefined, T1).ids).toEqual({})
+  })
+})
+
+describe('stampableIds', () => {
+  const pool = [cand('111'), cand('222'), cand('333'), cand('444')]
+  const ok = (id) => ({ id })
+  const failed = (id) => ({ id, error: 'PubMed fetch failed' })
+
+  it('stamps the papers that ran clean AND the ones she passed over in the funnel', () => {
+    expect(stampableIds(pool, [ok('111'), ok('222')])).toEqual(['111', '222', '333', '444'])
+  })
+
+  it('never stamps a paper that errored — a network wobble must not bury it', () => {
+    expect(stampableIds(pool, [ok('111'), failed('222')])).toEqual(['111', '333', '444'])
+  })
+
+  it('stamps NOTHING when every paper failed — that is not a digest she was shown', () => {
+    expect(stampableIds(pool, [failed('111'), failed('222')])).toEqual([])
+  })
+
+  it('stamps nothing when no paper ran at all', () => {
+    expect(stampableIds(pool, [])).toEqual([])
+    expect(stampableIds(pool, undefined)).toEqual([])
+  })
+
+  it('needs only one success to stamp the papers she was offered', () => {
+    expect(stampableIds(pool, [failed('111'), failed('222'), ok('333')])).toEqual(['333', '444'])
+  })
+
+  it('drops pool entries with no id', () => {
+    expect(stampableIds([{ title: 'no pmid' }, cand('111')], [ok('111')])).toEqual(['111'])
+  })
+
+  it('tolerates a missing pool and malformed outcome entries', () => {
+    expect(stampableIds(undefined, [ok('111')])).toEqual([])
+    expect(stampableIds(pool, [null, ok('111')])).toEqual(['111', '222', '333', '444'])
+  })
+
+  it('feeds mergeSeen directly — the failed paper stays absent from the ledger', () => {
+    const ledger = mergeSeen(EMPTY_LEDGER, stampableIds(pool, [ok('111'), failed('222')]), T1)
+    expect(ledger.ids['222']).toBeUndefined()
+    expect(Object.keys(ledger.ids)).toEqual(['111', '333', '444'])
   })
 })
 
