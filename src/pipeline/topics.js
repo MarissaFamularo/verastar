@@ -47,17 +47,26 @@ export const DEFAULT_TOPIC_CAP = 10
 export const MAX_TOPIC_CAP = 50
 
 // The cap can only mean "unseen" if we fetch enough ids to still have `cap` left after the
-// already-seen ones are dropped, so each topic asks for OVERFETCH× the cap. esearch returns
-// bare ids and costs nothing, so the multiple is set by how many repeats a run has to chew
-// through: on day two a topic's newest ids are largely yesterday's, and ×4 absorbs several
-// stale days before the cap starts under-filling. MAX_RETMAX bounds the widened look-back
-// runs, where the seen fraction is highest.
-export const OVERFETCH = 4
+// already-seen ones are dropped, so each topic over-fetches. esearch returns bare ids and
+// costs nothing, so the only question is how many repeats the fetch has to chew through.
+//
+// The multiple SCALES WITH THE WINDOW, and that is the whole point — do not simplify it back
+// to a constant. The longer the window, the larger the fraction of it she has already been
+// shown: a 3-day window turns over roughly a third of itself overnight, so most of the newest
+// ids are genuinely new, but a 30-day look-back run by someone who reads this app daily is
+// almost entirely papers already in her ledger. A fixed multiple gets eaten by repeats
+// exactly on the widened look-back — the rescue path, where depth matters most and where
+// under-filling is least visible.
+//
+// cap × (1 + days) is the cheapest thing with the right shape: identical to the old ×4 at
+// the 3-day default, three times deeper at 30. MAX_RETMAX is the hard ceiling on what we'll
+// ask PubMed for in one call.
 export const MAX_RETMAX = 100
 
-// How many ids to REQUEST for one topic, given the cap we intend to keep.
-export function overfetchFor(cap) {
-  return Math.min(normalizeTopicCap(cap) * OVERFETCH, MAX_RETMAX)
+// How many ids to REQUEST for one topic, given the cap we intend to keep and the window.
+export function overfetchFor(cap, days) {
+  const multiple = 1 + normalizeSearchDays(days)
+  return Math.min(normalizeTopicCap(cap) * multiple, MAX_RETMAX)
 }
 
 // What the empty state may offer as a deliberate, one-off widening. 90 is included so the

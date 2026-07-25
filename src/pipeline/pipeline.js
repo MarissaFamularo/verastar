@@ -105,8 +105,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 //   - THE CAP COUNTS UNSEEN PAPERS. `skipIds` (her seen-ledger ∪ her library) is applied
 //     per topic BEFORE the cap, so each topic yields ten papers she has never been offered
 //     rather than ten search hits that might be mostly repeats. That's why we over-fetch
-//     ids: esearch returns bare ids and is free, so we ask for `overfetchFor(cap)` and throw
-//     most of them away.
+//     ids: esearch returns bare ids and is free, so we ask for `overfetchFor(cap, days)` —
+//     which scales with the window, since a wider one is proportionally more repeats — and
+//     throw most of them away.
 //   - ONE metadata call, over the SURVIVORS. The esummary fetch happens after the skip and
 //     the cap, so filtering earlier makes the batched call smaller, not bigger.
 //
@@ -124,7 +125,7 @@ export async function searchCandidates({
   const plan = profileTopics({ topics, northStars })
   const windowDays = normalizeSearchDays(days)
   const cap = normalizeTopicCap(perTopic)
-  const retmax = overfetchFor(cap)
+  const retmax = overfetchFor(cap, windowDays)
   const gap = Number.isFinite(Number(paceMs)) ? Number(paceMs) : searchPaceMs()
 
   const results = []

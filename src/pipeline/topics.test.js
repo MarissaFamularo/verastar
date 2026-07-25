@@ -26,7 +26,6 @@ import {
   MAX_SEARCH_DAYS,
   DEFAULT_TOPIC_CAP,
   MAX_TOPIC_CAP,
-  OVERFETCH,
   MAX_RETMAX,
   FALLBACK_TOPIC,
 } from './topics.js'
@@ -178,16 +177,28 @@ describe('cleanIds / capTopicPmids', () => {
 
 describe('overfetchFor', () => {
   it('asks for several times the cap, so the cap survives the seen-ledger filter', () => {
-    expect(overfetchFor(10)).toBe(10 * OVERFETCH)
-    expect(overfetchFor(5)).toBe(5 * OVERFETCH)
+    expect(overfetchFor(10, 3)).toBe(40)
+    expect(overfetchFor(5, 3)).toBe(20)
   })
 
-  it('clamps the request so a widened look-back cannot ask PubMed for the world', () => {
-    expect(overfetchFor(50)).toBe(MAX_RETMAX)
+  // The reason the multiple is not a constant: the longer the window, the more of it she has
+  // already been shown, so a fixed multiple gets eaten by repeats on exactly the widened
+  // look-back that exists to rescue a thin morning.
+  it('digs deeper as the window widens', () => {
+    expect(overfetchFor(10, 1)).toBe(20)
+    expect(overfetchFor(10, 3)).toBe(40)
+    expect(overfetchFor(10, 7)).toBe(80)
+    expect(overfetchFor(10, 30)).toBe(MAX_RETMAX)
   })
 
-  it('normalizes a junk cap rather than requesting NaN ids', () => {
-    expect(overfetchFor(undefined)).toBe(DEFAULT_TOPIC_CAP * OVERFETCH)
+  it('clamps the request so a wide window cannot ask PubMed for the world', () => {
+    expect(overfetchFor(50, 90)).toBe(MAX_RETMAX)
+    expect(overfetchFor(10, 90)).toBe(MAX_RETMAX)
+  })
+
+  it('normalizes junk inputs rather than requesting NaN ids', () => {
+    expect(overfetchFor(undefined, undefined)).toBe(DEFAULT_TOPIC_CAP * (1 + DEFAULT_SEARCH_DAYS))
+    expect(overfetchFor('abc', 'abc')).toBe(DEFAULT_TOPIC_CAP * (1 + DEFAULT_SEARCH_DAYS))
   })
 })
 
