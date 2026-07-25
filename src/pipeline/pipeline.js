@@ -18,9 +18,17 @@ import {
   fetchCitations,
   pmidToPmcid,
   searchPubmed,
+  searchPaceMs,
 } from './sources.js'
 import { extractQuantities } from './extract.js'
 import { verify, normalize, extractNumbers, numbersEqual } from './verify.js'
+import {
+  profileTopics,
+  normalizeSearchDays,
+  normalizeTopicCap,
+  mergeTopicResults,
+  attachTopics,
+} from './topics.js'
 
 // Public identifiers only — the app re-verifies every value live (docs/FACTS.md).
 export const DEMO_PAPERS = [
@@ -91,27 +99,71 @@ export async function searchPapers({ northStars = [], retmax = 10, days = 30 } =
   return pmids.map((pmid) => ({ id: pmid, pmid, pmcid: null, nct: null, title: null }))
 }
 
-// Wide candidate search for the selection funnel: search PubMed broadly on the north
-// stars, then pull batched metadata (title · journal · year · publication types) in ONE
-// call. Returns candidate stubs the selection pass can score WITHOUT any full-text fetch or
-// extraction — the ~50-candidates-in step of the real morning workflow. Newest-first.
-export async function searchCandidates({ northStars = [], retmax = 40, days = 90 } = {}) {
-  const terms = northStars.length ? northStars : ['vascular surgery']
-  const term = terms.map((t) => `"${t.replace(/"/g, '')}"[tiab]`).join(' OR ')
-  const pmids = await searchPubmed(term, { retmax, days })
-  if (!pmids.length) return []
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// Wide candidate search for the selection funnel — now ONE PubMed query PER TOPIC, each
+// capped on its own take, over a window short enough that "today's papers" means it
+// (see topics.js for why the old one-OR-query-over-90-days shape was three broken promises).
+//
+// Three properties this function is responsible for:
+//   - SEQUENTIAL, paced. N searches where there used to be one; eutils asks for sequential
+//     requests inside its rate limit, so we wait `searchPaceMs()` between calls rather than
+//     firing them in parallel and hoping the retry catches the 429.
+//   - PARTIAL FAILURE IS NOT TOTAL FAILURE. One topic's query blowing up must not cost her
+//     the other nine topics' digest — the error is captured per topic and reported back in
+//     `failed`, never thrown and never swallowed.
+//   - ONE metadata call. Per-topic search, but the esummary fetch is still a single batched
+//     call over the merged pmid set — the fan-out is in the searching, not the fetching.
+//
+// Returns { candidates, counts, failed, days }: the counts and failures are the honest
+// account of what was actually searched, which the empty state needs in order to say
+// anything true.
+export async function searchCandidates({
+  topics,
+  northStars = [],
+  perTopic,
+  days,
+  paceMs,
+} = {}) {
+  const plan = profileTopics({ topics, northStars })
+  const windowDays = normalizeSearchDays(days)
+  const cap = normalizeTopicCap(perTopic)
+  const gap = Number.isFinite(Number(paceMs)) ? Number(paceMs) : searchPaceMs()
+
+  const results = []
+  for (let i = 0; i < plan.length; i++) {
+    if (i > 0 && gap > 0) await sleep(gap)
+    const topic = plan[i]
+    try {
+      // retmax is the cap: fetching more ids than a topic is allowed to contribute would
+      // just be discarded by the merge.
+      const pmids = await searchPubmed(topic.query, { retmax: cap, days: windowDays })
+      results.push({ label: topic.label, pmids })
+    } catch (err) {
+      console.warn(`PubMed search failed for topic "${topic.label}":`, err.message)
+      results.push({ label: topic.label, error: err.message })
+    }
+  }
+
+  const { pmids, topicsByPmid, counts, failed } = mergeTopicResults(results, { cap })
+  if (!pmids.length) return { candidates: [], counts, failed, days: windowDays }
+
   const cites = await fetchCitations(pmids)
-  return cites.map((c) => ({
-    id: c.pmid,
-    pmid: c.pmid,
-    pmcid: null,
-    nct: null,
-    title: c.title,
-    journal: c.journal,
-    year: c.year,
-    author: c.author,
-    pubtypes: c.pubtypes,
-  }))
+  const candidates = attachTopics(
+    cites.map((c) => ({
+      id: c.pmid,
+      pmid: c.pmid,
+      pmcid: null,
+      nct: null,
+      title: c.title,
+      journal: c.journal,
+      year: c.year,
+      author: c.author,
+      pubtypes: c.pubtypes,
+    })),
+    topicsByPmid,
+  )
+  return { candidates, counts, failed, days: windowDays }
 }
 
 // Run the full pipeline on one paper. Returns:

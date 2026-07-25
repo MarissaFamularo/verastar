@@ -28,6 +28,16 @@ function withKey(url) {
   return out
 }
 
+// How long a caller making BACK-TO-BACK eutils calls should wait between them. The daily
+// scan searches one query per topic, so what used to be a single request is now ten — well
+// inside NCBI's 3 req/s unkeyed limit only if it paces itself. 350ms keeps a keyless run
+// under 3/s with margin (the retry above is the safety net, not the plan); an API key raises
+// the ceiling to 10/s, so 120ms is polite there. Etiquette is why this is a gap and not a
+// parallel fan-out: eutils asks for sequential requests, not bursts.
+export function searchPaceMs() {
+  return getNcbiKey() ? 120 : 350
+}
+
 // Retry with backoff. NCBI eutils rate-limits at 3 req/s without an API key, and a burst
 // of scan requests occasionally trips it (400/429/5xx) — a short retry clears it.
 async function withRetry(fn, { attempts = 3, delayMs = 500 } = {}) {
