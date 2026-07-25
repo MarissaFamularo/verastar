@@ -23,19 +23,42 @@
 // Everything in this file is pure. The sequencing, the pacing, and the fetching live in
 // pipeline.js, at the edge where the network is.
 
+import { filterUnseen } from './seen.js'
+
 // Three days is the daily-driver default: run it every morning and you've seen everything,
 // skip a couple of days and you still haven't missed anything. The clamp exists because the
 // number arrives from a text input — 90 is the old behavior and a sane ceiling for a
 // deliberate catch-up, 1 is "only what landed since yesterday".
+//
+// DELIBERATE DIVERGENCE: her hand-run script defaults to a ONE-day window (and 15 per
+// query). We use 3 because that's what she asked this app for in her own words — "studies
+// published in the last 3 days" — and because a missed morning shouldn't cost her a day of
+// literature. Not an oversight; don't quietly "align" it to the script.
 export const DEFAULT_SEARCH_DAYS = 3
 export const MIN_SEARCH_DAYS = 1
 export const MAX_SEARCH_DAYS = 90
 
-// Per-topic take. Ten is roughly a topic's whole 3-day output in her areas, so the cap
-// rarely bites at the default window — it's the guard rail for a wide query or a widened
-// window, where one prolific topic could otherwise flood the pool it shares.
+// Per-topic take, and it now means TEN PAPERS SHE HAS NEVER SEEN — the seen-ledger filter
+// runs before this cap, not after (see mergeTopicResults). That reordering is what makes 10
+// defensible: capping the raw search meant a topic's ten slots could be eight repeats and
+// two new papers, while dozens of unseen papers sat unreachable behind the cap and then
+// aged out of the window. Worst on exactly the daily use this app is for.
 export const DEFAULT_TOPIC_CAP = 10
 export const MAX_TOPIC_CAP = 50
+
+// The cap can only mean "unseen" if we fetch enough ids to still have `cap` left after the
+// already-seen ones are dropped, so each topic asks for OVERFETCH× the cap. esearch returns
+// bare ids and costs nothing, so the multiple is set by how many repeats a run has to chew
+// through: on day two a topic's newest ids are largely yesterday's, and ×4 absorbs several
+// stale days before the cap starts under-filling. MAX_RETMAX bounds the widened look-back
+// runs, where the seen fraction is highest.
+export const OVERFETCH = 4
+export const MAX_RETMAX = 100
+
+// How many ids to REQUEST for one topic, given the cap we intend to keep.
+export function overfetchFor(cap) {
+  return Math.min(normalizeTopicCap(cap) * OVERFETCH, MAX_RETMAX)
+}
 
 // What the empty state may offer as a deliberate, one-off widening. 90 is included so the
 // affordance never disappears on someone whose saved window is already 30.
@@ -131,11 +154,9 @@ export function profileTopicCap(profile) {
   return normalizeTopicCap(profile?.search?.perTopic)
 }
 
-// One topic's PMIDs, capped and de-duplicated, as strings. The cap is enforced here rather
-// than trusted from `retmax` so the guarantee "no topic contributes more than N" holds even
-// if a caller forgets to pass it down.
-export function capTopicPmids(pmids, cap = DEFAULT_TOPIC_CAP) {
-  const limit = normalizeTopicCap(cap)
+// One topic's raw PMIDs as clean, de-duplicated strings — no cap. This is the set the
+// seen-ledger filter runs over.
+export function cleanIds(pmids) {
   const out = []
   const seen = new Set()
   for (const raw of pmids || []) {
@@ -143,23 +164,36 @@ export function capTopicPmids(pmids, cap = DEFAULT_TOPIC_CAP) {
     if (!id || seen.has(id)) continue
     seen.add(id)
     out.push(id)
-    if (out.length >= limit) break
   }
   return out
 }
 
+// One topic's PMIDs, capped and de-duplicated, as strings. The cap is enforced here rather
+// than trusted from `retmax` so the guarantee "no topic contributes more than N" holds even
+// if a caller forgets to pass it down.
+export function capTopicPmids(pmids, cap = DEFAULT_TOPIC_CAP) {
+  return cleanIds(pmids).slice(0, normalizeTopicCap(cap))
+}
+
 // Merge per-topic search results into ONE pmid pool. `results` is one entry per topic,
-// `{ label, pmids }` or `{ label, error }`. Returns:
-//   { pmids, topicsByPmid, counts, failed }
+// `{ label, pmids, retmax }` or `{ label, error }`. `skipIds` is everything she has already
+// been shown or saved. Returns:
+//   { pmids, topicsByPmid, counts, failed, skipped }
 //
-// Order is round-robin across topics, not topic-by-topic. The merged pool is what the funnel
-// lists and what any later truncation would cut from, so a 30-paper aortic day must not push
-// carotid to the bottom — fair representation is the whole reason for searching per topic.
-export function mergeTopicResults(results, { cap = DEFAULT_TOPIC_CAP } = {}) {
+// ORDER IS THE POINT: skip-then-cap, never cap-then-skip. Filtering after the cap meant the
+// cap counted repeats — a topic's ten slots spent on eight papers she read yesterday, while
+// the unseen ones behind them never entered the pool, were never stamped, and aged out of
+// the window unread. Skipping first costs nothing (the ledger is keyed by pmid, so it needs
+// no metadata) and makes `cap` mean ten papers she has never seen.
+//
+// Order within the pool is round-robin across topics, not topic-by-topic: the merged pool is
+// what the funnel lists, so a 60-paper aortic day must not push carotid to the bottom.
+export function mergeTopicResults(results, { cap = DEFAULT_TOPIC_CAP, skipIds } = {}) {
   const rows = (Array.isArray(results) ? results : []).filter(Boolean)
   const failed = []
   const counts = []
   const lists = []
+  let skipped = 0
   for (const row of rows) {
     const label = str(row.label) || str(row.query)
     if (row.error) {
@@ -168,8 +202,15 @@ export function mergeTopicResults(results, { cap = DEFAULT_TOPIC_CAP } = {}) {
       failed.push({ label, error: str(row.error) || 'search failed' })
       continue
     }
-    const ids = capTopicPmids(row.pmids, cap)
-    counts.push({ label, count: ids.length })
+    const raw = cleanIds(row.pmids)
+    const unseen = skipIds ? filterUnseen(raw, skipIds) : raw
+    skipped += raw.length - unseen.length
+    const ids = capTopicPmids(unseen, cap)
+    // `more` = PubMed handed back everything we asked for, so there are papers beyond this
+    // topic's fetch. It turns "10 of 40 new" into the honest "10 of 40+ new".
+    const asked = Number(row.retmax)
+    const more = Number.isFinite(asked) && asked > 0 && raw.length >= asked
+    counts.push({ label, count: ids.length, available: unseen.length, more })
     lists.push({ label, ids })
   }
 
@@ -190,7 +231,7 @@ export function mergeTopicResults(results, { cap = DEFAULT_TOPIC_CAP } = {}) {
       if (label && !topicsByPmid[id].includes(label)) topicsByPmid[id].push(label)
     }
   }
-  return { pmids, topicsByPmid, counts, failed }
+  return { pmids, topicsByPmid, counts, failed, skipped }
 }
 
 // Carry topic attribution onto the candidate objects the funnel scores and displays.
@@ -211,20 +252,39 @@ export function lookbackOptions(days) {
   return LOOKBACK_DAYS.filter((d) => d > current)
 }
 
+// Topics where the per-topic cap held papers back (or where the fetch itself ran out before
+// her backlog did). Both are the same fact from her side — there was more than she was
+// shown — and both are invisible without this: a capped topic reports "10 papers" exactly
+// like a topic that only had 10. She cannot tune a cap she cannot see binding.
+export function heldBack(counts = []) {
+  return (Array.isArray(counts) ? counts : []).filter(
+    (c) => c && (Number(c.count) < Number(c.available) || c.more),
+  )
+}
+
 // The one honest sentence about what was actually searched. The window is stated because it
-// is the digest's central claim, and a topic that failed is NAMED because "9 topics searched"
-// with no names leaves her unable to tell which area she's flying blind in this morning.
+// is the digest's central claim; a topic that failed is NAMED because "9 topics searched"
+// with no names leaves her unable to tell which area she's flying blind in this morning; and
+// a topic the cap bit is named for the same reason.
 export function searchSummary({ days, counts = [], failed = [], found = null } = {}) {
   const windowDays = normalizeSearchDays(days)
   const topics = (counts?.length || 0) + (failed?.length || 0)
   if (!topics) return ''
   let out = `Searched ${topics} topic${topics === 1 ? '' : 's'} over the last ${windowDays} day${windowDays === 1 ? '' : 's'}`
   const n = Number(found)
-  if (Number.isFinite(n)) out += ` — ${n} paper${n === 1 ? '' : 's'}`
+  if (Number.isFinite(n)) out += ` — ${n} new paper${n === 1 ? '' : 's'}`
   out += '.'
   if (failed.length) {
     const names = failed.map((f) => f?.label).filter(Boolean)
     out += ` ${failed.length} topic${failed.length === 1 ? '' : 's'} failed to search${names.length ? `: ${names.join(', ')}` : ''} — those areas aren't covered today.`
+  }
+  const held = heldBack(counts)
+  if (held.length) {
+    // "+" when PubMed returned everything we asked for: there are more beyond the fetch, so
+    // the denominator is a floor, not a total. Claiming a precise "of 40" there would be the
+    // same class of quiet lie as widening the window.
+    const parts = held.map((c) => `${c.label} ${c.count} of ${c.available}${c.more ? '+' : ''}`)
+    out += ` Per topic: ${parts.join(', ')} — raise "per topic" in your profile to see more.`
   }
   return out
 }

@@ -26,6 +26,7 @@ import {
   profileTopics,
   normalizeSearchDays,
   normalizeTopicCap,
+  overfetchFor,
   mergeTopicResults,
   attachTopics,
 } from './topics.js'
@@ -94,29 +95,36 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // capped on its own take, over a window short enough that "today's papers" means it
 // (see topics.js for why the old one-OR-query-over-90-days shape was three broken promises).
 //
-// Three properties this function is responsible for:
+// Four properties this function is responsible for:
 //   - SEQUENTIAL, paced. N searches where there used to be one; eutils asks for sequential
 //     requests inside its rate limit, so we wait `searchPaceMs()` between calls rather than
 //     firing them in parallel and hoping the retry catches the 429.
 //   - PARTIAL FAILURE IS NOT TOTAL FAILURE. One topic's query blowing up must not cost her
 //     the other nine topics' digest — the error is captured per topic and reported back in
 //     `failed`, never thrown and never swallowed.
-//   - ONE metadata call. Per-topic search, but the esummary fetch is still a single batched
-//     call over the merged pmid set — the fan-out is in the searching, not the fetching.
+//   - THE CAP COUNTS UNSEEN PAPERS. `skipIds` (her seen-ledger ∪ her library) is applied
+//     per topic BEFORE the cap, so each topic yields ten papers she has never been offered
+//     rather than ten search hits that might be mostly repeats. That's why we over-fetch
+//     ids: esearch returns bare ids and is free, so we ask for `overfetchFor(cap)` and throw
+//     most of them away.
+//   - ONE metadata call, over the SURVIVORS. The esummary fetch happens after the skip and
+//     the cap, so filtering earlier makes the batched call smaller, not bigger.
 //
-// Returns { candidates, counts, failed, days }: the counts and failures are the honest
-// account of what was actually searched, which the empty state needs in order to say
-// anything true.
+// Returns { candidates, counts, failed, skipped, days }: the honest account of what was
+// searched, what the cap held back, and how much was dropped as already-seen — which is
+// what lets the empty state tell "a quiet field" apart from "you're up to date".
 export async function searchCandidates({
   topics,
   northStars = [],
   perTopic,
   days,
   paceMs,
+  skipIds,
 } = {}) {
   const plan = profileTopics({ topics, northStars })
   const windowDays = normalizeSearchDays(days)
   const cap = normalizeTopicCap(perTopic)
+  const retmax = overfetchFor(cap)
   const gap = Number.isFinite(Number(paceMs)) ? Number(paceMs) : searchPaceMs()
 
   const results = []
@@ -124,18 +132,17 @@ export async function searchCandidates({
     if (i > 0 && gap > 0) await sleep(gap)
     const topic = plan[i]
     try {
-      // retmax is the cap: fetching more ids than a topic is allowed to contribute would
-      // just be discarded by the merge.
-      const pmids = await searchPubmed(topic.query, { retmax: cap, days: windowDays })
-      results.push({ label: topic.label, pmids })
+      const pmids = await searchPubmed(topic.query, { retmax, days: windowDays })
+      // retmax rides along so the merge can tell "40 papers exist" from "at least 40 do".
+      results.push({ label: topic.label, pmids, retmax })
     } catch (err) {
       console.warn(`PubMed search failed for topic "${topic.label}":`, err.message)
       results.push({ label: topic.label, error: err.message })
     }
   }
 
-  const { pmids, topicsByPmid, counts, failed } = mergeTopicResults(results, { cap })
-  if (!pmids.length) return { candidates: [], counts, failed, days: windowDays }
+  const { pmids, topicsByPmid, counts, failed, skipped } = mergeTopicResults(results, { cap, skipIds })
+  if (!pmids.length) return { candidates: [], counts, failed, skipped, days: windowDays }
 
   const cites = await fetchCitations(pmids)
   const candidates = attachTopics(
@@ -152,7 +159,7 @@ export async function searchCandidates({
     })),
     topicsByPmid,
   )
-  return { candidates, counts, failed, days: windowDays }
+  return { candidates, counts, failed, skipped, days: windowDays }
 }
 
 // Run the full pipeline on one paper. Returns:

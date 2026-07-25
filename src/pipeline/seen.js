@@ -63,6 +63,16 @@ export function filterUnseen(candidates, seen, library) {
   })
 }
 
+// The union the search layer skips: everything she has been shown, plus everything already
+// in her library. Same two sources filterUnseen unions internally — exposed as one Set
+// because the per-topic search needs to hand it down to a pure merge function, and because
+// dedup now happens BEFORE the per-topic cap rather than after the pool is built.
+export function skipSet(seen, library) {
+  const out = asIdSet(seen)
+  for (const id of asIdSet(library)) out.add(id)
+  return out
+}
+
 // Stamp pmids as shown. Idempotent: an id already in the ledger keeps its original
 // (first-seen) date, so re-stamping the same pool never resets its place in the
 // eviction order.

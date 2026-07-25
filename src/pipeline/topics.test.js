@@ -12,7 +12,10 @@ import {
   normalizeTopicCap,
   profileSearchDays,
   profileTopicCap,
+  cleanIds,
   capTopicPmids,
+  overfetchFor,
+  heldBack,
   mergeTopicResults,
   attachTopics,
   lookbackOptions,
@@ -23,6 +26,8 @@ import {
   MAX_SEARCH_DAYS,
   DEFAULT_TOPIC_CAP,
   MAX_TOPIC_CAP,
+  OVERFETCH,
+  MAX_RETMAX,
   FALLBACK_TOPIC,
 } from './topics.js'
 
@@ -154,18 +159,35 @@ describe('normalizeTopicCap', () => {
   })
 })
 
-describe('capTopicPmids', () => {
+describe('cleanIds / capTopicPmids', () => {
   it('caps a topic to its own take', () => {
     expect(capTopicPmids(['1', '2', '3', '4'], 2)).toEqual(['1', '2'])
   })
 
   it('stringifies and de-duplicates within a topic', () => {
+    expect(cleanIds([1, '1', 2])).toEqual(['1', '2'])
     expect(capTopicPmids([1, '1', 2], 10)).toEqual(['1', '2'])
   })
 
   it('is total on junk input', () => {
+    expect(cleanIds(null)).toEqual([])
     expect(capTopicPmids(null)).toEqual([])
     expect(capTopicPmids([null, '', undefined, '7'])).toEqual(['7'])
+  })
+})
+
+describe('overfetchFor', () => {
+  it('asks for several times the cap, so the cap survives the seen-ledger filter', () => {
+    expect(overfetchFor(10)).toBe(10 * OVERFETCH)
+    expect(overfetchFor(5)).toBe(5 * OVERFETCH)
+  })
+
+  it('clamps the request so a widened look-back cannot ask PubMed for the world', () => {
+    expect(overfetchFor(50)).toBe(MAX_RETMAX)
+  })
+
+  it('normalizes a junk cap rather than requesting NaN ids', () => {
+    expect(overfetchFor(undefined)).toBe(DEFAULT_TOPIC_CAP * OVERFETCH)
   })
 })
 
@@ -199,7 +221,7 @@ describe('mergeTopicResults', () => {
   it('applies the per-topic cap during the merge, not just at search time', () => {
     const { pmids, counts } = mergeTopicResults([{ label: 'Aortic', pmids: ['1', '2', '3'] }], { cap: 2 })
     expect(pmids).toEqual(['1', '2'])
-    expect(counts).toEqual([{ label: 'Aortic', count: 2 }])
+    expect(counts).toMatchObject([{ label: 'Aortic', count: 2, available: 3 }])
   })
 
   it('keeps a failed topic out of the pool but names it in `failed`', () => {
@@ -209,17 +231,81 @@ describe('mergeTopicResults', () => {
     ])
     expect(pmids).toEqual(['c1'])
     expect(failed).toEqual([{ label: 'Aortic', error: '429 Too Many Requests' }])
-    expect(counts).toEqual([{ label: 'Carotid', count: 1 }])
+    expect(counts).toMatchObject([{ label: 'Carotid', count: 1, available: 1 }])
   })
 
   it('reports a topic that legitimately returned nothing as a zero count, not a failure', () => {
     const { failed, counts } = mergeTopicResults([{ label: 'Carotid', pmids: [] }])
     expect(failed).toEqual([])
-    expect(counts).toEqual([{ label: 'Carotid', count: 0 }])
+    expect(counts).toMatchObject([{ label: 'Carotid', count: 0, available: 0 }])
   })
 
   it('is total on junk input', () => {
-    expect(mergeTopicResults(null)).toEqual({ pmids: [], topicsByPmid: {}, counts: [], failed: [] })
+    expect(mergeTopicResults(null)).toEqual({ pmids: [], topicsByPmid: {}, counts: [], failed: [], skipped: 0 })
+  })
+})
+
+// The reordering this module exists to get right. Capping BEFORE the seen filter meant the
+// cap counted repeats: day two spends a topic's ten slots on papers she read yesterday while
+// the unseen ones behind them never enter the pool and age out of the window unread.
+describe('mergeTopicResults — the cap counts UNSEEN papers', () => {
+  it('drops already-seen ids BEFORE the cap, so ten means ten new', () => {
+    const { pmids, counts, skipped } = mergeTopicResults(
+      [{ label: 'Aortic', pmids: ['s1', 's2', 's3', 'n1', 'n2'] }],
+      { cap: 2, skipIds: new Set(['s1', 's2', 's3']) },
+    )
+    // Cap-then-skip would have yielded nothing here: the newest two were both seen.
+    expect(pmids).toEqual(['n1', 'n2'])
+    expect(counts).toMatchObject([{ label: 'Aortic', count: 2, available: 2 }])
+    expect(skipped).toBe(3)
+  })
+
+  it('reports how many the ledger dropped — that is what tells a quiet field from being caught up', () => {
+    const allSeen = mergeTopicResults([{ label: 'Aortic', pmids: ['s1', 's2'] }], { cap: 10, skipIds: new Set(['s1', 's2']) })
+    expect(allSeen.pmids).toEqual([])
+    expect(allSeen.skipped).toBe(2)
+
+    const emptyField = mergeTopicResults([{ label: 'Aortic', pmids: [] }], { cap: 10, skipIds: new Set(['s1']) })
+    expect(emptyField.pmids).toEqual([])
+    expect(emptyField.skipped).toBe(0)
+  })
+
+  it('skips nothing when no ledger is passed', () => {
+    const { pmids, skipped } = mergeTopicResults([{ label: 'Aortic', pmids: ['a', 'b'] }], { cap: 10 })
+    expect(pmids).toEqual(['a', 'b'])
+    expect(skipped).toBe(0)
+  })
+
+  it('counts `available` as UNSEEN papers, not raw search hits', () => {
+    const { counts } = mergeTopicResults(
+      [{ label: 'Aortic', pmids: ['s1', 'n1', 'n2', 'n3'] }],
+      { cap: 1, skipIds: new Set(['s1']) },
+    )
+    expect(counts[0]).toMatchObject({ count: 1, available: 3 })
+  })
+
+  it('marks `more` when PubMed returned everything we asked for — the denominator is a floor', () => {
+    const saturated = mergeTopicResults([{ label: 'Aortic', pmids: ['a', 'b', 'c'], retmax: 3 }], { cap: 1 })
+    expect(saturated.counts[0]).toMatchObject({ count: 1, available: 3, more: true })
+
+    const roomToSpare = mergeTopicResults([{ label: 'Aortic', pmids: ['a', 'b'], retmax: 40 }], { cap: 1 })
+    expect(roomToSpare.counts[0]).toMatchObject({ count: 1, available: 2, more: false })
+  })
+})
+
+describe('heldBack', () => {
+  it('names a topic whose cap bit', () => {
+    expect(heldBack([{ label: 'Aortic', count: 10, available: 41 }]).map((c) => c.label)).toEqual(['Aortic'])
+  })
+
+  it('names a topic whose fetch ran out even though the cap did not bite', () => {
+    expect(heldBack([{ label: 'Aortic', count: 5, available: 5, more: true }])).toHaveLength(1)
+  })
+
+  it('stays quiet when she was shown everything there was', () => {
+    expect(heldBack([{ label: 'Carotid', count: 4, available: 4, more: false }])).toEqual([])
+    expect(heldBack([])).toEqual([])
+    expect(heldBack(null)).toEqual([])
   })
 })
 
@@ -257,14 +343,32 @@ describe('lookbackOptions', () => {
 
 describe('searchSummary', () => {
   it('states the window — it is the digest\'s central claim', () => {
-    const line = searchSummary({ days: 3, counts: [{ label: 'A', count: 4 }], found: 4 })
-    expect(line).toBe('Searched 1 topic over the last 3 days — 4 papers.')
+    const line = searchSummary({ days: 3, counts: [{ label: 'A', count: 4, available: 4 }], found: 4 })
+    expect(line).toBe('Searched 1 topic over the last 3 days — 4 new papers.')
+  })
+
+  it('names the topics the cap held back, with the numbers', () => {
+    const line = searchSummary({
+      days: 3,
+      counts: [
+        { label: 'Aortic Disease', count: 10, available: 41, more: false },
+        { label: 'Carotid', count: 6, available: 6, more: false },
+      ],
+      found: 16,
+    })
+    expect(line).toContain('Aortic Disease 10 of 41')
+    expect(line).not.toContain('Carotid 6')
+  })
+
+  it('marks the denominator as a floor when there were more beyond the fetch', () => {
+    const line = searchSummary({ days: 3, counts: [{ label: 'Aortic', count: 10, available: 40, more: true }], found: 10 })
+    expect(line).toContain('Aortic 10 of 40+')
   })
 
   it('names the topics that failed rather than just counting them', () => {
     const line = searchSummary({
       days: 3,
-      counts: [{ label: 'Carotid', count: 2 }],
+      counts: [{ label: 'Carotid', count: 2, available: 2 }],
       failed: [{ label: 'Aortic Disease', error: 'boom' }],
       found: 2,
     })

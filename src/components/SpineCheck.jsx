@@ -11,7 +11,7 @@ import { saveDailyDigest, loadDailyDigest, clearDailyDigest } from '../lib/diges
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates, applyScoreFloor, normalizeScoreFloor, floorSummary } from '../pipeline/select.js'
-import { filterUnseen, seenIds, mergeSeen, capLedger, stampableIds } from '../pipeline/seen.js'
+import { skipSet, seenIds, mergeSeen, capLedger, stampableIds } from '../pipeline/seen.js'
 import {
   profileTopics,
   profileSearchDays,
@@ -539,47 +539,45 @@ export default function SpineCheck() {
     try {
       const profile = await getProfile()
       searchDays = override ?? profileSearchDays(profile)
+      // Cross-day dedup now happens INSIDE the search, per topic, before the per-topic cap —
+      // otherwise the cap counts repeats and a topic's ten slots go to papers she read
+      // yesterday while the unseen ones behind them age out unread. Papers already in her
+      // library count as seen too. Both reads are fresh rather than the mounted savedIds
+      // state: a stale set here would re-serve a saved paper.
+      const [ledger, saved] = await Promise.all([store.get('seen', SEEN_KEY), store.all('papers')])
       const search = await searchCandidates({
         topics: profileTopics(profile),
         northStars: profile?.northStars ?? [],
         perTopic: profileTopicCap(profile),
         days: searchDays,
+        skipIds: skipSet(seenIds(ledger), saved || []),
       })
-      const pool = search.candidates
+      fresh = search.candidates
       searchDays = search.days
-      // Say what was searched BEFORE saying what came of it. A topic whose query failed is a
-      // hole in today's coverage, and a hole she can't see reads exactly like a quiet day.
-      setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: pool.length }))
-      if (!pool.length) {
+      // Say what was searched BEFORE saying what came of it: a topic whose query failed is a
+      // hole in today's coverage, and a topic the cap bit has more waiting — neither is
+      // visible in a digest that just looks short.
+      setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: fresh.length }))
+      if (!fresh.length) {
         setSearching(false)
         setEmptyWindow(searchDays)
-        // Not an error: "nothing was published" is a true fact about a 3-day window, and
-        // rendering it in the error red would teach her to distrust a working scan.
-        setScanNote(`Nothing published in the last ${searchDays} day${searchDays === 1 ? '' : 's'} matched your topics.`)
+        // Two different true sentences, and the difference matters to her: a quiet field is
+        // not the same as being caught up. `skipped` is how many the ledger dropped, so it
+        // tells them apart. Neither is an error — rendering either in the error red would
+        // teach her to distrust a scan that worked perfectly.
+        setScanNote(
+          search.skipped > 0
+            ? `Nothing new since your last digest — all ${search.skipped} paper${search.skipped === 1 ? '' : 's'} in your topics from the last ${searchDays} day${searchDays === 1 ? '' : 's'} are already in your library or have been shown before.`
+            : `Nothing published in the last ${searchDays} day${searchDays === 1 ? '' : 's'} matched your topics.`,
+        )
         return
       }
-      // Cross-day dedup, BEFORE the scoring call: PubMed's newest-40 barely turns over
-      // overnight, so without this she re-reads yesterday's list. Papers already in her
-      // library count as seen too. Filtering here (not after scoring) means we never pay
-      // to score a paper we were always going to discard. The library read is fresh rather
-      // than the mounted savedIds state — a stale set here would re-serve a saved paper.
-      const [ledger, saved] = await Promise.all([store.get('seen', SEEN_KEY), store.all('papers')])
-      fresh = filterUnseen(pool, seenIds(ledger), saved || [])
     } catch (err) {
       setScanError(`PubMed search failed: ${err.message}`)
       setSearching(false)
       return
     }
     setSearching(false)
-    if (!fresh.length) {
-      // Everything the window held, she has already seen. Same offer as a genuinely empty
-      // window: the honest fix is a wider window she asks for, not one we take.
-      setEmptyWindow(searchDays)
-      setScanNote(
-        `Nothing new since your last digest — every paper published in the last ${searchDays} day${searchDays === 1 ? '' : 's'} in your topics is already in your library or has been shown before.`,
-      )
-      return
-    }
     setSelecting(true)
     let scored, chosenIds
     try {

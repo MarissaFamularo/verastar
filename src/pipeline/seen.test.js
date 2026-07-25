@@ -11,6 +11,7 @@ import {
   filterUnseen,
   mergeSeen,
   capLedger,
+  skipSet,
   stampableIds,
   LEDGER_CAP,
   EMPTY_LEDGER,
@@ -131,6 +132,23 @@ describe('mergeSeen', () => {
   it('ignores empty and unidentifiable entries', () => {
     expect(mergeSeen(EMPTY_LEDGER, ['111', '', null, {}], T1).ids).toEqual({ 111: T1 })
     expect(mergeSeen(EMPTY_LEDGER, undefined, T1).ids).toEqual({})
+  })
+})
+
+describe('skipSet', () => {
+  it('unions the ledger with the library — a saved paper is one she has plainly seen', () => {
+    const set = skipSet(new Set(['111']), [{ id: '222' }])
+    expect([...set].sort()).toEqual(['111', '222'])
+  })
+
+  it('is empty (never null) when there is nothing to skip, so the search skips nothing', () => {
+    expect(skipSet(undefined, undefined).size).toBe(0)
+    expect(skipSet(new Set(), []).size).toBe(0)
+  })
+
+  it('takes ledger ids and library records in whatever shape they arrive', () => {
+    const set = skipSet(seenIds({ ids: { 111: T1 } }), [{ id: '222', pmid: '222' }, cand('333')])
+    expect([...set].sort()).toEqual(['111', '222', '333'])
   })
 })
 
