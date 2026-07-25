@@ -364,8 +364,17 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete }) {
         <button onClick={onDelete} className="cursor-pointer" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-fg-faint)', background: 'transparent', border: 0 }}>Delete</button>
       </div>
 
+      {/* A finding the prose gate refuted is withheld here too — the Library shows the digest's
+          warning copy instead of the sentence. 'unchecked'/'supported' render unchanged. */}
       {showFinding && paper.finding && (
-        <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>{paper.finding}</p>
+        paper.check?.verdict === 'refuted' ? (
+          <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-abstract)' }}>
+            ⚠︎ Summary withheld — the source check couldn't confirm it
+            {paper.check?.reason ? ` (${paper.check.reason})` : ''}. Read the paper before repeating a takeaway.
+          </p>
+        ) : (
+          <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>{paper.finding}</p>
+        )
       )}
 
       <TagRow tags={paper.tags} onRemove={onRemoveTag} />

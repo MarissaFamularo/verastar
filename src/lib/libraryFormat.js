@@ -107,7 +107,17 @@ export function sourceNoteMd(paper) {
   const parts = [fm, '', `# ${p.title || `PMID ${p.pmid ?? ''}`.trim()}`]
 
   if (p.relevance) parts.push('', `_**Relevance** — ${p.relevance}_`)
-  if (p.finding) parts.push('', '## Finding', '', p.finding)
+  // A finding the prose gate refuted is withheld from disk too — the vault mirrors the digest:
+  // the on-screen warning copy replaces the sentence, never alongside it. 'unchecked' and
+  // 'supported' render the finding as before.
+  if (p.finding && p.check?.verdict === 'refuted') {
+    parts.push('', '## Finding', '')
+    parts.push(
+      `> ⚠︎ Summary withheld — the source check couldn't confirm it${p.check?.reason ? ` (${p.check.reason})` : ''}. Read the paper before repeating a takeaway.`
+    )
+  } else if (p.finding) {
+    parts.push('', '## Finding', '', p.finding)
+  }
 
   const quantities = (p.quantities || []).filter((q) => q && q.value != null)
   if (quantities.length) {

@@ -99,6 +99,29 @@ describe('sourceNoteMd', () => {
   it('does not throw on a bare record with no quantities/citation', () => {
     expect(() => sourceNoteMd({ pmid: '9', title: 'X', savedAt: '2026-01-01T00:00:00Z' })).not.toThrow()
   })
+
+  it('withholds a refuted finding — the warning copy replaces the sentence on disk', () => {
+    const md = sourceNoteMd(paper({ check: { verdict: 'refuted', reason: 'direction of effect reversed' } }))
+    expect(md).not.toContain('Drug-coated devices reduced reintervention.')
+    expect(md).toContain("Summary withheld — the source check couldn't confirm it (direction of effect reversed)")
+    expect(md).toContain('Read the paper before repeating a takeaway.')
+    // verified numbers are the app-owned channel — unaffected by the prose gate
+    expect(md).toContain('Amputation-free survival:** 84 %')
+  })
+
+  it('withholds a refuted finding without dangling parens when there is no reason', () => {
+    const md = sourceNoteMd(paper({ check: { verdict: 'refuted', reason: '' } }))
+    expect(md).toContain("Summary withheld — the source check couldn't confirm it. Read the paper")
+    expect(md).not.toContain('()')
+  })
+
+  it('renders supported/unchecked/absent-check findings unchanged', () => {
+    for (const check of [{ verdict: 'supported', reason: '' }, { verdict: 'unchecked', reason: '' }, undefined]) {
+      const md = sourceNoteMd(paper({ check }))
+      expect(md).toContain('## Finding\n\nDrug-coated devices reduced reintervention.')
+      expect(md).not.toContain('Summary withheld')
+    }
+  })
 })
 
 describe('conceptNoteMd', () => {
