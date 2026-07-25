@@ -71,11 +71,25 @@ async function getJson(url) {
 
 // --- PubMed ------------------------------------------------------------------
 
-// Search PubMed, return an array of PMIDs (strings). `days` restricts to recently
-// published papers (reldate on publication date), sorted newest-first.
-export async function searchPubmed(term, { retmax = 20, days } = {}) {
+// Which date `days` counts back from. DO NOT change this to 'pdat' — it is deliberate, and
+// it is what her hand-run morning routine has always done.
+//
+// For a daily driver, "new" means new TO PUBMED, not "carries a recent publication date".
+// `edat` is the Entrez date: the day the record appeared in PubMed. `pdat` is the
+// publication date the journal stamped on it. Those come apart constantly in her fields —
+// ahead-of-print and delayed-indexing records land in PubMed today carrying last month's
+// publication date. Under `pdat` with a 3-day window such a paper is invisible on the day it
+// arrives AND on every subsequent day, because its publication date only ever gets older.
+// It is never surfaced, by any run, ever. That is precisely the silent permanent miss the
+// tight window and the seen-ledger exist to prevent, so the window counts from `edat`.
+export const DEFAULT_DATETYPE = 'edat'
+
+// Search PubMed, return an array of PMIDs (strings). `days` restricts to records that
+// entered PubMed in that window (see DEFAULT_DATETYPE), sorted newest-first. `datetype` is
+// an explicit option so a caller that genuinely wants publication dates has to say so.
+export async function searchPubmed(term, { retmax = 20, days, datetype = DEFAULT_DATETYPE } = {}) {
   let url = `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&sort=date&retmax=${retmax}&term=${encodeURIComponent(term)}`
-  if (days) url += `&reldate=${days}&datetype=pdat`
+  if (days) url += `&reldate=${days}&datetype=${encodeURIComponent(datetype)}`
   const data = await getJson(withKey(url))
   return data?.esearchresult?.idlist ?? []
 }

@@ -88,17 +88,6 @@ export async function fetchSource(paper) {
   return { hasBody: false, text: abstract, tables: '', tier: 'abstract_only', pmcid: pmcid || null }
 }
 
-// Live daily scan: search recent PubMed for the clinician's north stars and return paper
-// stubs the pipeline can run. Each north star is matched in title/abstract; results are
-// recent-first. This is the real product loop — mostly abstracts, exactly like a hand-run
-// morning digest.
-export async function searchPapers({ northStars = [], retmax = 10, days = 30 } = {}) {
-  const terms = northStars.length ? northStars : ['vascular surgery']
-  const term = terms.map((t) => `"${t.replace(/"/g, '')}"[tiab]`).join(' OR ')
-  const pmids = await searchPubmed(term, { retmax, days })
-  return pmids.map((pmid) => ({ id: pmid, pmid, pmcid: null, nct: null, title: null }))
-}
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // Wide candidate search for the selection funnel — now ONE PubMed query PER TOPIC, each
