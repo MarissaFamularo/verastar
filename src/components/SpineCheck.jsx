@@ -12,6 +12,13 @@ import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates, applyScoreFloor, normalizeScoreFloor, floorSummary } from '../pipeline/select.js'
 import { filterUnseen, seenIds, mergeSeen, capLedger, stampableIds } from '../pipeline/seen.js'
+import {
+  profileTopics,
+  profileSearchDays,
+  profileTopicCap,
+  lookbackOptions,
+  searchSummary,
+} from '../pipeline/topics.js'
 import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { savePaper } from '../pipeline/save.js'
 import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
@@ -228,6 +235,17 @@ function CandidatePool({
                     {[c.journal, c.year].filter(Boolean).join(' · ')}
                     {types && <span style={{ color: 'var(--color-fg-faint)' }}> · {types}</span>}
                   </p>
+                  {/* Which of her topics pulled this in — the answer to "why is this here?",
+                      and for a cross-cutting paper it's genuinely more than one. */}
+                  {(c.topics || []).length > 0 && (
+                    <p className="flex flex-wrap" style={{ margin: '4px 0 0', gap: 5 }}>
+                      {c.topics.map((t) => (
+                        <span key={t} style={{ borderRadius: 999, background: 'rgba(233,196,106,.1)', color: 'var(--color-gold-soft)', padding: '1px 8px', fontSize: 10.5, fontWeight: 500 }}>
+                          {t}
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   {c.reason && <p style={{ margin: '2px 0 0', fontSize: 12, fontStyle: 'italic', color: 'var(--color-fg-muted)' }}>{c.reason}</p>}
                 </div>
                 {inDigest && (
@@ -255,6 +273,12 @@ export default function SpineCheck() {
   // Honest non-failures — "nothing new since yesterday", "4 of 38 cleared your bar".
   // Kept apart from scanError so a legitimate short day never renders in the error red.
   const [scanNote, setScanNote] = useState('')
+  // What the search actually did — topics searched, window, and any topic whose query
+  // failed. Kept separate from scanNote because scanNote is claimed by the scoring funnel.
+  const [searchNote, setSearchNote] = useState('')
+  // The window a scan just came back empty on, or null. Non-null is what puts the explicit
+  // "look back further" offer on screen — the app never widens the window by itself.
+  const [emptyWindow, setEmptyWindow] = useState(null)
   const [stages, setStages] = useState({})
   const [results, setResults] = useState([]) // runPaper results (live or showcase)
   const [triaged, setTriaged] = useState({}) // id -> { score, tier, finding, relevance }
@@ -492,9 +516,15 @@ export default function SpineCheck() {
   // rubric (metadata only) → run the digest immediately on the rubric's top picks. The
   // selection funnel stays collapsed underneath the digest — open it to adjust the picks,
   // re-rank against an edited rubric, or top up. The daily user never has to touch it.
-  async function startScan() {
+  //
+  // `days` overrides the profile's saved window for THIS run only — it's how the empty
+  // state's "look back 7 days" works. A one-off catch-up must never quietly become her new
+  // default, so the override lives in the call and is never written back to the profile.
+  async function startScan({ days: override } = {}) {
     setScanError('')
     setScanNote('')
+    setSearchNote('')
+    setEmptyWindow(null)
     ranRef.current = true
     setRestored(false)
     setResults([])
@@ -505,12 +535,27 @@ export default function SpineCheck() {
     setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
     setSearching(true)
     let fresh = []
+    let searchDays = override
     try {
       const profile = await getProfile()
-      const pool = await searchCandidates({ northStars: profile?.northStars ?? [], retmax: 40, days: 90 })
+      searchDays = override ?? profileSearchDays(profile)
+      const search = await searchCandidates({
+        topics: profileTopics(profile),
+        northStars: profile?.northStars ?? [],
+        perTopic: profileTopicCap(profile),
+        days: searchDays,
+      })
+      const pool = search.candidates
+      searchDays = search.days
+      // Say what was searched BEFORE saying what came of it. A topic whose query failed is a
+      // hole in today's coverage, and a hole she can't see reads exactly like a quiet day.
+      setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: pool.length }))
       if (!pool.length) {
         setSearching(false)
-        setScanError('No recent papers matched your north stars — broaden them or widen the window.')
+        setEmptyWindow(searchDays)
+        // Not an error: "nothing was published" is a true fact about a 3-day window, and
+        // rendering it in the error red would teach her to distrust a working scan.
+        setScanNote(`Nothing published in the last ${searchDays} day${searchDays === 1 ? '' : 's'} matched your topics.`)
         return
       }
       // Cross-day dedup, BEFORE the scoring call: PubMed's newest-40 barely turns over
@@ -527,8 +572,11 @@ export default function SpineCheck() {
     }
     setSearching(false)
     if (!fresh.length) {
+      // Everything the window held, she has already seen. Same offer as a genuinely empty
+      // window: the honest fix is a wider window she asks for, not one we take.
+      setEmptyWindow(searchDays)
       setScanNote(
-        'Nothing new since your last digest — every recent paper in your areas is already in your library or has been shown before.',
+        `Nothing new since your last digest — every paper published in the last ${searchDays} day${searchDays === 1 ? '' : 's'} in your topics is already in your library or has been shown before.`,
       )
       return
     }
@@ -610,6 +658,8 @@ export default function SpineCheck() {
   async function runShowcase() {
     setScanError('')
     setScanNote('')
+    setSearchNote('')
+    setEmptyWindow(null)
     setCandidates([])
     // Deliberately NOT recorded as seen: the three reference trials are a proof surface,
     // not her morning, and burying them would break the demo on the second run.
@@ -634,7 +684,7 @@ export default function SpineCheck() {
           surface as a small secondary beneath it. */}
       <div className="flex flex-col items-center" style={{ gap: 12, marginTop: 6 }}>
         <button
-          onClick={startScan}
+          onClick={() => startScan()}
           disabled={!keySet || busy}
           className="cursor-pointer"
           style={{ padding: '14px 34px', borderRadius: 13, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15.5, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -10px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }}
@@ -665,11 +715,36 @@ export default function SpineCheck() {
 
       {/* Status lines. */}
       {!keySet && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Add your API key in Settings first.</p>}
-      {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed wide for recent papers…</p>}
+      {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed — one query per topic…</p>}
+      {/* What was actually searched, including any topic whose query failed. Stated whether
+          the morning was rich or empty: the window is the digest's central claim, and a
+          missing topic is the one thing a full-looking digest would never reveal. */}
+      {searchNote && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--color-fg-faint)', lineHeight: 1.55, maxWidth: 620, fontFamily: 'var(--font-mono)' }}>{searchNote}</p>}
       {selecting && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is scoring every candidate against your rubric…</p>}
       {scanError && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{scanError}</p>}
       {/* A short day and a nothing-new day are outcomes, not errors — muted, never red. */}
       {scanNote && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: 'var(--color-fg-dim)', lineHeight: 1.55, maxWidth: 620 }}>{scanNote}</p>}
+      {/* The ONLY way the window ever gets wider. An empty morning is a true fact about a
+          3-day window; quietly re-running it at 30 days to fill the page would make the one
+          line she trusts the one line that's false. So she asks — and because the wider run
+          is a call-level override, her saved default is still 3 tomorrow. */}
+      {emptyWindow != null && lookbackOptions(emptyWindow).length > 0 && (
+        <div className="flex flex-wrap items-center" style={{ gap: 8, margin: '12px 0 0' }}>
+          <span style={{ fontSize: 12.5, color: 'var(--color-fg-faint)' }}>Look back further:</span>
+          {lookbackOptions(emptyWindow).map((d) => (
+            <button
+              key={d}
+              onClick={() => startScan({ days: d })}
+              disabled={!keySet || busy}
+              title={`Search the last ${d} days — this run only; your saved window stays at ${emptyWindow}`}
+              className="cursor-pointer"
+              style={{ borderRadius: 999, border: '1px solid rgba(255,255,255,.14)', background: 'transparent', color: 'var(--color-fg-soft)', padding: '5px 13px', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
+            >
+              {d} days
+            </button>
+          ))}
+        </div>
+      )}
       {restored && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Restored your last digest — run again for fresh results.</p>}
       {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
       {showEmpty && (
