@@ -8,7 +8,7 @@
 //
 // Facts locked in docs/FACTS.md:
 //   - new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
-//   - models: extraction -> claude-opus-4-8; triage/interview -> claude-sonnet-5 / claude-haiku-4-5
+//   - models: extraction/triage/interview -> claude-sonnet-5; fast/check -> claude-haiku-4-5
 //   - current models REJECT temperature / top_p / top_k / budget_tokens (400)
 //   - structured output: output_config: { format: { type: "json_schema", schema } }
 //   - do NOT combine citations with output_config.format (400) -> separate calls
@@ -20,7 +20,10 @@ const NCBI_KEY_STORAGE = 'verastar.ncbi_key'
 const NCBI_EMAIL_STORAGE = 'verastar.ncbi_email'
 
 export const MODELS = {
-  extraction: 'claude-opus-4-8',
+  // Extraction ran Opus for the hackathon; downgraded to Sonnet because the deterministic
+  // verifier gates every extracted number against the source — a weaker extractor can
+  // miss values (they fail verification and get flagged), never fabricate one on screen.
+  extraction: 'claude-sonnet-5',
   triage: 'claude-sonnet-5',
   interview: 'claude-sonnet-5',
   fast: 'claude-haiku-4-5-20251001',

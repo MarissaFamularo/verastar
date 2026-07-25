@@ -14,6 +14,7 @@
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 import { normalize, extractNumbers, extractNumbersWithIndex, numbersEqual } from './verify.js'
+import { checkFindings, SNIPPET_CHARS } from './check.js'
 
 export const TRIAGE_SCHEMA = {
   type: 'object',
@@ -149,8 +150,10 @@ function buildSystem(rubric) {
 // candidates: [{ id, title, summary, design, verified: [{name, value}] }] — `value` is the
 // fmtNum-formatted string (callers format via lib/format.js), so the prompt shows the model
 // the exact rendering the fact channel uses and an inline number can never disagree with it.
-// Returns [{ id, score, tier, finding, relevance }], every ranking already through the
-// number guard. One structured call on a cheap model.
+// Returns [{ id, score, tier, finding, relevance, check }], every ranking already
+// through the number guard, with `check` from the adversarial prose gate
+// ({ verdict: 'supported'|'refuted'|'unchecked', reason }). Two structured calls on
+// cheap models (rank+write, then audit).
 export async function triage({
   northStars = [],
   projects = [],
@@ -168,7 +171,7 @@ export async function triage({
         const facts = (c.verified || []).length
           ? c.verified.map((v) => `  - ${v.name}: ${v.value}`).join('\n')
           : '  (no verified values)'
-        return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\n${(c.summary || '').slice(0, 900)}\nVerified results:\n${facts}`
+        return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\n${(c.summary || '').slice(0, SNIPPET_CHARS)}\nVerified results:\n${facts}`
       })
       .join('\n\n')
 
@@ -184,7 +187,30 @@ export async function triage({
   // set before any caller can render it. An id the model invented gets an empty verified
   // set, so any number it carries is dropped too.
   const verifiedById = new Map(candidates.map((c) => [String(c.id), c.verified || []]))
-  return (result.rankings ?? []).map((rk) =>
+  const sanitized = (result.rankings ?? []).map((rk) =>
     sanitizeRanking(rk, verifiedById.get(String(rk?.id)) || [])
   )
+
+  // The prose gate (pipeline/check.js) — an adversarial second model audits each
+  // AS-RENDERED finding (post-number-guard) against the same snippet the writer saw:
+  // direction of effect, comparator, population, strength of claim. Advisory and
+  // non-blocking: any failure here degrades to 'unchecked' and the digest renders as it
+  // would have without the gate. The UI withholds 'refuted' findings.
+  const summaryById = new Map(candidates.map((c) => [String(c.id), c.summary || '']))
+  let checks = new Map()
+  try {
+    checks = await checkFindings({
+      items: sanitized.map((rk) => ({
+        id: rk.id,
+        finding: rk.finding,
+        snippet: summaryById.get(String(rk.id)) || '',
+      })),
+    })
+  } catch (err) {
+    console.warn('Prose check failed (findings render unchecked):', err.message)
+  }
+  return sanitized.map((rk) => ({
+    ...rk,
+    check: checks.get(String(rk.id)) || { verdict: 'unchecked', reason: '' },
+  }))
 }

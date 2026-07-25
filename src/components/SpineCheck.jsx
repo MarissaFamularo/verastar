@@ -421,7 +421,7 @@ export default function SpineCheck() {
         })
         const byId = {}
         for (const rk of rankings) {
-          byId[rk.id] = { score: rk.score, tier: rk.tier, finding: rk.finding, relevance: rk.relevance }
+          byId[rk.id] = { score: rk.score, tier: rk.tier, finding: rk.finding, relevance: rk.relevance, check: rk.check }
         }
         setTriaged(byId)
         triagedNow = byId
@@ -664,13 +664,32 @@ export default function SpineCheck() {
                 <p style={{ margin: '12px 0 0', fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 15, color: 'var(--color-fg-dim)', lineHeight: 1.55 }}>{take.relevance}</p>
               )}
 
-              {/* The finding — verified prose. "grounded in source" opens the sentence it rests on. */}
-              {take?.finding && (
+              {/* The finding — verified prose. Numbers are gated deterministically; the prose
+                  itself passed an adversarial source check (direction, comparator, population).
+                  A finding the check refuted is WITHHELD, not rendered — same bias as the
+                  number guard: an unsupported claim on screen is fatal, a withheld one is not. */}
+              {take?.finding && take?.check?.verdict !== 'refuted' && (
                 <p style={{ margin: '11px 0 0', fontSize: 15.5, lineHeight: 1.65, color: 'var(--color-fg-soft)' }}>
                   {take.finding}{' '}
+                  {take?.check?.verdict === 'supported' && (
+                    <span title="A second model independently confirmed this summary against the source text — direction of effect, comparison, and population" className="whitespace-nowrap" style={{ fontSize: 12, color: 'var(--color-verified-soft)', opacity: 0.85 }}>
+                      ✓ checked{' '}
+                    </span>
+                  )}
                   {heroRow && (
                     <button onClick={() => openSource(heroRow.quantity, heroRow.verdict, res.sourceDoc, title)} className="cursor-pointer whitespace-nowrap" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-verified-soft)' }}>
                       grounded in source ↗
+                    </button>
+                  )}
+                </p>
+              )}
+              {take?.finding && take?.check?.verdict === 'refuted' && (
+                <p style={{ margin: '11px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--color-abstract)' }}>
+                  ⚠︎ Summary withheld — the source check couldn't confirm it
+                  {take.check?.reason ? ` (${take.check.reason})` : ''}. Read the paper before repeating a takeaway.{' '}
+                  {heroRow && (
+                    <button onClick={() => openSource(heroRow.quantity, heroRow.verdict, res.sourceDoc, title)} className="cursor-pointer whitespace-nowrap" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-verified-soft)' }}>
+                      verified values are unaffected ↗
                     </button>
                   )}
                 </p>

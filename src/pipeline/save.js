@@ -23,6 +23,9 @@ export function buildPaperRecord(res, take, { title } = {}) {
     tier: take?.tier ?? null,
     finding: take?.finding ?? '',
     relevance: take?.relevance ?? '',
+    // Prose-gate verdict for the finding ({ verdict, reason }) — 'refuted' means the
+    // digest withheld this sentence; stored so Library surfaces can honor it too.
+    check: take?.check ?? { verdict: 'unchecked', reason: '' },
     quantities: verifiedRows.map((r) => ({ ...r.quantity, tier: r.verdict.tier })),
     fullText: res.sourceDoc?.text || '', // untruncated — the concept summarizer + library note use it
     tables: res.sourceDoc?.tables || '',
