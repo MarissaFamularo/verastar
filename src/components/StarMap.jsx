@@ -61,6 +61,7 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
       hoverNode: null,
       reveals: new Map(), // edgeId -> t0 (ms) for the gentle fade-in of a new connection
       settled: false, // physics frozen once the layout is calm
+      alpha: 1, // cooling temperature — decays every step so a big graph is GUARANTEED to freeze
       stars: [], // static background starfield (world-space)
       w: 0,
       h: 0,
@@ -174,7 +175,7 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
               s.y = p.y
               s.vx = s.vy = 0
               s.pinned = true
-              eng.settled = false // let the rest of the map react to the drag
+              eng.wake() // let the rest of the map react to the drag (reheats alpha too)
             }
           } else {
             eng.camera.x += dx / eng.camera.scale
@@ -227,11 +228,22 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
     )
 
     // --- physics: repulsion + edge springs + gentle gravity toward origin ---
+    // Forces are scaled by a decaying temperature (eng.alpha), d3-style: at library scale
+    // (100+ hubs, hundreds of springs) the raw system can sustain an oscillation that never
+    // drops below the energy threshold — the map vibrates forever. Cooling guarantees a
+    // freeze; the energy check below just lets a small calm graph freeze sooner.
     function step() {
       if (eng.settled) return // frozen once calm — nodes hold still, cheaper, easy to click
       const ns = nodesRef.current
       const es = edgesRef.current
       const sim = eng.sim
+      // Degree per node, for spring softening: a hub with 30 springs at full stiffness
+      // overshoots every frame and rings like a struck bell.
+      const degree = new Map()
+      for (const e of es) {
+        degree.set(e.source, (degree.get(e.source) || 0) + 1)
+        degree.set(e.target, (degree.get(e.target) || 0) + 1)
+      }
       for (const n of ns) {
         let s = sim.get(n.id)
         if (!s) continue
@@ -261,7 +273,10 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
         const dy = b.y - a.y
         const d = Math.hypot(dx, dy) || 0.01
         const rest = 128
-        const k = 0.018
+        // Soften springs on high-degree nodes, and let a dashed "maybe" tug at quarter
+        // strength — 600 unconfirmed suggestions must not out-pull the confirmed web.
+        const soften = Math.sqrt(Math.min(degree.get(e.source) || 1, degree.get(e.target) || 1))
+        const k = (0.018 / soften) * (e.status === 'confirmed' ? 1 : 0.25)
         const f = (d - rest) * k
         const ux = dx / d
         const uy = dy / d
@@ -278,8 +293,8 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
       for (const n of ns) {
         const s = sim.get(n.id)
         if (!s || s.pinned) continue
-        s.vx = (s.vx + (s.fx || 0)) * 0.86
-        s.vy = (s.vy + (s.fy || 0)) * 0.86
+        s.vx = (s.vx + (s.fx || 0) * eng.alpha) * 0.86
+        s.vy = (s.vy + (s.fy || 0) * eng.alpha) * 0.86
         // clamp so a cold start can't fling a star off-screen
         const vmax = 40
         s.vx = Math.max(-vmax, Math.min(vmax, s.vx))
@@ -288,11 +303,16 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
         s.y += s.vy
         energy += s.vx * s.vx + s.vy * s.vy
       }
-      // once the layout is calm, freeze it (twinkle/pulse/reveal keep animating regardless)
-      if (ns.length && energy / ns.length < 0.05) eng.settled = true
+      eng.alpha *= 0.985 // ~300 visible ticks from a cold start, fewer from a drag reheat
+      // once the layout is calm — or fully cooled — freeze it (twinkle/pulse/reveal keep
+      // animating regardless)
+      if (ns.length && (energy / ns.length < 0.05 || eng.alpha < 0.004)) eng.settled = true
     }
     eng.wake = () => {
       eng.settled = false
+      // Reheat, don't reset: a drag or a new edge should stir the neighborhood, not
+      // re-run the whole cold-start dance.
+      eng.alpha = Math.max(eng.alpha, 0.3)
     }
 
     // --- render ---
@@ -479,7 +499,7 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
       sim.set(n.id, { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, vx: 0, vy: 0 })
       added = true
     })
-    if (added) eng.settled = false // new star → re-settle the layout
+    if (added) eng.wake?.() // new star → re-settle the layout (reheated, or it can't move)
   }, [nodes])
 
   // --- fade a connection in the first time we see it (the "app just noticed this" moment) ---
@@ -491,7 +511,7 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
       if (!seenEdges.current.has(e.id)) {
         seenEdges.current.add(e.id)
         eng.reveals.set(e.id, performance.now())
-        eng.settled = false // a new line changes the pull — let it re-settle
+        eng.wake?.() // a new line changes the pull — let it re-settle (reheated)
       }
     }
   }, [edges])
