@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import { saveDailyDigest, loadDailyDigest, clearDailyDigest, withOaLinks, digestGaps, restoreNote } from '../lib/digestStore.js'
+import { digestProjects } from '../lib/trellis.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import {
@@ -488,7 +489,7 @@ export default function SpineCheck() {
         const profile = await getProfile()
         const rankings = await triage({
           northStars: profile?.northStars ?? [],
-          projects: profile?.projects ?? [],
+          projects: await digestProjects(profile),
           rubric: profile?.rubric?.criteria ?? '',
           candidates: ok.map((r) => ({
             id: r.paper.id,
@@ -528,7 +529,7 @@ export default function SpineCheck() {
     const scored = await selectCandidates({
       rubric: profile?.rubric?.criteria ?? '',
       northStars: profile?.northStars ?? [],
-      projects: profile?.projects ?? [],
+      projects: await digestProjects(profile),
       candidates: pool,
     })
     setCandidates(scored)

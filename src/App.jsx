@@ -5,6 +5,7 @@ import { supabase, supabaseConfigured, currentUser, sendMagicLink, signOut, isSi
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
+import { refreshTrellisProjects, getTrellisProjects } from './lib/trellis.js'
 import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
@@ -449,7 +450,7 @@ function MigrationOffer({ account, paperCount, onDecline }) {
 
 // Right rail on the Digest surface: key status, weekly counts, active projects,
 // and the Weekend Read teaser. Counts derive from real saved papers.
-function DigestRail({ saved, onSettings, counts, projects, onConnections, demo }) {
+function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, demo }) {
   return (
     <aside className="vs-digest-rail" style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div
@@ -477,7 +478,7 @@ function DigestRail({ saved, onSettings, counts, projects, onConnections, demo }
         ))}
       </div>
 
-      {projects.length > 0 && (
+      {(projects.length > 0 || trellis.length > 0) && (
         <>
           <p style={{ margin: '0 0 12px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Active Work</p>
           <div className="flex flex-col" style={{ gap: 9, marginBottom: 34 }}>
@@ -485,6 +486,14 @@ function DigestRail({ saved, onSettings, counts, projects, onConnections, demo }
               <span key={p} className="inline-flex items-center" style={{ gap: 9, fontSize: 14, color: 'var(--color-fg-soft)' }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#8a94a8' }} />
                 {p}
+              </span>
+            ))}
+            {/* Synced from PaperTrellis — hollow blue marker so they read as synced,
+                not hand-entered. Titles only; the stage lives in Settings. */}
+            {trellis.map((p) => (
+              <span key={p.id} title="Synced from PaperTrellis" className="inline-flex items-center" style={{ gap: 9, fontSize: 14, color: 'var(--color-fg-soft)' }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', border: '1px solid var(--color-registry)', boxSizing: 'border-box' }} />
+                {p.title}
               </span>
             ))}
           </div>
@@ -522,6 +531,9 @@ export default function App() {
   const [starsOpen, setStarsOpen] = useState(false) // north-star chips: collapsed by default
   const [profile, setProfile] = useState(null)
   const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0 })
+  // Synced PaperTrellis project rows (title + stage) for the rail and Settings —
+  // display only; the prompt-line merge happens at the digest call sites.
+  const [trellis, setTrellis] = useState([])
 
   const [bootError, setBootError] = useState('')
   const [account, setAccount] = useState(null) // { email } when signed in
@@ -558,12 +570,20 @@ export default function App() {
       }
       setOnboarded(!!p?.onboarded)
       setProfile(p || null)
+      // Cached PaperTrellis projects render immediately; the refresh fires in the
+      // background (never awaited — a slow or failed sync must not hold up boot).
+      loadTrellis()
+      if (user) refreshTrellisProjects().then(loadTrellis).catch(() => {})
       // Vault drain: catch the flat-file folder up with anything saved away from
       // this desktop (phone saves land here). Quiet no-op unless a folder is still
       // permitted this session; the Reconnect click in File to Disk re-triggers it.
       drainVault().catch(() => {})
     }).catch((err) => setBootError(err?.message || String(err)))
   }, [])
+
+  function loadTrellis() {
+    getTrellisProjects().then((c) => setTrellis(c?.projects ?? [])).catch(() => {})
+  }
 
   // Derive weekly counts from real saved papers (defensive on shape).
   function refreshCounts() {
@@ -584,7 +604,11 @@ export default function App() {
   // remounts — SpineCheck especially must survive a focus mid-digest-run.
   useWindowFocusRefresh(() => {
     drainVault().catch(() => {})
-    if (onboarded === true && isSignedIn()) refreshCounts()
+    if (onboarded === true && isSignedIn()) {
+      refreshCounts()
+      // PaperTrellis may have moved a project past submission while this tab slept.
+      refreshTrellisProjects().then(loadTrellis).catch(() => {})
+    }
   })
 
   function handleSave(k, remember) {
@@ -759,7 +783,7 @@ export default function App() {
               </div>
             </div>
           </main>
-          <DigestRail saved={saved} counts={counts} projects={projects} demo={!!profile?.demo && !account} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
+          <DigestRail saved={saved} counts={counts} projects={projects} trellis={trellis} demo={!!profile?.demo && !account} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
         </div>
       )}
 
