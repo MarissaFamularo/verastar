@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { setApiKey, getApiKey, hasApiKey, clearApiKey, isKeyRemembered, ping } from './lib/anthropic.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
-import { supabase, supabaseConfigured, currentUser, sendMagicLink, signOut, isSignedIn } from './lib/supabase.js'
+import { supabase, supabaseConfigured, currentUser, sendMagicLink, verifyEmailCode, signOut, isSignedIn } from './lib/supabase.js'
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
@@ -202,7 +202,28 @@ function AccountSection({ account }) {
   const [email, setEmail] = useState('')
   const [sendState, setSendState] = useState('idle') // idle | sending | sent | error
   const [sendError, setSendError] = useState('')
+  const [code, setCode] = useState('')
+  const [verifyState, setVerifyState] = useState('idle') // idle | verifying | error
+  const [verifyError, setVerifyError] = useState('')
   if (!supabaseConfigured) return null
+
+  // Typing the emailed code signs in HERE — the only path that works from the
+  // installed home-screen app, where clicking the emailed link opens the browser
+  // (a separate storage world) instead of the app that asked.
+  async function verify(e) {
+    e.preventDefault()
+    const trimmed = code.trim()
+    if (!trimmed) return
+    setVerifyState('verifying')
+    setVerifyError('')
+    try {
+      await verifyEmailCode(email.trim(), trimmed)
+      window.location.reload()
+    } catch (err) {
+      setVerifyError(err?.message || String(err))
+      setVerifyState('error')
+    }
+  }
 
   async function send(e) {
     e.preventDefault()
@@ -250,9 +271,30 @@ function AccountSection({ account }) {
             stays on this device, never in your account.
           </p>
           {sendState === 'sent' ? (
-            <div style={{ padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
-              <span style={{ fontWeight: 600 }}>Link sent to {email.trim()}</span> — open it on this device to finish signing in.
-            </div>
+            <>
+              <div style={{ padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600 }}>Email sent to {email.trim()}</span> — enter the 6-digit code from it below. (The email's link also works, but only in the same browser — from the installed app, use the code.)
+              </div>
+              <form onSubmit={verify} className="flex" style={{ gap: 9, marginTop: 10 }}>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="6-digit code"
+                  style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
+                />
+                <button type="submit" disabled={verifyState === 'verifying'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: verifyState === 'verifying' ? 0.6 : 1 }}>
+                  {verifyState === 'verifying' ? 'Checking…' : 'Sign in'}
+                </button>
+              </form>
+              {verifyState === 'error' && (
+                <div style={{ marginTop: 10, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                  <span style={{ fontWeight: 600 }}>That code didn't work:</span> {verifyError}
+                </div>
+              )}
+            </>
           ) : (
             <form onSubmit={send} className="flex" style={{ gap: 9 }}>
               <input

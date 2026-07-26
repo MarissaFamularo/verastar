@@ -45,6 +45,21 @@ export async function sendMagicLink(email) {
   if (error) throw new Error(error.message)
 }
 
+// The same email carries a one-time code alongside the link (template must include
+// {{ .Token }}). Typing the code signs in THIS context — the only path that works in
+// an installed home-screen app, where the emailed link opens the browser's separate
+// storage world instead.
+export async function verifyEmailCode(email, code) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: 'email',
+  })
+  if (error) throw new Error(error.message)
+  _user = data?.session?.user || null
+  return _user
+}
+
 export async function signOut() {
   await supabase.auth.signOut()
   _user = null
