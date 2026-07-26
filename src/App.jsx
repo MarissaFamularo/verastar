@@ -242,6 +242,69 @@ function AccountSection({ account }) {
   )
 }
 
+// Collapsible primer for people who arrive without an API key: what it is, where to
+// get one, and what a day of Verastar actually costs. Cost figures assume the models
+// in lib/anthropic.js (Sonnet 5 extraction/triage, Haiku fast checks) — revisit if
+// MODELS changes.
+function ApiKeyExplainer() {
+  const [open, setOpen] = useState(false)
+  const h = { margin: '14px 0 4px', fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg-soft)' }
+  const p = { margin: '0 0 2px', fontSize: 12.5, lineHeight: 1.6, color: 'var(--color-fg-muted)' }
+  return (
+    <div style={{ marginTop: 14, borderRadius: 12, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)' }}>
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="cursor-pointer flex items-center"
+        style={{ width: '100%', gap: 8, padding: '11px 14px', border: 0, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit', textAlign: 'left' }}
+      >
+        <span style={{ fontSize: 10, color: 'var(--color-accent)', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>▶</span>
+        What&rsquo;s an API key, how do I get one, and what does it cost?
+      </button>
+      {open && (
+        <div style={{ padding: '0 14px 14px' }}>
+          <p style={h}>What it is</p>
+          <p style={p}>
+            An API key is a personal passcode that lets software use Claude, the AI model that reads and
+            scores papers for you. Verastar doesn&rsquo;t have its own server or accounts — your browser talks
+            directly to Anthropic (the company that makes Claude) using your key. You load prepaid credit
+            on your Anthropic account and each run draws it down. No subscription, no markup, and spending
+            can never exceed the credit you&rsquo;ve loaded.
+          </p>
+          <p style={h}>How to get one</p>
+          <p style={p}>
+            1. Create a free account at{' '}
+            <a href="https://platform.claude.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>
+              platform.claude.com
+            </a>{' '}
+            (the Anthropic developer console).
+            <br />
+            2. Add credit via <span style={{ color: 'var(--color-fg-soft)' }}>Set up billing</span> — new
+            accounts start at $0, and $5 is plenty to start.
+            <br />
+            3. Open <span style={{ color: 'var(--color-fg-soft)' }}>API keys</span> in the sidebar, click{' '}
+            <span style={{ color: 'var(--color-fg-soft)' }}>Create key</span>, and copy the key — it starts
+            with <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>sk-ant-</span> and is shown
+            only once. Save it somewhere safe if you plan to use Verastar on both your phone and your
+            computer — you&rsquo;ll paste it on each. Lost it? Just create another.
+            <br />
+            4. Paste the key above. Treat it like a password: anyone who has it can spend your credit.
+          </p>
+          <p style={h}>What it costs</p>
+          <p style={p}>
+            You pay per use, in fractions of a cent per page of text. A full daily digest — triaging
+            ~30&ndash;50 new abstracts and deep-reading the best few papers — runs about{' '}
+            <span style={{ color: 'var(--color-fg-soft)' }}>$0.10&ndash;$0.30</span>. Saving and verifying a
+            single paper is a few cents. Daily use adds up to{' '}
+            <span style={{ color: 'var(--color-fg-soft)' }}>under $10 / month</span> and it&rsquo;s pre-paid,
+            so it&rsquo;ll just stop when the credit runs out.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, onStartOver, onToggleRemember, status, reply, error, account }) {
   const [keyInput, setKeyInput] = useState('')
   const [remember, setRemember] = useState(false)
@@ -340,6 +403,8 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
               ? 'Your key is remembered in this browser’s local storage on this device — never sent to our servers. Clear it any time.'
               : 'Your key lives only in this browser tab — never sent to our servers, never written to disk, and cleared when you close the tab. Check “Remember on this device” to keep it across restarts.'}
           </p>
+
+          <ApiKeyExplainer />
 
           <AccountSection account={account} />
 
