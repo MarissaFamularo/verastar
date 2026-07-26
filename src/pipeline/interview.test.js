@@ -36,14 +36,19 @@ import { DEFAULT_SCORE_FLOOR } from './select.js'
 
 const codes = (query) => topicIssues(query).map((i) => i.code)
 
-// Her production queries.json, verbatim — the quality bar the generator is aimed at. If the
-// validator flags one of these it is the validator that is wrong.
-const HER_QUERIES = [
-  'vascular surgery endovascular open repair outcomes',
+// Her production queries.json, verbatim. This file was once the quality bar — then we measured
+// it against PubMed (30-day edat, 2026-07-26) and found the juxtaposed rows half-dead: the
+// carotid row returned 2 results where its OR-joined equivalent returned 128. So the file is
+// now split: the OR-joined rows are still the bar, and the juxtaposed rows are exactly what
+// the `juxtaposed` flag exists to catch.
+const HER_OR_QUERIES = [
   'aortic aneurysm OR aortic dissection OR TEVAR OR EVAR',
-  'carotid stenosis endarterectomy stenting stroke prevention',
   'peripheral artery disease OR limb ischemia OR diabetic foot OR wound healing amputation',
   'pelvic venous disease OR pelvic congestion syndrome OR ovarian vein embolization OR pelvic vein embolization',
+]
+const HER_JUXTAPOSED_QUERIES = [
+  'vascular surgery endovascular open repair outcomes',
+  'carotid stenosis endarterectomy stenting stroke prevention',
   'machine learning OR artificial intelligence OR deep learning clinical medicine surgery',
   'large language model healthcare clinical OR ChatGPT clinical OR GPT-4 medical',
   'vascular surgery education residency training simulation',
@@ -52,8 +57,31 @@ const HER_QUERIES = [
 ]
 
 describe('topicIssues — the queries that come back empty', () => {
-  it('passes every one of her ten real production queries', () => {
-    for (const q of HER_QUERIES) expect(topicIssues(q)).toEqual([])
+  it('passes her OR-joined production queries clean', () => {
+    for (const q of HER_OR_QUERIES) expect(topicIssues(q)).toEqual([])
+  })
+
+  it('flags her juxtaposed production rows — measured half-dead against PubMed — and nothing else about them', () => {
+    for (const q of HER_JUXTAPOSED_QUERIES) expect(codes(q)).toEqual(['juxtaposed'])
+  })
+
+  it('a run of 5+ words inside ONE OR-alternate flags even when the query has ORs elsewhere', () => {
+    expect(codes('machine learning OR deep learning clinical medicine surgery')).toContain('juxtaposed')
+  })
+
+  it('tolerates a 4-word single concept — "chronic limb threatening ischemia" is one idea, not four', () => {
+    expect(codes('chronic limb threatening ischemia')).toEqual([])
+    expect(codes('carotid stenosis endarterectomy stenting')).toEqual([])
+  })
+
+  it('counts words per OR-alternate, not across the whole query', () => {
+    // 10 words total, but no alternate holds 5 — this is her healthy PAD row's shape
+    expect(codes('peripheral artery disease OR limb ischemia OR wound healing amputation')).toEqual([])
+  })
+
+  it('does not count boolean operators as concept words', () => {
+    // 5 raw tokens, but AND is an operator, not a concept — 4 concept words, under the bar
+    expect(codes('diabetic foot AND revascularization outcomes')).not.toContain('juxtaposed')
   })
 
   it('flags a long AND chain — MeSH expansion turns it into zero results', () => {
@@ -66,7 +94,10 @@ describe('topicIssues — the queries that come back empty', () => {
   })
 
   it('does not mistake a lowercase "and" in prose for the boolean operator', () => {
-    expect(topicIssues('limb ischemia and wound healing outcomes')).toEqual([])
+    // No and-chain flag — but the five real words around it are still ANDed by PubMed
+    // (lowercase "and" is a stopword), so the juxtaposed flag correctly fires.
+    expect(codes('limb ischemia and wound healing outcomes')).toEqual(['juxtaposed'])
+    expect(codes('limb ischemia and wound healing')).toEqual([])
   })
 
   it('flags any bracketed field tag — it switches term mapping off', () => {
@@ -101,16 +132,17 @@ describe('topicIssues — the queries that come back empty', () => {
 })
 
 describe('checkTopics — the plan as a whole', () => {
-  const rows = (n, q = 'carotid stenosis endarterectomy stenting') =>
+  const rows = (n, q = 'carotid stenosis OR carotid endarterectomy') =>
     Array.from({ length: n }, (_, i) => ({ label: `T${i}`, query: `${q} ${i}` }))
 
-  it('a full ten-topic plan of her real queries is clean', () => {
-    const plan = HER_QUERIES.map((query, i) => ({ label: `T${i}`, query }))
+  it('her full ten-topic plan flags exactly the juxtaposed rows, nothing else', () => {
+    const plan = [...HER_OR_QUERIES, ...HER_JUXTAPOSED_QUERIES].map((query, i) => ({ label: `T${i}`, query }))
     const result = checkTopics(plan)
-    expect(result.ok).toBe(true)
-    expect(result.count).toBe(0)
-    expect(result.rows).toEqual([])
-    expect(result.list).toEqual([])
+    expect(result.ok).toBe(false)
+    expect(result.list).toEqual([]) // ten topics — the plan-level band is satisfied
+    expect(result.rows).toHaveLength(HER_JUXTAPOSED_QUERIES.length)
+    for (const row of result.rows) expect(row.issues.map((i) => i.code)).toEqual(['juxtaposed'])
+    expect(result.count).toBe(HER_JUXTAPOSED_QUERIES.length)
   })
 
   it(`flags fewer than ${MIN_TOPICS}`, () => {

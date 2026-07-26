@@ -275,6 +275,23 @@ export async function draftProfileFromInterview({
 const FIELD_TAG = /\[[^\]]*\]/
 const AND_OPERATOR = /\bAND\b/g
 
+// PubMed ANDs words that just sit next to each other, so a long run of juxtaposed concepts
+// inside one OR-alternate is an AND chain in disguise. Measured against PubMed (30-day edat,
+// 2026-07-26): her real row "carotid stenosis endarterectomy stenting stroke prevention"
+// returned 2 results where the OR-joined equivalent returned 128. The threshold is 5 because
+// a legitimate single concept can run 4 words ("chronic limb threatening ischemia") and this
+// flag must not cry wolf on those.
+const JUXTAPOSED_WORDS = 5
+const BOOLEAN_WORD = /^(AND|OR|NOT)$/i
+
+// Longest run of concept words in any OR-alternate. Boolean operators (either case — a
+// lowercase "and" is a PubMed stopword, not a concept) don't count as words.
+function longestJuxtaposition(q) {
+  return Math.max(
+    ...q.split(/\bOR\b/).map((seg) => seg.split(/\s+/).filter((w) => w && !BOOLEAN_WORD.test(w)).length),
+  )
+}
+
 // One query -> the things wrong with it, worst first. Empty array means it looks fine.
 export function topicIssues(query) {
   const q = str(query)
@@ -288,6 +305,13 @@ export function topicIssues(query) {
     issues.push({
       code: 'and-chain',
       message: `Long AND chain (${ands} ANDs) — MeSH expansion turns these into zero results. Use OR instead.`,
+    })
+  }
+  const run = longestJuxtaposition(q)
+  if (run >= JUXTAPOSED_WORDS) {
+    issues.push({
+      code: 'juxtaposed',
+      message: `${run} words with no OR between them — PubMed ANDs juxtaposed words, so this is an AND chain in disguise and returns almost nothing on a short window. Join the distinct concepts with OR.`,
     })
   }
   if (FIELD_TAG.test(q)) {
