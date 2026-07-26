@@ -98,6 +98,10 @@ function IconRail({ view, setView, onSettings, initials }) {
   // The lattice glyph is unlabeled, so leaving the app can't be a surprise: the
   // doorway asks first, and the new tab opens only from the confirm button.
   const [trellisAsk, setTrellisAsk] = useState(false)
+  // The star map can't be used at phone width (it renders the "bigger sky" sign),
+  // so the phone's tab bar doesn't offer it — a tab you can't use is just clutter.
+  const isMobile = useIsMobile()
+  const navItems = isMobile ? NAV.filter(([id]) => id !== 'starmap') : NAV
   return (
     <aside
       className="vs-rail flex flex-col items-center border-r"
@@ -117,7 +121,7 @@ function IconRail({ view, setView, onSettings, initials }) {
         </svg>
       </div>
       <nav className="vs-rail-nav flex flex-col items-center w-full" style={{ gap: 6 }}>
-        {NAV.map(([id, label]) => {
+        {navItems.map(([id, label]) => {
           const active = view === id
           return (
             <button
@@ -148,13 +152,15 @@ function IconRail({ view, setView, onSettings, initials }) {
           onClick={() => setTrellisAsk(true)}
           title="PaperTrellis — manage your projects (opens the sister app)"
           aria-label="Open PaperTrellis"
-          className="flex items-center justify-center cursor-pointer"
-          style={{ width: 36, height: 36, padding: 0, border: 0, background: 'transparent', borderRadius: 11, color: 'var(--color-fg-muted)' }}
+          className="flex flex-col items-center justify-center cursor-pointer"
+          style={{ minWidth: 36, padding: '4px 2px', border: 0, background: 'transparent', borderRadius: 11, gap: 4, color: 'var(--color-fg-muted)', fontFamily: 'inherit' }}
         >
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M4 4l16 16M12 4l8 8M4 12l8 8" />
             <path d="M20 4L4 20M12 4l-8 8M20 12l-8 8" />
           </svg>
+          {/* Labeled like every other stop on the bar — an unlettered glyph read as a mystery. */}
+          <span style={{ fontSize: 10.5, fontWeight: 500 }}>PT</span>
         </button>
         {trellisAsk && (
           <div
@@ -451,9 +457,11 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
           boxShadow: '0 40px 120px -20px rgba(0,0,0,.85)',
         }}
       >
-        <div className="flex items-center justify-between" style={{ padding: '26px 30px 4px' }}>
+        {/* Sticky, so the ✕ stays reachable however deep the settings scroll —
+            on a phone the card fills the screen and there's no backdrop to tap. */}
+        <div className="flex items-center justify-between" style={{ position: 'sticky', top: 0, zIndex: 2, padding: '22px 30px 12px', background: '#141821', borderBottom: '1px solid var(--hairline)' }}>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 500, color: 'var(--color-fg)' }}>Settings</h2>
-          <button onClick={onClose} className="cursor-pointer" style={{ border: 0, background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 19, lineHeight: 1, fontFamily: 'inherit' }}>
+          <button onClick={onClose} aria-label="Close settings" className="cursor-pointer" style={{ border: 0, background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 19, lineHeight: 1, padding: '6px 8px', margin: '-6px -8px', fontFamily: 'inherit' }}>
             ✕
           </button>
         </div>
@@ -574,6 +582,16 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
               </div>
             </div>
           )}
+          {/* Bottom exit for the long scroll — closing shouldn't require a trip
+              back to the top of the modal. */}
+          <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
+          <button
+            onClick={onClose}
+            className="cursor-pointer"
+            style={{ width: '100%', padding: '11px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13.5, fontWeight: 600, fontFamily: 'inherit' }}
+          >
+            Done
+          </button>
         </div>
       </div>
     </div>
