@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
-import { saveDailyDigest, loadDailyDigest, clearDailyDigest } from '../lib/digestStore.js'
+import { saveDailyDigest, loadDailyDigest, clearDailyDigest, withOaLinks, digestGaps, restoreNote } from '../lib/digestStore.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import { selectCandidates, applyScoreFloor, normalizeScoreFloor, floorSummary } from '../pipeline/select.js'
@@ -286,7 +286,8 @@ export default function SpineCheck() {
   const [expanded, setExpanded] = useState({}) // id -> bool: show verified values
   const [viewer, setViewer] = useState(null) // { title, corpusLabel, corpusText, quote, valueLabel }
   const [savedIds, setSavedIds] = useState(() => new Set()) // ids deposited to the Knowledge Base
-  const [restored, setRestored] = useState(false) // digest rehydrated from IndexedDB this mount
+  // Rehydrated from IndexedDB this mount: { note, incomplete } or null.
+  const [restored, setRestored] = useState(null)
   const keySet = hasApiKey()
 
   // Latest digest state, mirrored every render — async runs would otherwise persist stale
@@ -294,6 +295,12 @@ export default function SpineCheck() {
   const digestRef = useRef(null)
   digestRef.current = { results, triaged, candidates, selectedIds }
   const ranRef = useRef(false)
+  // In-flight for the WHOLE run — the papers AND the ranking call that follows. Nothing may
+  // write a digest snapshot while this is true: mid-run `results` is partial and `triaged` is
+  // empty or stale, and that snapshot restores as a digest with no summaries. The `running`
+  // state can't serve as the guard — it goes false the instant the paper loop ends, while
+  // triage hasn't been called yet.
+  const runInFlight = useRef(false)
 
   // Persist the digest snapshot. Fire-and-forget — never blocks the UI, never throws.
   function persistDigest(overrides = {}) {
@@ -319,7 +326,11 @@ export default function SpineCheck() {
         setTriaged(saved.triaged)
         setCandidates(saved.candidates)
         setSelectedIds(saved.selectedIds)
-        setRestored(true)
+        // Say what actually came back. A snapshot can be missing summaries — the ranking call
+        // failed, or an older build wrote one mid-run — and a page of blank cards under a
+        // cheerful "restored" line is indistinguishable from a broken app.
+        const gaps = digestGaps(saved)
+        setRestored({ note: restoreNote(gaps), incomplete: !gaps.complete })
       })
       .catch(console.warn)
   }, [])
@@ -331,6 +342,7 @@ export default function SpineCheck() {
   // so a restored digest keeps its links without re-resolving.
   const oaBusy = useRef(false)
   const oaTried = useRef(new Set()) // paper ids attempted this mount — never re-hit Unpaywall
+  const oaResolved = useRef(new Map()) // paper id -> oa | null, so a run's own write keeps them
   useEffect(() => {
     if (oaBusy.current) return
     const pending = results.filter(
@@ -342,10 +354,16 @@ export default function SpineCheck() {
       for (const r of pending) {
         oaTried.current.add(r.paper.id)
         const oa = await resolveOaLink(r.citation.doi).catch(() => null)
+        oaResolved.current.set(r.paper.id, oa || null)
         setResults((prev) => prev.map((x) => (x.paper.id === r.paper.id ? { ...x, oa: oa || null } : x)))
       }
       oaBusy.current = false
-      persistDigest()
+      // Checked HERE, after the awaits, not when the effect fired: links resolve DURING a run,
+      // and writing then would persist a partial results array with an empty triage map — which
+      // restores on the next mount as a digest of two papers and no summaries. Skipping the
+      // write loses nothing: the run's own final write merges oaResolved back in, and any link
+      // that lands after that write finds the flag already clear and persists normally.
+      if (!runInFlight.current) persistDigest()
     })()
   }, [results])
 
@@ -397,10 +415,22 @@ export default function SpineCheck() {
   // Returns the run's outcomes as [{ id, error }] — the seen ledger needs to know which
   // papers actually made it, and runPaper reports failure in its return value rather than
   // by throwing, so "runList resolved" does NOT mean "every paper ran".
-  async function runList(papers, { injectCorrupt = false, append = false } = {}) {
+  //
+  // The wrapper exists only to hold the in-flight flag across the whole thing — papers and
+  // ranking both — so no background write can snapshot the half-built digest.
+  async function runList(papers, options = {}) {
+    runInFlight.current = true
+    try {
+      return await runAndRank(papers, options)
+    } finally {
+      runInFlight.current = false
+    }
+  }
+
+  async function runAndRank(papers, { injectCorrupt = false, append = false } = {}) {
     setRunning(true)
     ranRef.current = true
-    setRestored(false)
+    setRestored(null)
     const base = append ? results : []
     if (!append) {
       setResults([])
@@ -463,8 +493,10 @@ export default function SpineCheck() {
       }
       setRanking(false)
     }
-    // Persist so a tab switch (which unmounts this component) never costs a re-run.
-    persistDigest({ results: collected, triaged: triagedNow })
+    // Persist so a tab switch (which unmounts this component) never costs a re-run. This is the
+    // ONE write a run makes, so `collected` has to carry the open-access links that resolved
+    // while it was building — it predates those patches, hence the merge.
+    persistDigest({ results: withOaLinks(collected, oaResolved.current), triaged: triagedNow })
     return collected.map((r) => ({ id: r.paper.id, error: r.error }))
   }
 
@@ -526,7 +558,7 @@ export default function SpineCheck() {
     setSearchNote('')
     setEmptyWindow(null)
     ranRef.current = true
-    setRestored(false)
+    setRestored(null)
     setResults([])
     setTriaged({})
     setCandidates([])
@@ -743,7 +775,14 @@ export default function SpineCheck() {
           ))}
         </div>
       )}
-      {restored && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Restored your last digest — run again for fresh results.</p>}
+      {/* A restore that came back short says so, in amber — same treatment as a withheld
+          summary, because it's the same kind of fact: the app is telling her what it does
+          NOT have. A whole restore keeps the quiet muted line. */}
+      {restored && (
+        <p style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: restored.incomplete ? 'var(--color-abstract)' : 'var(--color-fg-muted)' }}>
+          {restored.note}
+        </p>
+      )}
       {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
       {showEmpty && (
         <p style={{ margin: '16px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)', lineHeight: 1.6, maxWidth: 620 }}>

@@ -40,6 +40,46 @@ export function reviveDigest(record) {
   }
 }
 
+// A run writes its snapshot from the array it collected paper-by-paper, and that array
+// predates the open-access links resolved (asynchronously) alongside the run. Re-applies
+// those links so a restored digest keeps its free-full-text links instead of re-resolving
+// them. `resolved` is a Map of paper id -> oa object, or null for "looked, nothing free".
+// A result that already carries an `oa` field is left exactly as it is.
+export function withOaLinks(results, resolved) {
+  if (!Array.isArray(results)) return []
+  if (!resolved?.size) return results
+  return results.map((r) => {
+    const id = r?.paper?.id
+    if (r?.oa !== undefined || id == null || !resolved.has(id)) return r
+    return { ...r, oa: resolved.get(id) ?? null }
+  })
+}
+
+// Is a restored digest whole? The ranking step (pipeline/triage) writes the finding and the
+// relevance for every successful paper in ONE call, so a result with no entry in `triaged`
+// renders as a card with no summary. Two ways that happens: the ranking call failed, or the
+// snapshot was written before it ran. Papers that errored never reach triage, so they are not
+// a gap; entries with no id are ignored rather than guessed at.
+export function digestGaps(digest) {
+  const results = Array.isArray(digest?.results) ? digest.results : []
+  const triaged = digest?.triaged && typeof digest.triaged === 'object' ? digest.triaged : {}
+  let missing = 0
+  for (const r of results) {
+    const id = r?.paper?.id
+    if (id == null || r?.error) continue
+    if (!Object.prototype.hasOwnProperty.call(triaged, id)) missing += 1
+  }
+  return { total: results.length, missing, complete: missing === 0 }
+}
+
+// The restore line, from digestGaps' count. A digest of blank cards is what a half-written
+// snapshot looks like, and it reads as a broken app — so the gap is stated, in the same
+// sentence, before the offer to run again.
+export function restoreNote({ missing = 0 } = {}) {
+  if (!missing) return 'Restored your last digest — run again for fresh results.'
+  return `Restored your last digest — ${missing} paper${missing === 1 ? ' has' : 's have'} no summary (the ranking step didn't finish). Run again for fresh results.`
+}
+
 // Overwrites the single daily-digest slot. Callers fire-and-forget.
 export function saveDailyDigest(state) {
   return store.put(COLLECTION, KEY, serializeDigest(state))
