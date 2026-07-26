@@ -11,6 +11,7 @@ import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { getTrellisProjects, getTrellisExcluded, setTrellisExcluded, PAPERTRELLIS_URL } from '../lib/trellis.js'
+import { isMobileNow } from '../lib/useMobile.js'
 import { DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { normalizeScoreFloor } from '../pipeline/select.js'
 import { normalizeTopics, normalizeSearchDays, normalizeTopicCap } from '../pipeline/topics.js'
@@ -47,6 +48,8 @@ export default function NorthStars() {
   // holds the un-starred ids (so a newly synced project defaults to starred).
   const [trellis, setTrellis] = useState([])
   const [excluded, setExcluded] = useState(new Set())
+  // The synced list is tall on a phone — collapsed there by default, open on desktop.
+  const [trellisOpen, setTrellisOpen] = useState(() => !isMobileNow())
 
   useEffect(() => {
     getProfile().then((profile) => {
@@ -185,10 +188,24 @@ export default function NorthStars() {
           not use. Non-empty, the synced set is visible so she knows what the digest sees. */}
       {isSignedIn() && trellis.length > 0 && (
         <div style={{ marginTop: 16, padding: '13px 15px', borderRadius: 11, border: '1px solid var(--hairline)', background: 'var(--surface-1)' }}>
-          <p style={{ margin: '0 0 10px', fontSize: 11, letterSpacing: '.13em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>
+          {/* The header is the collapse handle; the starred count keeps the digest's
+              view of the list legible even while the rows are folded away. */}
+          <button
+            onClick={() => setTrellisOpen((o) => !o)}
+            aria-expanded={trellisOpen}
+            className="cursor-pointer flex items-center w-full"
+            style={{ gap: 8, padding: 0, border: 0, background: 'transparent', fontFamily: 'inherit', fontSize: 11, letterSpacing: '.13em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}
+          >
+            <span aria-hidden="true" style={{ fontSize: 10, letterSpacing: 0 }}>{trellisOpen ? '▾' : '▸'}</span>
             From PaperTrellis
-          </p>
-          <div className="flex flex-col" style={{ gap: 7 }}>
+            {!trellisOpen && (
+              <span style={{ letterSpacing: 0, textTransform: 'none', fontWeight: 400, color: 'var(--color-fg-muted)' }}>
+                · {trellis.length - [...excluded].filter((id) => trellis.some((p) => p.id === id)).length} of {trellis.length} starred
+              </span>
+            )}
+          </button>
+          {trellisOpen && (
+          <div className="flex flex-col" style={{ gap: 7, marginTop: 10 }}>
             {trellis.map((p) => {
               const starred = !excluded.has(p.id)
               return (
@@ -214,6 +231,8 @@ export default function NorthStars() {
               )
             })}
           </div>
+          )}
+          {trellisOpen && (
           <p style={{ margin: '10px 0 0', fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
             Pre-submission projects, synced from your{' '}
             <a href={PAPERTRELLIS_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>
@@ -222,6 +241,7 @@ export default function NorthStars() {
             account — edit them there. Starred ones steer your digest; un-star a project to
             leave it out.
           </p>
+          )}
         </div>
       )}
 

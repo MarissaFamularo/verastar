@@ -21,6 +21,7 @@ import { pmcUrl } from '../pipeline/openaccess.js'
 import { listDomains, domainColor, domainLabel } from '../lib/domains.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
+import { useIsMobile } from '../lib/useMobile.js'
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 
@@ -35,6 +36,10 @@ export default function KnowledgeBase() {
   const [refiling, setRefiling] = useState('') // '' | progress string
   const [confirmRefile, setConfirmRefile] = useState(false)
   const [reorg, setReorg] = useState('') // '' | 'running' | result/error message
+  // On the phone the two chip rows eat most of a screen before the first paper —
+  // collapsed behind one toggle line there; desktop keeps them always open.
+  const isMobile = useIsMobile()
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const keySet = hasApiKey()
 
   async function refresh() {
@@ -193,10 +198,27 @@ export default function KnowledgeBase() {
           <button onClick={() => setQuery('')} className="cursor-pointer" style={{ fontSize: 12, color: 'var(--color-fg-muted)', background: 'transparent', border: 0 }}>clear</button>
         )}
       </div>
+      {/* Mobile: the chip rows collapse behind this line. The active filters stay
+          legible in the summary so collapsing never hides what's narrowing the list. */}
+      {isMobile && (topics.length > 0 || listDomains().length > 1) && (
+        <button
+          onClick={() => setFiltersOpen((o) => !o)}
+          className="cursor-pointer flex items-center"
+          style={{ marginTop: 14, gap: 8, padding: 0, border: 0, background: 'transparent', fontFamily: 'inherit', fontSize: 12.5, color: 'var(--color-fg-muted)' }}
+        >
+          <span aria-hidden="true" style={{ fontSize: 10 }}>{filtersOpen ? '▾' : '▸'}</span>
+          Filter by topic &amp; domain
+          {!filtersOpen && (topic !== 'all' || domain !== 'all') && (
+            <span style={{ color: 'var(--color-accent)' }}>
+              · {[topic !== 'all' && topics.find((t) => t.id === topic)?.label, domain !== 'all' && domainLabel(domain)].filter(Boolean).join(' · ')}
+            </span>
+          )}
+        </button>
+      )}
       {/* Topic chips — the hub tier ("Carotid Revascularization"-level), the altitude a
           single-specialty reader actually browses by. The classifier caps hub growth by
           strongly preferring existing hubs, so this stays a handful of chips. */}
-      {topics.length > 0 && (
+      {(!isMobile || filtersOpen) && topics.length > 0 && (
         <div className="flex flex-wrap" style={{ marginTop: 14, gap: 8 }}>
           <FilterChip active={topic === 'all'} onClick={() => setTopic('all')}>All topics</FilterChip>
           {topics.map((t) => (
@@ -208,7 +230,7 @@ export default function KnowledgeBase() {
       )}
       {/* Domain chips only earn a row when the library actually spans disciplines — a
           single-domain library would render one always-on chip that filters nothing. */}
-      {listDomains().length > 1 && (
+      {(!isMobile || filtersOpen) && listDomains().length > 1 && (
         <div className="flex flex-wrap" style={{ marginTop: 10, gap: 8 }}>
           <FilterChip active={domain === 'all'} onClick={() => setDomain('all')}>All domains</FilterChip>
           {listDomains().map((d) => (

@@ -7,6 +7,7 @@ import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
 import { refreshTrellisProjects, getTrellisProjects, getTrellisExcluded, consideredProjects, PAPERTRELLIS_URL } from './lib/trellis.js'
 import { useWindowFocusRefresh } from './lib/focusRefresh.js'
+import { useIsMobile } from './lib/useMobile.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
@@ -165,6 +166,30 @@ function IconRail({ view, setView, onSettings, initials }) {
         </button>
       </div>
     </aside>
+  )
+}
+
+// The star map is a roam-and-zoom canvas — cramped to uselessness at phone width.
+// Mobile gets an honest sign instead, and the sim never mounts (no idle canvas work).
+function StarMapSmallSky() {
+  return (
+    <div className="flex flex-col items-center justify-center" style={{ minHeight: '70vh', padding: '40px 28px', textAlign: 'center' }}>
+      <div style={{ color: 'var(--color-gold)', opacity: 0.85, marginBottom: 18 }}>
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
+          <path d="M5 18 L11 8 L17 13 L20.5 4.5" opacity=".5" />
+          <circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none" />
+          <circle cx="11" cy="8" r="2.2" fill="currentColor" stroke="none" />
+          <circle cx="17" cy="13" r="1.4" fill="currentColor" stroke="none" />
+          <circle cx="20.5" cy="4.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      </div>
+      <p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 22, color: 'var(--color-fg)' }}>
+        The star map needs a bigger sky.
+      </p>
+      <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--color-fg-muted)', maxWidth: 300 }}>
+        Open Verastar on a desktop to roam your constellations.
+      </p>
+    </div>
   )
 }
 
@@ -599,6 +624,7 @@ function DigestRail({ saved, onSettings, counts, projects, trellis, onConnection
 }
 
 export default function App() {
+  const isMobile = useIsMobile()
   const [saved, setSaved] = useState(hasApiKey())
   const [remembered, setRemembered] = useState(isKeyRemembered())
   const [status, setStatus] = useState('idle')
@@ -875,7 +901,7 @@ export default function App() {
       {view !== 'digest' && (
         <main style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
           {view === 'library' && <KnowledgeBase key="library" />}
-          {view === 'starmap' && <ConstellationView key="starmap" />}
+          {view === 'starmap' && (isMobile ? <StarMapSmallSky key="starmap" /> : <ConstellationView key="starmap" />)}
           {view === 'connections' && <WeekendRead key="connections" />}
           {view === 'memos' && <Memos key="memos" />}
         </main>
