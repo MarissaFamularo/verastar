@@ -29,6 +29,8 @@ import {
 } from '../pipeline/topics.js'
 import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { savePaper } from '../pipeline/save.js'
+import { setPaperFavorite } from '../lib/favorites.js'
+import HeartButton from './HeartButton.jsx'
 import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
@@ -294,6 +296,7 @@ export default function SpineCheck() {
   const [expanded, setExpanded] = useState({}) // id -> bool: show verified values
   const [viewer, setViewer] = useState(null) // { title, corpusLabel, corpusText, quote, valueLabel }
   const [savedIds, setSavedIds] = useState(() => new Set()) // ids deposited to the Knowledge Base
+  const [favIds, setFavIds] = useState(() => new Set()) // saved papers hearted as favorites
   // Rehydrated from IndexedDB this mount: { note, incomplete } or null.
   const [restored, setRestored] = useState(null)
   // Her selection bar, so a card can say when its POST-read score came in under it. Read
@@ -321,9 +324,13 @@ export default function SpineCheck() {
 
   const titleOf = (res) => res.paper.title || res.citation?.title || `PMID ${res.paper.pmid}`
 
-  // Load which papers are already in the Knowledge Base (persisted in IndexedDB).
+  // Load which papers are already in the Knowledge Base (persisted in IndexedDB),
+  // and which of those are hearted — the digest's heart mirrors the Library's.
   useEffect(() => {
-    store.all('papers').then((papers) => setSavedIds(new Set((papers || []).map((p) => p.id))))
+    store.all('papers').then((papers) => {
+      setSavedIds(new Set((papers || []).map((p) => p.id)))
+      setFavIds(new Set((papers || []).filter((p) => p.favorite).map((p) => p.id)))
+    })
   }, [])
 
   // The selection bar. normalizeScoreFloor is the same fallback scorePool applies, so a
@@ -400,6 +407,13 @@ export default function SpineCheck() {
         next.delete(id)
         return next
       })
+      // Withdrawing the record takes its heart with it — mirror that in the UI set.
+      setFavIds((prev) => {
+        if (!prev.has(id)) return prev
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
       return
     }
     setSavedIds((prev) => new Set(prev).add(id))
@@ -411,6 +425,33 @@ export default function SpineCheck() {
     } catch (err) {
       console.warn('Save failed:', err.message)
     }
+  }
+
+  // Heart a paper straight from the digest. A favorite is a flag on the SAVED record,
+  // so hearting an unsaved paper saves it first (same shared save path), then flips the
+  // flag — one tap does both, and the checkbox lights up alongside the heart.
+  async function toggleFavorite(res, take, title) {
+    const id = res.paper.id
+    if (favIds.has(id)) {
+      await setPaperFavorite(id, false)
+      setFavIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      return
+    }
+    if (!savedIds.has(id)) {
+      setSavedIds((prev) => new Set(prev).add(id))
+      try {
+        await savePaper(res, take, { title })
+      } catch (err) {
+        console.warn('Save failed:', err.message)
+        return
+      }
+    }
+    await setPaperFavorite(id, true)
+    setFavIds((prev) => new Set(prev).add(id))
   }
 
   // Open the source panel for a located quote, picking the corpus (prose/table) it
@@ -863,10 +904,13 @@ export default function SpineCheck() {
                     </span>
                   )}
                   {!res.error && (
-                    <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: savedIds.has(paper.id) ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)' }}>
-                      <input type="checkbox" checked={savedIds.has(paper.id)} onChange={() => toggleSave(res, take, verifiedRows, title)} style={{ width: 15, height: 15, accentColor: '#7fbf9a' }} />
-                      {savedIds.has(paper.id) ? 'Saved' : 'Save to Library'}
-                    </label>
+                    <>
+                      <HeartButton active={favIds.has(paper.id)} onClick={() => toggleFavorite(res, take, title)} />
+                      <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: savedIds.has(paper.id) ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)' }}>
+                        <input type="checkbox" checked={savedIds.has(paper.id)} onChange={() => toggleSave(res, take, verifiedRows, title)} style={{ width: 15, height: 15, accentColor: '#7fbf9a' }} />
+                        {savedIds.has(paper.id) ? 'Saved' : 'Save to Library'}
+                      </label>
+                    </>
                   )}
                 </div>
               </div>

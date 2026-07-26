@@ -18,6 +18,8 @@ import { hasApiKey } from '../lib/anthropic.js'
 import { synthesizeWeekendRead } from '../pipeline/weekend.js'
 import { appendConnectionsToLibrary } from '../lib/library.js'
 import { isSignedIn } from '../lib/supabase.js'
+import { setPaperFavorite } from '../lib/favorites.js'
+import HeartButton from './HeartButton.jsx'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 
 // Which kind of anchor a thread hangs off — colors the pill so projects/north stars/cross-cutting
@@ -49,12 +51,15 @@ function AnchorPill({ anchor, profile }) {
 }
 
 // One paper cited inside a thread: title, mono citation line, the app-verified finding.
-function PaperRow({ paper }) {
+function PaperRow({ paper, onToggleFavorite }) {
   const c = paper?.citation
   const bits = c ? [c.author, c.journal, c.year].filter(Boolean).join(' · ') : ''
   return (
     <li style={{ borderLeft: '2px solid rgba(255,255,255,.12)', paddingLeft: 16 }}>
-      <p style={{ margin: 0, fontSize: 14.5, fontWeight: 500, color: 'var(--color-fg-soft)' }}>{paper?.title || 'Untitled paper'}</p>
+      <div className="flex items-start" style={{ gap: 8 }}>
+        <p style={{ margin: 0, fontSize: 14.5, fontWeight: 500, color: 'var(--color-fg-soft)', flex: 1 }}>{paper?.title || 'Untitled paper'}</p>
+        <HeartButton active={!!paper?.favorite} onClick={() => onToggleFavorite(paper)} size={14} style={{ marginTop: 1 }} />
+      </div>
       {c && (
         <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>
           {bits && <span>{bits} · </span>}
@@ -115,6 +120,13 @@ export default function WeekendRead() {
       }
     })().catch(() => {})
   })
+
+  // Flip a cited paper's heart — the same favorite flag every other surface reads.
+  async function toggleFavorite(p) {
+    if (!p?.id) return
+    const next = await setPaperFavorite(p.id, !p.favorite)
+    if (next) setPapers((prev) => prev.map((x) => (x.id === p.id ? next : x)))
+  }
 
   // pmid/id -> paper, so a thread's pmids resolve to full records for rendering.
   const byId = useMemo(() => {
@@ -252,7 +264,7 @@ export default function WeekendRead() {
                         <ul style={{ margin: '18px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 14 }}>
                           {t.pmids.map((id) => {
                             const paper = byId.get(String(id))
-                            return paper ? <PaperRow key={id} paper={paper} /> : null
+                            return paper ? <PaperRow key={id} paper={paper} onToggleFavorite={toggleFavorite} /> : null
                           })}
                         </ul>
                       </div>

@@ -24,6 +24,7 @@ import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 import { useIsMobile } from '../lib/useMobile.js'
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
+import HeartButton from './HeartButton.jsx'
 
 export default function KnowledgeBase() {
   const [concepts, setConcepts] = useState([])
@@ -32,6 +33,7 @@ export default function KnowledgeBase() {
   const [query, setQuery] = useState('')
   const [domain, setDomain] = useState('all')
   const [topic, setTopic] = useState('all')
+  const [favsOnly, setFavsOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refiling, setRefiling] = useState('') // '' | progress string
   const [confirmRefile, setConfirmRefile] = useState(false)
@@ -69,9 +71,11 @@ export default function KnowledgeBase() {
     if (isSignedIn() && !refiling) refresh().catch(() => {})
   })
 
+  // Favorites narrow the paper set BEFORE grouping, so a favorites-only view keeps
+  // buildKB's own rule doing the work: concepts with no matching papers just vanish.
   const { groups, unfiled, counts } = useMemo(
-    () => buildKB(concepts, papers, { query, domain, topic, edges }),
-    [concepts, papers, edges, query, domain, topic],
+    () => buildKB(concepts, favsOnly ? papers.filter((p) => p.favorite) : papers, { query, domain, topic, edges }),
+    [concepts, papers, edges, query, domain, topic, favsOnly],
   )
   const topics = useMemo(() => listTopics(concepts, papers, edges), [concepts, papers, edges])
   const tIdx = useMemo(() => topicIndex(concepts, edges), [concepts, edges])
@@ -197,6 +201,20 @@ export default function KnowledgeBase() {
         {query && (
           <button onClick={() => setQuery('')} className="cursor-pointer" style={{ fontSize: 12, color: 'var(--color-fg-muted)', background: 'transparent', border: 0 }}>clear</button>
         )}
+        {/* Favorites-only lives beside search, not with the chips — it survives the
+            mobile filter fold, so a hearted library is one tap away on the phone too. */}
+        <button
+          onClick={() => setFavsOnly((f) => !f)}
+          title={favsOnly ? 'Showing favorites only — click for all papers' : 'Show favorites only'}
+          aria-pressed={favsOnly}
+          className="cursor-pointer flex items-center"
+          style={{ gap: 6, padding: '4px 10px', borderRadius: 8, border: 0, fontFamily: 'inherit', fontSize: 12, fontWeight: 500, background: favsOnly ? 'rgba(224,96,90,.16)' : 'transparent', color: favsOnly ? 'var(--color-domain-vascular)' : 'var(--color-fg-muted)' }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill={favsOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+            <path d="M12 20.3C7.2 16.7 3.5 13.5 3.5 9.8 3.5 7.1 5.6 5 8.1 5c1.5 0 3 .8 3.9 2.1C12.9 5.8 14.4 5 15.9 5c2.5 0 4.6 2.1 4.6 4.8 0 3.7-3.7 6.9-8.5 10.5z" />
+          </svg>
+          Favorites
+        </button>
       </div>
       {/* Mobile: the chip rows collapse behind this line. The active filters stay
           legible in the summary so collapsing never hides what's narrowing the list. */}
@@ -270,7 +288,9 @@ export default function KnowledgeBase() {
           </p>
         ) : counts.papers === 0 ? (
           <p style={{ fontSize: 14, color: 'var(--color-fg-muted)' }}>
-            No matches for “{query}”{domain !== 'all' ? ` in ${domainLabel(domain)}` : ''}.
+            {favsOnly && !query
+              ? 'No favorites yet — tap the heart on any paper to keep it here.'
+              : `No matches for “${query}”${domain !== 'all' ? ` in ${domainLabel(domain)}` : ''}${favsOnly ? ' among your favorites' : ''}.`}
           </p>
         ) : (
           <>
@@ -287,6 +307,7 @@ export default function KnowledgeBase() {
                 onSaveNote={(id, notes) => savePaper(id, { notes })}
                 onDeleteConcept={() => deleteConcept(group)}
                 onDeletePaper={deletePaper}
+                onToggleFavorite={(p) => savePaper(p.id, { favorite: !p.favorite })}
               />
             ))}
             {unfiled.length > 0 && (
@@ -296,7 +317,7 @@ export default function KnowledgeBase() {
                 </p>
                 <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {unfiled.map((p) => (
-                    <PaperRow key={p.id} paper={p} onRemoveTag={(t) => removePaperTag(p, t)} onSaveNote={(notes) => savePaper(p.id, { notes })} onDelete={() => deletePaper(p)} />
+                    <PaperRow key={p.id} paper={p} onRemoveTag={(t) => removePaperTag(p, t)} onSaveNote={(notes) => savePaper(p.id, { notes })} onDelete={() => deletePaper(p)} onToggleFavorite={() => savePaper(p.id, { favorite: !p.favorite })} />
                   ))}
                 </ul>
               </div>
@@ -319,7 +340,7 @@ export default function KnowledgeBase() {
 // One concept node: colored TOPIC eyebrow + glow dot (the hub tier — falls back to the domain
 // for a hub-less concept), Spectral title, synthesized summary, prunable concept tags, and the
 // source papers under it (each with an editable note + tags).
-function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveConceptTag, onRemovePaperTag, onSaveNote, onDeleteConcept, onDeletePaper }) {
+function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveConceptTag, onRemovePaperTag, onSaveNote, onDeleteConcept, onDeletePaper, onToggleFavorite }) {
   const [open, setOpen] = useState(true)
   const color = topicColor || domainColor(concept.domain)
   return (
@@ -355,7 +376,7 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
         <ul style={{ margin: 0, padding: 0, listStyle: 'none', borderTop: '1px solid var(--hairline)' }}>
           {papers.map((p, i) => (
             <li key={p.id} style={{ padding: '16px 26px', borderTop: i === 0 ? 'none' : '1px solid var(--hairline-soft)' }}>
-              <PaperRow paper={p} onRemoveTag={(t) => onRemovePaperTag(p, t)} onSaveNote={(notes) => onSaveNote(p.id, notes)} onDelete={() => onDeletePaper(p)} />
+              <PaperRow paper={p} onRemoveTag={(t) => onRemovePaperTag(p, t)} onSaveNote={(notes) => onSaveNote(p.id, notes)} onDelete={() => onDeletePaper(p)} onToggleFavorite={() => onToggleFavorite(p)} />
             </li>
           ))}
           {papers.length === 0 && (
@@ -370,7 +391,7 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
 }
 
 // One saved paper: title, mono citation, collapsible finding, editable note, prunable tags, links.
-function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete }) {
+function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }) {
   const [showFinding, setShowFinding] = useState(false)
   const [note, setNote] = useState(paper.notes || '')
   const dirty = note !== (paper.notes || '')
@@ -420,6 +441,7 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete }) {
       {cite && <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>{cite}</p>}
 
       <div className="flex flex-wrap items-center" style={{ marginTop: 9, gap: 8 }}>
+        <HeartButton active={!!paper.favorite} onClick={onToggleFavorite} />
         {paper.finding && (
           <button onClick={() => setShowFinding((s) => !s)} style={pill}>{showFinding ? 'Hide summary' : 'Summary'}</button>
         )}

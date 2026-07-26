@@ -25,6 +25,8 @@ import { listDomains, PROJECT_COLOR, domainColor, domainLabel } from '../lib/dom
 import { topicIndex } from '../lib/kb.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
+import { setPaperFavorite } from '../lib/favorites.js'
+import HeartButton from './HeartButton.jsx'
 import StarMap from './StarMap.jsx'
 
 const KIND_LABEL = { northStar: 'North star', project: 'Active Work', concept: 'Concept' }
@@ -98,6 +100,13 @@ export default function ConstellationView() {
   // The source papers filed under a concept (by conceptId, or the concept's pmid set).
   const sourcePapersOf = (node) =>
     papers.filter((p) => p.conceptId === node.id || (node.sourcePmids || []).includes(String(p.pmid)))
+
+  // Flip a source paper's heart and patch it into the live list — same flag the
+  // Library and digest read, so the star map's heart is never its own state.
+  async function handleToggleFavorite(p) {
+    const next = await setPaperFavorite(p.id, !p.favorite)
+    if (next) setPapers((prev) => prev.map((x) => (x.id === p.id ? next : x)))
+  }
 
   async function handleDismiss(edge) {
     setNote('')
@@ -238,6 +247,7 @@ export default function ConstellationView() {
             connections={neighborsOf(selected.id)}
             openPaper={openPaper}
             onTogglePaper={(pmid) => setOpenPaper((cur) => (cur === pmid ? null : pmid))}
+            onToggleFavorite={handleToggleFavorite}
             onAskClaude={askClaude}
             onDismiss={handleDismiss}
             onRemove={() => handleRemoveNode(selected.id)}
@@ -262,6 +272,7 @@ function NodePanel({
   connections,
   openPaper,
   onTogglePaper,
+  onToggleFavorite,
   onAskClaude,
   onDismiss,
   onRemove,
@@ -325,6 +336,7 @@ function NodePanel({
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--color-fg-soft)', lineHeight: 1.4 }}>{p.title}</p>
                   {cite && <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>{cite}</p>}
                   <div className="flex flex-wrap items-center" style={{ marginTop: 9, gap: 8 }}>
+                    <HeartButton active={!!p.favorite} onClick={() => onToggleFavorite(p)} size={14} />
                     {p.finding && <button onClick={() => onTogglePaper(p.pmid)} style={pill}>{isOpen ? 'Hide summary' : 'Summary'}</button>}
                     <a href={p.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: 'var(--color-accent)' }}>View article ↗</a>
                     {(p.pdfUrl || p.oaUrl) && <a href={p.pdfUrl || p.oaUrl} target="_blank" rel="noopener noreferrer" style={{ borderRadius: 7, padding: '3px 9px', fontSize: 11, fontWeight: 600, color: '#fff', background: 'rgba(224,96,90,.85)' }}>{p.pdfUrl ? 'PDF' : 'Free full text'}</a>}
