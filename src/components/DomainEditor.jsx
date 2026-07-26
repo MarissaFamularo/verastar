@@ -68,7 +68,8 @@ export default function DomainEditor() {
       <h3 style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--color-fg-soft)' }}>Domains</h3>
       <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', lineHeight: 1.5 }}>
         The broad fields your library is grouped and colored by. Claude creates these
-        automatically as you save papers — rename or prune them here.
+        automatically as you save papers — rename or prune them here. Fields you add or
+        rename are yours: Claude files new papers into them and never merges them away.
       </p>
 
       <div className="flex flex-col" style={{ marginTop: 12, gap: 7 }}>

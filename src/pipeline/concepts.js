@@ -13,7 +13,7 @@
 //     which sparse fields are needless splinters of another and should merge into it.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
-import { listDomains, ensureDomain } from '../lib/domains.js'
+import { listDomains, ensureDomain, ensureDomainsLoaded } from '../lib/domains.js'
 
 // concept id from its name — stable slug so re-using the same name collapses to one node.
 export function conceptId(name) {
@@ -41,15 +41,37 @@ export const ANALYZE_SCHEMA = {
   },
 }
 
+// The domain rule, built from the reader's CURRENT taxonomy. Two regimes, because the right
+// answer differs completely:
+//
+//   - Empty taxonomy: there is nothing to match, so name the field by DISCIPLINE (department
+//     level) and lean against collapsing everything into the clinical specialty.
+//   - Existing taxonomy: the list itself is the spec. A single-specialty reader whose fields are
+//     subject-level ("Carotid Disease", "Aneurysm", "Limb") gets NO grouping from a discipline
+//     that swallows the whole library — every paper lands in "Vascular Surgery" and the tier is
+//     dead. So the model matches the granularity it is shown rather than the one we'd prescribe,
+//     and fields the user created themselves outrank anything the model would name itself.
+//
+// Pure — exported so the preference rule is testable without an API call.
+export function domainGuidance(domains = []) {
+  const head = `the broad GROUPING this paper is filed under — one tier wider than a hub (a domain gathers several hubs). A paper's DISCIPLINE can differ from its clinical subject: a machine-learning model for aneurysm growth contributes AI methods, a data-interoperability or genomic-database paper contributes data science, a training-curriculum paper contributes education.`
+  if (!domains.length) {
+    return `${head} This reader's taxonomy is empty so far — propose the domain as a short field-level name (2–4 words, Title Case), broad enough that a dozen hubs could live under it, chosen by the paper's discipline rather than merely its clinical subject. A clinician-scientist's library normally spans SEVERAL such fields — if you find yourself filing methods, data, AI, and education papers all under one clinical specialty, you are collapsing the taxonomy.`
+  }
+  const list = domains
+    .map((d) => `  - "${d.key}": ${d.label}${d.source === 'user' ? '   ← the reader created this field themselves' : ''}`)
+    .join('\n')
+  return `${head} This reader ALREADY HAS a taxonomy — file the paper INTO it. Return the KEY verbatim:
+${list}
+Match the granularity of that list; infer it from the list itself. If the fields are SUBJECT-level (conditions, anatomy, populations), file at that level — do NOT fall back to the broad specialty or discipline that contains all of them, because a field that swallows the reader's whole library groups nothing. If the fields are DISCIPLINE-level, file by discipline. When the list MIXES levels — a broad specialty sitting alongside narrower fields — file into the narrowest field the paper actually fits; the broad one is the last resort, for papers no narrower field covers. Fields the reader created themselves are the strongest available signal of how they want their library organized: prefer them over any field you would name yourself, and pick the closest one whenever the paper plausibly belongs there.
+Mint a NEW field ONLY when the paper genuinely fits none of the above — not merely because no field is a perfect fit. Name a new field at the SAME level of granularity as the existing list (2–4 words, Title Case), never a paper- or disease-instance-specific topic, and never a near-duplicate of a field already listed.`
+}
+
 const analyzeSystem = (domains, projects) => `You file papers into a clinician-scientist's concept-based knowledge graph. The reader may be from ANY specialty — derive every topic name from the papers themselves, never from these examples. The graph has TWO tiers: broad "hub" topics that gather many papers (a vascular surgeon might accrue "Carotid Revascularization" and "CLTI Management"; an orthopedic surgeon "Knee Arthroplasty" and "Resident Education"), and specific "concept" satellites beneath them (e.g. "Transcarotid Revascularization Stroke Risk" under the former, "Cementless Fixation Outcomes" under the latter). A paper is a SOURCE under one specific concept, and that concept hangs off one broad hub. This is what makes the map read like a constellation — big hubs with small satellites orbiting them — instead of a handful of lonely stars. For the given paper return:
 
 - concept: the paper's SPECIFIC topic — a small, reusable node capturing its actual angle (technique, endpoint, cohort). Reuse an EXISTING concept name VERBATIM only if the paper is truly the SAME specific topic; otherwise mint a new specific concept. Do NOT collapse everything into the hub, and do NOT use the paper's exact title — name the topic it exemplifies (e.g. a paper on TCAR 30-day stroke → "Transcarotid Revascularization Outcomes", not the title). Keeping specific concepts as their own satellites is intended: singletons stay visible.
 - hub: the BROAD parent topic this concept belongs under. STRONGLY prefer an existing hub from the list — a TCAR paper, a CEA-vs-CAS paper, and an asymptomatic-stenosis paper all share the hub "Carotid Revascularization". Only mint a new hub when none fits. A hub is broad enough to gather a dozen concepts. If the paper's specific topic already IS that broad (no finer angle), you may return the same string for both concept and hub.
-- domain: the broad RESEARCH FIELD this paper belongs to — one tier wider than a hub (a domain gathers several hubs; think department or discipline, e.g. "Vascular Surgery", "Health Data Science", "AI & Technology in Medicine", "Medical Education"). Choose the domain by the paper's DISCIPLINE — the kind of expertise it contributes — not merely its clinical subject. A machine-learning model for aneurysm growth is "AI & Technology in Medicine" (its contribution is AI methods) even though its subject is vascular; a data-interoperability or genomic-database paper is "Health Data Science"; a training-curriculum paper is "Medical Education". A clinician-scientist's library normally spans SEVERAL such fields — if you find yourself filing methods, data, AI, and education papers all under the clinical specialty, you are collapsing the taxonomy. ${
-  domains.length
-    ? `Reuse an existing domain — returned as its key — when the paper's discipline genuinely matches it:\n${domains.map((d) => `  - "${d.key}": ${d.label}`).join('\n')}\nBut do NOT force a paper into an existing domain just because its clinical subject overlaps; when its discipline is different, propose a NEW domain as a short field-level name (2–4 words, Title Case) — never a paper- or disease-specific topic.`
-    : `This reader's taxonomy is empty so far — propose the domain as a short field-level name (2–4 words, Title Case), broad enough that a dozen hubs could live under it.`
-}
+- domain: ${domainGuidance(domains)}
 - tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by. Tags carry the finest angle; the concept is specific and the hub is broad.${projectBan(projects)}`
 
 // The reader's own projects leak into filing via the paper's Relevance line ("…informs your
@@ -91,6 +113,7 @@ export async function analyzePaper({ paper, concepts = [], projects = [], model 
     (paper.relevance ? `Relevance: ${paper.relevance}\n` : '') +
     (paper.text ? `\nSource excerpt:\n${paper.text.slice(0, 2000)}` : '')
 
+  await ensureDomainsLoaded() // the prompt must show the reader's real taxonomy, not an empty one
   const r = await extractStructured({
     model,
     system: analyzeSystem(listDomains(), projects),
@@ -148,13 +171,15 @@ export const MERGE_SCHEMA = {
 
 const MERGE_SYSTEM = `You tidy the FIELD taxonomy of a clinician-scientist's knowledge graph. Fields are broad research disciplines — department-level, like "Vascular Surgery" or "Health Data Science" — that color the map's stars. A good taxonomy is a handful of well-populated fields (roughly 4–8), not a long tail of one-paper micro-fields. You get every field with its paper count; the papers themselves are listed under the SPARSE fields. Decide which sparse fields (if any) should MERGE into another field. Merge when a sparse field is a near-duplicate, a subset, or a needless splinter of another (e.g. "Clinical AI" into "AI & Technology in Medicine"). KEEP a sparse field that is a genuinely distinct discipline likely to accrue more papers — every new field starts with one paper, so small is not, by itself, a reason to merge. Never merge two healthy distinct fields. Return merges: [] when the taxonomy is already right.`
 
-// Propose taxonomy merges. `fields` = [{ key, label, count, papers }] — papers (titles) are
-// provided only for the sparse fields. Returns raw [{ from, into }] by key; the caller
-// sanitizes (deposit.pickMerges) and applies. Claude proposes; the code disposes.
+// Propose taxonomy merges. `fields` = [{ key, label, count, pinned, papers }] — papers (titles)
+// are provided only for the sparse fields, and `pinned` marks the user's own fields (off-limits
+// as a merge source). Returns raw [{ from, into }] by key; the caller sanitizes
+// (deposit.pickMerges) and applies. Claude proposes; the code disposes.
 export async function proposeDomainMerges({ fields, model = MODELS.triage, maxTokens = 1024 }) {
   const lines = fields.map(
     (f) =>
       `- "${f.key}" (${f.label}) — ${f.count} paper${f.count === 1 ? '' : 's'}` +
+      (f.pinned ? ' [the reader created this field — never merge it away; it may absorb others]' : '') +
       (f.papers?.length ? `\n${f.papers.map((t) => `    · ${t}`).join('\n')}` : ''),
   )
   const r = await extractStructured({
