@@ -5,7 +5,7 @@
 // into it — a single-specialty reader whose every paper lands in "Vascular Surgery" has a dead tier.
 
 import { describe, it, expect } from 'vitest'
-import { sanitizeFiling, domainGuidance } from './concepts.js'
+import { sanitizeFiling, domainGuidance, categoryGuidance, OTHER_LABEL } from './concepts.js'
 
 const PROJECTS = ['Limb Preservation Program', 'COSMOS utilization study']
 
@@ -119,5 +119,34 @@ describe('domainGuidance', () => {
 
   it('defaults to the empty-taxonomy regime with no argument', () => {
     expect(domainGuidance()).toBe(domainGuidance([]))
+  })
+})
+
+// Once the library has category shelves, the hub answer is a CHOICE, not a coinage: pick one
+// of the fixed labels or fall to Other. Deposits never change the shelf set.
+describe('categoryGuidance', () => {
+  const CATS = ['Carotid Disease', 'Aneurysm', 'Other']
+
+  it('no categories yet → null (the free-form hub regime applies)', () => {
+    expect(categoryGuidance([])).toBe(null)
+    expect(categoryGuidance()).toBe(null)
+  })
+
+  it('lists every category label verbatim', () => {
+    const g = categoryGuidance(CATS)
+    for (const l of CATS) expect(g).toContain(`"${l}"`)
+  })
+
+  it('demands a fixed choice and names the Other fallback', () => {
+    const g = categoryGuidance(CATS)
+    expect(g).toMatch(/FIXED set/)
+    expect(g).toMatch(/EXACTLY one of these labels, verbatim/)
+    expect(g).toContain(`return exactly "${OTHER_LABEL}"`)
+  })
+
+  it('forbids minting, renaming, or merging a category at deposit time', () => {
+    const g = categoryGuidance(CATS)
+    expect(g).toMatch(/NEVER creates, renames, or merges/)
+    expect(g).toMatch(/Never invent a new category name/)
   })
 })

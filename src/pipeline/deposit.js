@@ -9,9 +9,9 @@
 import { getProfile, store } from '../lib/store.js'
 import { listDomains, removeDomain, userDomainKeys } from '../lib/domains.js'
 import { analyzePaper, synthesizeConcept, proposeDomainMerges } from './concepts.js'
+import { resolveCategory, ensureOtherCategory, addSourceToNode } from './categorize.js'
 import {
   loadGraph,
-  loadConcepts,
   syncAnchors,
   upsertConcept,
   linkToHub,
@@ -20,12 +20,18 @@ import {
 } from './graph.js'
 
 // File one already-saved paper into the two-tier concept graph: analyze → upsert its SPECIFIC
-// concept (the satellite the paper is a source of) → upsert the BROAD hub it belongs under →
-// link satellite→hub with a confirmed taxonomy edge (the map's skeleton) → patch the paper record
-// (domain + conceptId + tags). Does NOT synthesize the summary (do that once per concept via
+// concept (the satellite the paper is a source of) → link it under its CATEGORY shelf with a
+// confirmed taxonomy edge (the map's skeleton) → patch the paper record (domain + conceptId +
+// tags). The category set is FIXED at deposit time: the classifier must name one of the
+// existing shelves, an unresolvable name files to "Other", and a deposit never mints a hub —
+// shelves change only through categorizeLibrary(). Before the first organization (no hubs yet)
+// the satellite simply floats; enough floaters trip the reorganize trigger, which mints the
+// initial shelves. Does NOT synthesize the summary (do that once per concept via
 // synthesizeGroup so a batch re-file doesn't re-synthesize per paper). Returns { groupId } or null.
 export async function filePaper(paper) {
-  const existing = await loadConcepts()
+  const { nodes, edges } = await loadGraph()
+  const existing = nodes.filter((n) => n.kind === 'concept')
+  const hubs = existing.filter((c) => c.isHub)
   // The reader's projects are banned as topic names — the Relevance line names them
   // ("…informs your Limb Preservation Program") and the model would otherwise mint a
   // topic that duplicates the map's yellow project star.
@@ -34,19 +40,38 @@ export async function filePaper(paper) {
     paper: { title: paper.title, finding: paper.finding, relevance: paper.relevance, text: paper.fullText },
     concepts: existing.map((c) => ({ name: c.label, domain: c.domain, isHub: c.isHub })),
     projects: profile?.projects || [],
+    categories: hubs.map((h) => h.label),
   })
-  const node = await upsertConcept({ name: concept, domain, tags, sourcePmids: [paper.id] })
-  // The broad hub is a grouping node (no papers of its own, same domain color); the satellite
-  // hangs off it. When concept === hub the paper's topic already IS broad — no separate hub node.
-  if (hub && hub !== concept) {
-    const hubNode = await upsertConcept({ name: hub, domain, isHub: true })
-    await linkToHub(node.id, hubNode.id, hubNode.label)
+
+  const patchPaper = async (groupId) => {
+    const current = await store.get('papers', paper.id)
+    if (!current) return null // un-saved while we were working
+    await store.put('papers', paper.id, { ...current, domain, tags, conceptId: groupId })
+    return { groupId }
   }
 
-  const current = await store.get('papers', paper.id)
-  if (!current) return null // un-saved while we were working
-  await store.put('papers', paper.id, { ...current, domain, tags, conceptId: node.id })
-  return { groupId: node.id }
+  // Paper's own topic IS one of the shelves → file it directly on the shelf node (by ID —
+  // re-slugging the name via upsertConcept would duplicate a migration-id shelf).
+  const shelfForConcept = resolveCategory(concept, hubs)
+  if (shelfForConcept) {
+    await addSourceToNode(shelfForConcept.id, paper.id)
+    return patchPaper(shelfForConcept.id)
+  }
+
+  const node = await upsertConcept({ name: concept, domain, tags, sourcePmids: [paper.id] })
+  if (hubs.length) {
+    // A satellite that's already shelved keeps its shelf (stable assignments don't churn);
+    // otherwise it goes where the classifier said — or to Other when that shelf doesn't exist.
+    const hubIds = new Set(hubs.map((h) => h.id))
+    const alreadyFiled = edges.some(
+      (e) => e?.origin === 'taxonomy' && e.source === node.id && hubIds.has(e.target),
+    )
+    if (!alreadyFiled) {
+      const shelf = resolveCategory(hub, hubs) || (await ensureOtherCategory(hubs))
+      await linkToHub(node.id, shelf.id, shelf.label)
+    }
+  }
+  return patchPaper(node.id)
 }
 
 // (Re)synthesize one concept's evidence summary from every saved paper filed under it.
@@ -166,18 +191,27 @@ export async function consolidateDomains() {
   return merges
 }
 
-// Re-file the WHOLE knowledge base: clear the existing concept nodes (+ their edges), reset each
-// paper's filing, then re-classify every saved paper into a concept and re-synthesize each touched
-// concept once. The DOMAIN taxonomy is deliberately NOT cleared — re-filing runs through
-// filePaper → analyzePaper, which reads the live domain list, so a re-file is exactly the action
-// that pulls papers into fields the user added by hand since they were first saved.
-// Paid: one analyzePaper call per paper + one synthesizeConcept per concept.
-// `onProgress(done, total)` fires per paper. Returns a small summary.
+// Re-file the WHOLE knowledge base: clear the existing SATELLITE concept nodes (+ their edges),
+// reset each paper's filing, then re-classify every saved paper into a concept and re-synthesize
+// each touched concept once. The CATEGORY shelves (hub nodes) deliberately survive — the shelf
+// set changes only through categorizeLibrary(), so a re-file redistributes papers into the
+// categories the user already has rather than destroying them. The DOMAIN taxonomy is likewise
+// NOT cleared — re-filing runs through filePaper → analyzePaper, which reads the live domain
+// list, so a re-file is exactly the action that pulls papers into fields the user added by hand
+// since they were first saved. Paid: one analyzePaper call per paper + one synthesizeConcept per
+// concept. `onProgress(done, total)` fires per paper. Returns a small summary.
 export async function refileKB(onProgress) {
   await syncAnchors(await getProfile()) // ensure project nodes exist; sweep any legacy north stars
 
   const { nodes } = await loadGraph()
-  for (const n of nodes.filter((n) => n.kind === 'concept')) await removeNode(n.id)
+  const concepts = nodes.filter((n) => n.kind === 'concept')
+  for (const n of concepts.filter((n) => !n.isHub)) await removeNode(n.id)
+  // Shelves stay, but their direct-source lists reset — stale pmid claims would otherwise
+  // re-capture papers (buildKB's sourcePmids fallback) before the re-file reaches them.
+  for (const h of concepts.filter((n) => n.isHub)) {
+    if (h.sourcePmids?.length)
+      await store.put('graphNodes', h.id, { ...h, sourcePmids: [], updatedAt: new Date().toISOString() })
+  }
 
   const papers = (await store.all('papers')) || []
   for (const p of papers) {

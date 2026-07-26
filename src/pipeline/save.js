@@ -6,6 +6,7 @@
 
 import { store } from '../lib/store.js'
 import { filePaper, synthesizeGroup, consolidateDomains } from './deposit.js'
+import { maybeReorganize } from './categorize.js'
 import { resolveOaLink, oaPatch } from './openaccess.js'
 import { depositPaperToLibrary } from '../lib/library.js'
 
@@ -92,6 +93,9 @@ function enrichInBackground(record) {
     } catch (err) {
       console.warn('Field tidy skipped:', err.message)
     }
+    // Reorganize the category shelves only when the trigger condition says so (>10 hubs, or
+    // enough shelf-less concepts). maybeReorganize never throws; a failure is a silent no-op.
+    await maybeReorganize()
     try {
       const doi = record.citation?.doi
       if (doi && !record.pdfUrl && !record.oaUrl) {
