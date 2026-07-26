@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { isSignedIn } from '../lib/supabase.js'
-import { getTrellisProjects } from '../lib/trellis.js'
+import { getTrellisProjects, getTrellisExcluded, setTrellisExcluded } from '../lib/trellis.js'
 import { DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { normalizeScoreFloor } from '../pipeline/select.js'
 import { normalizeTopics, normalizeSearchDays, normalizeTopicCap } from '../pipeline/topics.js'
@@ -41,9 +41,12 @@ export default function NorthStars() {
   // patches the profile record and nothing else — so rebuilding the search plan can never
   // touch her library (papers, digests, graph, seen ledger all live in other collections).
   const [interviewing, setInterviewing] = useState(false)
-  // Synced PaperTrellis projects, shown read-only below the manual list. PaperTrellis is
-  // the source of truth for these — no add/remove here, editing happens over there.
+  // Synced PaperTrellis projects, shown below the manual list. PaperTrellis is the source
+  // of truth for the projects themselves — no add/remove here, editing happens over there.
+  // The STAR is Verastar's: it marks which of them the digest may consider. `excluded`
+  // holds the un-starred ids (so a newly synced project defaults to starred).
   const [trellis, setTrellis] = useState([])
+  const [excluded, setExcluded] = useState(new Set())
 
   useEffect(() => {
     getProfile().then((profile) => {
@@ -67,8 +70,20 @@ export default function NorthStars() {
     })
     if (isSignedIn()) {
       getTrellisProjects().then((c) => setTrellis(c?.projects ?? [])).catch(() => {})
+      getTrellisExcluded().then(setExcluded).catch(() => {})
     }
   }, [])
+
+  // Star toggle: flip membership in the exclusion set and persist it whole. The write is
+  // the singleton row, so last-writer-wins matches every other profile-adjacent setting.
+  function toggleStar(id) {
+    setExcluded((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      setTrellisExcluded(next).catch(() => {})
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!loaded) return
@@ -174,17 +189,34 @@ export default function NorthStars() {
             From PaperTrellis
           </p>
           <div className="flex flex-col" style={{ gap: 7 }}>
-            {trellis.map((p) => (
-              <div key={p.id} className="flex items-center" style={{ gap: 9 }}>
-                <span style={{ fontSize: 13, color: 'var(--color-fg-soft)' }}>{p.title}</span>
-                <span style={{ padding: '2px 8px', borderRadius: 999, background: 'rgba(143,189,230,.1)', fontSize: 10.5, fontWeight: 500, color: 'var(--color-registry)' }}>
-                  {p.stage?.name}
-                </span>
-              </div>
-            ))}
+            {trellis.map((p) => {
+              const starred = !excluded.has(p.id)
+              return (
+                <div key={p.id} className="flex items-center" style={{ gap: 9, opacity: starred ? 1 : 0.45 }}>
+                  {/* The five-point outline star — the app's own mark, never a sparkle.
+                      Filled gold = the digest considers this project; hollow = it doesn't. */}
+                  <button
+                    onClick={() => toggleStar(p.id)}
+                    title={starred ? 'Considered in your digest — click to leave it out' : 'Left out of your digest — click to consider it'}
+                    aria-label={starred ? `Stop considering ${p.title} in the digest` : `Consider ${p.title} in the digest`}
+                    className="cursor-pointer flex items-center"
+                    style={{ padding: 2, border: 0, background: 'transparent', color: starred ? 'var(--color-gold)' : 'var(--color-fg-faint)', flex: '0 0 auto' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill={starred ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+                      <polygon points="12,3 14.47,9.6 21.51,9.91 15.99,14.3 17.88,21.09 12,17.2 6.12,21.09 8.01,14.3 2.49,9.91 9.53,9.6" />
+                    </svg>
+                  </button>
+                  <span style={{ fontSize: 13, color: 'var(--color-fg-soft)' }}>{p.title}</span>
+                  <span style={{ padding: '2px 8px', borderRadius: 999, background: 'rgba(143,189,230,.1)', fontSize: 10.5, fontWeight: 500, color: 'var(--color-registry)' }}>
+                    {p.stage?.name}
+                  </span>
+                </div>
+              )
+            })}
           </div>
           <p style={{ margin: '10px 0 0', fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
-            Pre-submission projects, synced from your PaperTrellis account. Edit them there.
+            Pre-submission projects, synced from your PaperTrellis account — edit them there.
+            Starred ones steer your digest; un-star a project to leave it out.
           </p>
         </div>
       )}

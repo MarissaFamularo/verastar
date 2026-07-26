@@ -5,7 +5,7 @@ import { supabase, supabaseConfigured, currentUser, sendMagicLink, signOut, isSi
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
-import { refreshTrellisProjects, getTrellisProjects } from './lib/trellis.js'
+import { refreshTrellisProjects, getTrellisProjects, getTrellisExcluded, consideredProjects } from './lib/trellis.js'
 import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
@@ -581,8 +581,12 @@ export default function App() {
     }).catch((err) => setBootError(err?.message || String(err)))
   }, [])
 
+  // The rail lists only the STARRED synced projects — the same slice the digest sees;
+  // showing an un-starred one would misreport what today's scoring considered.
   function loadTrellis() {
-    getTrellisProjects().then((c) => setTrellis(c?.projects ?? [])).catch(() => {})
+    Promise.all([getTrellisProjects(), getTrellisExcluded()])
+      .then(([c, excluded]) => setTrellis(consideredProjects(c, excluded)))
+      .catch(() => {})
   }
 
   // Derive weekly counts from real saved papers (defensive on shape).
@@ -798,7 +802,7 @@ export default function App() {
 
       {settingsOpen && (
         <SettingsModal
-          onClose={() => { setSettingsOpen(false); setStatus('idle') }}
+          onClose={() => { setSettingsOpen(false); setStatus('idle'); loadTrellis() }}
           saved={saved}
           remembered={remembered}
           onSave={handleSave}

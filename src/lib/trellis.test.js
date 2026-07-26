@@ -10,6 +10,7 @@ import {
   preSubmission,
   trellisProjectLines,
   mergedProjects,
+  consideredProjects,
 } from './trellis.js'
 
 const row = (fields) => ({
@@ -129,5 +130,40 @@ describe('mergedProjects — the shape the digest call sites pass on', () => {
     expect(mergedProjects(undefined, { projects: [row()], syncedAt: 'x' })).toEqual([
       'Pop Artery Aneurysm (COSMOS) (Writing)',
     ])
+  })
+})
+
+describe('the star — consideredProjects and the exclusion-aware merge', () => {
+  const two = [row(), row({ id: 'p2', title: 'Frailty-CLTI Study', stage: { name: 'Analysis', position: 5 } })]
+
+  it('no exclusions: every synced project is considered (the default is starred)', () => {
+    expect(consideredProjects({ projects: two }, new Set())).toHaveLength(2)
+    expect(consideredProjects({ projects: two }, undefined)).toHaveLength(2)
+  })
+
+  it('an excluded id drops out of the considered slice', () => {
+    const kept = consideredProjects({ projects: two }, new Set(['p1']))
+    expect(kept.map((p) => p.id)).toEqual(['p2'])
+  })
+
+  it('mergedProjects never feeds an un-starred project to the prompt', () => {
+    const profile = { projects: ['Limb Preservation Program'] }
+    expect(mergedProjects(profile, { projects: two }, new Set(['p2']))).toEqual([
+      'Limb Preservation Program',
+      'Pop Artery Aneurysm (COSMOS) (Writing)',
+    ])
+  })
+
+  it('excluding everything leaves exactly the manual list — same shape as never syncing', () => {
+    const profile = { projects: ['LPP'] }
+    expect(mergedProjects(profile, { projects: two }, new Set(['p1', 'p2']))).toEqual(['LPP'])
+  })
+
+  it('a stale exclusion for a project no longer synced is harmless', () => {
+    expect(consideredProjects({ projects: [row()] }, new Set(['gone-id']))).toHaveLength(1)
+  })
+
+  it('accepts a plain array of ids too — the store row round-trips as JSON', () => {
+    expect(consideredProjects({ projects: two }, ['p1']).map((p) => p.id)).toEqual(['p2'])
   })
 })

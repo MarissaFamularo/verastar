@@ -94,15 +94,45 @@ export function trellisProjectLines(cache) {
   return (cache?.projects ?? []).map(trellisProjectLine)
 }
 
+// --- the star: which synced projects the digest may consider ---
+
+// Not every project deserves a slot in the scorer's attention. The star lives in
+// VERASTAR (this key), never in PaperTrellis — "steer my digest" is a digest
+// preference, and teammates who share a project must not see it. What we store is
+// the EXCLUSION list (un-starred ids): a new PaperTrellis project therefore arrives
+// starred, so nothing is ever silently dropped — she prunes noise, not rescues signal.
+const EXCLUDED_KEY = 'trellisExcluded'
+
+export async function getTrellisExcluded() {
+  try {
+    const row = await store.get('profile', EXCLUDED_KEY)
+    return new Set(row?.ids ?? [])
+  } catch {
+    return new Set()
+  }
+}
+
+export async function setTrellisExcluded(ids) {
+  await store.put('profile', EXCLUDED_KEY, { ids: [...ids] })
+}
+
+// The starred slice of a cache — what the rail shows and the digest sees.
+export function consideredProjects(cache, excluded) {
+  const out = new Set(excluded ?? [])
+  return (cache?.projects ?? []).filter((p) => !out.has(p.id))
+}
+
 // The merge the digest call sites feed to select/triage: manual Active Work strings
-// first (hers, verbatim), synced PaperTrellis lines after. Pure so the shape is testable
-// without mocking the store.
-export function mergedProjects(profile, cache) {
-  return [...(profile?.projects ?? []), ...trellisProjectLines(cache)]
+// first (hers, verbatim), then only the STARRED synced lines. Pure so the shape is
+// testable without mocking the store.
+export function mergedProjects(profile, cache, excluded) {
+  const lines = consideredProjects(cache, excluded).map(trellisProjectLine)
+  return [...(profile?.projects ?? []), ...lines]
 }
 
 // What the digest call sites actually await. Signed out (or never synced) the cache is
 // empty and this returns exactly `profile?.projects ?? []` — the old behavior.
 export async function digestProjects(profile) {
-  return mergedProjects(profile, await getTrellisProjects())
+  const [cache, excluded] = await Promise.all([getTrellisProjects(), getTrellisExcluded()])
+  return mergedProjects(profile, cache, excluded)
 }
