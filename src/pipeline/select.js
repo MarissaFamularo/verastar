@@ -117,12 +117,58 @@ export function applyScoreFloor(scored, { floor = DEFAULT_SCORE_FLOOR, count } =
 // it renders in the muted note slot rather than the error red, which is what says it isn't
 // a failure. Reassuring her in prose that a short digest is legitimate would read as the
 // app defending itself.
+// It also has to name WHICH score it is counting. Two different 0–100 numbers reach the
+// digest and only one of them is this one — see the pre-read/post-read note below.
 export function floorSummary({ total = 0, cleared = 0, picked = 0, floor = DEFAULT_SCORE_FLOOR } = {}) {
   if (!total) return ''
-  if (!cleared) return `Nothing cleared your bar today — ${total} paper${total === 1 ? '' : 's'} scored, none reached ${floor}.`
+  if (!cleared)
+    return `On title and journal, nothing cleared your bar today — ${total} paper${total === 1 ? '' : 's'} scored, none reached ${floor}.`
   if (cleared < total) {
-    const trimmed = `${cleared} of ${total} cleared your bar today (score ${floor}+).`
+    const trimmed = `On title and journal, ${cleared} of ${total} cleared your bar today (score ${floor}+).`
     return picked < cleared ? `${trimmed} The top ${picked} made the digest.` : trimmed
   }
-  return picked < cleared ? `All ${total} cleared your bar — the top ${picked} made the digest.` : ''
+  return picked < cleared ? `On title and journal, all ${total} cleared your bar — the top ${picked} made the digest.` : ''
+}
+
+// --- the pre-read screen vs the post-read judgment ---------------------------
+//
+// TWO 0–100 scores reach the digest and they are not the same number. This file's score
+// (selectCandidates) reads title + journal + publication type BEFORE the paper is fetched,
+// and it is the one the floor filters on. The card's number comes from pipeline/triage,
+// written AFTER the paper was fetched and read. Unlabelled, they read as the app
+// contradicting itself: "3 of 27 cleared your bar today (score 60+)" sitting directly
+// above a card marked 58. Both are true; only the labels were missing. So floorSummary
+// names its input ("on title and journal") and the card says "after reading" — and a
+// post-read score under the bar is stated on its own card, because a screen that
+// mis-ranked a paper is signal she can act on.
+//
+// Nothing here re-filters. She already paid to extract the paper; dropping it after the
+// fact would spend her money and show her nothing.
+
+// Coerce a UI-supplied score/floor to a usable number, or null. '' and null must not
+// coerce to 0 the way Number() does — an absent score is not a score of zero.
+const asScore = (v) => {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+// The card's score label, in the tight header row next to the tier chip. Empty for a paper
+// triage never scored, so the card drops the label rather than showing a bare "after
+// reading".
+export function readFitLabel({ score } = {}) {
+  const n = asScore(score)
+  return n === null ? '' : `fit ${n} after reading`
+}
+
+// Stated, muted, on a card whose post-read score came in under her bar — the pre-read
+// screen let it through and reading it disagreed. Not amber and not red: the
+// withheld-summary amber and the error red both mean other things, and nothing here
+// failed. Empty when there is nothing to report: no score, no floor configured, or a score
+// at or above the bar (the boundary clears, exactly as applyScoreFloor treats it).
+export function belowFloorNote({ score, floor } = {}) {
+  const n = asScore(score)
+  const bar = asScore(floor)
+  if (n === null || bar === null || n >= bar) return ''
+  return `${n} after reading — below your bar of ${bar}.`
 }

@@ -3,7 +3,14 @@
 // padded in, and zero papers is a reportable outcome rather than a failure.
 
 import { describe, it, expect } from 'vitest'
-import { applyScoreFloor, normalizeScoreFloor, floorSummary, DEFAULT_SCORE_FLOOR } from './select.js'
+import {
+  applyScoreFloor,
+  normalizeScoreFloor,
+  floorSummary,
+  readFitLabel,
+  belowFloorNote,
+  DEFAULT_SCORE_FLOOR,
+} from './select.js'
 
 // Scored pools always arrive sorted highest-first from selectCandidates.
 const pool = (...scores) => scores.map((score, i) => ({ id: `p${i}`, score }))
@@ -85,21 +92,37 @@ describe('applyScoreFloor', () => {
 
 describe('floorSummary', () => {
   it('says plainly how many cleared the bar', () => {
-    expect(floorSummary({ total: 38, cleared: 4, picked: 4, floor: 60 })).toBe('4 of 38 cleared your bar today (score 60+).')
+    expect(floorSummary({ total: 38, cleared: 4, picked: 4, floor: 60 })).toBe(
+      'On title and journal, 4 of 38 cleared your bar today (score 60+).',
+    )
   })
 
   it('adds the cap when the ceiling trimmed further', () => {
     expect(floorSummary({ total: 38, cleared: 14, picked: 10, floor: 60 })).toContain('The top 10 made the digest.')
   })
 
+  // The sentence has to name WHICH score it counted. The card carries a different 0–100
+  // number (triage, post-read), and "4 of 38 cleared your bar (score 60+)" sitting above a
+  // card marked 58 read as the app contradicting itself.
+  it('names the pre-read screen it is counting, so the card score cannot read as a contradiction', () => {
+    for (const args of [
+      { total: 38, cleared: 4, picked: 4, floor: 60 },
+      { total: 38, cleared: 14, picked: 10, floor: 60 },
+      { total: 12, cleared: 0, picked: 0, floor: 70 },
+      { total: 20, cleared: 20, picked: 10, floor: 60 },
+    ]) {
+      expect(floorSummary(args)).toContain('On title and journal')
+    }
+  })
+
   // A zero day states the count and stops — the muted note slot already says it isn't an
   // error, and prose reassuring her that a short digest is legitimate reads as defensive.
   it('reports a zero day as a bare fact', () => {
     expect(floorSummary({ total: 12, cleared: 0, picked: 0, floor: 70 })).toBe(
-      'Nothing cleared your bar today — 12 papers scored, none reached 70.',
+      'On title and journal, nothing cleared your bar today — 12 papers scored, none reached 70.',
     )
     expect(floorSummary({ total: 1, cleared: 0, picked: 0, floor: 60 })).toBe(
-      'Nothing cleared your bar today — 1 paper scored, none reached 60.',
+      'On title and journal, nothing cleared your bar today — 1 paper scored, none reached 60.',
     )
   })
 
@@ -110,6 +133,68 @@ describe('floorSummary', () => {
   })
 
   it('reports the cap even when every candidate cleared', () => {
-    expect(floorSummary({ total: 20, cleared: 20, picked: 10, floor: 60 })).toBe('All 20 cleared your bar — the top 10 made the digest.')
+    expect(floorSummary({ total: 20, cleared: 20, picked: 10, floor: 60 })).toBe(
+      'On title and journal, all 20 cleared your bar — the top 10 made the digest.',
+    )
+  })
+})
+
+// The card's number is triage's — written AFTER the paper was fetched and read — and it is
+// not the number the floor filtered on. These two helpers are the whole defense against the
+// digest appearing to contradict itself.
+describe('readFitLabel', () => {
+  it('marks the card score as a post-read judgment', () => {
+    expect(readFitLabel({ score: 58 })).toBe('fit 58 after reading')
+    expect(readFitLabel({ score: 0 })).toBe('fit 0 after reading')
+  })
+
+  it('drops the label rather than rendering a bare "after reading"', () => {
+    expect(readFitLabel({ score: null })).toBe('')
+    expect(readFitLabel({ score: undefined })).toBe('')
+    expect(readFitLabel({})).toBe('')
+    expect(readFitLabel()).toBe('')
+    expect(readFitLabel({ score: 'abc' })).toBe('')
+  })
+})
+
+describe('belowFloorNote', () => {
+  // The pre-read screen let it through and reading it disagreed. That is signal about the
+  // screen, not an error — and it is the case that made the digest look self-contradictory.
+  it('states the disagreement when the post-read score came in under the bar', () => {
+    expect(belowFloorNote({ score: 58, floor: 60 })).toBe('58 after reading — below your bar of 60.')
+    expect(belowFloorNote({ score: 22, floor: 60 })).toBe('22 after reading — below your bar of 60.')
+  })
+
+  it('says nothing when reading agreed with the screen', () => {
+    expect(belowFloorNote({ score: 84, floor: 60 })).toBe('')
+  })
+
+  // Same boundary applyScoreFloor uses: a score sitting exactly on the bar CLEARED it.
+  it('treats a score exactly on the bar as clearing it', () => {
+    expect(belowFloorNote({ score: 60, floor: 60 })).toBe('')
+    expect(belowFloorNote({ score: 59, floor: 60 })).toBe('59 after reading — below your bar of 60.')
+  })
+
+  it('says nothing when there is no post-read score to report', () => {
+    expect(belowFloorNote({ score: null, floor: 60 })).toBe('')
+    expect(belowFloorNote({ score: undefined, floor: 60 })).toBe('')
+    expect(belowFloorNote({ score: '', floor: 60 })).toBe('')
+    expect(belowFloorNote({ floor: 60 })).toBe('')
+    expect(belowFloorNote({ score: 'abc', floor: 60 })).toBe('')
+  })
+
+  // No bar loaded yet (or none configured) means no bar to be below — never invent one,
+  // and never let '' or null coerce to a floor of 0 the way Number() would.
+  it('says nothing when no floor is configured', () => {
+    expect(belowFloorNote({ score: 12, floor: null })).toBe('')
+    expect(belowFloorNote({ score: 12, floor: undefined })).toBe('')
+    expect(belowFloorNote({ score: 12, floor: '' })).toBe('')
+    expect(belowFloorNote({ score: 12 })).toBe('')
+    expect(belowFloorNote()).toBe('')
+  })
+
+  // An explicit floor of 0 is opting out — nothing can be below it.
+  it('reports nothing against a zero bar', () => {
+    expect(belowFloorNote({ score: 0, floor: 0 })).toBe('')
   })
 })

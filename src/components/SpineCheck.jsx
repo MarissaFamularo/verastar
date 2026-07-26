@@ -10,7 +10,14 @@ import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import { saveDailyDigest, loadDailyDigest, clearDailyDigest, withOaLinks, digestGaps, restoreNote } from '../lib/digestStore.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
-import { selectCandidates, applyScoreFloor, normalizeScoreFloor, floorSummary } from '../pipeline/select.js'
+import {
+  selectCandidates,
+  applyScoreFloor,
+  normalizeScoreFloor,
+  floorSummary,
+  readFitLabel,
+  belowFloorNote,
+} from '../pipeline/select.js'
 import { skipSet, seenIds, mergeSeen, capLedger, stampableIds } from '../pipeline/seen.js'
 import {
   profileTopics,
@@ -288,6 +295,10 @@ export default function SpineCheck() {
   const [savedIds, setSavedIds] = useState(() => new Set()) // ids deposited to the Knowledge Base
   // Rehydrated from IndexedDB this mount: { note, incomplete } or null.
   const [restored, setRestored] = useState(null)
+  // Her selection bar, so a card can say when its POST-read score came in under it. Read
+  // from the profile on mount (not just set by a run) because a restored digest has to be
+  // able to say it too. Null until loaded — the note stays off rather than guessing a bar.
+  const [scoreFloor, setScoreFloor] = useState(null)
   const keySet = hasApiKey()
 
   // Latest digest state, mirrored every render — async runs would otherwise persist stale
@@ -312,6 +323,14 @@ export default function SpineCheck() {
   // Load which papers are already in the Knowledge Base (persisted in IndexedDB).
   useEffect(() => {
     store.all('papers').then((papers) => setSavedIds(new Set((papers || []).map((p) => p.id))))
+  }, [])
+
+  // The selection bar. normalizeScoreFloor is the same fallback scorePool applies, so a
+  // profile that predates the field shows the bar the app actually enforced, not a blank.
+  useEffect(() => {
+    getProfile()
+      .then((p) => setScoreFloor(normalizeScoreFloor(p?.rubric?.scoreFloor)))
+      .catch(console.warn)
   }, [])
 
   // Rehydrate the last digest — App unmounts this component on every tab switch, and
@@ -519,6 +538,7 @@ export default function SpineCheck() {
     })
     const chosenIds = new Set(picked.map((c) => c.id))
     setSelectedIds(chosenIds)
+    setScoreFloor(floor) // she may have edited the bar since mount; this run used THIS one
     setScanNote(floorSummary({ total, cleared, picked: picked.length, floor }))
     // The pool + picks survive a tab switch even before any digest runs.
     persistDigest({ candidates: scored, selectedIds: chosenIds })
@@ -820,15 +840,26 @@ export default function SpineCheck() {
           const rank = String(idx + 1).padStart(2, '0')
           return (
             <article key={paper.id} style={{ padding: '24px 26px', borderRadius: 15, background: 'var(--surface-1)' }}>
-              {/* Header — rank · verification chip · fit score / save. */}
-              <div className="flex items-center" style={{ gap: 11, marginBottom: 11 }}>
+              {/* Header — rank · verification chip · post-read fit / save. The fit label
+                  says "after reading" because the scan line above the digest reports a
+                  DIFFERENT score (the pre-read screen, on title and journal); unlabelled,
+                  a card marked 58 under a "score 60+" sentence reads as a contradiction.
+                  flex-wrap so the longer label drops to its own line on a phone instead of
+                  crushing the tier chip. */}
+              <div className="flex flex-wrap items-center" style={{ gap: 11, marginBottom: 11 }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--color-fg-faint)' }}>{rank}</span>
                 {take?.tier ? <TierChip tier={take.tier} /> : stage && stage !== 'done' ? (
                   <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>{STAGE_LABEL[stage]}</span>
                 ) : null}
                 <div className="flex items-center" style={{ marginLeft: 'auto', gap: 14 }}>
-                  {take?.score != null && (
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-fg-faint)' }}>fit {take.score}</span>
+                  {readFitLabel(take) && (
+                    <span
+                      title="Fit to your rubric scored after the paper was fetched and read — not the pre-read title-and-journal screen the digest was selected on"
+                      className="whitespace-nowrap"
+                      style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-fg-faint)' }}
+                    >
+                      {readFitLabel(take)}
+                    </span>
                   )}
                   {!res.error && (
                     <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: savedIds.has(paper.id) ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)' }}>
@@ -841,6 +872,16 @@ export default function SpineCheck() {
 
               <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, lineHeight: 1.32, color: 'var(--color-fg)' }}>{title}</h3>
               <Citation citation={res.citation} oa={res.oa} pmcid={res.source?.pmcid} />
+
+              {/* The pre-read screen cleared this one and reading it disagreed. Muted, in
+                  the same quiet mono as the search note — NOT the withheld-summary amber
+                  and not the error red, both of which mean something else. The paper stays:
+                  it is already extracted and paid for, and the disagreement is the signal. */}
+              {belowFloorNote({ score: take?.score, floor: scoreFloor }) && (
+                <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>
+                  {belowFloorNote({ score: take?.score, floor: scoreFloor })}
+                </p>
+              )}
 
               {/* Relevance to the clinician's projects — italic Spectral, number-free. */}
               {take?.relevance && (
