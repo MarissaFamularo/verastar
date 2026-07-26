@@ -30,6 +30,7 @@ import {
 import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { savePaper } from '../pipeline/save.js'
 import { setPaperFavorite } from '../lib/favorites.js'
+import { logEvent } from '../lib/events.js'
 import HeartButton from './HeartButton.jsx'
 import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
@@ -421,7 +422,7 @@ export default function SpineCheck() {
     // concept, resolve an open-access PDF link, and write it to the connected on-disk folder. The
     // "Add a paper" entry point in the Library uses the exact same path so they never drift.
     try {
-      await savePaper(res, take, { title })
+      await savePaper(res, take, { title, source: 'digest' })
     } catch (err) {
       console.warn('Save failed:', err.message)
     }
@@ -444,7 +445,7 @@ export default function SpineCheck() {
     if (!savedIds.has(id)) {
       setSavedIds((prev) => new Set(prev).add(id))
       try {
-        await savePaper(res, take, { title })
+        await savePaper(res, take, { title, source: 'digest' })
       } catch (err) {
         console.warn('Save failed:', err.message)
         return
@@ -558,6 +559,14 @@ export default function SpineCheck() {
     // ONE write a run makes, so `collected` has to carry the open-access links that resolved
     // while it was building — it predates those patches, hence the merge.
     persistDigest({ results: withOaLinks(collected, oaResolved.current), triaged: triagedNow })
+    // Adoption telemetry: one row per completed run. `showcase` marks the keyless demo
+    // trials, `append` the add-more path — both would otherwise inflate real-run counts.
+    logEvent('digest_run', {
+      papers: collected.length,
+      errors: collected.filter((r) => r.error).length,
+      append: !!append,
+      showcase: !!injectCorrupt,
+    })
     return collected.map((r) => ({ id: r.paper.id, error: r.error }))
   }
 

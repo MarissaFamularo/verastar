@@ -7,7 +7,8 @@ import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
 import { refreshTrellisProjects, getTrellisProjects, getTrellisExcluded, consideredProjects, PAPERTRELLIS_URL } from './lib/trellis.js'
 import { useWindowFocusRefresh } from './lib/focusRefresh.js'
-import { useIsMobile } from './lib/useMobile.js'
+import { useIsMobile, isMobileNow } from './lib/useMobile.js'
+import { logEvent } from './lib/events.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
@@ -654,6 +655,10 @@ export default function App() {
     // color/label lookups are ready.
     initStore().then(async (user) => {
       setAccount(user ? { email: user.email } : null)
+      // Adoption telemetry: one row per page load, AFTER auth resolves (logEvent is a
+      // no-op signed out, so this counts consented sessions only). Retention = these
+      // rows grouped by user and day; `mobile` splits phone vs desktop habits.
+      logEvent('app_opened', { mobile: isMobileNow() })
       const [p] = await Promise.all([getProfile(), loadDomains()])
       if (user && !p?.onboarded) {
         // Cloud has no profile yet — check whether this browser holds a library to
@@ -687,6 +692,12 @@ export default function App() {
       drainVault().catch(() => {})
     }).catch((err) => setBootError(err?.message || String(err)))
   }, [])
+
+  // Which surface she's on, one row per switch (the mount logs the default 'digest').
+  // Settings is a modal, not a view — it doesn't land here.
+  useEffect(() => {
+    logEvent('view_opened', { view })
+  }, [view])
 
   // The rail lists only the STARRED synced projects — the same slice the digest sees;
   // showing an un-starred one would misreport what today's scoring considered.

@@ -5,6 +5,7 @@
 // writes it to the connected on-disk folder. The background work never blocks (or breaks) the save.
 
 import { store } from '../lib/store.js'
+import { logEvent } from '../lib/events.js'
 import { filePaper, synthesizeGroup, consolidateDomains } from './deposit.js'
 import { maybeReorganize } from './categorize.js'
 import { resolveOaLink, oaPatch } from './openaccess.js'
@@ -46,9 +47,12 @@ export function buildPaperRecord(res, take, { title } = {}) {
 
 // Persist the record, then run the background enrichment (concept filing → summary, OA PDF link,
 // on-disk write). Returns the persisted record immediately; the background work is fire-and-forget.
-export async function savePaper(res, take, { title } = {}) {
+export async function savePaper(res, take, { title, source = 'unknown' } = {}) {
   const record = buildPaperRecord(res, take, { title })
   await store.put('papers', record.id, record)
+  // Adoption telemetry on the ONE shared save path, so no entry point can forget it.
+  // `source` says which doorway: the digest's checkbox/heart or the manual Add a paper.
+  logEvent('paper_saved', { pmid: record.pmid, source })
   enrichInBackground(record)
   return record
 }

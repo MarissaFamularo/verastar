@@ -98,7 +98,7 @@ export default function AddPaper({ onAdded }) {
     const title = res.citation?.title || res.paper.title || `PMID ${pmid}`
     let record
     try {
-      record = await savePaper(res, take, { title })
+      record = await savePaper(res, take, { title, source: 'manual' })
     } catch (err) {
       setStage('')
       setError(`Couldn’t save: ${err.message}`)

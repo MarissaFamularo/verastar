@@ -19,6 +19,7 @@ import { synthesizeWeekendRead } from '../pipeline/weekend.js'
 import { appendConnectionsToLibrary } from '../lib/library.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { setPaperFavorite } from '../lib/favorites.js'
+import { logEvent } from '../lib/events.js'
 import HeartButton from './HeartButton.jsx'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 
@@ -159,6 +160,11 @@ export default function WeekendRead() {
       const createdAt = new Date().toISOString()
       setRead(result)
       setGeneratedAt(createdAt)
+      logEvent('weekend_read_generated', {
+        papers: focus.length,
+        library: shelf.length,
+        threads: result?.threads?.length ?? 0,
+      })
       // Persist keyed by day so a same-day regenerate overwrites rather than piling up.
       const dayKey = `weekend:${createdAt.slice(0, 10)}`
       await store.put('digests', dayKey, {
