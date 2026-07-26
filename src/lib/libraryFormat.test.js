@@ -9,6 +9,8 @@ import {
   conceptSlug,
   sourceNoteMd,
   conceptNoteMd,
+  memoNoteMd,
+  memoFileName,
   digestMd,
   connectionsEntryMd,
   readmeMd,
@@ -138,6 +140,57 @@ describe('conceptNoteMd', () => {
   it('is safe with no member papers', () => {
     const md = conceptNoteMd({ label: 'Empty' }, [])
     expect(md).toContain('No sources filed')
+  })
+})
+
+describe('memoNoteMd', () => {
+  const memo = {
+    id: 'memo:2026-07-26T14:30:05.123Z',
+    text: 'Ask the fellows about the BASIL-3 subgroup.\n\nSecond thought on a new line.',
+    createdAt: '2026-07-26T14:30:05.123Z',
+  }
+
+  it('renders frontmatter, a date heading, and the text VERBATIM', () => {
+    const md = memoNoteMd(memo)
+    expect(md.startsWith('---\n')).toBe(true)
+    expect(md).toContain('captured: "2026-07-26T14:30:05.123Z"')
+    expect(md).toContain('# Memo — 2026-07-26')
+    // verbatim: line breaks and all — a memo is the user's own words
+    expect(md).toContain('Ask the fellows about the BASIL-3 subgroup.\n\nSecond thought on a new line.')
+  })
+
+  it('carries updatedAt only when the memo was edited', () => {
+    expect(memoNoteMd(memo)).toContain('updated:\n') // empty slot, predictable shape
+    expect(memoNoteMd({ ...memo, updatedAt: '2026-07-27T08:00:00.000Z' })).toContain(
+      'updated: "2026-07-27T08:00:00.000Z"',
+    )
+  })
+
+  it('does not throw on a bare record', () => {
+    expect(() => memoNoteMd({})).not.toThrow()
+    expect(() => memoNoteMd(null)).not.toThrow()
+  })
+})
+
+describe('memoFileName', () => {
+  it('derives a filesystem-safe memos/ path from createdAt, seconds included', () => {
+    expect(memoFileName({ createdAt: '2026-07-26T14:30:05.123Z' })).toBe('memos/2026-07-26-143005_memo.md')
+  })
+
+  it('two memos in the same minute get distinct files', () => {
+    const a = memoFileName({ createdAt: '2026-07-26T14:30:05.000Z' })
+    const b = memoFileName({ createdAt: '2026-07-26T14:30:41.000Z' })
+    expect(a).not.toBe(b)
+  })
+
+  it('is stable across edits — the name comes from createdAt, never updatedAt', () => {
+    const created = { createdAt: '2026-07-26T14:30:05.000Z' }
+    expect(memoFileName({ ...created, updatedAt: '2026-07-27T09:00:00.000Z' })).toBe(memoFileName(created))
+  })
+
+  it('falls back to undated on a missing/garbled createdAt', () => {
+    expect(memoFileName({})).toBe('memos/undated_memo.md')
+    expect(memoFileName({ createdAt: 'not a date' })).toBe('memos/undated_memo.md')
   })
 })
 

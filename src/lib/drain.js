@@ -11,9 +11,12 @@
 // Timestamps are ISO-8601 UTC strings throughout (`new Date().toISOString()`),
 // so lexicographic comparison IS chronological comparison — no Date.parse, no NaN.
 
-// The record's own "last saved" moment: papers stamp savedAt, weekend reads createdAt.
+// The record's own "last saved" moment: papers stamp savedAt, memos updatedAt (a re-edited
+// memo must re-write its file), weekend reads createdAt. Safe as ONE shared chain because
+// papers always carry savedAt (it wins before updatedAt could) and weekend records never
+// carry updatedAt — the middle slot belongs to memos alone.
 export function recordBasis(record) {
-  return record?.savedAt || record?.createdAt || null
+  return record?.savedAt || record?.updatedAt || record?.createdAt || null
 }
 
 // Does this record's note still need to be written (or re-written) to the vault?
@@ -40,13 +43,17 @@ export function weekendKey(record) {
 //   papers     — stale paper records (source notes)
 //   weekends   — stale weekend reads (connections.md entries), oldest first so
 //                prepending lands them newest-on-top
+//   memos      — stale quick notes (memos/ files), oldest first
 //   conceptIds — concepts touched by the stale papers (their notes list members)
 // Daily-digest records (kind 'daily') are UI state, never vault notes — ignored.
-export function computeDrain({ papers, digests } = {}) {
+export function computeDrain({ papers, digests, memos } = {}) {
   const stalePapers = (papers || []).filter(needsVaultWrite)
   const weekends = (digests || [])
     .filter((d) => d?.type === 'weekend' && needsVaultWrite(d))
     .sort((a, b) => ((a.createdAt || '') < (b.createdAt || '') ? -1 : 1))
+  const staleMemos = (memos || [])
+    .filter(needsVaultWrite)
+    .sort((a, b) => (recordBasis(a) || '') < (recordBasis(b) || '') ? -1 : 1)
   const conceptIds = new Set(stalePapers.map((p) => p.conceptId).filter(Boolean))
-  return { papers: stalePapers, weekends, conceptIds }
+  return { papers: stalePapers, weekends, memos: staleMemos, conceptIds }
 }

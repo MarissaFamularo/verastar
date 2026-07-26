@@ -19,6 +19,8 @@ import {
   conceptSlug,
   sourceNoteMd,
   conceptNoteMd,
+  memoNoteMd,
+  memoFileName,
   digestMd,
   connectionsEntryMd,
   readmeMd,
@@ -189,6 +191,17 @@ export async function depositPaperToLibrary(paper) {
   await stampRecord('papers', paper.id, new Date().toISOString())
 }
 
+// Write one quick memo to memos/<stamp>_memo.md and stamp it landed. The filename derives from
+// createdAt, so a re-edited memo re-writes its own file (writeFileInDir creates memos/ lazily).
+// Deleting a memo in the app never deletes the file — the vault is append-only memory, same
+// contract as papers.
+export async function writeMemoToLibrary(memo) {
+  const root = await activeRoot()
+  if (!root || !memo) return
+  await writeFileInDir(root, memoFileName(memo), memoNoteMd(memo))
+  await stampRecord('memos', memo.id, new Date().toISOString())
+}
+
 // Freeze a digest (a list of { title, citation, tier, finding }) to digests/<date>_digest.md.
 export async function writeDigestToLibrary(date, entries) {
   const root = await activeRoot()
@@ -302,13 +315,14 @@ export function drainVault() {
     const handle = await getStoredHandle()
     if (!handle || !(await hasPermission(handle))) return { written: 0 }
 
-    const [papers, digests, nodes] = await Promise.all([
+    const [papers, digests, memos, nodes] = await Promise.all([
       store.all('papers'),
       store.all('digests'),
+      store.all('memos'),
       store.all('graphNodes'),
     ])
-    const drain = computeDrain({ papers, digests })
-    if (!drain.papers.length && !drain.weekends.length) return { written: 0 }
+    const drain = computeDrain({ papers, digests, memos })
+    if (!drain.papers.length && !drain.weekends.length && !drain.memos.length) return { written: 0 }
 
     let written = 0
     for (const p of drain.papers) {
@@ -326,7 +340,14 @@ export function drainVault() {
     for (const w of drain.weekends) {
       await appendConnectionsToLibrary(weekendKey(w).slice('weekend:'.length), w.read)
     }
-    if (written) await refreshReadme(handle)
+    // Memos saved on the phone (or with the folder disconnected). Each write stamps its record.
+    for (const m of drain.memos) {
+      await writeFileInDir(handle, memoFileName(m), memoNoteMd(m))
+      await stampRecord('memos', m.id, new Date().toISOString())
+      written++
+    }
+    // README counts sources/concepts only — memo writes alone don't change it.
+    if (drain.papers.length) await refreshReadme(handle)
 
     _lastDrain = { written, weekends: drain.weekends.length, at: new Date().toISOString() }
     for (const fn of _drainListeners) fn(_lastDrain)
