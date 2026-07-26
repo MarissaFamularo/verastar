@@ -4,7 +4,15 @@
 // suggester never fabricating a duplicate or overriding a confirmed link.
 
 import { describe, it, expect } from 'vitest'
-import { anchorId, conceptId, edgeId, structuralSuggestions, coreAnchorPhrase } from './graph.js'
+import {
+  anchorId,
+  conceptId,
+  edgeId,
+  structuralSuggestions,
+  coreAnchorPhrase,
+  trellisNodeId,
+  trellisAnchorNodes,
+} from './graph.js'
 
 describe('ids', () => {
   it('anchor ids are kind-prefixed and case-normalized', () => {
@@ -123,5 +131,44 @@ describe('anchor core-phrase matching', () => {
     const out = structuralSuggestions([proj, hub, sat], taxonomy)
     expect(out.some((o) => edgeId(o.source, o.target) === edgeId(hub.id, proj.id))).toBe(true)
     expect(out.some((o) => edgeId(o.source, o.target) === edgeId(sat.id, proj.id))).toBe(false)
+  })
+})
+
+describe('PaperTrellis project stars', () => {
+  const pt = (id, title, description = '', extra = {}) => ({ id, title, description, ...extra })
+
+  it('node ids are stable — derived from the PT row id, not the title', () => {
+    expect(trellisNodeId('abc-123')).toBe('proj:pt-abc-123')
+    const a = trellisAnchorNodes([], [pt('abc-123', 'Pop Artery Aneurysm (COSMOS)')])
+    const b = trellisAnchorNodes(a.nodes, [pt('abc-123', 'Renamed Title')])
+    expect(a.nodes[0].id).toBe(b.nodes[0].id)
+    expect(b.nodes[0].label).toBe('Renamed Title') // renames flow through, same star
+  })
+
+  it('builds project-shaped nodes carrying source, ptId, and a truncated desc', () => {
+    const long = 'x'.repeat(300)
+    const { nodes } = trellisAnchorNodes([], [pt('u1', 'Frailty-CLTI Study', long)])
+    expect(nodes[0]).toMatchObject({ kind: 'project', label: 'Frailty-CLTI Study', source: 'papertrellis', ptId: 'u1' })
+    expect(nodes[0].desc.length).toBe(200)
+    expect(nodes[0].text).toContain('Frailty-CLTI Study')
+  })
+
+  it('preserves addedAt across re-syncs', () => {
+    const first = trellisAnchorNodes([], [pt('u1', 'Frailty-CLTI Study')])
+    const again = trellisAnchorNodes(first.nodes, [pt('u1', 'Frailty-CLTI Study')])
+    expect(again.nodes[0].addedAt).toBe(first.nodes[0].addedAt)
+  })
+
+  it('flags un-starred PT nodes as stale, never the manual project stars', () => {
+    const manual = { id: anchorId('project', 'Limb Preservation Program'), kind: 'project', label: 'Limb Preservation Program' }
+    const kept = { id: trellisNodeId('u1'), kind: 'project', source: 'papertrellis', ptId: 'u1', addedAt: 't' }
+    const gone = { id: trellisNodeId('u2'), kind: 'project', source: 'papertrellis', ptId: 'u2', addedAt: 't' }
+    const { nodes, staleIds } = trellisAnchorNodes([manual, kept, gone], [pt('u1', 'Kept Project')])
+    expect(staleIds).toEqual([trellisNodeId('u2')])
+    expect(nodes.map((n) => n.id)).toEqual([trellisNodeId('u1')])
+  })
+
+  it('empty starred set (signed out / never synced) builds nothing and sweeps nothing new', () => {
+    expect(trellisAnchorNodes([], [])).toEqual({ nodes: [], staleIds: [] })
   })
 })

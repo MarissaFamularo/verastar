@@ -12,11 +12,18 @@
 
 import { store } from '../lib/store.js'
 import { conceptId } from './concepts.js'
+import { getTrellisProjects, getTrellisExcluded, consideredProjects } from '../lib/trellis.js'
 
 // --- id schemes (stable, so re-syncing never duplicates a node) ---
 
 export function anchorId(kind, label) {
   return `${kind === 'project' ? 'proj' : 'ns'}:${label.trim().toLowerCase()}`
+}
+
+// PaperTrellis project stars key off the PT row id, not the title — a renamed project keeps
+// its star (and its edges) instead of minting a duplicate.
+export function trellisNodeId(ptId) {
+  return `proj:pt-${ptId}`
 }
 
 // re-exported so callers have one import for node ids
@@ -72,8 +79,53 @@ export async function syncAnchors(profile) {
     projects.push(node)
   }
 
+  // Starred PaperTrellis projects are project stars too. Signed out or never synced, the cache
+  // is empty: no PT nodes to build, none stored to sweep — exactly the manual-only behavior.
+  const [cache, excluded] = await Promise.all([getTrellisProjects(), getTrellisExcluded()])
+  const { nodes: ptNodes, staleIds } = trellisAnchorNodes(existing, consideredProjects(cache, excluded))
+  projects.push(...ptNodes)
+  if (staleIds.length) {
+    const edges = (await store.all('graphEdges')) || []
+    const stale = new Set(staleIds)
+    await Promise.all([
+      ...staleIds.map((id) => store.delete('graphNodes', id)),
+      ...edges.filter((e) => stale.has(e.source) || stale.has(e.target)).map((e) => store.delete('graphEdges', e.id)),
+    ])
+  }
+
   await Promise.all(projects.map((n) => store.put('graphNodes', n.id, n)))
   return projects
+}
+
+// The PaperTrellis slice of the anchor sync, pure so the sweep is testable without a store.
+// PT nodes are REBUILT from the starred sync on every load (title/desc edits flow through;
+// addedAt survives); a PT node whose project is un-starred or past submission is stale and
+// leaves the map. `desc` rides on the node because the keyword matcher needs more than the
+// title; capped so an abstract-length description doesn't bloat the row.
+const PT_DESC_MAX = 200
+export function trellisAnchorNodes(existingNodes, starred) {
+  const byId = new Map((existingNodes || []).map((n) => [n.id, n]))
+  const nodes = (starred || []).map((p) => {
+    const id = trellisNodeId(p.id)
+    const desc = String(p.description || '').trim().slice(0, PT_DESC_MAX)
+    return {
+      id,
+      kind: 'project',
+      label: p.title,
+      desc,
+      text: [p.title, desc].filter(Boolean).join(' '),
+      sourcePmids: [],
+      summary: '',
+      source: 'papertrellis',
+      ptId: p.id,
+      addedAt: byId.get(id)?.addedAt || new Date().toISOString(),
+    }
+  })
+  const keep = new Set(nodes.map((n) => n.id))
+  const staleIds = (existingNodes || [])
+    .filter((n) => n.source === 'papertrellis' && !keep.has(n.id))
+    .map((n) => n.id)
+  return { nodes, staleIds }
 }
 
 // --- concept stars (the graph nodes are concepts, not individual papers) ---
