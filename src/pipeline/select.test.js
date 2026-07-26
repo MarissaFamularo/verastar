@@ -10,10 +10,37 @@ import {
   readFitLabel,
   belowFloorNote,
   DEFAULT_SCORE_FLOOR,
+  SCALE,
 } from './select.js'
 
 // Scored pools always arrive sorted highest-first from selectCandidates.
 const pool = (...scores) => scores.map((score, i) => ({ id: `p${i}`, score }))
+
+// The floor is only meaningful if the scale it filters on has fixed meanings. Measured
+// against a real 68-paper pool, an un-anchored prompt put 35 papers at 0–8 and left the
+// whole span 56–84 empty, so a floor of 60 admitted one paper. These lock the coupling
+// between the two: the default bar has to sit at the bottom edge of the band the prompt
+// calls the ordinary good-paper band, or the number is arbitrary again.
+describe('the scoring scale is anchored to the floor', () => {
+  const bandStarts = [...SCALE.matchAll(/^-\s*(\d+)[–-](\d+)\s*—/gm)].map((m) => Number(m[1]))
+
+  it('defines bands across the whole range, not just the endpoints', () => {
+    expect(bandStarts.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('starts a band exactly at the default floor — the bar is a band edge, not a guess', () => {
+    expect(bandStarts).toContain(DEFAULT_SCORE_FLOOR)
+  })
+
+  it('tells the scorer the band at the floor is the ordinary one, not an exceptional one', () => {
+    const atFloor = SCALE.split('\n').find((l) => l.trim().startsWith(`- ${DEFAULT_SCORE_FLOOR}`))
+    expect(atFloor).toMatch(/ORDINARY BAND/i)
+  })
+
+  it('forbids scoring papers relative to the pool, which is what compressed it downward', () => {
+    expect(SCALE).toMatch(/not (by ranking it )?against the other candidates|not against the field/i)
+  })
+})
 
 describe('normalizeScoreFloor', () => {
   it('takes a usable number', () => {
