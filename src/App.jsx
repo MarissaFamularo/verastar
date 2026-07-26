@@ -95,6 +95,9 @@ function NavIcon({ view }) {
 }
 
 function IconRail({ view, setView, onSettings, initials }) {
+  // The lattice glyph is unlabeled, so leaving the app can't be a surprise: the
+  // doorway asks first, and the new tab opens only from the confirm button.
+  const [trellisAsk, setTrellisAsk] = useState(false)
   return (
     <aside
       className="vs-rail flex flex-col items-center border-r"
@@ -141,20 +144,54 @@ function IconRail({ view, setView, onSettings, initials }) {
       <div className="vs-rail-foot flex flex-col items-center" style={{ marginTop: 'auto', gap: 14 }}>
         {/* PaperTrellis is the sister app (same ecosystem, same account) — a quiet
             doorway at the rail's foot, not a nav view of this app. Lattice glyph. */}
-        <a
-          href={PAPERTRELLIS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={() => setTrellisAsk(true)}
           title="PaperTrellis — manage your projects (opens the sister app)"
           aria-label="Open PaperTrellis"
-          className="flex items-center justify-center"
-          style={{ width: 36, height: 36, borderRadius: 11, color: 'var(--color-fg-muted)' }}
+          className="flex items-center justify-center cursor-pointer"
+          style={{ width: 36, height: 36, padding: 0, border: 0, background: 'transparent', borderRadius: 11, color: 'var(--color-fg-muted)' }}
         >
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M4 4l16 16M12 4l8 8M4 12l8 8" />
             <path d="M20 4L4 20M12 4l-8 8M20 12l-8 8" />
           </svg>
-        </a>
+        </button>
+        {trellisAsk && (
+          <div
+            onClick={() => setTrellisAsk(false)}
+            className="flex items-center justify-center"
+            style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(5,7,12,.72)', padding: 24 }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Open PaperTrellis?"
+              style={{ maxWidth: 400, width: '100%', background: 'var(--color-ink-raised)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 16, padding: '24px 26px', boxShadow: '0 24px 60px rgba(0,0,0,.5)' }}
+            >
+              <p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 21, color: 'var(--color-fg)' }}>Heading to PaperTrellis</p>
+              <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.6, color: 'var(--color-fg-muted)' }}>
+                This opens PaperTrellis in a new tab — Verastar&rsquo;s sister app, where your
+                research projects live. Star a project there and it steers your digest here.
+              </p>
+              <div className="flex" style={{ gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setTrellisAsk(false)}
+                  className="cursor-pointer"
+                  style={{ padding: '9px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}
+                >
+                  Stay here
+                </button>
+                <button
+                  onClick={() => { window.open(PAPERTRELLIS_URL, '_blank', 'noopener,noreferrer'); setTrellisAsk(false) }}
+                  className="cursor-pointer"
+                  style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}
+                >
+                  Open PaperTrellis
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* The avatar doubles as the Settings entry point — no separate rail item. */}
         <button
           onClick={onSettings}
