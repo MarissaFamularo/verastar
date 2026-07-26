@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { setApiKey, hasApiKey, clearApiKey, isKeyRemembered, ping } from './lib/anthropic.js'
+import { setApiKey, getApiKey, hasApiKey, clearApiKey, isKeyRemembered, ping } from './lib/anthropic.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
 import { supabase, supabaseConfigured, currentUser, sendMagicLink, signOut, isSignedIn } from './lib/supabase.js'
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
@@ -228,7 +228,7 @@ function AccountSection({ account }) {
   )
 }
 
-function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, onStartOver, status, reply, error, account }) {
+function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, onStartOver, onToggleRemember, status, reply, error, account }) {
   const [keyInput, setKeyInput] = useState('')
   const [remember, setRemember] = useState(false)
   // Start over is two-step: the button reveals a confirm block with the erase choice.
@@ -279,6 +279,10 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
                   Clear key
                 </button>
               </div>
+              <label className="flex items-center cursor-pointer" style={{ gap: 8, marginTop: 10, fontSize: 13, color: 'var(--color-fg-soft)' }}>
+                <input type="checkbox" checked={remembered} onChange={(e) => onToggleRemember(e.target.checked)} style={{ accentColor: 'var(--color-accent)' }} />
+                Remember on this device
+              </label>
               {status === 'ok' && (
                 <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
                   <span style={{ fontWeight: 600 }}>Anthropic replied “{reply}”</span> — browser-direct call works.
@@ -578,6 +582,14 @@ export default function App() {
     setReply('')
     setError('')
   }
+  // Move the already-saved key between sessionStorage and localStorage without
+  // re-entry — the key is readable in-page, so re-persisting it is just a rewrite.
+  function handleToggleRemember(remember) {
+    const k = getApiKey()
+    if (!k) return
+    setApiKey(k, { remember })
+    setRemembered(remember)
+  }
   function handleClear() {
     clearApiKey()
     setSaved(false)
@@ -755,6 +767,7 @@ export default function App() {
           onClear={handleClear}
           onPing={handlePing}
           onStartOver={handleStartOver}
+          onToggleRemember={handleToggleRemember}
           status={status}
           reply={reply}
           error={error}
