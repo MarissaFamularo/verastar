@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Verastar mark: the observatory's five-point chart star (src/App.jsx rail logo),
+  <!-- Verastar mark: the Star Map constellation asterism (NavIcon 'starmap' in src/App.jsx),
        gold on the ink surface from the design system in src/index.css. -->
   <defs>
     <radialGradient id="sky" cx="50%" cy="38%" r="75%">
@@ -14,14 +14,18 @@
   <rect width="512" height="512" rx="112" fill="url(#sky)"/>
   <!-- faint companion stars -->
   <circle cx="128" cy="122" r="4" fill="#e9c46a" opacity="0.35"/>
-  <circle cx="398" cy="150" r="3" fill="#f4f5f9" opacity="0.28"/>
-  <circle cx="366" cy="396" r="4" fill="#e9c46a" opacity="0.3"/>
-  <circle cx="112" cy="368" r="3" fill="#f4f5f9" opacity="0.22"/>
+  <circle cx="398" cy="360" r="3" fill="#f4f5f9" opacity="0.28"/>
+  <circle cx="330" cy="430" r="4" fill="#e9c46a" opacity="0.3"/>
+  <circle cx="98" cy="240" r="3" fill="#f4f5f9" opacity="0.22"/>
   <!-- glow pass -->
-  <polygon points="256,86 308.7,226.8 458.9,233.4 341.1,327.1 381.4,472 256,389 130.6,472 170.9,327.1 53.1,233.4 203.3,226.8"
-           fill="none" stroke="#e9c46a" stroke-width="30" stroke-linejoin="round"
-           filter="url(#glow)" opacity="0.75"/>
-  <!-- the star itself -->
-  <polygon points="256,86 308.7,226.8 458.9,233.4 341.1,327.1 381.4,472 256,389 130.6,472 170.9,327.1 53.1,233.4 203.3,226.8"
-           fill="rgba(233,196,106,0.14)" stroke="#e9c46a" stroke-width="22" stroke-linejoin="round"/>
+  <g filter="url(#glow)" opacity="0.7">
+    <path d="M86 404 L218 184 L350 294 L426 108" fill="none" stroke="#e9c46a" stroke-width="24" stroke-linecap="round"/>
+    <circle cx="218" cy="184" r="48" fill="#e9c46a"/>
+  </g>
+  <!-- the asterism itself -->
+  <path d="M86 404 L218 184 L350 294 L426 108" fill="none" stroke="#e9c46a" stroke-width="17" stroke-linecap="round" opacity="0.55"/>
+  <circle cx="86" cy="404" r="31" fill="#e9c46a"/>
+  <circle cx="218" cy="184" r="48" fill="#e9c46a"/>
+  <circle cx="350" cy="294" r="31" fill="#e9c46a"/>
+  <circle cx="426" cy="108" r="22" fill="#e9c46a"/>
 </svg>

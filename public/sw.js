@@ -9,7 +9,7 @@
 //
 // Bump VERSION when the shell list changes; activate cleans old caches.
 
-const VERSION = 'v1'
+const VERSION = 'v2'
 const CACHE = `verastar-shell-${VERSION}`
 const SHELL = ['/', '/site.webmanifest', '/icon.svg', '/favicon.png', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png']
 
