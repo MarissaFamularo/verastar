@@ -7,7 +7,7 @@
 // nodes via structural noticing. North stars are not graph nodes.
 
 import { getProfile, store } from '../lib/store.js'
-import { listDomains, removeDomain } from '../lib/domains.js'
+import { listDomains, removeDomain, userDomainKeys } from '../lib/domains.js'
 import { analyzePaper, synthesizeConcept, proposeDomainMerges } from './concepts.js'
 import {
   loadGraph,
@@ -72,6 +72,23 @@ export async function synthesizeGroup(groupId) {
 export const SPARSE_MIN = 3
 export const TIDY_MIN_FIELDS = 4
 
+// Which fields the tidy pass may absorb away. Pure. A field is a candidate only when it is
+// UNDER-populated but not EMPTY, and not one the user owns:
+//   - the user's own fields (added or renamed in Settings) are her taxonomy, not Claude's;
+//   - a field with zero papers was created deliberately — filing is what mints a field, so a
+//     count of 0 means a human typed it (typically ahead of the papers, to steer filing).
+//     That also covers fields added before `source` was recorded.
+export function mergeCandidates(domains, counts, pinned = new Set()) {
+  return new Set(
+    (domains || [])
+      .filter((d) => {
+        const n = counts.get(d.key) || 0
+        return !pinned.has(d.key) && n > 0 && n < SPARSE_MIN
+      })
+      .map((d) => d.key),
+  )
+}
+
 // Papers per domain key. Pure.
 export function domainCounts(papers) {
   const counts = new Map()
@@ -83,9 +100,11 @@ export function domainCounts(papers) {
 }
 
 // Sanitize Claude's proposed merges. Pure. A merge survives only when: `from` is a real,
-// SPARSE field; `into` is a real, different field that is NOT itself being merged away
-// (no chains); and each field is merged at most once. Claude proposes; this disposes.
-export function pickMerges(proposed, { keys, sparse }) {
+// SPARSE field that the user does NOT own; `into` is a real, different field that is NOT itself
+// being merged away (no chains); and each field is merged at most once. Claude proposes; this
+// disposes. A field the user typed or renamed in Settings is theirs — the tidy pass may absorb
+// other fields INTO it, but must never delete or rename it, however sparse it looks.
+export function pickMerges(proposed, { keys, sparse, protectedKeys = new Set() }) {
   const froms = new Set((proposed || []).map((m) => m?.from))
   const merged = new Set()
   const out = []
@@ -94,6 +113,7 @@ export function pickMerges(proposed, { keys, sparse }) {
     if (!from || !into || from === into) continue
     if (!keys.has(from) || !keys.has(into)) continue
     if (!sparse.has(from)) continue
+    if (protectedKeys.has(from)) continue
     if (froms.has(into)) continue
     if (merged.has(from)) continue
     merged.add(from)
@@ -111,19 +131,26 @@ export async function consolidateDomains() {
   if (domains.length < TIDY_MIN_FIELDS) return []
   const papers = (await store.all('papers')) || []
   const counts = domainCounts(papers)
-  const sparse = new Set(domains.filter((d) => (counts.get(d.key) || 0) < SPARSE_MIN).map((d) => d.key))
+  // The user's own fields are never merge candidates — absorbing one would undo her edit.
+  const pinned = userDomainKeys()
+  const sparse = mergeCandidates(domains, counts, pinned)
   if (!sparse.size) return []
 
   const fields = domains.map((d) => ({
     key: d.key,
     label: d.label,
     count: counts.get(d.key) || 0,
+    pinned: pinned.has(d.key),
     papers: sparse.has(d.key)
       ? papers.filter((p) => p.domain === d.key).map((p) => p.title).filter(Boolean).slice(0, 6)
       : [],
   }))
   const proposed = await proposeDomainMerges({ fields })
-  const merges = pickMerges(proposed, { keys: new Set(domains.map((d) => d.key)), sparse })
+  const merges = pickMerges(proposed, {
+    keys: new Set(domains.map((d) => d.key)),
+    sparse,
+    protectedKeys: pinned,
+  })
 
   const nodes = (await store.all('graphNodes')) || []
   for (const { from, into } of merges) {
@@ -141,7 +168,10 @@ export async function consolidateDomains() {
 
 // Re-file the WHOLE knowledge base: clear the existing concept nodes (+ their edges), reset each
 // paper's filing, then re-classify every saved paper into a concept and re-synthesize each touched
-// concept once. Paid: one analyzePaper call per paper + one synthesizeConcept per concept.
+// concept once. The DOMAIN taxonomy is deliberately NOT cleared — re-filing runs through
+// filePaper → analyzePaper, which reads the live domain list, so a re-file is exactly the action
+// that pulls papers into fields the user added by hand since they were first saved.
+// Paid: one analyzePaper call per paper + one synthesizeConcept per concept.
 // `onProgress(done, total)` fires per paper. Returns a small summary.
 export async function refileKB(onProgress) {
   await syncAnchors(await getProfile()) // ensure project nodes exist; sweep any legacy north stars

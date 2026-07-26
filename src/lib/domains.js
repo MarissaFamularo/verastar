@@ -53,6 +53,36 @@ export function nextColor(existing) {
   return PALETTE.find((c) => !used.has(c)) || PALETTE[existing.length % PALETTE.length]
 }
 
+// Punctuation-insensitive form of a domain name, for matching only. The classifier proposes a
+// LABEL; the same field can come back spelled differently from how the user typed it ("AI / ML"
+// vs "AI & ML" vs "AI and ML"), which would otherwise mint a duplicate field beside the user's.
+export function normalizeDomainName(raw) {
+  return (raw || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter((w) => w && w !== 'and')
+    .join('')
+}
+
+// Resolve a classifier answer (an existing key OR a proposed label) against a domain list.
+// Pure, so the reuse rule is testable: exact key, slug, or case-insensitive label first, then
+// the punctuation-insensitive fallback. Returns the matched record, or undefined when it's new.
+export function matchDomain(keyOrLabel, domains) {
+  const raw = (keyOrLabel || '').trim()
+  if (!raw) return undefined
+  const list = domains || []
+  const slug = slugifyDomain(raw)
+  const exact = list.find(
+    (d) => d.key === raw || d.key === slug || (d.label || '').toLowerCase() === raw.toLowerCase(),
+  )
+  if (exact) return exact
+  const norm = normalizeDomainName(raw)
+  return list.find((d) => normalizeDomainName(d.label) === norm || normalizeDomainName(d.key) === norm)
+}
+
 // Hydrate the cache from the store. One-time migration: a library whose papers/concepts
 // already reference the legacy keys (built before domains were per-user) gets the legacy
 // set seeded so nothing loses its name or color. Fresh users start EMPTY — domains appear
@@ -76,6 +106,14 @@ export function listDomains() {
   return _cache || []
 }
 
+// Hydrate once if nobody has. listDomains() is sync and answers [] before hydration — harmless
+// for a render, but a classifier prompt built from [] would be told the taxonomy is empty and
+// would mint a broad new field beside the user's. Callers that FILE papers await this first.
+export async function ensureDomainsLoaded() {
+  if (_cache === null) await loadDomains()
+  return _cache
+}
+
 function find(key) {
   return (_cache || []).find((d) => d.key === key) || LEGACY_BY_KEY.get(key)
 }
@@ -94,31 +132,44 @@ export async function ensureDomain(keyOrLabel) {
   const raw = (keyOrLabel || '').trim()
   if (!raw) return ''
   if (_cache === null) await loadDomains()
-  const slug = slugifyDomain(raw)
-  const hit = _cache.find(
-    (d) => d.key === raw || d.key === slug || d.label.toLowerCase() === raw.toLowerCase(),
-  )
+  const hit = matchDomain(raw, _cache)
   if (hit) return hit.key
-  const domain = { key: slug, label: raw, color: nextColor(_cache) }
+  const domain = { key: slugifyDomain(raw), label: raw, color: nextColor(_cache) }
   await store.put('domains', domain.key, domain)
   _cache = [..._cache, domain]
   return domain.key
 }
 
 // --- Settings editing (rename keeps the key, so filed papers follow the new label) ---
+//
+// A domain the user typed or renamed is marked `source: 'user'`. That mark is the taxonomy's
+// steering wheel: the classifier is told to prefer these fields (pipeline/concepts.js), and the
+// tidy pass is forbidden from merging them away (deposit.pickMerges). Claude never sets it.
+
+async function markUserOwned(key, patch = {}) {
+  const hit = (_cache || []).find((d) => d.key === key)
+  if (!hit) return
+  const updated = { ...hit, ...patch, source: 'user' }
+  await store.put('domains', key, updated)
+  _cache = _cache.map((d) => (d.key === key ? updated : d))
+}
 
 export async function addDomain(label) {
-  return ensureDomain(label)
+  const key = await ensureDomain(label)
+  // Adding a field Claude already minted doesn't duplicate it — it adopts it.
+  if (key) await markUserOwned(key)
+  return key
 }
 
 export async function renameDomain(key, label) {
   const next = (label || '').trim()
   if (!next) return
-  const hit = (_cache || []).find((d) => d.key === key)
-  if (!hit) return
-  const updated = { ...hit, label: next }
-  await store.put('domains', key, updated)
-  _cache = _cache.map((d) => (d.key === key ? updated : d))
+  await markUserOwned(key, { label: next })
+}
+
+// Keys of the fields the user owns — never merged away, and preferred by the classifier.
+export function userDomainKeys() {
+  return new Set(listDomains().filter((d) => d.source === 'user').map((d) => d.key))
 }
 
 // Removing a domain orphans any concepts still filed under it (they render as

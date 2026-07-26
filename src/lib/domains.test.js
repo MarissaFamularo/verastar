@@ -3,7 +3,7 @@
 // behavior — loadDomains migration, ensureDomain — needs IndexedDB and is exercised live.)
 
 import { describe, it, expect } from 'vitest'
-import { slugifyDomain, nextColor, PALETTE, LEGACY_DOMAINS, domainLabel, domainColor, DEFAULT_PAPER_COLOR } from './domains.js'
+import { slugifyDomain, nextColor, PALETTE, LEGACY_DOMAINS, domainLabel, domainColor, DEFAULT_PAPER_COLOR, normalizeDomainName, matchDomain } from './domains.js'
 
 describe('slugifyDomain', () => {
   it('slugs a field-level label to a stable key', () => {
@@ -26,6 +26,58 @@ describe('nextColor', () => {
   it('cycles when the palette is exhausted', () => {
     const all = PALETTE.map((c) => ({ color: c }))
     expect(PALETTE).toContain(nextColor(all))
+  })
+})
+
+describe('matchDomain', () => {
+  // The user's hand-added fields — the classifier must land ON these, not beside them.
+  const DOMAINS = [
+    { key: 'vascular-surgery', label: 'Vascular Surgery' },
+    { key: 'ai-ml', label: 'AI / ML', source: 'user' },
+    { key: 'carotid-disease', label: 'Carotid Disease', source: 'user' },
+  ]
+
+  it('matches an existing key, slug or label', () => {
+    expect(matchDomain('ai-ml', DOMAINS).key).toBe('ai-ml')
+    expect(matchDomain('Carotid Disease', DOMAINS).key).toBe('carotid-disease')
+    expect(matchDomain('carotid disease', DOMAINS).key).toBe('carotid-disease')
+  })
+
+  it("reuses the user's field however the model punctuates it", () => {
+    for (const proposed of ['AI / ML', 'AI & ML', 'AI and ML', 'AI/ML']) {
+      expect(matchDomain(proposed, DOMAINS)?.key).toBe('ai-ml')
+    }
+  })
+
+  it('a genuinely new field stays new', () => {
+    expect(matchDomain('Medical Education', DOMAINS)).toBeUndefined()
+    expect(matchDomain('Carotid Stenting Technique', DOMAINS)).toBeUndefined()
+  })
+
+  it('does not collapse a narrow field into the specialty that contains it', () => {
+    expect(matchDomain('Vascular Surgery', DOMAINS).key).toBe('vascular-surgery')
+    expect(matchDomain('Limb', DOMAINS)).toBeUndefined()
+  })
+
+  it('tolerates empty input and an empty taxonomy', () => {
+    expect(matchDomain('', DOMAINS)).toBeUndefined()
+    expect(matchDomain(null, DOMAINS)).toBeUndefined()
+    expect(matchDomain('AI / ML', [])).toBeUndefined()
+    expect(matchDomain('AI / ML', undefined)).toBeUndefined()
+  })
+})
+
+describe('normalizeDomainName', () => {
+  it('folds punctuation, case and the word "and"', () => {
+    expect(normalizeDomainName('AI & ML')).toBe(normalizeDomainName('ai/ml'))
+    expect(normalizeDomainName('Health Data Science and Biostatistics')).toBe(
+      normalizeDomainName('Health Data Science & Biostatistics'),
+    )
+  })
+
+  it('keeps distinct fields distinct', () => {
+    expect(normalizeDomainName('Limb')).not.toBe(normalizeDomainName('Limb Preservation'))
+    expect(normalizeDomainName('')).toBe('')
   })
 })
 
