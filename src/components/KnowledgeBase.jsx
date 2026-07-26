@@ -198,30 +198,32 @@ export default function KnowledgeBase() {
       </p>
 
       {/* search + domain filter */}
-      <div className="flex items-center" style={{ marginTop: 26, gap: 12, background: 'var(--surface-2)', borderRadius: 12, padding: '11px 15px' }}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--color-fg-muted)" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+      <div className="flex items-center" style={{ marginTop: 26, gap: isMobile ? 8 : 12, background: 'var(--surface-2)', borderRadius: 12, padding: isMobile ? '11px 12px' : '11px 15px' }}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--color-fg-muted)" strokeWidth="1.8" style={{ flex: '0 0 auto' }}><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search title, summary, tags…"
-          style={{ flex: 1, background: 'transparent', border: 0, outline: 'none', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit' }}
+          placeholder={isMobile ? 'Search library…' : 'Search title, summary, tags…'}
+          style={{ flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit' }}
         />
         {query && (
-          <button onClick={() => setQuery('')} className="cursor-pointer" style={{ fontSize: 12, color: 'var(--color-fg-muted)', background: 'transparent', border: 0 }}>clear</button>
+          <button onClick={() => setQuery('')} className="cursor-pointer" style={{ fontSize: 12, color: 'var(--color-fg-muted)', background: 'transparent', border: 0, flex: '0 0 auto' }}>clear</button>
         )}
         {/* Favorites-only lives beside search, not with the chips — it survives the
-            mobile filter fold, so a hearted library is one tap away on the phone too. */}
+            mobile filter fold, so a hearted library is one tap away on the phone too.
+            On the phone it folds to the heart alone; the label would crowd the input. */}
         <button
           onClick={() => setFavsOnly((f) => !f)}
           title={favsOnly ? 'Showing favorites only — click for all papers' : 'Show favorites only'}
+          aria-label={favsOnly ? 'Showing favorites only — tap for all papers' : 'Show favorites only'}
           aria-pressed={favsOnly}
           className="cursor-pointer flex items-center"
-          style={{ gap: 6, padding: '4px 10px', borderRadius: 8, border: 0, fontFamily: 'inherit', fontSize: 12, fontWeight: 500, background: favsOnly ? 'rgba(224,96,90,.16)' : 'transparent', color: favsOnly ? 'var(--color-domain-vascular)' : 'var(--color-fg-muted)' }}
+          style={{ gap: 6, padding: isMobile ? '6px 8px' : '4px 10px', borderRadius: 8, border: 0, flex: '0 0 auto', fontFamily: 'inherit', fontSize: 12, fontWeight: 500, background: favsOnly ? 'rgba(224,96,90,.16)' : 'transparent', color: favsOnly ? 'var(--color-domain-vascular)' : 'var(--color-fg-muted)' }}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill={favsOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+          <svg width={isMobile ? 16 : 13} height={isMobile ? 16 : 13} viewBox="0 0 24 24" fill={favsOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
             <path d="M12 20.3C7.2 16.7 3.5 13.5 3.5 9.8 3.5 7.1 5.6 5 8.1 5c1.5 0 3 .8 3.9 2.1C12.9 5.8 14.4 5 15.9 5c2.5 0 4.6 2.1 4.6 4.8 0 3.7-3.7 6.9-8.5 10.5z" />
           </svg>
-          Favorites
+          {!isMobile && 'Favorites'}
         </button>
       </div>
       {/* Mobile: the chip rows collapse behind this line. The active filters stay
