@@ -22,8 +22,23 @@ function makeFakeClient(response = { data: null, error: null }) {
         upsert: (rows) => { call.ops.push(['upsert', rows]); return builder },
         delete: () => { call.ops.push(['delete']); return builder },
         eq: (col, val) => { call.ops.push(['eq', col, val]); return builder },
+        order: (col, opts) => { call.ops.push(['order', col, opts]); return builder },
+        // Serve the requested slice of the canned data — `all` paginates, so the fake
+        // must model short-page-means-done or its loop would never terminate.
+        range: (from, to) => {
+          call.ops.push(['range', from, to])
+          builder._range = [from, to]
+          return builder
+        },
         maybeSingle: () => { call.ops.push(['maybeSingle']); return builder },
-        then: (onOk, onErr) => Promise.resolve(client.response).then(onOk, onErr),
+        then: (onOk, onErr) => {
+          let res = client.response
+          if (builder._range && Array.isArray(res?.data)) {
+            const [from, to] = builder._range
+            res = { ...res, data: res.data.slice(from, to + 1) }
+          }
+          return Promise.resolve(res).then(onOk, onErr)
+        },
       }
       return builder
     },
@@ -128,5 +143,31 @@ describe('delete / clear', () => {
     const call = client.calls[0]
     expect(opNames(call)).toContain('delete')
     expect(eqs(call)).toEqual({ user_id: USER, collection: 'digests' })
+  })
+})
+
+describe('all — pagination past the PostgREST 1000-row cap', () => {
+  it('stitches pages until a short page, in key order', async () => {
+    // 1500 rows: page one full (1000), page two short (500) — the short page ends the loop.
+    const rows = Array.from({ length: 1500 }, (_, i) => ({ value: { i } }))
+    const client = makeFakeClient({ data: rows, error: null })
+    const out = await cloudStore(client).all('graphEdges')
+    expect(out).toHaveLength(1500)
+    expect(out[0]).toEqual({ i: 0 })
+    expect(out[1499]).toEqual({ i: 1499 })
+    expect(client.calls).toHaveLength(2) // exactly two pages requested
+    expect(client.calls.map((c) => c.ops.find(([n]) => n === 'range').slice(1))).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ])
+    for (const call of client.calls) expect(opNames(call)).toContain('order') // stable paging needs an order
+  })
+
+  it('an exactly-full single page costs one extra empty read, not an infinite loop', async () => {
+    const rows = Array.from({ length: 1000 }, (_, i) => ({ value: { i } }))
+    const client = makeFakeClient({ data: rows, error: null })
+    const out = await cloudStore(client).all('papers')
+    expect(out).toHaveLength(1000)
+    expect(client.calls).toHaveLength(2)
   })
 })

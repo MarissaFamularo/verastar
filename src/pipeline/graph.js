@@ -79,10 +79,14 @@ export async function syncAnchors(profile) {
     projects.push(node)
   }
 
-  // Starred PaperTrellis projects are project stars too. Signed out or never synced, the cache
-  // is empty: no PT nodes to build, none stored to sweep — exactly the manual-only behavior.
+  // Starred PaperTrellis projects are project stars too. The sweep runs ONLY off a cache
+  // that has actually synced (syncedAt set): an empty read — signed out, cold boot before
+  // the background refresh lands, transient failure — must never be read as "she un-starred
+  // everything", because the sweep deletes the stars' edges (including Claude-made links)
+  // permanently. Proven the hard way in a signed-out repro.
   const [cache, excluded] = await Promise.all([getTrellisProjects(), getTrellisExcluded()])
-  const { nodes: ptNodes, staleIds } = trellisAnchorNodes(existing, consideredProjects(cache, excluded))
+  const { nodes: ptNodes, staleIds: rawStale } = trellisAnchorNodes(existing, consideredProjects(cache, excluded))
+  const staleIds = cache?.syncedAt ? rawStale : []
   projects.push(...ptNodes)
   if (staleIds.length) {
     const edges = (await store.all('graphEdges')) || []
@@ -452,8 +456,11 @@ export function structuralSuggestions(nodes, edges) {
   }
   const anchorIds = new Set(anchors.map((a) => a.id))
   const paperIds = new Set(papers.map((p) => p.id))
+  // Keyword AND claude edges are excluded from the tie set: both can legitimately give one
+  // anchor many links (a Claude pass returns up to ~10), and pairwise-linking everything a
+  // popular anchor touches mints C(n,2) filler edges — 8 links became 28 extras, live.
   for (const e of edges) {
-    if (e.origin === 'keyword') continue
+    if (e.origin === 'keyword' || e.origin === 'claude') continue
     if (paperIds.has(e.source) && anchorIds.has(e.target)) tie(e.source, e.target)
     if (paperIds.has(e.target) && anchorIds.has(e.source)) tie(e.target, e.source)
   }

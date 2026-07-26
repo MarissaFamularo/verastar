@@ -42,16 +42,25 @@ export function makeSupabaseStore({ client, userId }) {
         })
     },
 
-    all(collection) {
-      return client
-        .from('kv')
-        .select('value')
-        .eq('user_id', userId)
-        .eq('collection', collection)
-        .then(({ data, error }) => {
-          if (error) fail('read', error)
-          return (data || []).map((row) => row.value)
-        })
+    // PostgREST caps any single select at 1000 rows and truncates SILENTLY — a graph
+    // that crosses 1000 edges would simply lose its newest links from every read (found
+    // live: the map said exactly "1000 connections" while the table held more). Page
+    // through in key order until a short page proves the end.
+    async all(collection) {
+      const PAGE = 1000
+      const values = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await client
+          .from('kv')
+          .select('value')
+          .eq('user_id', userId)
+          .eq('collection', collection)
+          .order('key', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (error) fail('read', error)
+        for (const row of data || []) values.push(row.value)
+        if (!data || data.length < PAGE) return values
+      }
     },
 
     delete(collection, key) {

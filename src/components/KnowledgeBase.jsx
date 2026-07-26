@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { store } from '../lib/store.js'
+import { logEvent } from '../lib/events.js'
 import { hasApiKey } from '../lib/anthropic.js'
 import { loadConcepts, setConceptTags, removeNode } from '../pipeline/graph.js'
 import { refileKB } from '../pipeline/deposit.js'
@@ -377,11 +378,17 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete }) {
     if (navigator.share) {
       try {
         await navigator.share({ title: paper.title, text, url })
+        // Only a COMPLETED share sheet lands here (cancel rejects above) — a real share is
+        // the strongest quality signal a paper can earn, so it's worth a telemetry row.
+        logEvent('paper_shared', { pmid: paper.pmid || paper.id, method: 'native' })
       } catch {}
     } else {
       const ft = paper.pdfUrl || paper.oaUrl || pmcUrl(paper.pmcid)
       const body = [text, url, ft && `Full text: ${ft}`].filter(Boolean).join('\n')
       window.location.href = `mailto:?subject=${encodeURIComponent(paper.title)}&body=${encodeURIComponent(body)}`
+      // mailto hands off to the mail client — we can't see send vs abandon, so the event
+      // honestly records intent, not completion.
+      logEvent('paper_shared', { pmid: paper.pmid || paper.id, method: 'mailto' })
     }
   }
 
