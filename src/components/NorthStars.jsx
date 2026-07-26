@@ -9,6 +9,8 @@
 import { useEffect, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, saveProfile } from '../lib/store.js'
+import { isSignedIn } from '../lib/supabase.js'
+import { getTrellisProjects } from '../lib/trellis.js'
 import { DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { normalizeScoreFloor } from '../pipeline/select.js'
 import { normalizeTopics, normalizeSearchDays, normalizeTopicCap } from '../pipeline/topics.js'
@@ -39,6 +41,9 @@ export default function NorthStars() {
   // patches the profile record and nothing else — so rebuilding the search plan can never
   // touch her library (papers, digests, graph, seen ledger all live in other collections).
   const [interviewing, setInterviewing] = useState(false)
+  // Synced PaperTrellis projects, shown read-only below the manual list. PaperTrellis is
+  // the source of truth for these — no add/remove here, editing happens over there.
+  const [trellis, setTrellis] = useState([])
 
   useEffect(() => {
     getProfile().then((profile) => {
@@ -60,6 +65,9 @@ export default function NorthStars() {
       })
       setLoaded(true)
     })
+    if (isSignedIn()) {
+      getTrellisProjects().then((c) => setTrellis(c?.projects ?? [])).catch(() => {})
+    }
   }, [])
 
   useEffect(() => {
@@ -157,6 +165,29 @@ export default function NorthStars() {
           accent="violet"
         />
       </div>
+
+      {/* Signed in with an empty cache shows nothing — no nagging about a tool she may
+          not use. Non-empty, the synced set is visible so she knows what the digest sees. */}
+      {isSignedIn() && trellis.length > 0 && (
+        <div style={{ marginTop: 16, padding: '13px 15px', borderRadius: 11, border: '1px solid var(--hairline)', background: 'var(--surface-1)' }}>
+          <p style={{ margin: '0 0 10px', fontSize: 11, letterSpacing: '.13em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>
+            From PaperTrellis
+          </p>
+          <div className="flex flex-col" style={{ gap: 7 }}>
+            {trellis.map((p) => (
+              <div key={p.id} className="flex items-center" style={{ gap: 9 }}>
+                <span style={{ fontSize: 13, color: 'var(--color-fg-soft)' }}>{p.title}</span>
+                <span style={{ padding: '2px 8px', borderRadius: 999, background: 'rgba(143,189,230,.1)', fontSize: 10.5, fontWeight: 500, color: 'var(--color-registry)' }}>
+                  {p.stage?.name}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p style={{ margin: '10px 0 0', fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
+            Pre-submission projects, synced from your PaperTrellis account. Edit them there.
+          </p>
+        </div>
+      )}
 
       <div style={{ marginTop: 24, borderTop: '1px solid var(--hairline)', paddingTop: 24 }}>
         <TopicsEditor
