@@ -147,6 +147,8 @@ a:hover {
   }
   .vs-rail-foot {
     margin: 0 0 0 6px !important;
+    flex-direction: row !important; /* trellis link + avatar sit side by side on the tab bar */
+    gap: 10px !important;
     justify-content: center;
   }
   /* Digest: main column + right rail stack into one scroll. */

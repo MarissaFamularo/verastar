@@ -5,7 +5,7 @@ import { supabase, supabaseConfigured, currentUser, sendMagicLink, signOut, isSi
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
-import { refreshTrellisProjects, getTrellisProjects, getTrellisExcluded, consideredProjects } from './lib/trellis.js'
+import { refreshTrellisProjects, getTrellisProjects, getTrellisExcluded, consideredProjects, PAPERTRELLIS_URL } from './lib/trellis.js'
 import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
@@ -136,7 +136,23 @@ function IconRail({ view, setView, onSettings, initials }) {
           )
         })}
       </nav>
-      <div className="vs-rail-foot flex flex-col items-center" style={{ marginTop: 'auto' }}>
+      <div className="vs-rail-foot flex flex-col items-center" style={{ marginTop: 'auto', gap: 14 }}>
+        {/* PaperTrellis is the sister app (same ecosystem, same account) — a quiet
+            doorway at the rail's foot, not a nav view of this app. Lattice glyph. */}
+        <a
+          href={PAPERTRELLIS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="PaperTrellis — manage your projects (opens the sister app)"
+          aria-label="Open PaperTrellis"
+          className="flex items-center justify-center"
+          style={{ width: 36, height: 36, borderRadius: 11, color: 'var(--color-fg-muted)' }}
+        >
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M4 4l16 16M12 4l8 8M4 12l8 8" />
+            <path d="M20 4L4 20M12 4l-8 8M20 12l-8 8" />
+          </svg>
+        </a>
         {/* The avatar doubles as the Settings entry point — no separate rail item. */}
         <button
           onClick={onSettings}
