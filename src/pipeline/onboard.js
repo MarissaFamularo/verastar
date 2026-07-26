@@ -7,6 +7,7 @@
 // named user) lets the demo start from a truly empty app and seed a profile in one click.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
+import { DEFAULT_SCORE_FLOOR } from './select.js'
 
 // The user-owned steering criteria feed triage (the reasoning channel). The app's
 // integrity rules (the number-free two-channel contract, the output schema) live in
@@ -22,13 +23,17 @@ Skip: purely preclinical or animal work, editorials without new data, and topics
 
 export const DEFAULT_SELECT_COUNT = 10
 
+// The score floor is NOT drafted by the model — it's a calibration she tunes once she has
+// seen a few days of scores, so every new profile starts at the same known bar.
+export { DEFAULT_SCORE_FLOOR }
+
 // The demo / skip fallback: the real named user's profile, seeded instantly so the app
 // can go from empty to steered in one click on camera (BUILD_PLAN's from-empty demo path).
 export const DEMO_PROFILE = {
   name: 'Dr. Famularo',
   northStars: ['CLTI outcomes', 'Carotid revascularization', 'AI in medicine'],
   projects: ['Limb Preservation Program', 'COSMOS utilization study'],
-  rubric: { criteria: DEFAULT_RUBRIC, selectCount: DEFAULT_SELECT_COUNT },
+  rubric: { criteria: DEFAULT_RUBRIC, selectCount: DEFAULT_SELECT_COUNT, scoreFloor: DEFAULT_SCORE_FLOOR },
   onboarded: true,
 }
 
@@ -84,6 +89,7 @@ export async function draftProfile({ answers, model = MODELS.interview, maxToken
     rubric: {
       criteria: (draft.rubric || DEFAULT_RUBRIC).trim(),
       selectCount: Number(draft.selectCount) > 0 ? Math.round(draft.selectCount) : DEFAULT_SELECT_COUNT,
+      scoreFloor: DEFAULT_SCORE_FLOOR,
     },
   }
 }

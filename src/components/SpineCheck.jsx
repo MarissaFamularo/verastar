@@ -6,11 +6,27 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
-import { getProfile, store } from '../lib/store.js'
-import { saveDailyDigest, loadDailyDigest, clearDailyDigest } from '../lib/digestStore.js'
+import { getProfile, store, SEEN_KEY } from '../lib/store.js'
+import { saveDailyDigest, loadDailyDigest, clearDailyDigest, withOaLinks, digestGaps, restoreNote } from '../lib/digestStore.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
-import { selectCandidates } from '../pipeline/select.js'
+import {
+  selectCandidates,
+  applyScoreFloor,
+  normalizeScoreFloor,
+  floorSummary,
+  readFitLabel,
+  belowFloorNote,
+} from '../pipeline/select.js'
+import { skipSet, seenIds, mergeSeen, capLedger, stampableIds } from '../pipeline/seen.js'
+import {
+  profileTopics,
+  profileSearchDays,
+  profileTopicCap,
+  lookbackOptions,
+  searchSummary,
+} from '../pipeline/topics.js'
+import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { savePaper } from '../pipeline/save.js'
 import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
@@ -226,6 +242,17 @@ function CandidatePool({
                     {[c.journal, c.year].filter(Boolean).join(' · ')}
                     {types && <span style={{ color: 'var(--color-fg-faint)' }}> · {types}</span>}
                   </p>
+                  {/* Which of her topics pulled this in — the answer to "why is this here?",
+                      and for a cross-cutting paper it's genuinely more than one. */}
+                  {(c.topics || []).length > 0 && (
+                    <p className="flex flex-wrap" style={{ margin: '4px 0 0', gap: 5 }}>
+                      {c.topics.map((t) => (
+                        <span key={t} style={{ borderRadius: 999, background: 'rgba(233,196,106,.1)', color: 'var(--color-gold-soft)', padding: '1px 8px', fontSize: 10.5, fontWeight: 500 }}>
+                          {t}
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   {c.reason && <p style={{ margin: '2px 0 0', fontSize: 12, fontStyle: 'italic', color: 'var(--color-fg-muted)' }}>{c.reason}</p>}
                 </div>
                 {inDigest && (
@@ -250,6 +277,15 @@ export default function SpineCheck() {
   const [selectedIds, setSelectedIds] = useState(() => new Set()) // ids chosen for the digest
   const [poolOpen, setPoolOpen] = useState(false) // funnel is a disclosure — collapsed by default
   const [scanError, setScanError] = useState('')
+  // Honest non-failures — "nothing new since yesterday", "4 of 38 cleared your bar".
+  // Kept apart from scanError so a legitimate short day never renders in the error red.
+  const [scanNote, setScanNote] = useState('')
+  // What the search actually did — topics searched, window, and any topic whose query
+  // failed. Kept separate from scanNote because scanNote is claimed by the scoring funnel.
+  const [searchNote, setSearchNote] = useState('')
+  // The window a scan just came back empty on, or null. Non-null is what puts the explicit
+  // "look back further" offer on screen — the app never widens the window by itself.
+  const [emptyWindow, setEmptyWindow] = useState(null)
   const [stages, setStages] = useState({})
   const [results, setResults] = useState([]) // runPaper results (live or showcase)
   const [triaged, setTriaged] = useState({}) // id -> { score, tier, finding, relevance }
@@ -257,7 +293,12 @@ export default function SpineCheck() {
   const [expanded, setExpanded] = useState({}) // id -> bool: show verified values
   const [viewer, setViewer] = useState(null) // { title, corpusLabel, corpusText, quote, valueLabel }
   const [savedIds, setSavedIds] = useState(() => new Set()) // ids deposited to the Knowledge Base
-  const [restored, setRestored] = useState(false) // digest rehydrated from IndexedDB this mount
+  // Rehydrated from IndexedDB this mount: { note, incomplete } or null.
+  const [restored, setRestored] = useState(null)
+  // Her selection bar, so a card can say when its POST-read score came in under it. Read
+  // from the profile on mount (not just set by a run) because a restored digest has to be
+  // able to say it too. Null until loaded — the note stays off rather than guessing a bar.
+  const [scoreFloor, setScoreFloor] = useState(null)
   const keySet = hasApiKey()
 
   // Latest digest state, mirrored every render — async runs would otherwise persist stale
@@ -265,6 +306,12 @@ export default function SpineCheck() {
   const digestRef = useRef(null)
   digestRef.current = { results, triaged, candidates, selectedIds }
   const ranRef = useRef(false)
+  // In-flight for the WHOLE run — the papers AND the ranking call that follows. Nothing may
+  // write a digest snapshot while this is true: mid-run `results` is partial and `triaged` is
+  // empty or stale, and that snapshot restores as a digest with no summaries. The `running`
+  // state can't serve as the guard — it goes false the instant the paper loop ends, while
+  // triage hasn't been called yet.
+  const runInFlight = useRef(false)
 
   // Persist the digest snapshot. Fire-and-forget — never blocks the UI, never throws.
   function persistDigest(overrides = {}) {
@@ -276,6 +323,14 @@ export default function SpineCheck() {
   // Load which papers are already in the Knowledge Base (persisted in IndexedDB).
   useEffect(() => {
     store.all('papers').then((papers) => setSavedIds(new Set((papers || []).map((p) => p.id))))
+  }, [])
+
+  // The selection bar. normalizeScoreFloor is the same fallback scorePool applies, so a
+  // profile that predates the field shows the bar the app actually enforced, not a blank.
+  useEffect(() => {
+    getProfile()
+      .then((p) => setScoreFloor(normalizeScoreFloor(p?.rubric?.scoreFloor)))
+      .catch(console.warn)
   }, [])
 
   // Rehydrate the last digest — App unmounts this component on every tab switch, and
@@ -290,7 +345,11 @@ export default function SpineCheck() {
         setTriaged(saved.triaged)
         setCandidates(saved.candidates)
         setSelectedIds(saved.selectedIds)
-        setRestored(true)
+        // Say what actually came back. A snapshot can be missing summaries — the ranking call
+        // failed, or an older build wrote one mid-run — and a page of blank cards under a
+        // cheerful "restored" line is indistinguishable from a broken app.
+        const gaps = digestGaps(saved)
+        setRestored({ note: restoreNote(gaps), incomplete: !gaps.complete })
       })
       .catch(console.warn)
   }, [])
@@ -302,6 +361,7 @@ export default function SpineCheck() {
   // so a restored digest keeps its links without re-resolving.
   const oaBusy = useRef(false)
   const oaTried = useRef(new Set()) // paper ids attempted this mount — never re-hit Unpaywall
+  const oaResolved = useRef(new Map()) // paper id -> oa | null, so a run's own write keeps them
   useEffect(() => {
     if (oaBusy.current) return
     const pending = results.filter(
@@ -313,10 +373,16 @@ export default function SpineCheck() {
       for (const r of pending) {
         oaTried.current.add(r.paper.id)
         const oa = await resolveOaLink(r.citation.doi).catch(() => null)
+        oaResolved.current.set(r.paper.id, oa || null)
         setResults((prev) => prev.map((x) => (x.paper.id === r.paper.id ? { ...x, oa: oa || null } : x)))
       }
       oaBusy.current = false
-      persistDigest()
+      // Checked HERE, after the awaits, not when the effect fired: links resolve DURING a run,
+      // and writing then would persist a partial results array with an empty triage map — which
+      // restores on the next mount as a digest of two papers and no summaries. Skipping the
+      // write loses nothing: the run's own final write merges oaResolved back in, and any link
+      // that lands after that write finds the flag already clear and persists normally.
+      if (!runInFlight.current) persistDigest()
     })()
   }, [results])
 
@@ -364,10 +430,26 @@ export default function SpineCheck() {
   // live scan, the reference-proof showcase, and incremental "add to digest". In append mode
   // we keep the existing results and only run papers not already in the digest — so topping
   // up later never re-extracts (the expensive Opus step) the papers already done.
-  async function runList(papers, { injectCorrupt = false, append = false } = {}) {
+  //
+  // Returns the run's outcomes as [{ id, error }] — the seen ledger needs to know which
+  // papers actually made it, and runPaper reports failure in its return value rather than
+  // by throwing, so "runList resolved" does NOT mean "every paper ran".
+  //
+  // The wrapper exists only to hold the in-flight flag across the whole thing — papers and
+  // ranking both — so no background write can snapshot the half-built digest.
+  async function runList(papers, options = {}) {
+    runInFlight.current = true
+    try {
+      return await runAndRank(papers, options)
+    } finally {
+      runInFlight.current = false
+    }
+  }
+
+  async function runAndRank(papers, { injectCorrupt = false, append = false } = {}) {
     setRunning(true)
     ranRef.current = true
-    setRestored(false)
+    setRestored(null)
     const base = append ? results : []
     if (!append) {
       setResults([])
@@ -430,12 +512,17 @@ export default function SpineCheck() {
       }
       setRanking(false)
     }
-    // Persist so a tab switch (which unmounts this component) never costs a re-run.
-    persistDigest({ results: collected, triaged: triagedNow })
+    // Persist so a tab switch (which unmounts this component) never costs a re-run. This is the
+    // ONE write a run makes, so `collected` has to carry the open-access links that resolved
+    // while it was building — it predates those patches, hence the merge.
+    persistDigest({ results: withOaLinks(collected, oaResolved.current), triaged: triagedNow })
+    return collected.map((r) => ({ id: r.paper.id, error: r.error }))
   }
 
-  // Score a candidate pool against the current rubric and pre-check the top N. Shared by
-  // the initial scan and the re-rank button. `pool` is candidate stubs (metadata only).
+  // Score a candidate pool against the current rubric and pre-check the ones that EARNED a
+  // slot. Shared by the initial scan and the re-rank button. `pool` is candidate stubs
+  // (metadata only). Floor first, then the count cap — a thin day yields a short digest,
+  // never ten slots padded out with whatever scored highest among the mediocre.
   async function scorePool(pool) {
     const profile = await getProfile()
     const scored = await selectCandidates({
@@ -445,22 +532,53 @@ export default function SpineCheck() {
       candidates: pool,
     })
     setCandidates(scored)
-    const n = profile?.rubric?.selectCount ?? 10
-    const chosenIds = new Set(scored.slice(0, n).map((c) => c.id))
+    const { picked, cleared, total, floor } = applyScoreFloor(scored, {
+      floor: normalizeScoreFloor(profile?.rubric?.scoreFloor),
+      count: profile?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT,
+    })
+    const chosenIds = new Set(picked.map((c) => c.id))
     setSelectedIds(chosenIds)
+    setScoreFloor(floor) // she may have edited the bar since mount; this run used THIS one
+    setScanNote(floorSummary({ total, cleared, picked: picked.length, floor }))
     // The pool + picks survive a tab switch even before any digest runs.
     persistDigest({ candidates: scored, selectedIds: chosenIds })
-    return { scored, chosenIds }
+    return { scored, chosenIds, cleared, floor }
+  }
+
+  // Stamp a pool as shown. Called ONLY after a digest run has finished — an orphan stamp
+  // from a failed or abandoned run silently buries papers she never saw, which is the one
+  // failure here with no recovery. A repeat costs her two seconds; a false stamp costs a
+  // paper. stampableIds enforces the rest of that rule: papers that errored are excluded,
+  // and a run where nothing succeeded stamps nothing. The write itself is best-effort — a
+  // ledger that didn't save means a day of repeats, and that must never surface as a
+  // digest failure.
+  async function recordSeen(pool, outcomes) {
+    const ids = stampableIds(pool, outcomes)
+    if (!ids.length) return
+    try {
+      const ledger = await store.get('seen', SEEN_KEY)
+      const next = capLedger(mergeSeen(ledger, ids, new Date().toISOString()))
+      await store.put('seen', SEEN_KEY, next)
+    } catch (err) {
+      console.warn('Seen ledger update failed (digest unaffected):', err.message)
+    }
   }
 
   // The product loop, in ONE click: search PubMed WIDE → score every candidate against the
   // rubric (metadata only) → run the digest immediately on the rubric's top picks. The
   // selection funnel stays collapsed underneath the digest — open it to adjust the picks,
   // re-rank against an edited rubric, or top up. The daily user never has to touch it.
-  async function startScan() {
+  //
+  // `days` overrides the profile's saved window for THIS run only — it's how the empty
+  // state's "look back 7 days" works. A one-off catch-up must never quietly become her new
+  // default, so the override lives in the call and is never written back to the profile.
+  async function startScan({ days: override } = {}) {
     setScanError('')
+    setScanNote('')
+    setSearchNote('')
+    setEmptyWindow(null)
     ranRef.current = true
-    setRestored(false)
+    setRestored(null)
     setResults([])
     setTriaged({})
     setCandidates([])
@@ -468,33 +586,68 @@ export default function SpineCheck() {
     clearDailyDigest().catch(console.warn)
     setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
     setSearching(true)
-    let pool = []
+    let fresh = []
+    let searchDays = override
     try {
       const profile = await getProfile()
-      pool = await searchCandidates({ northStars: profile?.northStars ?? [], retmax: 40, days: 90 })
+      searchDays = override ?? profileSearchDays(profile)
+      // Cross-day dedup now happens INSIDE the search, per topic, before the per-topic cap —
+      // otherwise the cap counts repeats and a topic's ten slots go to papers she read
+      // yesterday while the unseen ones behind them age out unread. Papers already in her
+      // library count as seen too. Both reads are fresh rather than the mounted savedIds
+      // state: a stale set here would re-serve a saved paper.
+      const [ledger, saved] = await Promise.all([store.get('seen', SEEN_KEY), store.all('papers')])
+      const search = await searchCandidates({
+        topics: profileTopics(profile),
+        northStars: profile?.northStars ?? [],
+        perTopic: profileTopicCap(profile),
+        days: searchDays,
+        skipIds: skipSet(seenIds(ledger), saved || []),
+      })
+      fresh = search.candidates
+      searchDays = search.days
+      // Say what was searched BEFORE saying what came of it: a topic whose query failed is a
+      // hole in today's coverage, and a topic the cap bit has more waiting — neither is
+      // visible in a digest that just looks short.
+      setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: fresh.length }))
+      if (!fresh.length) {
+        setSearching(false)
+        setEmptyWindow(searchDays)
+        // Two different true sentences, and the difference matters to her: a quiet field is
+        // not the same as being caught up. `skipped` is how many the ledger dropped, so it
+        // tells them apart. Neither is an error — rendering either in the error red would
+        // teach her to distrust a scan that worked perfectly.
+        setScanNote(
+          search.skipped > 0
+            ? `Nothing new since your last digest — all ${search.skipped} paper${search.skipped === 1 ? '' : 's'} in your topics from the last ${searchDays} day${searchDays === 1 ? '' : 's'} are already in your library or have been shown before.`
+            : `Nothing published in the last ${searchDays} day${searchDays === 1 ? '' : 's'} matched your topics.`,
+        )
+        return
+      }
     } catch (err) {
       setScanError(`PubMed search failed: ${err.message}`)
       setSearching(false)
       return
     }
     setSearching(false)
-    if (!pool.length) {
-      setScanError('No recent papers matched your north stars — broaden them or widen the window.')
-      return
-    }
     setSelecting(true)
     let scored, chosenIds
     try {
-      ;({ scored, chosenIds } = await scorePool(pool))
+      ;({ scored, chosenIds } = await scorePool(fresh))
     } catch (err) {
       setScanError(`Selection failed: ${err.message}`)
       setSelecting(false)
       return
     }
     setSelecting(false)
-    // Auto-run the digest on the top picks — one button, digest pops.
+    // Auto-run the digest on the papers that cleared the floor — one button, digest pops.
+    // Nobody clearing it is a legitimate morning: scorePool has already said so plainly,
+    // the pool stays open below, and nothing is stamped seen (she was never shown a digest
+    // of them, so tomorrow may well surface them again against a lower bar).
     const chosen = scored.filter((c) => chosenIds.has(c.id))
-    if (chosen.length) await runList(chosen, { injectCorrupt: false })
+    if (!chosen.length) return
+    const outcomes = await runList(chosen, { injectCorrupt: false })
+    await recordSeen(scored, outcomes) // LAST — and only what actually ran or was passed over
   }
 
   // Live re-rank: re-score the SAME cached pool against the (edited) rubric — no re-fetch,
@@ -503,6 +656,7 @@ export default function SpineCheck() {
     if (!candidates.length || selecting) return
     setSelecting(true)
     setScanError('')
+    setScanNote('')
     try {
       await scorePool(candidates.map(({ score, reason, ...c }) => c)) // strip old scores
     } catch (err) {
@@ -517,8 +671,13 @@ export default function SpineCheck() {
   async function runDigest() {
     const chosen = candidates.filter((c) => selectedIds.has(c.id))
     if (!chosen.length) return
-    await runList(chosen, { injectCorrupt: false })
+    const outcomes = await runList(chosen, { injectCorrupt: false })
     setPoolOpen(false)
+    // The whole pool is offered up, not just the papers she ran: she saw the rest in the
+    // funnel and passed on them, so re-offering those tomorrow is the repeat this ledger
+    // exists to stop. Also covers the hand-run path where the floor cleared nobody and
+    // startScan's auto-run never fired. Papers that errored are dropped by stampableIds.
+    await recordSeen(candidates, outcomes)
   }
 
   // Top up an existing digest: run ONLY the newly-checked candidates and append them, then
@@ -527,7 +686,11 @@ export default function SpineCheck() {
     const digested = new Set(results.map((r) => r.paper.id))
     const additions = candidates.filter((c) => selectedIds.has(c.id) && !digested.has(c.id))
     if (!additions.length) return
-    await runList(additions, { append: true })
+    // Append mode returns outcomes for the WHOLE digest, so a paper that errored on an
+    // earlier run stays excluded here too — it still hasn't been shown to her.
+    const outcomes = await runList(additions, { append: true })
+    // mergeSeen keeps first-seen stamps, so re-stamping the pool on every top-up is a no-op.
+    await recordSeen(candidates, outcomes)
   }
 
   function toggleCandidate(id) {
@@ -544,7 +707,12 @@ export default function SpineCheck() {
   // (registry match, the corruption catch) deterministically.
   async function runShowcase() {
     setScanError('')
+    setScanNote('')
+    setSearchNote('')
+    setEmptyWindow(null)
     setCandidates([])
+    // Deliberately NOT recorded as seen: the three reference trials are a proof surface,
+    // not her morning, and burying them would break the demo on the second run.
     await runList(DEMO_PAPERS, { injectCorrupt: true })
   }
 
@@ -557,7 +725,8 @@ export default function SpineCheck() {
 
   const busy = running || searching || selecting
   const primaryLabel = searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Building digest…' : "Run today's digest"
-  const showEmpty = !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError
+  const showEmpty =
+    !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote
 
   return (
     <section>
@@ -565,7 +734,7 @@ export default function SpineCheck() {
           surface as a small secondary beneath it. */}
       <div className="flex flex-col items-center" style={{ gap: 12, marginTop: 6 }}>
         <button
-          onClick={startScan}
+          onClick={() => startScan()}
           disabled={!keySet || busy}
           className="cursor-pointer"
           style={{ padding: '14px 34px', borderRadius: 13, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15.5, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -10px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }}
@@ -596,10 +765,44 @@ export default function SpineCheck() {
 
       {/* Status lines. */}
       {!keySet && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Add your API key in Settings first.</p>}
-      {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed wide for recent papers…</p>}
+      {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed — one query per topic…</p>}
+      {/* What was actually searched, including any topic whose query failed. Stated whether
+          the morning was rich or empty: the window is the digest's central claim, and a
+          missing topic is the one thing a full-looking digest would never reveal. */}
+      {searchNote && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--color-fg-faint)', lineHeight: 1.55, maxWidth: 620, fontFamily: 'var(--font-mono)' }}>{searchNote}</p>}
       {selecting && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is scoring every candidate against your rubric…</p>}
       {scanError && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{scanError}</p>}
-      {restored && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Restored your last digest — run again for fresh results.</p>}
+      {/* A short day and a nothing-new day are outcomes, not errors — muted, never red. */}
+      {scanNote && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: 'var(--color-fg-dim)', lineHeight: 1.55, maxWidth: 620 }}>{scanNote}</p>}
+      {/* The ONLY way the window ever gets wider. An empty morning is a true fact about a
+          3-day window; quietly re-running it at 30 days to fill the page would make the one
+          line she trusts the one line that's false. So she asks — and because the wider run
+          is a call-level override, her saved default is still 3 tomorrow. */}
+      {emptyWindow != null && lookbackOptions(emptyWindow).length > 0 && (
+        <div className="flex flex-wrap items-center" style={{ gap: 8, margin: '12px 0 0' }}>
+          <span style={{ fontSize: 12.5, color: 'var(--color-fg-faint)' }}>Look back further:</span>
+          {lookbackOptions(emptyWindow).map((d) => (
+            <button
+              key={d}
+              onClick={() => startScan({ days: d })}
+              disabled={!keySet || busy}
+              title={`Search the last ${d} days — this run only; your saved window stays at ${emptyWindow}`}
+              className="cursor-pointer"
+              style={{ borderRadius: 999, border: '1px solid rgba(255,255,255,.14)', background: 'transparent', color: 'var(--color-fg-soft)', padding: '5px 13px', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
+            >
+              {d} days
+            </button>
+          ))}
+        </div>
+      )}
+      {/* A restore that came back short says so, in amber — same treatment as a withheld
+          summary, because it's the same kind of fact: the app is telling her what it does
+          NOT have. A whole restore keeps the quiet muted line. */}
+      {restored && (
+        <p style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: restored.incomplete ? 'var(--color-abstract)' : 'var(--color-fg-muted)' }}>
+          {restored.note}
+        </p>
+      )}
       {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
       {showEmpty && (
         <p style={{ margin: '16px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)', lineHeight: 1.6, maxWidth: 620 }}>
@@ -637,15 +840,26 @@ export default function SpineCheck() {
           const rank = String(idx + 1).padStart(2, '0')
           return (
             <article key={paper.id} style={{ padding: '24px 26px', borderRadius: 15, background: 'var(--surface-1)' }}>
-              {/* Header — rank · verification chip · fit score / save. */}
-              <div className="flex items-center" style={{ gap: 11, marginBottom: 11 }}>
+              {/* Header — rank · verification chip · post-read fit / save. The fit label
+                  says "after reading" because the scan line above the digest reports a
+                  DIFFERENT score (the pre-read screen, on title and journal); unlabelled,
+                  a card marked 58 under a "score 60+" sentence reads as a contradiction.
+                  flex-wrap so the longer label drops to its own line on a phone instead of
+                  crushing the tier chip. */}
+              <div className="flex flex-wrap items-center" style={{ gap: 11, marginBottom: 11 }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--color-fg-faint)' }}>{rank}</span>
                 {take?.tier ? <TierChip tier={take.tier} /> : stage && stage !== 'done' ? (
                   <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>{STAGE_LABEL[stage]}</span>
                 ) : null}
                 <div className="flex items-center" style={{ marginLeft: 'auto', gap: 14 }}>
-                  {take?.score != null && (
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-fg-faint)' }}>fit {take.score}</span>
+                  {readFitLabel(take) && (
+                    <span
+                      title="Fit to your rubric scored after the paper was fetched and read — not the pre-read title-and-journal screen the digest was selected on"
+                      className="whitespace-nowrap"
+                      style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-fg-faint)' }}
+                    >
+                      {readFitLabel(take)}
+                    </span>
                   )}
                   {!res.error && (
                     <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: savedIds.has(paper.id) ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)' }}>
@@ -658,6 +872,16 @@ export default function SpineCheck() {
 
               <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, lineHeight: 1.32, color: 'var(--color-fg)' }}>{title}</h3>
               <Citation citation={res.citation} oa={res.oa} pmcid={res.source?.pmcid} />
+
+              {/* The pre-read screen cleared this one and reading it disagreed. Muted, in
+                  the same quiet mono as the search note — NOT the withheld-summary amber
+                  and not the error red, both of which mean something else. The paper stays:
+                  it is already extracted and paid for, and the disagreement is the signal. */}
+              {belowFloorNote({ score: take?.score, floor: scoreFloor }) && (
+                <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>
+                  {belowFloorNote({ score: take?.score, floor: scoreFloor })}
+                </p>
+              )}
 
               {/* Relevance to the clinician's projects — italic Spectral, number-free. */}
               {take?.relevance && (

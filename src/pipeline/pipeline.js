@@ -18,9 +18,18 @@ import {
   fetchCitations,
   pmidToPmcid,
   searchPubmed,
+  searchPaceMs,
 } from './sources.js'
 import { extractQuantities } from './extract.js'
 import { verify, normalize, extractNumbers, numbersEqual } from './verify.js'
+import {
+  profileTopics,
+  normalizeSearchDays,
+  normalizeTopicCap,
+  overfetchFor,
+  mergeTopicResults,
+  attachTopics,
+} from './topics.js'
 
 // Public identifiers only — the app re-verifies every value live (docs/FACTS.md).
 export const DEMO_PAPERS = [
@@ -80,38 +89,78 @@ export async function fetchSource(paper) {
   return { hasBody: false, text: abstract, tables: '', tier: 'abstract_only', pmcid: pmcid || null }
 }
 
-// Live daily scan: search recent PubMed for the clinician's north stars and return paper
-// stubs the pipeline can run. Each north star is matched in title/abstract; results are
-// recent-first. This is the real product loop — mostly abstracts, exactly like a hand-run
-// morning digest.
-export async function searchPapers({ northStars = [], retmax = 10, days = 30 } = {}) {
-  const terms = northStars.length ? northStars : ['vascular surgery']
-  const term = terms.map((t) => `"${t.replace(/"/g, '')}"[tiab]`).join(' OR ')
-  const pmids = await searchPubmed(term, { retmax, days })
-  return pmids.map((pmid) => ({ id: pmid, pmid, pmcid: null, nct: null, title: null }))
-}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// Wide candidate search for the selection funnel: search PubMed broadly on the north
-// stars, then pull batched metadata (title · journal · year · publication types) in ONE
-// call. Returns candidate stubs the selection pass can score WITHOUT any full-text fetch or
-// extraction — the ~50-candidates-in step of the real morning workflow. Newest-first.
-export async function searchCandidates({ northStars = [], retmax = 40, days = 90 } = {}) {
-  const terms = northStars.length ? northStars : ['vascular surgery']
-  const term = terms.map((t) => `"${t.replace(/"/g, '')}"[tiab]`).join(' OR ')
-  const pmids = await searchPubmed(term, { retmax, days })
-  if (!pmids.length) return []
+// Wide candidate search for the selection funnel — now ONE PubMed query PER TOPIC, each
+// capped on its own take, over a window short enough that "today's papers" means it
+// (see topics.js for why the old one-OR-query-over-90-days shape was three broken promises).
+//
+// Four properties this function is responsible for:
+//   - SEQUENTIAL, paced. N searches where there used to be one; eutils asks for sequential
+//     requests inside its rate limit, so we wait `searchPaceMs()` between calls rather than
+//     firing them in parallel and hoping the retry catches the 429.
+//   - PARTIAL FAILURE IS NOT TOTAL FAILURE. One topic's query blowing up must not cost her
+//     the other nine topics' digest — the error is captured per topic and reported back in
+//     `failed`, never thrown and never swallowed.
+//   - THE CAP COUNTS UNSEEN PAPERS. `skipIds` (her seen-ledger ∪ her library) is applied
+//     per topic BEFORE the cap, so each topic yields ten papers she has never been offered
+//     rather than ten search hits that might be mostly repeats. That's why we over-fetch
+//     ids: esearch returns bare ids and is free, so we ask for `overfetchFor(cap, days)` —
+//     which scales with the window, since a wider one is proportionally more repeats — and
+//     throw most of them away.
+//   - ONE metadata call, over the SURVIVORS. The esummary fetch happens after the skip and
+//     the cap, so filtering earlier makes the batched call smaller, not bigger.
+//
+// Returns { candidates, counts, failed, skipped, days }: the honest account of what was
+// searched, what the cap held back, and how much was dropped as already-seen — which is
+// what lets the empty state tell "a quiet field" apart from "you're up to date".
+export async function searchCandidates({
+  topics,
+  northStars = [],
+  perTopic,
+  days,
+  paceMs,
+  skipIds,
+} = {}) {
+  const plan = profileTopics({ topics, northStars })
+  const windowDays = normalizeSearchDays(days)
+  const cap = normalizeTopicCap(perTopic)
+  const retmax = overfetchFor(cap, windowDays)
+  const gap = Number.isFinite(Number(paceMs)) ? Number(paceMs) : searchPaceMs()
+
+  const results = []
+  for (let i = 0; i < plan.length; i++) {
+    if (i > 0 && gap > 0) await sleep(gap)
+    const topic = plan[i]
+    try {
+      const pmids = await searchPubmed(topic.query, { retmax, days: windowDays })
+      // retmax rides along so the merge can tell "40 papers exist" from "at least 40 do".
+      results.push({ label: topic.label, pmids, retmax })
+    } catch (err) {
+      console.warn(`PubMed search failed for topic "${topic.label}":`, err.message)
+      results.push({ label: topic.label, error: err.message })
+    }
+  }
+
+  const { pmids, topicsByPmid, counts, failed, skipped } = mergeTopicResults(results, { cap, skipIds })
+  if (!pmids.length) return { candidates: [], counts, failed, skipped, days: windowDays }
+
   const cites = await fetchCitations(pmids)
-  return cites.map((c) => ({
-    id: c.pmid,
-    pmid: c.pmid,
-    pmcid: null,
-    nct: null,
-    title: c.title,
-    journal: c.journal,
-    year: c.year,
-    author: c.author,
-    pubtypes: c.pubtypes,
-  }))
+  const candidates = attachTopics(
+    cites.map((c) => ({
+      id: c.pmid,
+      pmid: c.pmid,
+      pmcid: null,
+      nct: null,
+      title: c.title,
+      journal: c.journal,
+      year: c.year,
+      author: c.author,
+      pubtypes: c.pubtypes,
+    })),
+    topicsByPmid,
+  )
+  return { candidates, counts, failed, skipped, days: windowDays }
 }
 
 // Run the full pipeline on one paper. Returns:
