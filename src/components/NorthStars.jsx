@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { isSignedIn } from '../lib/supabase.js'
-import { getTrellisProjects, getTrellisExcluded, setTrellisExcluded } from '../lib/trellis.js'
+import { getTrellisProjects, getTrellisExcluded, setTrellisExcluded, PAPERTRELLIS_URL } from '../lib/trellis.js'
 import { DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { normalizeScoreFloor } from '../pipeline/select.js'
 import { normalizeTopics, normalizeSearchDays, normalizeTopicCap } from '../pipeline/topics.js'
@@ -215,8 +215,12 @@ export default function NorthStars() {
             })}
           </div>
           <p style={{ margin: '10px 0 0', fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
-            Pre-submission projects, synced from your PaperTrellis account — edit them there.
-            Starred ones steer your digest; un-star a project to leave it out.
+            Pre-submission projects, synced from your{' '}
+            <a href={PAPERTRELLIS_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>
+              PaperTrellis
+            </a>{' '}
+            account — edit them there. Starred ones steer your digest; un-star a project to
+            leave it out.
           </p>
         </div>
       )}

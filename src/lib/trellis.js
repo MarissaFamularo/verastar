@@ -11,6 +11,9 @@
 import { supabase, supabaseConfigured, isSignedIn } from './supabase.js'
 import { store } from './store.js'
 
+// Where "edit them there" actually is — the UI links synced projects back here.
+export const PAPERTRELLIS_URL = 'https://papertrellis.com'
+
 // Stage positions in PaperTrellis: Idea=1 … Submission=7, Revision=8, Published=9.
 // At or past Submission the search-for-citations phase is over.
 export const SUBMISSION_POSITION = 7
