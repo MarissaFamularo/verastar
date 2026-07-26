@@ -165,33 +165,45 @@ export default function KnowledgeBase() {
       <div style={{ display: 'flex', gap: 40, alignItems: 'flex-start', flexWrap: 'wrap' }}>
       <div style={{ flex: '1 1 440px', minWidth: 0, maxWidth: 720 }}>
       <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Your knowledge graph</p>
-      <div className="flex items-end justify-between" style={{ gap: 20, marginTop: 9 }}>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Library</h1>
-        <div className="flex items-center" style={{ gap: 14 }}>
-          {keySet && totalPapers > 0 &&
-            (refiling ? (
-              <span style={{ fontSize: 12, color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>{refiling}</span>
-            ) : confirmRefile ? (
-              <span className="flex items-center" style={{ gap: 8, fontSize: 12 }}>
-                <span style={{ color: 'var(--color-fg-muted)' }}>Re-run Claude on all {totalPapers}?</span>
-                <button onClick={handleRefile} className="cursor-pointer" style={{ borderRadius: 8, background: 'var(--color-accent)', color: '#1c1206', padding: '3px 10px', fontWeight: 600, border: 0 }}>Re-file</button>
-                <button onClick={() => setConfirmRefile(false)} className="cursor-pointer" style={{ color: 'var(--color-fg-muted)', background: 'transparent', border: 0 }}>cancel</button>
-              </span>
-            ) : (
-              <button
-                onClick={() => setConfirmRefile(true)}
-                title="Re-classify every saved paper into concepts + domains"
-                className="inline-flex items-center cursor-pointer"
-                style={{ gap: 7, padding: '6px 12px', borderRadius: 9, border: '1px solid rgba(255,255,255,.1)', color: 'var(--color-fg-soft)', fontSize: 12.5, background: 'transparent' }}
-              >
-                ↻ Re-file with Claude
-              </button>
-            ))}
-          <span style={{ fontSize: 13, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>
-            {totalConcepts} concept{totalConcepts === 1 ? '' : 's'} · {totalPapers} paper{totalPapers === 1 ? '' : 's'}
-          </span>
-        </div>
-      </div>
+      {/* Desktop: title, re-file, and counts share one line. On the phone the
+          re-file control drops to its own row under the title — beside it, the
+          button wrapped into a tall pill that crowded out the counts. */}
+      {(() => {
+        const refileControl = keySet && totalPapers > 0 && (
+          refiling ? (
+            <span style={{ fontSize: 12, color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>{refiling}</span>
+          ) : confirmRefile ? (
+            <span className="flex items-center" style={{ gap: 8, fontSize: 12, flexWrap: 'wrap' }}>
+              <span style={{ color: 'var(--color-fg-muted)' }}>Re-run Claude on all {totalPapers}?</span>
+              <button onClick={handleRefile} className="cursor-pointer" style={{ borderRadius: 8, background: 'var(--color-accent)', color: '#1c1206', padding: '3px 10px', fontWeight: 600, border: 0 }}>Re-file</button>
+              <button onClick={() => setConfirmRefile(false)} className="cursor-pointer" style={{ color: 'var(--color-fg-muted)', background: 'transparent', border: 0 }}>cancel</button>
+            </span>
+          ) : (
+            <button
+              onClick={() => setConfirmRefile(true)}
+              title="Re-classify every saved paper into concepts + domains"
+              className="inline-flex items-center cursor-pointer"
+              style={{ gap: 7, padding: '6px 12px', borderRadius: 9, border: '1px solid rgba(255,255,255,.1)', color: 'var(--color-fg-soft)', fontSize: 12.5, background: 'transparent', whiteSpace: 'nowrap' }}
+            >
+              ↻ Re-file with Claude
+            </button>
+          )
+        )
+        return (
+          <>
+            <div className="flex items-end justify-between" style={{ gap: 20, marginTop: 9 }}>
+              <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>Library</h1>
+              <div className="flex items-center" style={{ gap: 14 }}>
+                {!isMobile && refileControl}
+                <span style={{ fontSize: 13, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  {totalConcepts} concept{totalConcepts === 1 ? '' : 's'} · {totalPapers} paper{totalPapers === 1 ? '' : 's'}
+                </span>
+              </div>
+            </div>
+            {isMobile && refileControl && <div style={{ marginTop: 12 }}>{refileControl}</div>}
+          </>
+        )
+      })()}
       <p style={{ margin: '12px 0 0', fontSize: 15, color: 'var(--color-fg-dim)', maxWidth: 640, lineHeight: 1.55 }}>
         Everything you've saved, grouped into concept nodes and colored by domain. Search title, summary, and tags;
         filter by topic. Claude tags each paper on deposit — prune what's wrong and add your own notes.

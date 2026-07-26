@@ -57,7 +57,12 @@ export default function SourceViewer({ open, onClose, title, corpusLabel, corpus
 
       {/* slide-over panel */}
       <div className="relative flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl dark:bg-slate-900">
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+        {/* Full-height panel starts at the screen's true top edge — pad the header
+            past the phone's status bar or the title and Close sit under the clock. */}
+        <header
+          className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 dark:border-slate-800"
+          style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
+        >
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Source · {corpusLabel === 'tables' ? 'table' : 'full text'}
