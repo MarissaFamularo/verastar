@@ -13,6 +13,7 @@ import SpineCheck from './components/SpineCheck.jsx'
 import KnowledgeBase from './components/KnowledgeBase.jsx'
 import WeekendRead from './components/WeekendRead.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
+import Memos from './components/Memos.jsx'
 
 // ── Observatory shell ──────────────────────────────────────────────────────
 // The app is a dark, star-lit reading room. A fixed 88px icon rail on the left
@@ -21,14 +22,17 @@ import ConstellationView from './components/ConstellationView.jsx'
 // at the rail's foot or the digest's key chip). Faithful port of design/Verastar.dc.html — the engine
 // (pipeline/, verifier) is untouched; this file is pure presentation + routing.
 
-// Her product IA (the 4-tab simplification): Digest · Library · Star Map · Connections.
-// Library folds the concept graph + the flat-file vault into one surface; Connections is
-// the Weekend Read synthesis. The observatory visuals from the design ride on top.
+// Her product IA: Digest · Library · Star Map · Connections · Memos. Library folds the
+// concept graph + the flat-file vault into one surface; Connections is the Weekend Read
+// synthesis; Memos is voice-first quick capture (the phone keyboard's mic does the work).
+// The observatory visuals from the design ride on top. This ONE map is both the desktop
+// rail and the mobile bottom tab bar (index.css restyles .vs-rail under 760px).
 const NAV = [
   ['digest', 'Today'],
   ['library', 'Library'],
   ['starmap', 'Star Map'],
   ['connections', 'Connections'],
+  ['memos', 'Memos'],
 ]
 
 function NavIcon({ view }) {
@@ -71,6 +75,15 @@ function NavIcon({ view }) {
           <ellipse cx="12" cy="12" rx="10" ry="4.2" opacity=".55" transform="rotate(-24 12 12)" strokeWidth="1.4" />
           <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" />
           <circle cx="21.1" cy="7.9" r="1.3" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    case 'memos':
+      // Note sheet — a folded page with two written lines (no sparkles, no compass shapes).
+      return (
+        <svg {...p} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5.5 3.5h9L18.5 8v12.5h-13z" />
+          <path d="M14.5 3.5V8h4" />
+          <path d="M8.5 12.5h7M8.5 16h4.5" />
         </svg>
       )
     default:
@@ -755,6 +768,7 @@ export default function App() {
           {view === 'library' && <KnowledgeBase key="library" />}
           {view === 'starmap' && <ConstellationView key="starmap" />}
           {view === 'connections' && <WeekendRead key="connections" />}
+          {view === 'memos' && <Memos key="memos" />}
         </main>
       )}
 
