@@ -104,7 +104,7 @@ export default function ConstellationView() {
   // Flip a source paper's heart and patch it into the live list — same flag the
   // Library and digest read, so the star map's heart is never its own state.
   async function handleToggleFavorite(p) {
-    const next = await setPaperFavorite(p.id, !p.favorite)
+    const next = await setPaperFavorite(p.id, !p.favorite, { surface: 'starmap' })
     if (next) setPapers((prev) => prev.map((x) => (x.id === p.id ? next : x)))
   }
 

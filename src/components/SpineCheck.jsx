@@ -433,7 +433,7 @@ export default function SpineCheck() {
   async function toggleFavorite(res, take, title) {
     const id = res.paper.id
     if (favIds.has(id)) {
-      await setPaperFavorite(id, false)
+      await setPaperFavorite(id, false, { surface: 'digest' })
       setFavIds((prev) => {
         const next = new Set(prev)
         next.delete(id)
@@ -450,7 +450,7 @@ export default function SpineCheck() {
         return
       }
     }
-    await setPaperFavorite(id, true)
+    await setPaperFavorite(id, true, { surface: 'digest' })
     setFavIds((prev) => new Set(prev).add(id))
   }
 

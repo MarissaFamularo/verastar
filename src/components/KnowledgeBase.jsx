@@ -22,6 +22,7 @@ import { listDomains, domainColor, domainLabel } from '../lib/domains.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 import { useIsMobile } from '../lib/useMobile.js'
+import { setPaperFavorite } from '../lib/favorites.js'
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
@@ -92,6 +93,13 @@ export default function KnowledgeBase() {
 
   async function removePaperTag(paper, tag) {
     await savePaper(paper.id, { tags: (paper.tags || []).filter((t) => t !== tag) })
+  }
+
+  // Through lib/favorites.js, NOT the local savePaper patch — the heart must log its
+  // telemetry row no matter which surface flips it, and this one is no exception.
+  async function toggleFavorite(p) {
+    const next = await setPaperFavorite(p.id, !p.favorite, { surface: 'library' })
+    if (next) setPapers((prev) => prev.map((x) => (x.id === p.id ? next : x)))
   }
 
   async function removeConceptTag(concept, tag) {
@@ -307,7 +315,7 @@ export default function KnowledgeBase() {
                 onSaveNote={(id, notes) => savePaper(id, { notes })}
                 onDeleteConcept={() => deleteConcept(group)}
                 onDeletePaper={deletePaper}
-                onToggleFavorite={(p) => savePaper(p.id, { favorite: !p.favorite })}
+                onToggleFavorite={toggleFavorite}
               />
             ))}
             {unfiled.length > 0 && (
@@ -317,7 +325,7 @@ export default function KnowledgeBase() {
                 </p>
                 <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {unfiled.map((p) => (
-                    <PaperRow key={p.id} paper={p} onRemoveTag={(t) => removePaperTag(p, t)} onSaveNote={(notes) => savePaper(p.id, { notes })} onDelete={() => deletePaper(p)} onToggleFavorite={() => savePaper(p.id, { favorite: !p.favorite })} />
+                    <PaperRow key={p.id} paper={p} onRemoveTag={(t) => removePaperTag(p, t)} onSaveNote={(notes) => savePaper(p.id, { notes })} onDelete={() => deletePaper(p)} onToggleFavorite={() => toggleFavorite(p)} />
                   ))}
                 </ul>
               </div>

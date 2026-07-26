@@ -48,10 +48,16 @@ describe('setPaperFavorite', () => {
     expect(logEvent).not.toHaveBeenCalled()
   })
 
-  it('logs the heart as a telemetry event with the pmid', async () => {
+  it('logs the heart as a telemetry event with the pmid and surface', async () => {
+    __data.set('papers:p1', paper())
+    await setPaperFavorite('p1', true, { surface: 'digest' })
+    expect(logEvent).toHaveBeenCalledWith('paper_favorited', { pmid: '111', favorite: true, surface: 'digest' })
+  })
+
+  it('logs surface "unknown" when a call site forgets to say where', async () => {
     __data.set('papers:p1', paper())
     await setPaperFavorite('p1', true)
-    expect(logEvent).toHaveBeenCalledWith('paper_favorited', { pmid: '111', favorite: true })
+    expect(logEvent).toHaveBeenCalledWith('paper_favorited', { pmid: '111', favorite: true, surface: 'unknown' })
   })
 })
 

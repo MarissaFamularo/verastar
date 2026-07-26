@@ -124,7 +124,7 @@ export default function WeekendRead() {
   // Flip a cited paper's heart — the same favorite flag every other surface reads.
   async function toggleFavorite(p) {
     if (!p?.id) return
-    const next = await setPaperFavorite(p.id, !p.favorite)
+    const next = await setPaperFavorite(p.id, !p.favorite, { surface: 'connections' })
     if (next) setPapers((prev) => prev.map((x) => (x.id === p.id ? next : x)))
   }
 

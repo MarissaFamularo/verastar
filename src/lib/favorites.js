@@ -7,18 +7,20 @@
 import { store } from './store.js'
 import { logEvent } from './events.js'
 
-export async function setPaperFavorite(id, favorite) {
+export async function setPaperFavorite(id, favorite, { surface = 'unknown' } = {}) {
   const p = await store.get('papers', id)
   if (!p) return null
   const next = { ...p, favorite: !!favorite }
   await store.put('papers', id, next)
   // A heart is a deliberate quality signal, like a share — worth a telemetry row.
-  logEvent('paper_favorited', { pmid: next.pmid || id, favorite: !!favorite })
+  // `surface` records WHERE she hearted it (digest/library/starmap/connections):
+  // the adoption study cares which doorway gets used, not just that one was.
+  logEvent('paper_favorited', { pmid: next.pmid || id, favorite: !!favorite, surface })
   return next
 }
 
-export async function togglePaperFavorite(id) {
+export async function togglePaperFavorite(id, opts) {
   const p = await store.get('papers', id)
   if (!p) return null
-  return setPaperFavorite(id, !p.favorite)
+  return setPaperFavorite(id, !p.favorite, opts)
 }
