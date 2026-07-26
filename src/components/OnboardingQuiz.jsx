@@ -1,23 +1,35 @@
 // components/OnboardingQuiz.jsx — the first-run flow: "watch it build my profile in 60 seconds."
 //
-// Faithful port of design/Onboarding.dc.html onto the real pipeline. Five steps:
+// Faithful port of design/Onboarding.dc.html onto the real pipeline:
 // welcome → connect (BYOK — the only place a brand-new user can enter a key) →
-// intake (three questions) → drafting (constellation animation while one Claude
-// call drafts the steering profile) → review (edit everything, then enter).
+// INTERVIEW (a real conversation, one question at a time — ProfileInterview.jsx) →
+// review (edit the drafted topics, stars and rubric, then enter).
 // A demo path on the welcome screen seeds DEMO_PROFILE so the app demos keyless.
 //
+// The old three-question intake survives as a labelled QUICK START off the interview
+// screen. It is kept because it is genuinely faster and because it works when the
+// interview's per-turn calls can't run — but it is no longer the default, for one
+// reason: it never produced PubMed queries. It drafted north-star phrases, the scan
+// searched those phrases, and "AI in medicine" as a search term is how neurointervention
+// papers reached a vascular-surgery digest. The interview's whole job is the search plan.
+//
 // `preview` mode (App mounts this at ?firstrun=1): nothing persists — no key
-// writes, no saveProfile — and drafting is a timed animation instead of a paid
-// call, so the flow can be walked end-to-end for free.
+// writes, no saveProfile, no profile READ — and both drafting paths are timed
+// animations instead of paid calls, so the flow can be walked end-to-end for free.
 
 import { useEffect, useState } from 'react'
 import { hasApiKey, setApiKey, setNcbiKey, setNcbiEmail } from '../lib/anthropic.js'
 import { supabaseConfigured, sendMagicLink } from '../lib/supabase.js'
-import { saveProfile } from '../lib/store.js'
+import { getProfile, saveProfile } from '../lib/store.js'
 import { draftProfile, DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
+import { mergeInterviewProfile } from '../pipeline/interview.js'
 import { normalizeScoreFloor } from '../pipeline/select.js'
+import { normalizeTopics, normalizeSearchDays, normalizeTopicCap } from '../pipeline/topics.js'
 import ChipGroup from './ChipGroup.jsx'
+import ProfileInterview from './ProfileInterview.jsx'
+import QueryFlags from './QueryFlags.jsx'
 import RubricEditor from './RubricEditor.jsx'
+import TopicsEditor from './TopicsEditor.jsx'
 
 const QUESTIONS = [
   {
@@ -114,12 +126,14 @@ function DraftingConstellation() {
 }
 
 export default function OnboardingQuiz({ onDone, preview = false }) {
-  const [step, setStep] = useState('welcome') // welcome | signin | connect | intake | drafting | review
+  const [step, setStep] = useState('welcome') // welcome | signin | connect | interview | intake | drafting | review
   const [keyInput, setKeyInput] = useState('')
   const [ncbiInput, setNcbiInput] = useState('')
   const [emailInput, setEmailInput] = useState('')
   const [answers, setAnswers] = useState({})
-  const [draft, setDraft] = useState(null) // { name, northStars, projects, rubric:{criteria,selectCount} }
+  const [draft, setDraft] = useState(null) // { name, northStars, projects, topics, search, rubric:{criteria,selectCount,scoreFloor} }
+  // Which path produced the draft, so "back" from review returns where she came from.
+  const [path, setPath] = useState('interview') // interview | intake
   const [error, setError] = useState('')
   // Returning-user sign-in from the welcome screen (accounts configured only).
   const [signinEmail, setSigninEmail] = useState('')
@@ -165,7 +179,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
       if (!hasApiKey()) return // key required to interview; the demo path is on the welcome screen
     }
     setError('')
-    setStep('intake')
+    setStep('interview')
   }
 
   // Send the returning-user magic link. Finishing sign-in is the emailed link's job:
@@ -193,19 +207,36 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
     saveProfile(demoProfile).then(() => onDone?.(demoProfile))
   }
 
+  // Write the reviewed draft. Two properties matter here and both are deliberate:
+  //
+  //   - It PATCHES the existing profile record (mergeInterviewProfile) instead of replacing
+  //     it. Re-running onboarding is expected — she will want to rebuild her search plan now
+  //     that the interview writes queries — and a replace would drop keys this screen never
+  //     shows. Her library is in other collections (`papers`, `digests`, `graphNodes`,
+  //     `graphEdges`, `seen`) and nothing in this flow writes or clears any of them.
+  //   - In preview it neither writes NOR reads. ?firstrun=1 persists nothing, full stop.
   async function save() {
-    const profile = {
+    const fields = {
       name: (draft.name || 'Doctor').trim(),
       northStars: draft.northStars || [],
       projects: draft.projects || [],
+      topics: normalizeTopics(draft.topics),
+      search: {
+        days: normalizeSearchDays(draft.search?.days),
+        perTopic: normalizeTopicCap(draft.search?.perTopic),
+      },
       rubric: {
         criteria: (draft.rubric?.criteria || DEFAULT_RUBRIC).trim(),
         selectCount: draft.rubric?.selectCount || DEFAULT_SELECT_COUNT,
         scoreFloor: normalizeScoreFloor(draft.rubric?.scoreFloor),
       },
-      onboarded: true,
     }
-    if (!preview) await saveProfile(profile)
+    if (preview) {
+      onDone?.(mergeInterviewProfile(null, fields))
+      return
+    }
+    const profile = mergeInterviewProfile(await getProfile(), fields)
+    await saveProfile(profile)
     onDone?.(profile)
   }
 
@@ -373,15 +404,50 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
     )
   }
 
-  // ===== INTAKE =====
-  if (step === 'intake') {
+  // ===== INTERVIEW (the default path) =====
+  if (step === 'interview') {
     return (
       <div>
         <p style={stepMark}>02 / 03 · INTERVIEW</p>
+        <h2 className="vs-step-title" style={stepTitle}>Let&rsquo;s talk.</h2>
+        <p style={stepLede}>
+          A few questions, one at a time — what you watch, which journals you can&rsquo;t miss,
+          and what should never reach your morning. From that Claude writes your PubMed
+          searches, your north stars, and your ranking rubric. You edit all of it before
+          anything is saved.
+        </p>
+        <div style={{ marginTop: 26 }}>
+          <ProfileInterview
+            preview={preview}
+            onDraft={(drafted) => {
+              setDraft(drafted)
+              setPath('interview')
+              setStep('review')
+            }}
+            onCancel={() => setStep('connect')}
+          />
+        </div>
+        <p style={{ margin: '22px 0 0', fontSize: 13, color: 'var(--color-fg-faint)' }}>
+          In a hurry?{' '}
+          <button onClick={() => { setError(''); setStep('intake') }} className="cursor-pointer" style={{ ...ghostLink, color: 'var(--color-accent)' }}>
+            Quick start — three questions instead
+          </button>
+        </p>
+      </div>
+    )
+  }
+
+  // ===== QUICK START (the original three-box intake) =====
+  if (step === 'intake') {
+    return (
+      <div>
+        <p style={stepMark}>02 / 03 · QUICK START</p>
         <h2 className="vs-step-title" style={stepTitle}>Three questions.</h2>
         <p style={stepLede}>
-          Answer in your own words — Claude drafts your north stars, projects, and ranking
-          rubric from these. You review and edit everything before it's saved.
+          The fast path: answer in your own words and Claude drafts your north stars,
+          projects, and ranking rubric. It does <em>not</em> write your PubMed queries — your
+          scan falls back to searching your north-star phrases, which is broader and noisier.
+          The interview writes real queries; you can also add them yourself on the next screen.
         </p>
 
         <div className="flex flex-col" style={{ marginTop: 26, gap: 20 }}>
@@ -407,15 +473,15 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
 
         <div className="flex items-center" style={{ marginTop: 28, gap: 18 }}>
           <button
-            onClick={() => { setError(''); setStep('drafting') }}
+            onClick={() => { setError(''); setPath('intake'); setStep('drafting') }}
             disabled={!answered || (!preview && !keySet)}
             className="cursor-pointer"
             style={{ ...primaryBtn, opacity: !answered || (!preview && !keySet) ? 0.5 : 1 }}
           >
             ✶ Draft my profile
           </button>
-          <button onClick={() => setStep('connect')} className="cursor-pointer" style={ghostLink}>
-            Back
+          <button onClick={() => setStep('interview')} className="cursor-pointer" style={ghostLink}>
+            ← Interview me instead
           </button>
         </div>
       </div>
@@ -443,8 +509,9 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
       <p style={stepMark}>03 / 03 · REVIEW</p>
       <h2 className="vs-step-title" style={stepTitle}>Your steering profile.</h2>
       <p style={stepLede}>
-        Drafted from your answers — edit anything, then enter. You can always tune it later
-        from Settings.
+        Drafted from your answers — edit anything, then enter. The search topics are the part
+        worth two minutes: each one is a real PubMed query that runs every morning. You can
+        always tune all of it later from Settings.
       </p>
 
       <div className="flex flex-col" style={{ marginTop: 24, gap: 22 }}>
@@ -457,9 +524,20 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
           />
         </div>
 
+        <div>
+          <TopicsEditor
+            topics={draft?.topics || []}
+            days={draft?.search?.days}
+            perTopic={draft?.search?.perTopic}
+            northStars={draft?.northStars || []}
+            onChange={({ topics, days, perTopic }) => setField({ topics, search: { days, perTopic } })}
+          />
+          <QueryFlags topics={draft?.topics || []} />
+        </div>
+
         <ChipGroup
           label="North stars"
-          hint="Concepts you steer by (used as search terms)"
+          hint="Concepts you steer by (rubric relevance, not the search)"
           items={draft?.northStars || []}
           onAdd={addTo('northStars')}
           onRemove={removeFrom('northStars')}
@@ -491,8 +569,8 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
         >
           Enter Verastar →
         </button>
-        <button onClick={() => setStep('intake')} className="cursor-pointer" style={ghostLink}>
-          Back to questions
+        <button onClick={() => setStep(path)} className="cursor-pointer" style={ghostLink}>
+          {path === 'interview' ? 'Start the interview over' : 'Back to questions'}
         </button>
       </div>
     </div>

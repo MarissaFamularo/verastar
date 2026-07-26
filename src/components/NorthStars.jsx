@@ -7,11 +7,14 @@
 // digest. The onboarding quiz drafts these; this is where they're refined afterward.
 
 import { useEffect, useState } from 'react'
+import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { normalizeScoreFloor } from '../pipeline/select.js'
 import { normalizeTopics, normalizeSearchDays, normalizeTopicCap } from '../pipeline/topics.js'
 import ChipGroup from './ChipGroup.jsx'
+import ProfileInterview from './ProfileInterview.jsx'
+import QueryFlags from './QueryFlags.jsx'
 import RubricEditor from './RubricEditor.jsx'
 import TopicsEditor from './TopicsEditor.jsx'
 
@@ -32,6 +35,10 @@ export default function NorthStars() {
   const [topics, setTopics] = useState([])
   const [search, setSearch] = useState({ days: normalizeSearchDays(undefined), perTopic: normalizeTopicCap(undefined) })
   const [loaded, setLoaded] = useState(false)
+  // Re-interviewing an existing profile. It writes through the SAME save effect below, which
+  // patches the profile record and nothing else — so rebuilding the search plan can never
+  // touch her library (papers, digests, graph, seen ledger all live in other collections).
+  const [interviewing, setInterviewing] = useState(false)
 
   useEffect(() => {
     getProfile().then((profile) => {
@@ -69,6 +76,17 @@ export default function NorthStars() {
     )
   }, [stars, projects, rubric, topics, search, loaded])
 
+  // A fresh draft lands in the editors, NOT straight in storage: the save effect above then
+  // persists it exactly the way a hand edit is persisted. An empty field in the draft leaves
+  // hers alone — a thin interview should never blank a list she already curated.
+  function applyDraft(draft) {
+    if (draft.northStars?.length) setStars(draft.northStars)
+    if (draft.projects?.length) setProjects(draft.projects)
+    if (draft.topics?.length) setTopics(draft.topics)
+    if (draft.rubric?.criteria) setRubric((r) => ({ ...r, criteria: draft.rubric.criteria }))
+    setInterviewing(false)
+  }
+
   const addTo = (setter, list) => (v) => {
     if (!list.includes(v)) setter([...list, v])
   }
@@ -81,6 +99,41 @@ export default function NorthStars() {
         the rubric your digest ranks against. Your daily digest surfaces and selects papers
         using these.
       </p>
+
+      {interviewing ? (
+        <div style={{ marginTop: 18, borderRadius: 12, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-1)', padding: '18px 18px 20px' }}>
+          <p style={{ margin: '0 0 4px', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.13em', color: 'var(--color-fg-faint)' }}>
+            REBUILDING YOUR PROFILE
+          </p>
+          <p style={{ margin: '0 0 16px', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+            The draft lands in the fields below for you to edit — your library, digests and
+            seen-paper history aren't touched.
+          </p>
+          <ProfileInterview
+            selectCount={rubric.selectCount}
+            scoreFloor={rubric.scoreFloor}
+            onDraft={applyDraft}
+            onCancel={() => setInterviewing(false)}
+            cancelLabel="Cancel"
+          />
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center" style={{ marginTop: 14, gap: 12 }}>
+          <button
+            onClick={() => setInterviewing(true)}
+            disabled={!hasApiKey()}
+            className="cursor-pointer"
+            style={{ borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', border: '1px solid rgba(239,143,91,.35)', background: 'rgba(239,143,91,.09)', color: 'var(--color-accent)', opacity: hasApiKey() ? 1 : 0.5 }}
+          >
+            ✶ Rebuild these with an interview
+          </button>
+          <span style={{ fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
+            {hasApiKey()
+              ? 'A few questions, then a fresh draft you edit — nothing in your library changes.'
+              : 'Add your Anthropic key in Settings to run the interview.'}
+          </span>
+        </div>
+      )}
 
       <div className="grid gap-6 sm:grid-cols-2" style={{ marginTop: 20 }}>
         <ChipGroup
@@ -116,6 +169,7 @@ export default function NorthStars() {
             setSearch({ days, perTopic })
           }}
         />
+        <QueryFlags topics={topics} />
       </div>
 
       <div style={{ marginTop: 24, borderTop: '1px solid var(--hairline)', paddingTop: 24 }}>
