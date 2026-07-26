@@ -13,6 +13,7 @@ import { store } from '../lib/store.js'
 import { hasApiKey } from '../lib/anthropic.js'
 import { loadConcepts, setConceptTags, removeNode } from '../pipeline/graph.js'
 import { refileKB } from '../pipeline/deposit.js'
+import { categorizeLibrary } from '../pipeline/categorize.js'
 import { buildKB, listTopics, topicIndex } from '../lib/kb.js'
 import { backfillOaPdfs } from '../pipeline/save.js'
 import { pmcUrl } from '../pipeline/openaccess.js'
@@ -32,6 +33,7 @@ export default function KnowledgeBase() {
   const [loading, setLoading] = useState(true)
   const [refiling, setRefiling] = useState('') // '' | progress string
   const [confirmRefile, setConfirmRefile] = useState(false)
+  const [reorg, setReorg] = useState('') // '' | 'running' | result/error message
   const keySet = hasApiKey()
 
   async function refresh() {
@@ -115,6 +117,28 @@ export default function KnowledgeBase() {
     setRefiling('')
   }
 
+  // Ask the model to (re)shelve the whole library into at most 10 categories. Free when the
+  // library is already organized; otherwise one cheap structured call. Reports honestly.
+  async function handleReorganize() {
+    setReorg('running')
+    try {
+      const res = await categorizeLibrary()
+      if (res?.ok) {
+        await refresh()
+        setReorg(
+          res.skipped
+            ? `Already organized — ${res.categories} categor${res.categories === 1 ? 'y' : 'ies'}, everything filed.`
+            : `${res.categories} categor${res.categories === 1 ? 'y' : 'ies'}, ${res.filed} filed.`,
+        )
+      } else {
+        setReorg(`Couldn’t reorganize: ${res?.error || 'unknown error'}`)
+      }
+    } catch (err) {
+      await refresh().catch(() => {}) // a mid-apply throw leaves a working superset — show it
+      setReorg(`Couldn’t reorganize: ${err.message}`)
+    }
+  }
+
   const totalConcepts = concepts.length
   const totalPapers = papers.length
 
@@ -189,6 +213,24 @@ export default function KnowledgeBase() {
           {listDomains().map((d) => (
             <FilterChip key={d.key} active={domain === d.key} color={d.color} onClick={() => setDomain(d.key)}>{d.label}</FilterChip>
           ))}
+        </div>
+      )}
+      {/* Category upkeep — the library self-organizes into ≤10 shelves on its own (deposits
+          trigger it when needed); this is the manual handle. Quiet by design. */}
+      {keySet && totalConcepts > 0 && (
+        <div className="flex flex-wrap items-center" style={{ marginTop: 12, gap: 10 }}>
+          <button
+            onClick={handleReorganize}
+            disabled={reorg === 'running'}
+            title="Ask Claude to reshelve the library into at most 10 categories"
+            className="cursor-pointer"
+            style={{ fontSize: 11.5, color: 'var(--color-fg-muted)', background: 'transparent', border: 0, padding: 0, textUnderlineOffset: 3, textDecoration: 'underline dotted' }}
+          >
+            {reorg === 'running' ? 'Reorganizing…' : '✦ Reorganize categories'}
+          </button>
+          {reorg && reorg !== 'running' && (
+            <span style={{ fontSize: 11.5, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>{reorg}</span>
+          )}
         </div>
       )}
 
