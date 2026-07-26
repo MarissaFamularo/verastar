@@ -15,6 +15,10 @@
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 import { listDomains, ensureDomain, ensureDomainsLoaded } from '../lib/domains.js'
 
+// The fall-through shelf every library shares: a deposit that names a category that doesn't
+// exist files here (a deposit NEVER mints a category — see pipeline/categorize.js).
+export const OTHER_LABEL = 'Other'
+
 // concept id from its name — stable slug so re-using the same name collapses to one node.
 export function conceptId(name) {
   return (
@@ -67,10 +71,22 @@ Match the granularity of that list; infer it from the list itself. If the fields
 Mint a NEW field ONLY when the paper genuinely fits none of the above — not merely because no field is a perfect fit. Name a new field at the SAME level of granularity as the existing list (2–4 words, Title Case), never a paper- or disease-instance-specific topic, and never a near-duplicate of a field already listed.`
 }
 
-const analyzeSystem = (domains, projects) => `You file papers into a clinician-scientist's concept-based knowledge graph. The reader may be from ANY specialty — derive every topic name from the papers themselves, never from these examples. The graph has TWO tiers: broad "hub" topics that gather many papers (a vascular surgeon might accrue "Carotid Revascularization" and "CLTI Management"; an orthopedic surgeon "Knee Arthroplasty" and "Resident Education"), and specific "concept" satellites beneath them (e.g. "Transcarotid Revascularization Stroke Risk" under the former, "Cementless Fixation Outcomes" under the latter). A paper is a SOURCE under one specific concept, and that concept hangs off one broad hub. This is what makes the map read like a constellation — big hubs with small satellites orbiting them — instead of a handful of lonely stars. For the given paper return:
+// The hub rule has two regimes, mirroring domainGuidance: once the library HAS categories
+// (hub nodes — organized by pipeline/categorize.js or the migration), the category set is
+// FIXED at deposit time and the paper must name which shelf it belongs on; only before the
+// first organization does the hub field fall back to its original free-form description
+// (where it is advisory — filePaper doesn't mint hubs from it). Pure, exported for tests.
+export function categoryGuidance(categories = []) {
+  if (!categories.length) return null
+  return `the CATEGORY this concept belongs to. The reader's library is organized into a FIXED set of category shelves — a deposit files INTO one, and NEVER creates, renames, or merges one. Return EXACTLY one of these labels, verbatim:
+${categories.map((l) => `  - "${l}"`).join('\n')}
+If the paper genuinely fits none of them, return exactly "${OTHER_LABEL}". Never invent a new category name.`
+}
+
+const analyzeSystem = (domains, projects, categories = []) => `You file papers into a clinician-scientist's concept-based knowledge graph. The reader may be from ANY specialty — derive every topic name from the papers themselves, never from these examples. The graph has TWO tiers: broad "hub" topics that gather many papers (a vascular surgeon might accrue "Carotid Revascularization" and "CLTI Management"; an orthopedic surgeon "Knee Arthroplasty" and "Resident Education"), and specific "concept" satellites beneath them (e.g. "Transcarotid Revascularization Stroke Risk" under the former, "Cementless Fixation Outcomes" under the latter). A paper is a SOURCE under one specific concept, and that concept hangs off one broad hub. This is what makes the map read like a constellation — big hubs with small satellites orbiting them — instead of a handful of lonely stars. For the given paper return:
 
 - concept: the paper's SPECIFIC topic — a small, reusable node capturing its actual angle (technique, endpoint, cohort). Reuse an EXISTING concept name VERBATIM only if the paper is truly the SAME specific topic; otherwise mint a new specific concept. Do NOT collapse everything into the hub, and do NOT use the paper's exact title — name the topic it exemplifies (e.g. a paper on TCAR 30-day stroke → "Transcarotid Revascularization Outcomes", not the title). Keeping specific concepts as their own satellites is intended: singletons stay visible.
-- hub: the BROAD parent topic this concept belongs under. STRONGLY prefer an existing hub from the list — a TCAR paper, a CEA-vs-CAS paper, and an asymptomatic-stenosis paper all share the hub "Carotid Revascularization". Only mint a new hub when none fits. A hub is broad enough to gather a dozen concepts. If the paper's specific topic already IS that broad (no finer angle), you may return the same string for both concept and hub.
+- hub: ${categoryGuidance(categories) || `the BROAD parent topic this concept belongs under. STRONGLY prefer an existing hub from the list — a TCAR paper, a CEA-vs-CAS paper, and an asymptomatic-stenosis paper all share the hub "Carotid Revascularization". Only mint a new hub when none fits. A hub is broad enough to gather a dozen concepts. If the paper's specific topic already IS that broad (no finer angle), you may return the same string for both concept and hub.`}
 - domain: ${domainGuidance(domains)}
 - tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by. Tags carry the finest angle; the concept is specific and the hub is broad.${projectBan(projects)}`
 
@@ -97,16 +113,21 @@ export function sanitizeFiling({ concept, hub }, projects = []) {
 }
 
 // Analyze a paper. `paper` = { title, finding, relevance, text? }; `concepts` = existing
-// [{ name, domain, isHub }]; `projects` = the reader's project names (banned as topic names).
-// Returns { concept, hub, domain, tags } — the paper's specific concept (satellite) AND the
-// broad hub it hangs under. domain validated to a real key.
-export async function analyzePaper({ paper, concepts = [], projects = [], model = MODELS.triage, maxTokens = 1024 }) {
+// [{ name, domain, isHub }]; `projects` = the reader's project names (banned as topic names);
+// `categories` = the labels of the library's category shelves (when nonempty, the hub answer
+// is CONSTRAINED to them — see categoryGuidance). Returns { concept, hub, domain, tags } —
+// the paper's specific concept (satellite) AND the shelf/hub it hangs under. domain validated
+// to a real key.
+export async function analyzePaper({ paper, concepts = [], projects = [], categories = [], model = MODELS.triage, maxTokens = 1024 }) {
   const hubs = concepts.filter((c) => c.isHub)
   const sats = concepts.filter((c) => !c.isHub)
   const listOf = (arr) =>
     arr.length ? arr.map((c) => `- "${c.name}"${c.domain ? ` (${c.domain})` : ''}`).join('\n') : '(none yet)'
+  const hubsHeader = categories.length
+    ? 'CATEGORIES (the fixed shelves — file into one):'
+    : 'EXISTING HUBS (broad — reuse one if it fits):'
   const content =
-    `EXISTING HUBS (broad — reuse one if it fits):\n${listOf(hubs)}\n\n` +
+    `${hubsHeader}\n${listOf(hubs)}\n\n` +
     `EXISTING CONCEPTS (specific satellites):\n${listOf(sats)}\n\n` +
     `PAPER\nTitle: ${paper.title || '(untitled)'}\n` +
     (paper.finding ? `Finding: ${paper.finding}\n` : '') +
@@ -116,7 +137,7 @@ export async function analyzePaper({ paper, concepts = [], projects = [], model 
   await ensureDomainsLoaded() // the prompt must show the reader's real taxonomy, not an empty one
   const r = await extractStructured({
     model,
-    system: analyzeSystem(listDomains(), projects),
+    system: analyzeSystem(listDomains(), projects, categories),
     content,
     schema: ANALYZE_SCHEMA,
     maxTokens,
