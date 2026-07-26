@@ -237,19 +237,22 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
       const ns = nodesRef.current
       const es = edgesRef.current
       const sim = eng.sim
-      // Degree per node, for spring softening: a hub with 30 springs at full stiffness
-      // overshoots every frame and rings like a struck bell.
+      // Degree per node over CONFIRMED edges only — the ones that act as springs below.
       const degree = new Map()
       for (const e of es) {
+        if (e.status !== 'confirmed') continue
         degree.set(e.source, (degree.get(e.source) || 0) + 1)
         degree.set(e.target, (degree.get(e.target) || 0) + 1)
       }
+      // Gravity weakens as the library grows: linear center-pull crushes a big graph into
+      // a hairball (her 117-topic import proved it). Repulsion sets the spread instead.
+      const gravity = 0.012 / Math.max(1, Math.sqrt(ns.length / 25))
       for (const n of ns) {
         let s = sim.get(n.id)
         if (!s) continue
         if (s.pinned) continue
-        let fx = -s.x * 0.012
-        let fy = -s.y * 0.012 // gravity
+        let fx = -s.x * gravity
+        let fy = -s.y * gravity
         for (const m of ns) {
           if (m.id === n.id) continue
           const o = sim.get(m.id)
@@ -257,7 +260,7 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
           let dx = s.x - o.x
           let dy = s.y - o.y
           let d2 = dx * dx + dy * dy || 0.01
-          const rep = 9000 / d2 // more spread so labels don't pile up
+          const rep = 14000 / d2 // more spread so labels don't pile up
           const d = Math.sqrt(d2)
           fx += (dx / d) * rep
           fy += (dy / d) * rep
@@ -266,17 +269,20 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
         s.fy = fy
       }
       for (const e of es) {
+        // Dashed maybes are VISUAL ONLY — layout is shaped by the confirmed web. Hundreds
+        // of unconfirmed suggestions acting as springs is what packed the map solid.
+        if (e.status !== 'confirmed') continue
         const a = sim.get(e.source)
         const b = sim.get(e.target)
         if (!a || !b) continue
         const dx = b.x - a.x
         const dy = b.y - a.y
         const d = Math.hypot(dx, dy) || 0.01
-        const rest = 128
-        // Soften springs on high-degree nodes, and let a dashed "maybe" tug at quarter
-        // strength — 600 unconfirmed suggestions must not out-pull the confirmed web.
+        const rest = 150
+        // Soften springs on high-degree nodes — a hub with thirty edges at full stiffness
+        // rings like a struck bell.
         const soften = Math.sqrt(Math.min(degree.get(e.source) || 1, degree.get(e.target) || 1))
-        const k = (0.018 / soften) * (e.status === 'confirmed' ? 1 : 0.25)
+        const k = 0.018 / soften
         const f = (d - rest) * k
         const ux = dx / d
         const uy = dy / d
@@ -362,6 +368,16 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
       for (const e of es) {
         degree.set(e.source, (degree.get(e.source) || 0) + 1)
         degree.set(e.target, (degree.get(e.target) || 0) + 1)
+      }
+
+      // Label budget: at overview zoom a big library becomes text soup if every star is
+      // captioned. Unfocused and zoomed out, only the ~28 most-connected stars (plus every
+      // project) carry labels; zooming past 1.25 — or focusing a star — reveals the rest.
+      let labelFloor = 0
+      if (!focusId && camera.scale < 1.25 && ns.length > 40) {
+        const degs = ns.filter((n) => n.kind !== 'project').map((n) => degree.get(n.id) || 0)
+        degs.sort((x, y) => y - x)
+        labelFloor = degs[27] ?? 0
       }
 
       // edges — a light resting web that recedes until you look at a star; then that star's
@@ -452,7 +468,7 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
         // keep labels (the rest fade to dots) so a dense map stays readable. A strong dark halo
         // keeps text legible over the starfield.
         const isProject = n.kind === 'project'
-        const showLabel = focusId ? neighbors.has(n.id) : true
+        const showLabel = focusId ? neighbors.has(n.id) : isProject || (degree.get(n.id) || 0) >= labelFloor
         if (showLabel && n.kind !== 'paper') {
           const label = isProject ? n.label : truncate(n.label, 30)
           ctx.font = `${isProject ? 600 : 500} ${isProject ? 12 : 11}px ui-sans-serif, system-ui, sans-serif`
@@ -493,13 +509,24 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
     let added = false
     nodes.forEach((n, i) => {
       if (sim.has(n.id)) return
-      // seed projects on a ring, concepts spread across the field; deterministic jitter from id
+      // seed projects on a ring, concepts spread across the field; deterministic jitter from id.
+      // The spread scales with library size — 130 concepts seeded inside r=190 start as a
+      // ball the cooling window can't inflate; seeding near equilibrium radius fixes it.
+      const spread = Math.max(1, Math.sqrt(nodes.length / 30))
       const ang = hash01(n.id) * 6.2832
-      const rad = n.kind === 'project' ? 160 : 60 + hash01('r' + n.id) * 130
+      const rad = n.kind === 'project' ? 160 * spread : (60 + hash01('r' + n.id) * 130) * spread
       sim.set(n.id, { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, vx: 0, vy: 0 })
       added = true
     })
     if (added) eng.wake?.() // new star → re-settle the layout (reheated, or it can't move)
+    // First real load: fit the camera to the seeded cloud so a big library opens fully in
+    // view instead of overflowing the canvas. Once only — user pans/zooms are respected.
+    if (added && !eng.didFit && sim.size > 10 && eng.w) {
+      let R = 0
+      for (const s of sim.values()) R = Math.max(R, Math.hypot(s.x, s.y))
+      eng.camera.scale = Math.max(0.35, Math.min(1, (Math.min(eng.w, eng.h) / 2 - 50) / (R * 1.15)))
+      eng.didFit = true
+    }
   }, [nodes])
 
   // --- fade a connection in the first time we see it (the "app just noticed this" moment) ---
