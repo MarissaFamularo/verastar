@@ -19,7 +19,7 @@
 
 import { useEffect, useState } from 'react'
 import { hasApiKey, setApiKey, setNcbiKey, setNcbiEmail } from '../lib/anthropic.js'
-import { supabaseConfigured, sendMagicLink } from '../lib/supabase.js'
+import { supabaseConfigured, sendMagicLink, verifyEmailCode } from '../lib/supabase.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { draftProfile, DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { mergeInterviewProfile } from '../pipeline/interview.js'
@@ -139,6 +139,9 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
   const [signinEmail, setSigninEmail] = useState('')
   const [signinState, setSigninState] = useState('idle') // idle | sending | sent | error
   const [signinError, setSigninError] = useState('')
+  const [signinCode, setSigninCode] = useState('')
+  const [verifyState, setVerifyState] = useState('idle') // idle | verifying | error
+  const [verifyError, setVerifyError] = useState('')
   const keySet = hasApiKey()
   const answered = QUESTIONS.some((q) => (answers[q.key] || '').trim())
 
@@ -182,9 +185,11 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
     setStep('interview')
   }
 
-  // Send the returning-user magic link. Finishing sign-in is the emailed link's job:
-  // opening it lands a session, App reboots onto the cloud profile, and this flow
-  // never resumes — so there's nothing to persist or call back here.
+  // Send the returning-user magic link. Finishing sign-in is the email's job — via
+  // the emailed CODE typed here (works everywhere, including the installed
+  // home-screen app, where the link would open the browser's separate storage
+  // world instead), or via the link on a regular browser tab. Either way a session
+  // lands, App reboots onto the cloud profile, and this flow never resumes.
   async function sendSigninLink(e) {
     e.preventDefault()
     if (!signinEmail.trim()) return
@@ -196,6 +201,21 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
     } catch (err) {
       setSigninError(err?.message || String(err))
       setSigninState('error')
+    }
+  }
+
+  async function verifySigninCode(e) {
+    e.preventDefault()
+    const code = signinCode.trim()
+    if (!code) return
+    setVerifyState('verifying')
+    setVerifyError('')
+    try {
+      await verifyEmailCode(signinEmail.trim(), code)
+      window.location.reload()
+    } catch (err) {
+      setVerifyError(err?.message || String(err))
+      setVerifyState('error')
     }
   }
 
@@ -290,13 +310,35 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
         <h2 className="vs-step-title" style={stepTitle}>Welcome back.</h2>
         <p style={stepLede}>
           Your library lives in your account. Enter the email you signed up with and we&rsquo;ll
-          send a one-time sign-in link — open it on this device and your library follows you here.
-          No password, ever.
+          send a one-time code — type it here and your library follows you. No password, ever.
         </p>
         {signinState === 'sent' ? (
-          <div style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
-            <span style={{ fontWeight: 600 }}>Link sent to {signinEmail.trim()}</span> — open it on this
-            device to finish signing in.
+          <div style={{ maxWidth: 520 }}>
+            <div style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55 }}>
+              <span style={{ fontWeight: 600 }}>Email sent to {signinEmail.trim()}</span> — enter the
+              6-digit code from it below. (The email&rsquo;s link also works, but only in the same
+              browser — from the installed app, use the code.)
+            </div>
+            <form onSubmit={verifySigninCode} className="flex" style={{ gap: 10, marginTop: 14 }}>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={signinCode}
+                onChange={(e) => setSigninCode(e.target.value)}
+                placeholder="6-digit code"
+                autoFocus
+                style={{ ...inputStyle, marginTop: 0, flex: 1, width: 'auto', letterSpacing: '.14em' }}
+              />
+              <button type="submit" disabled={verifyState === 'verifying'} className="cursor-pointer" style={{ ...primaryBtn, opacity: verifyState === 'verifying' ? 0.6 : 1 }}>
+                {verifyState === 'verifying' ? 'Checking…' : 'Sign in'}
+              </button>
+            </form>
+            {verifyState === 'error' && (
+              <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600 }}>That code didn&rsquo;t work:</span> {verifyError}
+              </div>
+            )}
           </div>
         ) : (
           <form onSubmit={sendSigninLink} style={{ marginTop: 24, maxWidth: 520 }}>
