@@ -5,6 +5,7 @@ import { supabase, supabaseConfigured, currentUser, sendMagicLink, signOut, isSi
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
+import { refreshTrellisProjects, getTrellisProjects } from './lib/trellis.js'
 import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
@@ -13,6 +14,7 @@ import SpineCheck from './components/SpineCheck.jsx'
 import KnowledgeBase from './components/KnowledgeBase.jsx'
 import WeekendRead from './components/WeekendRead.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
+import Memos from './components/Memos.jsx'
 
 // ── Observatory shell ──────────────────────────────────────────────────────
 // The app is a dark, star-lit reading room. A fixed 88px icon rail on the left
@@ -21,14 +23,17 @@ import ConstellationView from './components/ConstellationView.jsx'
 // at the rail's foot or the digest's key chip). Faithful port of design/Verastar.dc.html — the engine
 // (pipeline/, verifier) is untouched; this file is pure presentation + routing.
 
-// Her product IA (the 4-tab simplification): Digest · Library · Star Map · Connections.
-// Library folds the concept graph + the flat-file vault into one surface; Connections is
-// the Weekend Read synthesis. The observatory visuals from the design ride on top.
+// Her product IA: Digest · Library · Star Map · Connections · Memos. Library folds the
+// concept graph + the flat-file vault into one surface; Connections is the Weekend Read
+// synthesis; Memos is voice-first quick capture (the phone keyboard's mic does the work).
+// The observatory visuals from the design ride on top. This ONE map is both the desktop
+// rail and the mobile bottom tab bar (index.css restyles .vs-rail under 760px).
 const NAV = [
   ['digest', 'Today'],
   ['library', 'Library'],
   ['starmap', 'Star Map'],
   ['connections', 'Connections'],
+  ['memos', 'Memos'],
 ]
 
 function NavIcon({ view }) {
@@ -71,6 +76,15 @@ function NavIcon({ view }) {
           <ellipse cx="12" cy="12" rx="10" ry="4.2" opacity=".55" transform="rotate(-24 12 12)" strokeWidth="1.4" />
           <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" />
           <circle cx="21.1" cy="7.9" r="1.3" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    case 'memos':
+      // Note sheet — a folded page with two written lines (no sparkles, no compass shapes).
+      return (
+        <svg {...p} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5.5 3.5h9L18.5 8v12.5h-13z" />
+          <path d="M14.5 3.5V8h4" />
+          <path d="M8.5 12.5h7M8.5 16h4.5" />
         </svg>
       )
     default:
@@ -436,7 +450,7 @@ function MigrationOffer({ account, paperCount, onDecline }) {
 
 // Right rail on the Digest surface: key status, weekly counts, active projects,
 // and the Weekend Read teaser. Counts derive from real saved papers.
-function DigestRail({ saved, onSettings, counts, projects, onConnections, demo }) {
+function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, demo }) {
   return (
     <aside className="vs-digest-rail" style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div
@@ -464,7 +478,7 @@ function DigestRail({ saved, onSettings, counts, projects, onConnections, demo }
         ))}
       </div>
 
-      {projects.length > 0 && (
+      {(projects.length > 0 || trellis.length > 0) && (
         <>
           <p style={{ margin: '0 0 12px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Active Work</p>
           <div className="flex flex-col" style={{ gap: 9, marginBottom: 34 }}>
@@ -472,6 +486,14 @@ function DigestRail({ saved, onSettings, counts, projects, onConnections, demo }
               <span key={p} className="inline-flex items-center" style={{ gap: 9, fontSize: 14, color: 'var(--color-fg-soft)' }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#8a94a8' }} />
                 {p}
+              </span>
+            ))}
+            {/* Synced from PaperTrellis — hollow blue marker so they read as synced,
+                not hand-entered. Titles only; the stage lives in Settings. */}
+            {trellis.map((p) => (
+              <span key={p.id} title="Synced from PaperTrellis" className="inline-flex items-center" style={{ gap: 9, fontSize: 14, color: 'var(--color-fg-soft)' }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', border: '1px solid var(--color-registry)', boxSizing: 'border-box' }} />
+                {p.title}
               </span>
             ))}
           </div>
@@ -509,6 +531,9 @@ export default function App() {
   const [starsOpen, setStarsOpen] = useState(false) // north-star chips: collapsed by default
   const [profile, setProfile] = useState(null)
   const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0 })
+  // Synced PaperTrellis project rows (title + stage) for the rail and Settings —
+  // display only; the prompt-line merge happens at the digest call sites.
+  const [trellis, setTrellis] = useState([])
 
   const [bootError, setBootError] = useState('')
   const [account, setAccount] = useState(null) // { email } when signed in
@@ -545,12 +570,20 @@ export default function App() {
       }
       setOnboarded(!!p?.onboarded)
       setProfile(p || null)
+      // Cached PaperTrellis projects render immediately; the refresh fires in the
+      // background (never awaited — a slow or failed sync must not hold up boot).
+      loadTrellis()
+      if (user) refreshTrellisProjects().then(loadTrellis).catch(() => {})
       // Vault drain: catch the flat-file folder up with anything saved away from
       // this desktop (phone saves land here). Quiet no-op unless a folder is still
       // permitted this session; the Reconnect click in File to Disk re-triggers it.
       drainVault().catch(() => {})
     }).catch((err) => setBootError(err?.message || String(err)))
   }, [])
+
+  function loadTrellis() {
+    getTrellisProjects().then((c) => setTrellis(c?.projects ?? [])).catch(() => {})
+  }
 
   // Derive weekly counts from real saved papers (defensive on shape).
   function refreshCounts() {
@@ -571,7 +604,11 @@ export default function App() {
   // remounts — SpineCheck especially must survive a focus mid-digest-run.
   useWindowFocusRefresh(() => {
     drainVault().catch(() => {})
-    if (onboarded === true && isSignedIn()) refreshCounts()
+    if (onboarded === true && isSignedIn()) {
+      refreshCounts()
+      // PaperTrellis may have moved a project past submission while this tab slept.
+      refreshTrellisProjects().then(loadTrellis).catch(() => {})
+    }
   })
 
   function handleSave(k, remember) {
@@ -746,7 +783,7 @@ export default function App() {
               </div>
             </div>
           </main>
-          <DigestRail saved={saved} counts={counts} projects={projects} demo={!!profile?.demo && !account} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
+          <DigestRail saved={saved} counts={counts} projects={projects} trellis={trellis} demo={!!profile?.demo && !account} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
         </div>
       )}
 
@@ -755,6 +792,7 @@ export default function App() {
           {view === 'library' && <KnowledgeBase key="library" />}
           {view === 'starmap' && <ConstellationView key="starmap" />}
           {view === 'connections' && <WeekendRead key="connections" />}
+          {view === 'memos' && <Memos key="memos" />}
         </main>
       )}
 

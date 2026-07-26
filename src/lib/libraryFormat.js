@@ -176,6 +176,30 @@ export function conceptNoteMd(node, papers = []) {
   return parts.join('\n') + '\n'
 }
 
+// memos/<stamp>_memo.md — one quick captured note. Deliberately the simplest note in the vault:
+// a small frontmatter block, a date heading, then the text VERBATIM — a memo is the user's own
+// words, so nothing here summarizes, trims, or reflows them.
+export function memoNoteMd(memo) {
+  const m = memo || {}
+  const fm = frontmatter([
+    ['captured', m.createdAt || ''],
+    ['updated', m.updatedAt || ''],
+  ])
+  return [fm, '', `# Memo — ${isoDate(m.createdAt)}`, '', String(m.text || '')].join('\n') + '\n'
+}
+
+// The memo's path in the vault: memos/<YYYY-MM-DD-HHMMSS>_memo.md, derived from createdAt so the
+// name is stable across edits (an edit re-writes the SAME file). Seconds are included because two
+// dictated memos can easily land in the same minute — per-second is as fine as a human capture
+// loop gets.
+export function memoFileName(memo) {
+  const iso = String(memo?.createdAt || '')
+  const stamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(iso)
+    ? `${iso.slice(0, 10)}-${iso.slice(11, 13)}${iso.slice(14, 16)}${iso.slice(17, 19)}`
+    : 'undated'
+  return `memos/${stamp}_memo.md`
+}
+
 // digests/<date>_digest.md — a faithful readable snapshot of a set of papers. `entries` is a light
 // shape ({ title, citation, tier, finding }) so any caller can hand it a day's digest to freeze.
 export function digestMd(date, entries = []) {
@@ -247,6 +271,7 @@ export function readmeMd({ profileName, counts } = {}) {
     'sources/        one note per saved paper (with its PDF when open-access)',
     'concepts/       synthesized topic notes, each linking its sources',
     'digests/        dated snapshots of a scan',
+    'memos/          quick notes you captured, in your own words',
     'connections.md  the running Weekend Read ledger, newest first',
     '```',
     '',

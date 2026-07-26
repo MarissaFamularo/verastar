@@ -18,6 +18,14 @@ describe('recordBasis', () => {
     expect(recordBasis({})).toBe(null)
     expect(recordBasis(null)).toBe(null)
   })
+
+  it('lets updatedAt win over createdAt (a re-edited memo is stale again)', () => {
+    expect(recordBasis({ createdAt: T1, updatedAt: T2 })).toBe(T2)
+    expect(recordBasis({ updatedAt: T2 })).toBe(T2)
+    // savedAt still wins first — papers keep their existing basis even if a field
+    // named updatedAt ever appeared on one.
+    expect(recordBasis({ savedAt: T1, updatedAt: T2, createdAt: T3 })).toBe(T1)
+  })
 })
 
 describe('needsVaultWrite', () => {
@@ -91,19 +99,34 @@ describe('computeDrain', () => {
     expect(drain.weekends.map((w) => w.createdAt)).toEqual([T1, T3])
   })
 
+  const memos = [
+    { id: 'memo:1', text: 'a', createdAt: T2 }, // never written
+    { id: 'memo:2', text: 'b', createdAt: T1, vaultWrittenAt: T1 }, // written, untouched since
+    { id: 'memo:3', text: 'c', createdAt: T1, updatedAt: T3, vaultWrittenAt: T2 }, // edited after landing
+    { id: 'memo:4', text: 'd', createdAt: T1, updatedAt: T2, vaultWrittenAt: T3 }, // edit already landed
+  ]
+
+  it('selects unstamped and edited-since-stamp memos, oldest basis first', () => {
+    const drain = computeDrain({ papers, digests, memos })
+    // memo:1's basis (T2) is older than memo:3's edit (T3) — order follows the basis, not createdAt.
+    expect(drain.memos.map((m) => m.id)).toEqual(['memo:1', 'memo:3'])
+  })
+
   it('is idempotent: after stamping, a second drain finds nothing', () => {
-    const first = computeDrain({ papers, digests })
+    const first = computeDrain({ papers, digests, memos })
     const stampedPapers = papers.map((p) => (first.papers.includes(p) ? stampVaultWritten(p, T2) : p))
     const stampedDigests = digests.map((d) => (first.weekends.includes(d) ? stampVaultWritten(d, T2) : d))
-    const second = computeDrain({ papers: stampedPapers, digests: stampedDigests })
+    const stampedMemos = memos.map((m) => (first.memos.includes(m) ? stampVaultWritten(m, T2) : m))
+    const second = computeDrain({ papers: stampedPapers, digests: stampedDigests, memos: stampedMemos })
     expect(second.papers).toEqual([])
     expect(second.weekends).toEqual([])
+    expect(second.memos).toEqual([])
     expect(second.conceptIds.size).toBe(0)
   })
 
   it('tolerates empty and missing inputs', () => {
-    expect(computeDrain({})).toEqual({ papers: [], weekends: [], conceptIds: new Set() })
-    expect(computeDrain()).toEqual({ papers: [], weekends: [], conceptIds: new Set() })
+    expect(computeDrain({})).toEqual({ papers: [], weekends: [], memos: [], conceptIds: new Set() })
+    expect(computeDrain()).toEqual({ papers: [], weekends: [], memos: [], conceptIds: new Set() })
   })
 })
 
