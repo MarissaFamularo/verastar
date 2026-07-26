@@ -246,7 +246,7 @@ export async function proposeEdge({ source, target, rationale = '', origin = 'st
     source,
     target,
     status: 'confirmed',
-    origin, // 'structural' | 'claude' | 'taxonomy'
+    origin, // 'structural' | 'keyword' | 'claude' | 'taxonomy'
     rationale,
     ts: new Date().toISOString(),
     confirmedAt: new Date().toISOString(),
@@ -302,9 +302,92 @@ export function coreAnchorPhrase(label) {
   return words.join(' ')
 }
 
+// --- keyword matching: how an anchor finds content that never spells out its name ---
+
+// Crude one-pass suffix strip — enough that aneurysm/aneurysms and prediction/predictive land
+// on one stem without a dependency. Both sides of a comparison pass through the same function,
+// so a mangled stem ("poplite") is still a stable key. Longest suffix first; the remainder must
+// keep 4+ chars so short tokens survive intact.
+const STEM_SUFFIXES = ['ations', 'ation', 'ities', 'ility', 'ical', 'ives', 'ions', 'ies', 'ive', 'ion', 'ing', 'ics', 'ic', 'als', 'al', 'ers', 'er', 'es', 's', 'e', 'y']
+function stemToken(w) {
+  for (const suf of STEM_SUFFIXES) {
+    if (w.length - suf.length >= 4 && w.endsWith(suf)) return w.slice(0, -suf.length)
+  }
+  return w
+}
+
+// Tokens that appear in nearly any project title or paper text and therefore carry no linking
+// signal: function words, generic research/effort words, and universal clinical words. Compared
+// post-stem, so one listed form usually covers its plural/derived siblings.
+const MATCH_STOPWORDS = [
+  // function words
+  'a', 'an', 'the', 'and', 'or', 'nor', 'but', 'of', 'in', 'on', 'for', 'to', 'with', 'without',
+  'by', 'at', 'from', 'into', 'onto', 'over', 'under', 'about', 'across', 'among', 'between',
+  'within', 'during', 'after', 'before', 'versus', 'via', 'per', 'than', 'then', 'when', 'where',
+  'which', 'who', 'what', 'how', 'why', 'is', 'are', 'was', 'were', 'be', 'being', 'been', 'do',
+  'does', 'did', 'has', 'have', 'had', 'can', 'could', 'will', 'would', 'should', 'may', 'might',
+  'must', 'not', 'non', 'its', 'this', 'that', 'these', 'those', 'their', 'our', 'all', 'any',
+  'each', 'both', 'more', 'most', 'less', 'least', 'other', 'same', 'such', 'only', 'also',
+  'new', 'novel', 'current', 'recent', 'early', 'late', 'first', 'second', 'ongoing', 'long',
+  'short', 'term',
+  // generic research/effort words
+  'study', 'studies', 'research', 'program', 'programme', 'project', 'projects', 'initiative',
+  'initiatives', 'effort', 'efforts', 'pilot', 'plan', 'plans', 'planning', 'committee',
+  'center', 'centre', 'group', 'groups', 'lab', 'labs', 'team', 'work', 'working', 'draft',
+  'paper', 'papers', 'manuscript', 'manuscripts', 'abstract', 'abstracts', 'submission',
+  'chapter', 'review', 'reviews', 'analysis', 'analyses', 'model', 'models', 'modeling',
+  'modelling', 'outcome', 'outcomes', 'result', 'results', 'effect', 'effects', 'impact',
+  'impacts', 'role', 'roles', 'association', 'associations', 'associated', 'correlation',
+  'comparison', 'compare', 'compared', 'comparing', 'evaluation', 'evaluate', 'evaluating',
+  'assessment', 'assess', 'assessing', 'approach', 'approaches', 'method', 'methods',
+  'methodology', 'protocol', 'protocols', 'cohort', 'cohorts', 'registry', 'registries',
+  'database', 'databases', 'data', 'dataset', 'datasets', 'trial', 'trials', 'series',
+  'report', 'reports', 'case', 'cases', 'aim', 'aims', 'objective', 'objectives',
+  'hypothesis', 'finding', 'findings', 'rate', 'rates', 'ratio', 'trend', 'trends',
+  'level', 'levels', 'use', 'uses', 'using', 'used', 'based',
+  // universal clinical words
+  'clinic', 'clinics', 'clinical', 'clinically', 'patient', 'patients', 'medical', 'medicine',
+  'health', 'healthcare', 'care', 'hospital', 'hospitals', 'disease', 'diseases',
+]
+const STOP_STEMS = new Set(MATCH_STOPWORDS.map(stemToken))
+
+// Significant stems of a text: lowercase, parentheticals dropped (org garnish like "(COSMOS)",
+// not topic), punctuation split, stopwords and numbers out. Returns stem -> first original form,
+// so a rationale can name real words instead of stems.
+export function significantTokens(text) {
+  const cleaned = String(text || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+  const out = new Map()
+  for (const w of cleaned.split(' ')) {
+    if (w.length < 3 || /^\d+$/.test(w)) continue
+    const s = stemToken(w)
+    if (STOP_STEMS.has(s)) continue
+    if (!out.has(s)) out.set(s, w)
+  }
+  return out
+}
+
+// Does this anchor plausibly own this concept? Shared significant stems between the anchor's
+// label+description and the concept's label+tags+text. Two distinct hits make a match — one
+// generic-ish token alone can't link — EXCEPT an anchor with a single significant token, which
+// gets to match on it (that one token is the whole topic). Returns { tokens, score } or null;
+// tokens are the anchor's word forms, for the rationale.
+export function anchorMatch(anchorText, concept) {
+  const at = significantTokens(anchorText)
+  if (at.size === 0) return null
+  const ct = significantTokens([concept.label, ...(concept.tags || []), concept.text || ''].filter(Boolean).join(' '))
+  const shared = []
+  for (const [s, orig] of at) if (ct.has(s)) shared.push(orig)
+  if (shared.length < (at.size === 1 ? 1 : 2)) return null
+  return { tokens: shared, score: shared.length }
+}
+
 // Compute NEW suggested edges from structure alone — never touching confirmed edges or
 // re-proposing pairs that already exist. Two kinds:
-//   1. paper → anchor : the paper's text names the north star / project.
+//   1. paper → anchor : the paper's text names the north star / project — or shares enough
+//      significant keywords with it (anchorMatch) that the name never had to appear.
 //   2. paper → paper  : two papers already tied to the SAME anchor (the serendipitous one —
 //      "you didn't draw this, but these two belong together").
 // Returns edge specs to hand to proposeEdge; the caller persists them.
@@ -315,10 +398,11 @@ export function structuralSuggestions(nodes, edges) {
   const papers = nodes.filter((n) => n.kind !== 'northStar' && n.kind !== 'project')
   const has = new Set(edges.map((e) => e.id))
   const out = []
-  const push = (a, b, rationale) => {
+  const push = (a, b, rationale, origin = 'structural') => {
     const id = edgeId(a, b)
-    if (has.has(id) || out.some((o) => edgeId(o.source, o.target) === id)) return
-    out.push({ source: a, target: b, rationale, origin: 'structural' })
+    if (has.has(id) || out.some((o) => edgeId(o.source, o.target) === id)) return false
+    out.push({ source: a, target: b, rationale, origin })
+    return true
   }
 
   // 1. name mentions — matched on the anchor's CORE phrase (see coreAnchorPhrase), and only
@@ -334,8 +418,33 @@ export function structuralSuggestions(nodes, edges) {
     }
   }
 
+  // 1b. keyword overlap — the mention path needs the anchor's core phrase verbatim, so
+  //     "Pop Artery Aneurysm (COSMOS)" never finds "Popliteal Artery Aneurysm"; this path
+  //     fires on shared significant tokens instead (anchorMatch, label+desc vs the concept's
+  //     text). Capped per anchor, best scores first, so a broad project can't spray the map.
+  //     Same hub-only rule as mentions. Tagged origin 'keyword' so pass 2 can tell these
+  //     recall ties apart from a real name-mention.
+  const KEYWORD_EDGE_CAP = 12
+  for (const a of anchors) {
+    const anchorText = [a.label, a.desc || ''].filter(Boolean).join(' ')
+    const candidates = []
+    for (const p of papers) {
+      if (satellites.has(p.id)) continue
+      const m = anchorMatch(anchorText, p)
+      if (m) candidates.push({ p, m })
+    }
+    candidates.sort((x, y) => y.m.score - x.m.score)
+    let gained = 0
+    for (const { p, m } of candidates) {
+      if (gained >= KEYWORD_EDGE_CAP) break
+      if (push(p.id, a.id, `shares “${m.tokens.join(', ')}” with “${a.label}”`, 'keyword')) gained++
+    }
+  }
+
   // 2. shared-anchor serendipity — build anchor -> papers tied to it (via ANY existing edge
-  //    plus the mentions we just found), then link co-anchored paper pairs.
+  //    plus the mentions we just found), then link co-anchored paper pairs. Keyword ties are
+  //    left out on BOTH sides: a capped 12-tie project would otherwise mint 66 pairwise
+  //    "serendipity" edges — spray with one step of laundering.
   const tiedByAnchor = new Map() // anchorId -> Set(paperId)
   const tie = (paperId, anchorId_) => {
     if (!tiedByAnchor.has(anchorId_)) tiedByAnchor.set(anchorId_, new Set())
@@ -344,10 +453,14 @@ export function structuralSuggestions(nodes, edges) {
   const anchorIds = new Set(anchors.map((a) => a.id))
   const paperIds = new Set(papers.map((p) => p.id))
   for (const e of edges) {
+    if (e.origin === 'keyword') continue
     if (paperIds.has(e.source) && anchorIds.has(e.target)) tie(e.source, e.target)
     if (paperIds.has(e.target) && anchorIds.has(e.source)) tie(e.target, e.source)
   }
-  for (const o of out) tie(o.source, o.target) // include fresh mentions
+  for (const o of out) {
+    if (o.origin === 'keyword') continue
+    tie(o.source, o.target) // include fresh mentions
+  }
 
   const labelOf = new Map(anchors.map((a) => [a.id, a.label]))
   for (const [aId, set] of tiedByAnchor) {
