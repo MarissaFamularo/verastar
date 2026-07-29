@@ -102,8 +102,12 @@ export function digestDateLine(savedAt, now = new Date()) {
   const days = Math.round((localMidnight(now) - localMidnight(parsed)) / 86400000)
   if (days <= 0) return { text: full(parsed), stale: false, days: 0 }
 
+  // Age FIRST, date second. At phone width this line wraps, and "Digest from Tuesday,
+  // July 28 · yesterday" broke after the separator — leaving the one word that matters
+  // stranded on line two. Front-loaded, the staleness survives any wrap.
   const when = parsed.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-  return { text: `Digest from ${when} · ${days === 1 ? 'yesterday' : `${days} days ago`}`, stale: true, days }
+  const age = days === 1 ? "Yesterday's digest" : `${days} days old`
+  return { text: `${age} · ${when}`, stale: true, days }
 }
 
 // Overwrites the single daily-digest slot. Callers fire-and-forget.

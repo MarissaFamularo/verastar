@@ -242,14 +242,14 @@ describe('digestDateLine', () => {
 
   it("names yesterday's digest as yesterday, and flags it stale", () => {
     const line = digestDateLine(new Date(2026, 6, 28, 6, 0).toISOString(), now)
-    expect(line.text).toBe('Digest from Tuesday, July 28 · yesterday')
+    expect(line.text).toBe("Yesterday's digest · Tuesday, July 28")
     expect(line.stale).toBe(true)
     expect(line.days).toBe(1)
   })
 
   it('counts days for an older digest', () => {
     const line = digestDateLine(new Date(2026, 6, 26, 6, 0).toISOString(), now)
-    expect(line.text).toBe('Digest from Sunday, July 26 · 3 days ago')
+    expect(line.text).toBe('3 days old · Sunday, July 26')
     expect(line.days).toBe(3)
   })
 
