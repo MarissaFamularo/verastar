@@ -9,6 +9,7 @@ import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import { saveDailyDigest, loadDailyDigest, clearDailyDigest, withOaLinks, digestGaps, restoreNote } from '../lib/digestStore.js'
 import { digestProjects } from '../lib/trellis.js'
+import { wakeLock } from '../lib/wakeLock.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import {
@@ -313,12 +314,22 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
   const digestRef = useRef(null)
   digestRef.current = { results, triaged, candidates, selectedIds }
   const ranRef = useRef(false)
-  // In-flight for the WHOLE run — the papers AND the ranking call that follows. Nothing may
-  // write a digest snapshot while this is true: mid-run `results` is partial and `triaged` is
-  // empty or stale, and that snapshot restores as a digest with no summaries. The `running`
-  // state can't serve as the guard — it goes false the instant the paper loop ends, while
-  // triage hasn't been called yet.
+  // In-flight for the WHOLE run — the papers AND the ranking call that follows. Guards ONLY
+  // the open-access-link effect below (~line 400) from racing in and writing a snapshot off
+  // of partial/stale `results` state mid-run. It does NOT gate the run's own writes: those
+  // write `collected` directly (never the lagging state) and are deliberate — see the
+  // per-paper persist inside runAndRank, which exists precisely so an interrupted run keeps
+  // what it already paid for. The `running` state can't serve as this guard either — it goes
+  // false the instant the paper loop ends, while triage hasn't been called yet.
   const runInFlight = useRef(false)
+
+  // Screen wake lock spans a whole run (search through ranking) so the run survives the
+  // phone's auto-lock — see lib/wakeLock.js. Destroy rather than merely end() on unmount:
+  // this component is torn down on every in-app tab switch, and there is no screen left
+  // here to protect either way.
+  useEffect(() => () => {
+    wakeLock.destroy()
+  }, [])
 
   // Persist the digest snapshot. Fire-and-forget — never blocks the UI, never throws.
   // The snapshot stamps its own savedAt inside serializeDigest; the header is told the
@@ -511,6 +522,11 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
     const existingIds = new Set(base.map((r) => r.paper.id))
     const toRun = papers.filter((p) => !existingIds.has(p.id))
     const collected = [...base]
+    // What actually landed in triage — fresh runs cleared it, appends keep the old map
+    // until the combined re-rank replaces it. Declared before the loop: each paper's
+    // incremental persist below needs it too, so a digest already showing summaries for
+    // the base papers doesn't restore looking blanker than it is.
+    let triagedNow = append ? triaged : {}
     for (const paper of toRun) {
       const res = await runPaper(paper, { onStage })
       // Showcase only: prove the gate rejects a corrupted value on the first clean paper.
@@ -520,6 +536,17 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
       }
       collected.push(res)
       setResults([...collected])
+      // Persist after EVERY paper, not just at the end of the whole run. Each extraction is
+      // a paid Claude call, and a run is minutes long — if the screen sleeps mid-loop (the
+      // wake lock is advisory and can fail to hold) the papers already verified must not be
+      // lost. `collected` is the source of truth here, NOT `digestRef.current` / `results`
+      // state — setState is async and lags a render behind, so persisting through the
+      // spread in persistDigest() would silently drop the paper that just finished. Triage
+      // hasn't run for anything newly fetched this loop, so this snapshot is honestly
+      // incomplete — digestGaps/restoreNote already know how to say that on restore, and
+      // the seen ledger is untouched either way (recordSeen only ever runs after the whole
+      // run finishes).
+      persistDigest({ results: withOaLinks(collected, oaResolved.current), triaged: triagedNow })
     }
     setRunning(false)
 
@@ -528,9 +555,6 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
     // (reviews, methods pieces) still belong in the digest. A failure here never touches
     // the proven facts.
     const ok = collected.filter((r) => !r.error)
-    // What actually landed in triage — fresh runs cleared it, appends keep the old map
-    // until the combined re-rank replaces it.
-    let triagedNow = append ? triaged : {}
     if (ok.length) {
       setRanking(true)
       try {
@@ -630,82 +654,91 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
   // state's "look back 7 days" works. A one-off catch-up must never quietly become her new
   // default, so the override lives in the call and is never written back to the profile.
   async function startScan({ days: override } = {}) {
-    setScanError('')
-    setScanNote('')
-    setSearchNote('')
-    setEmptyWindow(null)
-    ranRef.current = true
-    setRestored(null)
-    setResults([])
-    setTriaged({})
-    setCandidates([])
-    // Clear the persisted digest too — closing mid-scan must not resurrect stale results.
-    clearDailyDigest().catch(console.warn)
-    onDigestDate(null) // yesterday's date must not sit over a scan that's running now
-    setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
-    setSearching(true)
-    let fresh = []
-    let searchDays = override
+    // Acquire as the very first statement — this is the button's own onClick, the direct
+    // user-gesture call stack the Wake Lock API wants, and the lock has to span the search
+    // and scoring below, not just the paper loop runList wraps. finally releases it on
+    // every exit — the empty-window return, either catch, and the normal end.
+    wakeLock.start()
     try {
-      const profile = await getProfile()
-      searchDays = override ?? profileSearchDays(profile)
-      // Cross-day dedup now happens INSIDE the search, per topic, before the per-topic cap —
-      // otherwise the cap counts repeats and a topic's ten slots go to papers she read
-      // yesterday while the unseen ones behind them age out unread. Papers already in her
-      // library count as seen too. Both reads are fresh rather than the mounted savedIds
-      // state: a stale set here would re-serve a saved paper.
-      const [ledger, saved] = await Promise.all([store.get('seen', SEEN_KEY), store.all('papers')])
-      const search = await searchCandidates({
-        topics: profileTopics(profile),
-        northStars: profile?.northStars ?? [],
-        perTopic: profileTopicCap(profile),
-        days: searchDays,
-        skipIds: skipSet(seenIds(ledger), saved || []),
-      })
-      fresh = search.candidates
-      searchDays = search.days
-      // Say what was searched BEFORE saying what came of it: a topic whose query failed is a
-      // hole in today's coverage, and a topic the cap bit has more waiting — neither is
-      // visible in a digest that just looks short.
-      setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: fresh.length }))
-      if (!fresh.length) {
+      setScanError('')
+      setScanNote('')
+      setSearchNote('')
+      setEmptyWindow(null)
+      ranRef.current = true
+      setRestored(null)
+      setResults([])
+      setTriaged({})
+      setCandidates([])
+      // Clear the persisted digest too — closing mid-scan must not resurrect stale results.
+      clearDailyDigest().catch(console.warn)
+      onDigestDate(null) // yesterday's date must not sit over a scan that's running now
+      setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
+      setSearching(true)
+      let fresh = []
+      let searchDays = override
+      try {
+        const profile = await getProfile()
+        searchDays = override ?? profileSearchDays(profile)
+        // Cross-day dedup now happens INSIDE the search, per topic, before the per-topic cap —
+        // otherwise the cap counts repeats and a topic's ten slots go to papers she read
+        // yesterday while the unseen ones behind them age out unread. Papers already in her
+        // library count as seen too. Both reads are fresh rather than the mounted savedIds
+        // state: a stale set here would re-serve a saved paper.
+        const [ledger, saved] = await Promise.all([store.get('seen', SEEN_KEY), store.all('papers')])
+        const search = await searchCandidates({
+          topics: profileTopics(profile),
+          northStars: profile?.northStars ?? [],
+          perTopic: profileTopicCap(profile),
+          days: searchDays,
+          skipIds: skipSet(seenIds(ledger), saved || []),
+        })
+        fresh = search.candidates
+        searchDays = search.days
+        // Say what was searched BEFORE saying what came of it: a topic whose query failed is a
+        // hole in today's coverage, and a topic the cap bit has more waiting — neither is
+        // visible in a digest that just looks short.
+        setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: fresh.length }))
+        if (!fresh.length) {
+          setSearching(false)
+          setEmptyWindow(searchDays)
+          // Two different true sentences, and the difference matters to her: a quiet field is
+          // not the same as being caught up. `skipped` is how many the ledger dropped, so it
+          // tells them apart. Neither is an error — rendering either in the error red would
+          // teach her to distrust a scan that worked perfectly.
+          setScanNote(
+            search.skipped > 0
+              ? `Nothing new since your last digest — all ${search.skipped} paper${search.skipped === 1 ? '' : 's'} in your topics from the last ${searchDays} day${searchDays === 1 ? '' : 's'} are already in your library or have been shown before.`
+              : `Nothing published in the last ${searchDays} day${searchDays === 1 ? '' : 's'} matched your topics.`,
+          )
+          return
+        }
+      } catch (err) {
+        setScanError(`PubMed search failed: ${err.message}`)
         setSearching(false)
-        setEmptyWindow(searchDays)
-        // Two different true sentences, and the difference matters to her: a quiet field is
-        // not the same as being caught up. `skipped` is how many the ledger dropped, so it
-        // tells them apart. Neither is an error — rendering either in the error red would
-        // teach her to distrust a scan that worked perfectly.
-        setScanNote(
-          search.skipped > 0
-            ? `Nothing new since your last digest — all ${search.skipped} paper${search.skipped === 1 ? '' : 's'} in your topics from the last ${searchDays} day${searchDays === 1 ? '' : 's'} are already in your library or have been shown before.`
-            : `Nothing published in the last ${searchDays} day${searchDays === 1 ? '' : 's'} matched your topics.`,
-        )
         return
       }
-    } catch (err) {
-      setScanError(`PubMed search failed: ${err.message}`)
       setSearching(false)
-      return
-    }
-    setSearching(false)
-    setSelecting(true)
-    let scored, chosenIds
-    try {
-      ;({ scored, chosenIds } = await scorePool(fresh))
-    } catch (err) {
-      setScanError(`Selection failed: ${err.message}`)
+      setSelecting(true)
+      let scored, chosenIds
+      try {
+        ;({ scored, chosenIds } = await scorePool(fresh))
+      } catch (err) {
+        setScanError(`Selection failed: ${err.message}`)
+        setSelecting(false)
+        return
+      }
       setSelecting(false)
-      return
+      // Auto-run the digest on the papers that cleared the floor — one button, digest pops.
+      // Nobody clearing it is a legitimate morning: scorePool has already said so plainly,
+      // the pool stays open below, and nothing is stamped seen (she was never shown a digest
+      // of them, so tomorrow may well surface them again against a lower bar).
+      const chosen = scored.filter((c) => chosenIds.has(c.id))
+      if (!chosen.length) return
+      const outcomes = await runList(chosen, { injectCorrupt: false })
+      await recordSeen(scored, outcomes) // LAST — and only what actually ran or was passed over
+    } finally {
+      wakeLock.end()
     }
-    setSelecting(false)
-    // Auto-run the digest on the papers that cleared the floor — one button, digest pops.
-    // Nobody clearing it is a legitimate morning: scorePool has already said so plainly,
-    // the pool stays open below, and nothing is stamped seen (she was never shown a digest
-    // of them, so tomorrow may well surface them again against a lower bar).
-    const chosen = scored.filter((c) => chosenIds.has(c.id))
-    if (!chosen.length) return
-    const outcomes = await runList(chosen, { injectCorrupt: false })
-    await recordSeen(scored, outcomes) // LAST — and only what actually ran or was passed over
   }
 
   // Live re-rank: re-score the SAME cached pool against the (edited) rubric — no re-fetch,
@@ -729,13 +762,18 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
   async function runDigest() {
     const chosen = candidates.filter((c) => selectedIds.has(c.id))
     if (!chosen.length) return
-    const outcomes = await runList(chosen, { injectCorrupt: false })
-    setPoolOpen(false)
-    // The whole pool is offered up, not just the papers she ran: she saw the rest in the
-    // funnel and passed on them, so re-offering those tomorrow is the repeat this ledger
-    // exists to stop. Also covers the hand-run path where the floor cleared nobody and
-    // startScan's auto-run never fired. Papers that errored are dropped by stampableIds.
-    await recordSeen(candidates, outcomes)
+    wakeLock.start()
+    try {
+      const outcomes = await runList(chosen, { injectCorrupt: false })
+      setPoolOpen(false)
+      // The whole pool is offered up, not just the papers she ran: she saw the rest in the
+      // funnel and passed on them, so re-offering those tomorrow is the repeat this ledger
+      // exists to stop. Also covers the hand-run path where the floor cleared nobody and
+      // startScan's auto-run never fired. Papers that errored are dropped by stampableIds.
+      await recordSeen(candidates, outcomes)
+    } finally {
+      wakeLock.end()
+    }
   }
 
   // Top up an existing digest: run ONLY the newly-checked candidates and append them, then
@@ -744,11 +782,39 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
     const digested = new Set(results.map((r) => r.paper.id))
     const additions = candidates.filter((c) => selectedIds.has(c.id) && !digested.has(c.id))
     if (!additions.length) return
-    // Append mode returns outcomes for the WHOLE digest, so a paper that errored on an
-    // earlier run stays excluded here too — it still hasn't been shown to her.
-    const outcomes = await runList(additions, { append: true })
-    // mergeSeen keeps first-seen stamps, so re-stamping the pool on every top-up is a no-op.
-    await recordSeen(candidates, outcomes)
+    wakeLock.start()
+    try {
+      // Append mode returns outcomes for the WHOLE digest, so a paper that errored on an
+      // earlier run stays excluded here too — it still hasn't been shown to her.
+      const outcomes = await runList(additions, { append: true })
+      // mergeSeen keeps first-seen stamps, so re-stamping the pool on every top-up is a no-op.
+      await recordSeen(candidates, outcomes)
+    } finally {
+      wakeLock.end()
+    }
+  }
+
+  // Finish an interrupted run instead of starting over. Same append-mode call as
+  // addToDigest, on the candidates persisted for this digest — runAndRank filters out
+  // anything already in `results`, so a paper this digest already verified is never
+  // re-extracted; only what never ran gets fetched, and then the WHOLE set (old and newly
+  // run) goes through triage together. That last part is also the fix when EVERY paper
+  // already ran and only triage is missing: `chosen` can come back with nothing new to
+  // fetch, `toRun` inside runAndRank is then empty, and it goes straight to ranking.
+  //
+  // `candidates` can be missing or stale (an older digest, a cleared pool) and `chosen`
+  // then comes back empty too — that's only a true no-op when there is also nothing
+  // restored to re-rank; otherwise this still falls through to the ranking-only path.
+  async function resumeDigest() {
+    const chosen = candidates.filter((c) => selectedIds.has(c.id))
+    if (!chosen.length && !results.length) return
+    wakeLock.start()
+    try {
+      const outcomes = await runList(chosen, { append: true })
+      await recordSeen(candidates, outcomes)
+    } finally {
+      wakeLock.end()
+    }
   }
 
   function toggleCandidate(id) {
@@ -769,9 +835,14 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
     setSearchNote('')
     setEmptyWindow(null)
     setCandidates([])
-    // Deliberately NOT recorded as seen: the three reference trials are a proof surface,
-    // not her morning, and burying them would break the demo on the second run.
-    await runList(DEMO_PAPERS, { injectCorrupt: true })
+    wakeLock.start()
+    try {
+      // Deliberately NOT recorded as seen: the three reference trials are a proof surface,
+      // not her morning, and burying them would break the demo on the second run.
+      await runList(DEMO_PAPERS, { injectCorrupt: true })
+    } finally {
+      wakeLock.end()
+    }
   }
 
   // Order the digest by relevance to the north stars (highest first).
@@ -857,9 +928,24 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
           summary, because it's the same kind of fact: the app is telling her what it does
           NOT have. A whole restore keeps the quiet muted line. */}
       {restored && (
-        <p style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: restored.incomplete ? 'var(--color-abstract)' : 'var(--color-fg-muted)' }}>
-          {restored.note}
-        </p>
+        <div style={{ margin: '12px 0 0' }}>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: restored.incomplete ? 'var(--color-abstract)' : 'var(--color-fg-muted)' }}>
+            {restored.note}
+          </p>
+          {/* Finish rather than restart: the papers already verified are in `results` and
+              runAndRank (via resumeDigest) skips re-extracting them — only what never ran
+              gets fetched, then the whole set is (re-)ranked. */}
+          {restored.incomplete && (
+            <button
+              onClick={resumeDigest}
+              disabled={!keySet || busy}
+              className="cursor-pointer"
+              style={{ marginTop: 8, borderRadius: 999, border: '1px solid rgba(239,143,91,.4)', background: 'transparent', color: 'var(--color-accent)', padding: '6px 14px', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
+            >
+              {busy ? 'Finishing…' : 'Finish this digest'}
+            </button>
+          )}
+        </div>
       )}
       {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
       {showEmpty && (
