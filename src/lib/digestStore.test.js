@@ -32,6 +32,7 @@ import {
   withOaLinks,
   digestGaps,
   restoreNote,
+  digestDateLine,
 } from './digestStore.js'
 import { store, __data } from './store.js'
 
@@ -221,5 +222,57 @@ describe('withOaLinks', () => {
     await saveDailyDigest(state)
     const loaded = await loadDailyDigest()
     expect(loaded.results[0].oa).toEqual({ url: 'https://x/a.pdf' })
+  })
+})
+
+// digestDateLine — the header used to render `new Date()` unconditionally, so a digest
+// restored from yesterday sat under today's date and read as this morning's work. These
+// lock the calendar-day comparison (not elapsed hours) and the stale wording.
+describe('digestDateLine', () => {
+  const now = new Date(2026, 6, 29, 8, 0) // Wednesday, July 29, 2026, 8am local
+
+  it('shows today when there is no digest at all', () => {
+    expect(digestDateLine(null, now)).toEqual({ text: 'Wednesday, July 29, 2026', stale: false, days: 0 })
+  })
+
+  it("shows the full date, unstaled, for today's digest", () => {
+    const line = digestDateLine(new Date(2026, 6, 29, 5, 30).toISOString(), now)
+    expect(line).toEqual({ text: 'Wednesday, July 29, 2026', stale: false, days: 0 })
+  })
+
+  it("names yesterday's digest as yesterday, and flags it stale", () => {
+    const line = digestDateLine(new Date(2026, 6, 28, 6, 0).toISOString(), now)
+    expect(line.text).toBe('Digest from Tuesday, July 28 · yesterday')
+    expect(line.stale).toBe(true)
+    expect(line.days).toBe(1)
+  })
+
+  it('counts days for an older digest', () => {
+    const line = digestDateLine(new Date(2026, 6, 26, 6, 0).toISOString(), now)
+    expect(line.text).toBe('Digest from Sunday, July 26 · 3 days ago')
+    expect(line.days).toBe(3)
+  })
+
+  // The case she actually hit: a run late one evening, read the next morning. Only ~8
+  // hours elapsed, but it is unambiguously yesterday's digest.
+  it('compares calendar days, not elapsed hours', () => {
+    const lateLastNight = digestDateLine(new Date(2026, 6, 28, 23, 30).toISOString(), now)
+    expect(lateLastNight.stale).toBe(true)
+    expect(lateLastNight.days).toBe(1)
+
+    // ...and the converse: 17 hours apart, same day, not stale.
+    const readTonight = digestDateLine(new Date(2026, 6, 29, 6, 0).toISOString(), new Date(2026, 6, 29, 23, 0))
+    expect(readTonight.stale).toBe(false)
+  })
+
+  it('treats a future timestamp (fast phone clock) as today, never a negative age', () => {
+    const line = digestDateLine(new Date(2026, 6, 30, 2, 0).toISOString(), now)
+    expect(line.stale).toBe(false)
+    expect(line.days).toBe(0)
+  })
+
+  it('falls back to today on an unparseable timestamp', () => {
+    expect(digestDateLine('not a date', now).text).toBe('Wednesday, July 29, 2026')
+    expect(digestDateLine('not a date', now).stale).toBe(false)
   })
 })

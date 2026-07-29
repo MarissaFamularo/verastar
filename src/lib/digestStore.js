@@ -80,6 +80,32 @@ export function restoreNote({ missing = 0 } = {}) {
   return `Restored your last digest — ${missing} paper${missing === 1 ? ' has' : 's have'} no summary (the ranking step didn't finish). Run again for fresh results.`
 }
 
+// The date line above the greeting. It used to be `new Date()` unconditionally, which made
+// a digest restored from yesterday look like this morning's work — the header said today,
+// every card was stale, and nothing on the page disagreed. So the line reports the date of
+// the DIGEST ON SCREEN, and says how old it is when that isn't today.
+//
+// Comparison is by local calendar day, not elapsed hours: a digest run at 11pm and read at
+// 7am is yesterday's, and one run at 6am and read at 11pm is still today's. A savedAt in
+// the future (a phone clock running fast — the drain stamps hit this too) reads as today
+// rather than as a negative age.
+function localMidnight(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+export function digestDateLine(savedAt, now = new Date()) {
+  const full = (d) =>
+    d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  const parsed = savedAt ? new Date(savedAt) : null
+  if (!parsed || Number.isNaN(parsed.getTime())) return { text: full(now), stale: false, days: 0 }
+
+  const days = Math.round((localMidnight(now) - localMidnight(parsed)) / 86400000)
+  if (days <= 0) return { text: full(parsed), stale: false, days: 0 }
+
+  const when = parsed.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  return { text: `Digest from ${when} · ${days === 1 ? 'yesterday' : `${days} days ago`}`, stale: true, days }
+}
+
 // Overwrites the single daily-digest slot. Callers fire-and-forget.
 export function saveDailyDigest(state) {
   return store.put(COLLECTION, KEY, serializeDigest(state))

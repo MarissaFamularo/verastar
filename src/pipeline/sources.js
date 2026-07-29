@@ -94,11 +94,71 @@ export async function searchPubmed(term, { retmax = 20, days, datetype = DEFAULT
   return data?.esearchresult?.idlist ?? []
 }
 
-// Fetch abstract text for one or more PMIDs (plain text rettype=abstract).
+// A PubMed plain-text record is mostly NOT the abstract. It opens with a numbered citation
+// line, then the title, then the author list, then an "Author information:" block of
+// affiliations — and on a multi-centre paper that preamble runs past 1,300 characters
+// before the first word of science. Everything downstream reads a fixed-size window off
+// the FRONT of this text, so on those papers the window was the preamble: the digest's
+// summaries and the adversarial gate that audits them were both being handed author
+// addresses instead of results. Measured on two of her 2026-07-29 papers: the abstract
+// body started at 1,378 and 811 chars, RESULTS at 2,101 and 2,007 — the 900-char window
+// reached neither.
+//
+// So: keep the title, the abstract body and its keywords; drop the citation line, the
+// authors, the affiliations, and the trailing copyright/DOI/PMID/comment blocks. Records
+// are blank-line separated, which also makes this correct for a multi-PMID fetch.
+const TRAILER_BLOCK =
+  /^(©|copyright\b|doi:|pmid:|pmcid:|conflict of interest|declaration of|comment (in|on)\b|erratum (in|for)\b|update (in|of)\b|republished (in|from)\b|expression of concern\b|publisher:)/i
+const AUTHOR_INFO_BLOCK = /^(author information:|collaborators:|corresponding author:|contributed equally)/i
+
+// "Jahan S(1), Awad A(2), … Alraies MC(10)." — surname(s) then initials, optionally with
+// affiliation markers. Requires a clear majority of comma-separated segments to fit that
+// shape, so a title with commas and ordinary abstract prose can never trip it.
+function isAuthorList(block) {
+  const segments = block.split(/,\s*/).map((s) => s.trim()).filter(Boolean)
+  if (segments.length < 2) return false
+  const namelike = segments.filter((s) =>
+    /^[A-ZÀ-Þ][\p{L}'’-]+(?:[ -][\p{L}'’-]+)*\s+[A-Z]{1,4}(?:\(\d+\))*\.?$/u.test(s),
+  )
+  return namelike.length >= Math.ceil(segments.length * 0.6)
+}
+
+export function cleanAbstractText(raw) {
+  const text = String(raw ?? '')
+  if (!text.trim()) return text
+  const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean)
+  const drop = blocks.map(() => false)
+
+  blocks.forEach((block, i) => {
+    const flat = block.replace(/\s+/g, ' ').trim()
+    // The citation line: "1. Ann Vasc Surg. 2026 Jul 27:S0890-… doi: …". Numbered, and
+    // carrying a year or a DOI — a bare numbered line inside an abstract stays.
+    if (/^\d+\.\s/.test(flat) && (/doi:/i.test(flat) || /\b(19|20)\d{2}\b/.test(flat))) drop[i] = true
+    if (TRAILER_BLOCK.test(flat)) drop[i] = true
+    if (AUTHOR_INFO_BLOCK.test(flat)) {
+      drop[i] = true
+      // The author list sits directly above its affiliations.
+      const prev = i - 1
+      if (prev >= 0 && !drop[prev] && isAuthorList(blocks[prev].replace(/\s+/g, ' ').trim())) drop[prev] = true
+    } else if (isAuthorList(flat)) {
+      drop[i] = true
+    }
+  })
+
+  const kept = blocks.filter((_, i) => !drop[i]).join('\n\n')
+  // An unfamiliar record shape must degrade to today's behaviour, never to an empty
+  // source — `text` is also the verifier's grounding corpus, so over-stripping would
+  // flag every number rather than merely summarize badly.
+  if (kept.trim().length < 120 && text.trim().length >= 400) return text
+  return kept || text
+}
+
+// Fetch abstract text for one or more PMIDs (plain text rettype=abstract), stripped of
+// PubMed's citation/author/affiliation preamble — see cleanAbstractText.
 export async function fetchAbstracts(pmids) {
   const ids = Array.isArray(pmids) ? pmids.join(',') : String(pmids)
   const url = withKey(`${EUTILS}/efetch.fcgi?db=pubmed&id=${ids}&rettype=abstract&retmode=text`)
-  return getText(url)
+  return cleanAbstractText(await getText(url))
 }
 
 // Fetch citation metadata for a PMID via esummary. The mere fact that PubMed returns a

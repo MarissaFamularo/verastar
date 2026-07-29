@@ -273,7 +273,9 @@ function CandidatePool({
   )
 }
 
-export default function SpineCheck() {
+// onDigestDate: reports the savedAt of the digest on screen (null = none) so the page
+// header can date the digest it is actually showing rather than the day it is read.
+export default function SpineCheck({ onDigestDate = () => {} }) {
   const [running, setRunning] = useState(false)
   const [searching, setSearching] = useState(false)
   const [selecting, setSelecting] = useState(false) // selection funnel LLM call in flight
@@ -319,8 +321,11 @@ export default function SpineCheck() {
   const runInFlight = useRef(false)
 
   // Persist the digest snapshot. Fire-and-forget — never blocks the UI, never throws.
+  // The snapshot stamps its own savedAt inside serializeDigest; the header is told the
+  // same instant so a just-finished run dates as today without a re-read.
   function persistDigest(overrides = {}) {
     saveDailyDigest({ ...digestRef.current, ...overrides }).catch(console.warn)
+    onDigestDate(new Date().toISOString())
   }
 
   const titleOf = (res) => res.paper.title || res.citation?.title || `PMID ${res.paper.pmid}`
@@ -359,6 +364,7 @@ export default function SpineCheck() {
         // cheerful "restored" line is indistinguishable from a broken app.
         const gaps = digestGaps(saved)
         setRestored({ note: restoreNote(gaps), incomplete: !gaps.complete })
+        onDigestDate(saved.savedAt ?? null)
       })
       .catch(console.warn)
   }, [])
@@ -635,6 +641,7 @@ export default function SpineCheck() {
     setCandidates([])
     // Clear the persisted digest too — closing mid-scan must not resurrect stale results.
     clearDailyDigest().catch(console.warn)
+    onDigestDate(null) // yesterday's date must not sit over a scan that's running now
     setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
     setSearching(true)
     let fresh = []

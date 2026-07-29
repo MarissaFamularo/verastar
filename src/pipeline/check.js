@@ -18,7 +18,15 @@ import { extractStructured, MODELS } from '../lib/anthropic.js'
 // The evidence window, shared with triage's writer prompt so the skeptic judges the
 // claim against EXACTLY the text the writer saw: more text could "support" a claim the
 // writer never had evidence for; less would manufacture refutes.
-export const SNIPPET_CHARS = 900
+//
+// Sized to hold a WHOLE structured abstract, because a window that stops short of the
+// results section makes both jobs impossible: the writer summarizes a paper it has only
+// seen the methods of, and the skeptic — correctly — refutes the summary for lack of
+// evidence. Measured on her 2026-07-29 digest, after sources.js stopped spending the
+// window on author affiliations: RESULTS at 874 and 1,350 chars, CONCLUSIONS at 1,516 and
+// 2,107, whole cleaned abstracts 1,883 and 2,363. 900 reached neither paper's results.
+// The cost of the larger window is a few hundred tokens per paper on two cheap models.
+export const SNIPPET_CHARS = 2600
 
 export const CHECK_SCHEMA = {
   type: 'object',

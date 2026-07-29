@@ -9,6 +9,7 @@ import { refreshTrellisProjects, getTrellisProjects, getTrellisExcluded, conside
 import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import { useIsMobile, isMobileNow } from './lib/useMobile.js'
 import { logEvent } from './lib/events.js'
+import { digestDateLine } from './lib/digestStore.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
@@ -734,6 +735,9 @@ export default function App() {
   const [view, setView] = useState('digest')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [starsOpen, setStarsOpen] = useState(false) // north-star chips: collapsed by default
+  // savedAt of the digest currently on screen, reported by SpineCheck (which owns the
+  // restore). Null = no digest, so the header falls back to today's date.
+  const [digestSavedAt, setDigestSavedAt] = useState(null)
   const [profile, setProfile] = useState(null)
   const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0 })
   // Synced PaperTrellis project rows (title + stage) for the rail and Settings —
@@ -948,7 +952,7 @@ export default function App() {
   const stars = profile?.northStars || []
   const projects = profile?.projects || []
   const initials = name.replace(/^Dr\.?\s*/i, '').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'MF'
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  const dateLine = digestDateLine(digestSavedAt)
 
   return (
     <div className="vs-shell flex overflow-hidden" style={{ height: '100vh', width: '100%', background: 'linear-gradient(165deg,#0f1218,#08090d)' }}>
@@ -961,7 +965,10 @@ export default function App() {
             <div className="vs-page-pad relative" style={{ maxWidth: 820, padding: '46px 56px 64px' }}>
               <div className="flex items-start justify-between" style={{ gap: 24 }}>
                 <div>
-                  <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>{today}</p>
+                  {/* Amber when the digest on screen isn't today's — the same treatment as a
+                      withheld summary, because it's the same kind of fact: the app saying
+                      what it does NOT have. */}
+                  <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: dateLine.stale ? 'var(--color-abstract)' : 'var(--color-fg-faint)', fontWeight: 600 }}>{dateLine.text}</p>
                   <h1 className="vs-hero-h1" style={{ margin: '9px 0 0', fontFamily: 'var(--font-serif)', fontSize: 37, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)', lineHeight: 1.08 }}>
                     Good morning, {name}.
                   </h1>
@@ -998,7 +1005,7 @@ export default function App() {
                 </div>
               )}
               <div style={{ marginTop: 34 }}>
-                <SpineCheck key={saved ? 'keyed' : 'nokey'} />
+                <SpineCheck key={saved ? 'keyed' : 'nokey'} onDigestDate={setDigestSavedAt} />
               </div>
             </div>
           </main>
