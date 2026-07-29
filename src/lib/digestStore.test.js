@@ -180,9 +180,16 @@ describe('restoreNote', () => {
 
   it('states the gap, singular and plural', () => {
     expect(restoreNote({ missing: 1 })).toBe(
-      "Restored your last digest — 1 paper has no summary (the ranking step didn't finish). Run again for fresh results.",
+      "Restored your last digest — 1 paper has no summary (the run didn't finish). Finish it below to keep what's already verified, or run again for a fresh scan.",
     )
     expect(restoreNote({ missing: 4 })).toContain('4 papers have no summary')
+  })
+
+  // The gap line sits directly above the Finish button, so it must not send her to the
+  // expensive remedy — a fresh scan re-pays for every paper already verified.
+  it('points an incomplete restore at finishing, not at re-running', () => {
+    expect(restoreNote({ missing: 2 })).toMatch(/Finish it below/)
+    expect(restoreNote({ missing: 2 })).not.toMatch(/^Restored your last digest — run again/)
   })
 })
 

@@ -75,9 +75,13 @@ export function digestGaps(digest) {
 // The restore line, from digestGaps' count. A digest of blank cards is what a half-written
 // snapshot looks like, and it reads as a broken app — so the gap is stated, in the same
 // sentence, before the offer to run again.
+// A gap now has a cheaper remedy than "run again": the papers already on screen were
+// fetched, extracted and verified at real cost, and Finish keeps them — it only fetches
+// what never ran, then ranks the whole set. So the incomplete line points there rather
+// than at a fresh scan, which would pay for all of it a second time.
 export function restoreNote({ missing = 0 } = {}) {
   if (!missing) return 'Restored your last digest — run again for fresh results.'
-  return `Restored your last digest — ${missing} paper${missing === 1 ? ' has' : 's have'} no summary (the ranking step didn't finish). Run again for fresh results.`
+  return `Restored your last digest — ${missing} paper${missing === 1 ? ' has' : 's have'} no summary (the run didn't finish). Finish it below to keep what's already verified, or run again for a fresh scan.`
 }
 
 // The date line above the greeting. It used to be `new Date()` unconditionally, which made
