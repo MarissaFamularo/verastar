@@ -23,17 +23,20 @@ Skip: purely preclinical or animal work, editorials without new data, and topics
 
 export const DEFAULT_SELECT_COUNT = 10
 
+const DEMO_RUBRIC =
+  `Prioritize clinically actionable human evidence in vascular care and applied clinical AI. Rank comparative studies, trials, and high-quality syntheses above descriptive reports. Include an occasional workflow or safety paper when it changes how clinical technology should be evaluated. Skip preclinical work and unrelated specialties.`
+
 // The score floor is NOT drafted by the model — it's a calibration she tunes once she has
 // seen a few days of scores, so every new profile starts at the same known bar.
 export { DEFAULT_SCORE_FLOOR }
 
-// The demo / skip fallback: the real named user's profile, seeded instantly so the app
-// can go from empty to steered in one click on camera (BUILD_PLAN's from-empty demo path).
+// The demo / skip fallback is intentionally fictional. Demo mode must never reveal a real
+// user's name, private projects, saved state, or editorial preferences.
 export const DEMO_PROFILE = {
-  name: 'Dr. Famularo',
-  northStars: ['CLTI outcomes', 'Carotid revascularization', 'AI in medicine'],
-  projects: ['Limb Preservation Program', 'COSMOS utilization study'],
-  rubric: { criteria: DEFAULT_RUBRIC, selectCount: DEFAULT_SELECT_COUNT, scoreFloor: DEFAULT_SCORE_FLOOR },
+  name: 'Dr. Morgan',
+  northStars: ['Limb preservation', 'Carotid disease', 'Clinical AI'],
+  projects: ['Evidence Practice Review'],
+  rubric: { criteria: DEMO_RUBRIC, selectCount: DEFAULT_SELECT_COUNT, scoreFloor: DEFAULT_SCORE_FLOOR },
   onboarded: true,
 }
 

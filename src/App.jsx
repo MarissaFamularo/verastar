@@ -18,6 +18,7 @@ import KnowledgeBase from './components/KnowledgeBase.jsx'
 import WeekendRead from './components/WeekendRead.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
 import Memos from './components/Memos.jsx'
+import { DEMO_DIGEST_COUNTS } from './demo/demoDigest.js'
 
 // ── Observatory shell ──────────────────────────────────────────────────────
 // The app is a dark, star-lit reading room. A fixed 88px icon rail on the left
@@ -669,11 +670,11 @@ function DigestRail({ saved, onSettings, counts, projects, trellis, onConnection
       </div>
       {demo && (
         <p style={{ margin: '0 0 34px', padding: '8px 13px', borderRadius: 10, background: 'rgba(143,189,230,.08)', fontSize: 12, lineHeight: 1.5, color: 'var(--color-registry)' }}>
-          Demo profile — sample data. In demo mode nothing leaves this browser.
+          Fictional demo profile · public sample papers · separate from your library.
         </p>
       )}
 
-      <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>This week</p>
+      <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>{demo ? 'In this sample' : 'This week'}</p>
       <div className="flex" style={{ gap: 26, marginBottom: 34 }}>
         {[[counts.verified, 'verified'], [counts.saved, 'saved'], [counts.flagged, 'flagged']].map(([n, label]) => (
           <div key={label}>
@@ -705,8 +706,9 @@ function DigestRail({ saved, onSettings, counts, projects, trellis, onConnection
         </>
       )}
 
-      <div style={{ height: 1, background: 'var(--hairline)', marginBottom: 26 }} />
-      <div onClick={onConnections} className="cursor-pointer" style={{ padding: 20, borderRadius: 15, background: 'linear-gradient(160deg,rgba(239,143,91,.12),rgba(239,143,91,.03))' }}>
+      {!demo && <>
+        <div style={{ height: 1, background: 'var(--hairline)', marginBottom: 26 }} />
+        <div onClick={onConnections} className="cursor-pointer" style={{ padding: 20, borderRadius: 15, background: 'linear-gradient(160deg,rgba(239,143,91,.12),rgba(239,143,91,.03))' }}>
         <div className="flex items-center" style={{ gap: 8 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-bright)" strokeWidth="1.8">
             <path d="M4 20l3-9 8-6 3 3-6 8-8 4z" strokeLinejoin="round" />
@@ -717,7 +719,8 @@ function DigestRail({ saved, onSettings, counts, projects, trellis, onConnection
           Your saved papers thread through this week's work. A synthesis you judge, ready to read.
         </p>
         <p style={{ margin: '13px 0 0', fontSize: 13, color: 'var(--color-accent)', fontWeight: 500 }}>Preview the threads ↗</p>
-      </div>
+        </div>
+      </>}
     </aside>
   )
 }
@@ -951,8 +954,11 @@ export default function App() {
   const name = profile?.name || 'Doctor'
   const stars = profile?.northStars || []
   const projects = profile?.projects || []
+  const demo = !!profile?.demo && !account
   const initials = name.replace(/^Dr\.?\s*/i, '').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'MF'
-  const dateLine = digestDateLine(digestSavedAt)
+  const dateLine = demo
+    ? { text: 'Sample digest · public literature', stale: false }
+    : digestDateLine(digestSavedAt)
 
   return (
     <div className="vs-shell flex overflow-hidden" style={{ height: '100vh', width: '100%', background: 'linear-gradient(165deg,#0f1218,#08090d)' }}>
@@ -1005,11 +1011,11 @@ export default function App() {
                 </div>
               )}
               <div style={{ marginTop: 34 }}>
-                <SpineCheck key={saved ? 'keyed' : 'nokey'} onDigestDate={setDigestSavedAt} />
+                <SpineCheck key={`${saved ? 'keyed' : 'nokey'}-${demo ? 'demo' : 'live'}`} demo={demo} onDigestDate={setDigestSavedAt} />
               </div>
             </div>
           </main>
-          <DigestRail saved={saved} counts={counts} projects={projects} trellis={trellis} demo={!!profile?.demo && !account} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
+          <DigestRail saved={saved} counts={demo ? DEMO_DIGEST_COUNTS : counts} projects={projects} trellis={demo ? [] : trellis} demo={demo} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
         </div>
       )}
 

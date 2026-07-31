@@ -285,10 +285,10 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
             Set up my digest →
           </button>
           <button onClick={useDemo} className="cursor-pointer" style={ghostLink}>
-            Explore with a demo profile
+            Explore a populated sample digest
           </button>
           <p style={{ margin: '-6px 0 0', fontSize: 12, color: 'var(--color-fg-faint)' }}>
-            A sample profile, no key needed — in demo mode nothing leaves this browser.
+            Public paper metadata, no key needed — read-only and separate from your library.
           </p>
           {/* Returning users skip setup entirely — their library lives in their account.
               Hidden in ?firstrun=1 preview: sending a link is a real action, and preview saves nothing. */}

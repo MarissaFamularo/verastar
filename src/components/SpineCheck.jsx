@@ -37,6 +37,7 @@ import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import SourceViewer from './SourceViewer.jsx'
+import { DEMO_DIGEST } from '../demo/demoDigest.js'
 
 const STAGE_LABEL = {
   fetching: 'Fetching source…',
@@ -276,7 +277,7 @@ function CandidatePool({
 
 // onDigestDate: reports the savedAt of the digest on screen (null = none) so the page
 // header can date the digest it is actually showing rather than the day it is read.
-export default function SpineCheck({ onDigestDate = () => {} }) {
+export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const [running, setRunning] = useState(false)
   const [searching, setSearching] = useState(false)
   const [selecting, setSelecting] = useState(false) // selection funnel LLM call in flight
@@ -294,8 +295,8 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
   // "look back further" offer on screen — the app never widens the window by itself.
   const [emptyWindow, setEmptyWindow] = useState(null)
   const [stages, setStages] = useState({})
-  const [results, setResults] = useState([]) // runPaper results (live or showcase)
-  const [triaged, setTriaged] = useState({}) // id -> { score, tier, finding, relevance }
+  const [results, setResults] = useState(() => demo ? DEMO_DIGEST.results : []) // runPaper results (live, showcase, or read-only demo)
+  const [triaged, setTriaged] = useState(() => demo ? DEMO_DIGEST.triaged : {}) // id -> { score, tier, finding, relevance }
   const [ranking, setRanking] = useState(false)
   const [expanded, setExpanded] = useState({}) // id -> bool: show verified values
   const [viewer, setViewer] = useState(null) // { title, corpusLabel, corpusText, quote, valueLabel }
@@ -335,6 +336,7 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
   // The snapshot stamps its own savedAt inside serializeDigest; the header is told the
   // same instant so a just-finished run dates as today without a re-read.
   function persistDigest(overrides = {}) {
+    if (demo) return
     saveDailyDigest({ ...digestRef.current, ...overrides }).catch(console.warn)
     onDigestDate(new Date().toISOString())
   }
@@ -344,24 +346,30 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
   // Load which papers are already in the Knowledge Base (persisted in IndexedDB),
   // and which of those are hearted — the digest's heart mirrors the Library's.
   useEffect(() => {
+    if (demo) return
     store.all('papers').then((papers) => {
       setSavedIds(new Set((papers || []).map((p) => p.id)))
       setFavIds(new Set((papers || []).filter((p) => p.favorite).map((p) => p.id)))
     })
-  }, [])
+  }, [demo])
 
   // The selection bar. normalizeScoreFloor is the same fallback scorePool applies, so a
   // profile that predates the field shows the bar the app actually enforced, not a blank.
   useEffect(() => {
+    if (demo) {
+      setScoreFloor(null)
+      return
+    }
     getProfile()
       .then((p) => setScoreFloor(normalizeScoreFloor(p?.rubric?.scoreFloor)))
       .catch(console.warn)
-  }, [])
+  }, [demo])
 
   // Rehydrate the last digest — App unmounts this component on every tab switch, and
   // re-running would re-pay the extraction calls. Stages stay empty: labels only render
   // while a stage is in flight.
   useEffect(() => {
+    if (demo) return
     loadDailyDigest()
       .then((saved) => {
         if (!saved || ranRef.current) return
@@ -378,7 +386,7 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
         onDigestDate(saved.savedAt ?? null)
       })
       .catch(console.warn)
-  }, [])
+  }, [demo])
 
   // Resolve free-full-text links for the digest cards — the workflow is read-the-paper-first,
   // save-later, so the link belongs on the card, not just the Library. One Unpaywall call per
@@ -389,6 +397,7 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
   const oaTried = useRef(new Set()) // paper ids attempted this mount — never re-hit Unpaywall
   const oaResolved = useRef(new Map()) // paper id -> oa | null, so a run's own write keeps them
   useEffect(() => {
+    if (demo) return
     if (oaBusy.current) return
     const pending = results.filter(
       (r) => r.oa === undefined && !r.error && r.citation?.doi && !oaTried.current.has(r.paper.id),
@@ -410,7 +419,7 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
       // that lands after that write finds the flag already clear and persists normally.
       if (!runInFlight.current) persistDigest()
     })()
-  }, [results])
+  }, [results, demo])
 
   // Deposit / withdraw a paper to the Knowledge Base — the citation, finding, relevance, the
   // app-verified numbers, and the FULL fetched source text (no longer truncated), persisted
@@ -861,7 +870,11 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
     <section>
       {/* Run controls — the big centered primary action, with the deterministic proof
           surface as a small secondary beneath it. */}
-      <div className="flex flex-col items-center" style={{ gap: 12, marginTop: 6 }}>
+      {demo ? (
+        <div style={{ padding: '15px 17px', borderRadius: 13, border: '1px solid rgba(143,189,230,.18)', background: 'rgba(143,189,230,.07)', color: 'var(--color-registry)', fontSize: 13.5, lineHeight: 1.55 }}>
+          <span style={{ fontWeight: 600 }}>Sample digest · read only.</span> These public papers show what a populated morning looks like. This view does not read from or write to your profile, saved library, or digest history.
+        </div>
+      ) : <div className="flex flex-col items-center" style={{ gap: 12, marginTop: 6 }}>
         <button
           onClick={() => startScan()}
           disabled={!keySet || busy}
@@ -879,11 +892,11 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
         >
           Verifier proof
         </button>
-      </div>
+      </div>}
 
       {/* "Today's scan" section rule. */}
       <div className="flex items-center" style={{ gap: 14, margin: '30px 0 4px' }}>
-        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontStyle: 'italic', color: 'var(--color-fg-dim)' }}>Today's scan</span>
+        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontStyle: 'italic', color: 'var(--color-fg-dim)' }}>{demo ? 'Sample digest' : "Today's scan"}</span>
         <span style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
         {candidates.length > 0 && (
           <span style={{ fontSize: 12, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>
@@ -893,7 +906,7 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
       </div>
 
       {/* Status lines. */}
-      {!keySet && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Add your API key in Settings first.</p>}
+      {!demo && !keySet && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Add your API key in Settings first.</p>}
       {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed — one query per topic…</p>}
       {/* What was actually searched, including any topic whose query failed. Stated whether
           the morning was rich or empty: the window is the digest's central claim, and a
@@ -1005,7 +1018,9 @@ export default function SpineCheck({ onDigestDate = () => {} }) {
                       {readFitLabel(take)}
                     </span>
                   )}
-                  {!res.error && (
+                  {demo ? (
+                    <span style={{ fontSize: 12, color: 'var(--color-fg-faint)' }}>Sample · read only</span>
+                  ) : !res.error && (
                     <>
                       <HeartButton active={favIds.has(paper.id)} onClick={() => toggleFavorite(res, take, title)} />
                       <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: savedIds.has(paper.id) ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)' }}>
