@@ -197,9 +197,9 @@ describe('checkTopics — the plan as a whole', () => {
 
 describe('normalizeInterviewDraft — the model output is never trusted raw', () => {
   const good = {
-    name: '  Dr. Famularo ',
+    name: '  Dr. Morgan ',
     northStars: ['CLTI outcomes', '  carotid revascularization ', ''],
-    projects: ['Limb Preservation Program'],
+    projects: ['Limb Care Program'],
     topics: [
       { label: 'Aortic Disease', query: 'aortic aneurysm OR TEVAR' },
       { label: 'Carotid', query: 'carotid stenosis endarterectomy' },
@@ -209,7 +209,7 @@ describe('normalizeInterviewDraft — the model output is never trusted raw', ()
 
   it('trims and drops empties without reordering', () => {
     const draft = normalizeInterviewDraft(good)
-    expect(draft.name).toBe('Dr. Famularo')
+    expect(draft.name).toBe('Dr. Morgan')
     expect(draft.northStars).toEqual(['CLTI outcomes', 'carotid revascularization'])
     expect(draft.rubric.criteria).toBe('Prioritize practice-changing trials.')
     expect(draft.topics).toEqual(good.topics)
@@ -270,7 +270,7 @@ describe('normalizeInterviewDraft — the model output is never trusted raw', ()
 
 describe('mergeInterviewProfile — re-running the interview loses nothing', () => {
   const existing = {
-    name: 'Dr. Famularo',
+    name: 'Dr. Morgan',
     northStars: ['old star'],
     projects: ['old project'],
     topics: [{ label: 'Old', query: 'old query' }],
@@ -326,7 +326,7 @@ describe('mergeInterviewProfile — re-running the interview loses nothing', () 
 
   it('an undefined patch value is not an erasure', () => {
     const merged = mergeInterviewProfile(existing, { name: undefined, topics: undefined })
-    expect(merged.name).toBe('Dr. Famularo')
+    expect(merged.name).toBe('Dr. Morgan')
     expect(merged.topics).toEqual(existing.topics)
   })
 

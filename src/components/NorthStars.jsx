@@ -22,7 +22,7 @@ import RubricEditor from './RubricEditor.jsx'
 import TopicsEditor from './TopicsEditor.jsx'
 
 const STAR_SEED = ['CLTI outcomes', 'Carotid revascularization', 'AI in medicine']
-const PROJECT_SEED = ['Limb Preservation Program', 'COSMOS utilization study']
+const PROJECT_SEED = ['Limb Care Program', 'Vascular Outcomes Study']
 
 export default function NorthStars() {
   const [stars, setStars] = useState([])
@@ -179,7 +179,7 @@ export default function NorthStars() {
           items={projects}
           onAdd={addTo(setProjects, projects)}
           onRemove={removeFrom(setProjects, projects)}
-          placeholder="e.g. Limb Preservation Program"
+          placeholder="e.g. Limb Care Program"
           accent="violet"
         />
       </div>

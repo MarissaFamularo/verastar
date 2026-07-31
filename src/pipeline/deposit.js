@@ -33,7 +33,7 @@ export async function filePaper(paper) {
   const existing = nodes.filter((n) => n.kind === 'concept')
   const hubs = existing.filter((c) => c.isHub)
   // The reader's projects are banned as topic names — the Relevance line names them
-  // ("…informs your Limb Preservation Program") and the model would otherwise mint a
+  // ("…informs your Limb Care Program") and the model would otherwise mint a
   // topic that duplicates the map's yellow project star.
   const profile = await getProfile()
   const { concept, hub, domain, tags } = await analyzePaper({

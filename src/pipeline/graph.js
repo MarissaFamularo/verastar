@@ -355,7 +355,7 @@ const MATCH_STOPWORDS = [
 ]
 const STOP_STEMS = new Set(MATCH_STOPWORDS.map(stemToken))
 
-// Significant stems of a text: lowercase, parentheticals dropped (org garnish like "(COSMOS)",
+// Significant stems of a text: lowercase, parentheticals dropped (org garnish like "(ORBIT)",
 // not topic), punctuation split, stopwords and numbers out. Returns stem -> first original form,
 // so a rationale can name real words instead of stems.
 export function significantTokens(text) {
@@ -423,7 +423,7 @@ export function structuralSuggestions(nodes, edges) {
   }
 
   // 1b. keyword overlap — the mention path needs the anchor's core phrase verbatim, so
-  //     "Pop Artery Aneurysm (COSMOS)" never finds "Popliteal Artery Aneurysm"; this path
+  //     "Pop Artery Aneurysm (ORBIT)" never finds "Popliteal Artery Aneurysm"; this path
   //     fires on shared significant tokens instead (anchorMatch, label+desc vs the concept's
   //     text). Capped per anchor, best scores first, so a broad project can't spray the map.
   //     Same hub-only rule as mentions. Tagged origin 'keyword' so pass 2 can tell these

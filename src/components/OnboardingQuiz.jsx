@@ -35,7 +35,7 @@ const QUESTIONS = [
   {
     key: 'focus',
     label: 'Your specialty, and how the digest should address you',
-    placeholder: "e.g. I'm a vascular surgeon — call me Dr. Famularo.",
+    placeholder: "e.g. I'm a vascular surgeon — call me Dr. Morgan.",
   },
   {
     key: 'projects',
@@ -592,7 +592,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
           items={draft?.projects || []}
           onAdd={addTo('projects')}
           onRemove={removeFrom('projects')}
-          placeholder="e.g. Limb Preservation Program"
+          placeholder="e.g. Limb Care Program"
         />
 
         <RubricEditor

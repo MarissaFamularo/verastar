@@ -19,7 +19,7 @@ import {
 describe('ids', () => {
   it('anchor ids are kind-prefixed and case-normalized', () => {
     expect(anchorId('northStar', 'CLTI Outcomes')).toBe('ns:clti outcomes')
-    expect(anchorId('project', 'Limb Preservation Program')).toBe('proj:limb preservation program')
+    expect(anchorId('project', 'Limb Care Program')).toBe('proj:limb care program')
   })
 
   it('edge ids are undirected — (a,b) and (b,a) collapse', () => {
@@ -110,8 +110,8 @@ describe('anchor core-phrase matching', () => {
 
   it('coreAnchorPhrase strips generic effort-words from the ends', () => {
     expect(coreAnchorPhrase('Carotid Revascularization Initiative')).toBe('carotid revascularization')
-    expect(coreAnchorPhrase('COSMOS utilization study')).toBe('cosmos utilization')
-    expect(coreAnchorPhrase('Limb Preservation Program')).toBe('limb preservation')
+    expect(coreAnchorPhrase('ORBIT utilization study')).toBe('orbit utilization')
+    expect(coreAnchorPhrase('Limb Care Program')).toBe('limb care')
     expect(coreAnchorPhrase('Diabetic Foot')).toBe('diabetic foot') // nothing generic to strip
     expect(coreAnchorPhrase('Program')).toBe('program') // never strips down to nothing
   })
@@ -141,7 +141,7 @@ describe('anchorMatch (keyword auto-linking)', () => {
 
   it('links an abbreviated project title to its spelled-out concept', () => {
     // the whole point: the verbatim/core phrase never appears, the shared tokens do
-    const m = anchorMatch('Pop Artery Aneurysm (COSMOS)', concept('Popliteal Artery Aneurysm', 'popliteal artery aneurysm repair outcomes'))
+    const m = anchorMatch('Pop Artery Aneurysm (ORBIT)', concept('Popliteal Artery Aneurysm', 'popliteal artery aneurysm repair outcomes'))
     expect(m).toBeTruthy()
     expect(m.score).toBeGreaterThanOrEqual(2)
     expect(m.tokens).toContain('artery')
@@ -185,7 +185,7 @@ describe('structuralSuggestions keyword pass', () => {
   const concept = (name, text = name) => ({ id: conceptId(name), kind: 'concept', label: name, text, tags: [] })
 
   it('proposes a keyword edge with a rationale naming the shared tokens', () => {
-    const proj = projAnchor('Pop Artery Aneurysm (COSMOS)')
+    const proj = projAnchor('Pop Artery Aneurysm (ORBIT)')
     const c = concept('Popliteal Artery Aneurysm', 'popliteal artery aneurysm anticoagulation')
     const out = structuralSuggestions([proj, c], [])
     const e = out.find((o) => edgeId(o.source, o.target) === edgeId(c.id, proj.id))
@@ -193,11 +193,11 @@ describe('structuralSuggestions keyword pass', () => {
     expect(e.origin).toBe('keyword')
     expect(e.rationale).toContain('artery')
     expect(e.rationale).toContain('aneurysm')
-    expect(e.rationale).toContain('Pop Artery Aneurysm (COSMOS)')
+    expect(e.rationale).toContain('Pop Artery Aneurysm (ORBIT)')
   })
 
   it('matches through the anchor description, not only the label', () => {
-    const proj = projAnchor('COSMOS Chapter Two', 'Does anticoagulation reduce thrombosis after popliteal aneurysm repair?')
+    const proj = projAnchor('ORBIT Chapter Two', 'Does anticoagulation reduce thrombosis after popliteal aneurysm repair?')
     const c = concept('Popliteal Aneurysm Anticoagulation', 'anticoagulation strategy after popliteal aneurysm repair')
     const out = structuralSuggestions([proj, c], [])
     expect(out.some((o) => edgeId(o.source, o.target) === edgeId(c.id, proj.id))).toBe(true)
@@ -245,7 +245,7 @@ describe('PaperTrellis project stars', () => {
 
   it('node ids are stable — derived from the PT row id, not the title', () => {
     expect(trellisNodeId('abc-123')).toBe('proj:pt-abc-123')
-    const a = trellisAnchorNodes([], [pt('abc-123', 'Pop Artery Aneurysm (COSMOS)')])
+    const a = trellisAnchorNodes([], [pt('abc-123', 'Pop Artery Aneurysm (ORBIT)')])
     const b = trellisAnchorNodes(a.nodes, [pt('abc-123', 'Renamed Title')])
     expect(a.nodes[0].id).toBe(b.nodes[0].id)
     expect(b.nodes[0].label).toBe('Renamed Title') // renames flow through, same star
@@ -266,7 +266,7 @@ describe('PaperTrellis project stars', () => {
   })
 
   it('flags un-starred PT nodes as stale, never the manual project stars', () => {
-    const manual = { id: anchorId('project', 'Limb Preservation Program'), kind: 'project', label: 'Limb Preservation Program' }
+    const manual = { id: anchorId('project', 'Limb Care Program'), kind: 'project', label: 'Limb Care Program' }
     const kept = { id: trellisNodeId('u1'), kind: 'project', source: 'papertrellis', ptId: 'u1', addedAt: 't' }
     const gone = { id: trellisNodeId('u2'), kind: 'project', source: 'papertrellis', ptId: 'u2', addedAt: 't' }
     const { nodes, staleIds } = trellisAnchorNodes([manual, kept, gone], [pt('u1', 'Kept Project')])

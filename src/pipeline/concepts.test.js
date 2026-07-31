@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { sanitizeFiling, domainGuidance, categoryGuidance, OTHER_LABEL } from './concepts.js'
 
-const PROJECTS = ['Limb Preservation Program', 'COSMOS utilization study']
+const PROJECTS = ['Limb Care Program', 'ORBIT utilization study']
 
 describe('sanitizeFiling', () => {
   it('passes a clean filing through untouched', () => {
@@ -19,12 +19,12 @@ describe('sanitizeFiling', () => {
 
   it('a project-named hub collapses onto the concept', () => {
     expect(
-      sanitizeFiling({ concept: 'Minor-to-Major Amputation Progression', hub: 'Limb Preservation Program' }, PROJECTS),
+      sanitizeFiling({ concept: 'Minor-to-Major Amputation Progression', hub: 'Limb Care Program' }, PROJECTS),
     ).toEqual({ concept: 'Minor-to-Major Amputation Progression', hub: 'Minor-to-Major Amputation Progression' })
   })
 
   it('a project-named concept files directly under its hub', () => {
-    expect(sanitizeFiling({ concept: 'Limb Preservation Program', hub: 'CLTI Management' }, PROJECTS)).toEqual({
+    expect(sanitizeFiling({ concept: 'Limb Care Program', hub: 'CLTI Management' }, PROJECTS)).toEqual({
       concept: 'CLTI Management',
       hub: 'CLTI Management',
     })
@@ -32,12 +32,12 @@ describe('sanitizeFiling', () => {
 
   it('both banned falls back to Uncategorized', () => {
     expect(
-      sanitizeFiling({ concept: 'COSMOS utilization study', hub: 'Limb Preservation Program' }, PROJECTS),
+      sanitizeFiling({ concept: 'ORBIT utilization study', hub: 'Limb Care Program' }, PROJECTS),
     ).toEqual({ concept: 'Uncategorized', hub: 'Uncategorized' })
   })
 
   it('matches case- and whitespace-insensitively', () => {
-    expect(sanitizeFiling({ concept: '  limb preservation program ', hub: 'CLTI Management' }, PROJECTS)).toEqual({
+    expect(sanitizeFiling({ concept: '  limb care program ', hub: 'CLTI Management' }, PROJECTS)).toEqual({
       concept: 'CLTI Management',
       hub: 'CLTI Management',
     })

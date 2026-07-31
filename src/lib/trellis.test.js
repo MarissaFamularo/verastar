@@ -15,7 +15,7 @@ import {
 
 const row = (fields) => ({
   id: 'p1',
-  title: 'Pop Artery Aneurysm (COSMOS)',
+  title: 'Pop Artery Aneurysm (ORBIT)',
   description: '',
   deadline_at: null,
   updated_at: '2026-07-20T00:00:00Z',
@@ -25,22 +25,22 @@ const row = (fields) => ({
 
 describe('trellisProjectLine — one prompt-ready string', () => {
   it('title + stage only when description is empty and no deadline', () => {
-    expect(trellisProjectLine(row())).toBe('Pop Artery Aneurysm (COSMOS) (Writing)')
+    expect(trellisProjectLine(row())).toBe('Pop Artery Aneurysm (ORBIT) (Writing)')
   })
 
   it('appends the description after an em dash', () => {
     expect(trellisProjectLine(row({ description: 'Does anticoagulation decrease risk of ALI?' }))).toBe(
-      'Pop Artery Aneurysm (COSMOS) (Writing) — Does anticoagulation decrease risk of ALI?',
+      'Pop Artery Aneurysm (ORBIT) (Writing) — Does anticoagulation decrease risk of ALI?',
     )
   })
 
   it('whitespace-only description counts as empty', () => {
-    expect(trellisProjectLine(row({ description: '   ' }))).toBe('Pop Artery Aneurysm (COSMOS) (Writing)')
+    expect(trellisProjectLine(row({ description: '   ' }))).toBe('Pop Artery Aneurysm (ORBIT) (Writing)')
   })
 
   it('adds the due date between stage and description', () => {
     expect(trellisProjectLine(row({ deadline_at: '2026-08-01', description: 'Aim 2 draft.' }))).toBe(
-      'Pop Artery Aneurysm (COSMOS) (Writing), due 2026-08-01 — Aim 2 draft.',
+      'Pop Artery Aneurysm (ORBIT) (Writing), due 2026-08-01 — Aim 2 draft.',
     )
   })
 
@@ -99,7 +99,7 @@ describe('trellisProjectLines — cache to prompt lines', () => {
   it('maps cached rows through trellisProjectLine', () => {
     const cache = { projects: [row(), row({ id: 'p2', title: 'CLTI Registry', stage: { name: 'Analysis', position: 5 } })], syncedAt: 'x' }
     expect(trellisProjectLines(cache)).toEqual([
-      'Pop Artery Aneurysm (COSMOS) (Writing)',
+      'Pop Artery Aneurysm (ORBIT) (Writing)',
       'CLTI Registry (Analysis)',
     ])
   })
@@ -112,23 +112,23 @@ describe('trellisProjectLines — cache to prompt lines', () => {
 
 describe('mergedProjects — the shape the digest call sites pass on', () => {
   it('manual Active Work strings first, synced lines after', () => {
-    const profile = { projects: ['Limb Preservation Program'] }
+    const profile = { projects: ['Limb Care Program'] }
     const cache = { projects: [row()], syncedAt: 'x' }
     expect(mergedProjects(profile, cache)).toEqual([
-      'Limb Preservation Program',
-      'Pop Artery Aneurysm (COSMOS) (Writing)',
+      'Limb Care Program',
+      'Pop Artery Aneurysm (ORBIT) (Writing)',
     ])
   })
 
   it('signed out / never synced: exactly the old manual list', () => {
-    const profile = { projects: ['LPP', 'COSMOS'] }
-    expect(mergedProjects(profile, { projects: [], syncedAt: null })).toEqual(['LPP', 'COSMOS'])
+    const profile = { projects: ['LCP', 'ORBIT'] }
+    expect(mergedProjects(profile, { projects: [], syncedAt: null })).toEqual(['LCP', 'ORBIT'])
   })
 
   it('no profile at all still yields an array', () => {
     expect(mergedProjects(null, { projects: [], syncedAt: null })).toEqual([])
     expect(mergedProjects(undefined, { projects: [row()], syncedAt: 'x' })).toEqual([
-      'Pop Artery Aneurysm (COSMOS) (Writing)',
+      'Pop Artery Aneurysm (ORBIT) (Writing)',
     ])
   })
 })
@@ -147,10 +147,10 @@ describe('the star — consideredProjects and the exclusion-aware merge', () => 
   })
 
   it('mergedProjects never feeds an un-starred project to the prompt', () => {
-    const profile = { projects: ['Limb Preservation Program'] }
+    const profile = { projects: ['Limb Care Program'] }
     expect(mergedProjects(profile, { projects: two }, new Set(['p2']))).toEqual([
-      'Limb Preservation Program',
-      'Pop Artery Aneurysm (COSMOS) (Writing)',
+      'Limb Care Program',
+      'Pop Artery Aneurysm (ORBIT) (Writing)',
     ])
   })
 

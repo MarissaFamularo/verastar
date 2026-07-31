@@ -91,7 +91,7 @@ const analyzeSystem = (domains, projects, categories = []) => `You file papers i
 - tags: 3–6 SHORT lowercase topic tags (conditions, endpoints, techniques, methods) the clinician would search by. Tags carry the finest angle; the concept is specific and the hub is broad.${projectBan(projects)}`
 
 // The reader's own projects leak into filing via the paper's Relevance line ("…informs your
-// Limb Preservation Program") — the model then mints a topic named after the project, which
+// Limb Care Program") — the model then mints a topic named after the project, which
 // duplicates the map's yellow project star as a red concept star. Ban them explicitly.
 const projectBan = (projects) =>
   projects?.length

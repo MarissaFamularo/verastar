@@ -30,7 +30,7 @@ export const CONNECT_SCHEMA = {
   },
 }
 
-const SYSTEM = `You help a clinician-researcher grow a personal knowledge graph. You are given ONE new paper and a list of existing nodes in their graph — their north stars (recurring concepts), their active projects, and other papers they've saved. Propose which existing nodes this paper meaningfully connects to, and give a SHORT reason for each (one clause, plain language, e.g. "reports the amputation-free survival endpoint your Limb Preservation Program tracks").
+const SYSTEM = `You help a clinician-researcher grow a personal knowledge graph. You are given ONE new paper and a list of existing nodes in their graph — their north stars (recurring concepts), their active projects, and other papers they've saved. Propose which existing nodes this paper meaningfully connects to, and give a SHORT reason for each (one clause, plain language, e.g. "reports the amputation-free survival endpoint your Limb Care Program tracks").
 
 Rules:
 - Only propose connections you can justify from the paper's own content. This is a SUGGESTION the clinician will confirm or reject — never state it as established fact, and don't force links that aren't there.

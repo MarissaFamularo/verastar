@@ -33,7 +33,7 @@ keep up with the daily literature by hand. Verastar gives them the loop: **curre
 (daily digest) · **organized** (projects) · **connected** (graph edges) — and makes
 every surfaced number **click-traceable to its exact source, or flagged when it can't
 be verified.** **Named user: a practicing vascular-surgery / CLTI / AI-in-medicine
-clinician — real, not hypothetical.** Demo driver: **Dr. Famularo** (the real named user =
+clinician — real, not hypothetical.** Demo driver: **Dr. Morgan** (a fictional sample user =
 the builder), whose profile the onboarding interview drafts live so the demo starts from a
 truly empty app; a one-click "Skip" seeds her profile with no API call.
 
@@ -47,7 +47,7 @@ digests) hangs off this. Spec: [VERIFICATION_SPEC.md](VERIFICATION_SPEC.md).
 2. `verified-against-registry` requires the value to match the CT.gov posted outcome.
 3. Live-swing entry = DOI→PMID→PMCID with a CrossRef fallback; worst case flags.
 4. **Local-first / IndexedDB**, behind a `store.js` interface (Supabase is a P2 swap).
-5. Onboarding interview drafts the rubric, with a hardcoded Dr. Famularo rubric fallback.
+5. Onboarding interview drafts the rubric, with a hardcoded fictional rubric fallback.
 6. Never-cut / cut-order lists below.
 
 ## Scope
@@ -88,9 +88,9 @@ src/
   *Done when:* clicking BASIL-3's HR scrolls to + highlights the exact sentence, and an
   unverifiable value renders greyed/flagged instead of asserted.
 - **Setup interview + rubric + live re-rank.** Interview drafts the rubric (fallback:
-  hardcoded Dr. Famularo); `triage.js` ranks candidates in one call; editing the rubric
+  hardcoded fictional profile); `triage.js` ranks candidates in one call; editing the rubric
   re-ranks live via prompt cache.
-  *Done when:* a fresh run builds Dr. Famularo's rubric and editing it visibly re-orders papers.
+  *Done when:* a fresh run builds the sample clinician's rubric and editing it visibly re-orders papers.
 - **Graph + projects + connection card.** `react-force-graph`; "save to graph" writes a
   paper node + project edge; per-project relevance renders a connection card.
   *Done when:* a digest card's "Connects to [project]" click adds a wired node.

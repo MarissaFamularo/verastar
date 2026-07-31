@@ -24,7 +24,7 @@ const paper = (over = {}) => ({
   citation: 'Smith J · JVS · 2025',
   tier: 'verified-full-text',
   finding: 'Drug-coated devices reduced reintervention.',
-  relevance: 'Feeds the Limb Preservation Program.',
+  relevance: 'Feeds the Limb Care Program.',
   quantities: [{ name: 'Amputation-free survival', value: 84, unit: '%', tier: 'verified-full-text' }],
   pdfUrl: null,
   domain: 'vascular',
@@ -214,7 +214,7 @@ describe('connectionsEntryMd', () => {
   const weekend = {
     opener: 'A limb-preservation thread emerged.',
     threads: [
-      { anchor: 'Limb Preservation Program', pmids: ['111', '999'], narrative: 'They converge on durability.' },
+      { anchor: 'Limb Care Program', pmids: ['111', '999'], narrative: 'They converge on durability.' },
     ],
     gaps: ['Nothing touched carotid.'],
   }
@@ -223,7 +223,7 @@ describe('connectionsEntryMd', () => {
   it('resolves known pmids via the lookup and drops unknown ones', () => {
     const md = connectionsEntryMd('2026-07-09', weekend, lookup)
     expect(md).toContain('## Week of 2026-07-09')
-    expect(md).toContain('### Limb Preservation Program')
+    expect(md).toContain('### Limb Care Program')
     expect(md).toContain('BASIL-3')
     expect(md).toContain('https://pubmed.ncbi.nlm.nih.gov/111/')
     expect(md).not.toContain('/999/') // unknown pmid dropped gracefully
@@ -240,8 +240,8 @@ describe('connectionsEntryMd', () => {
 
 describe('readmeMd', () => {
   it('shows live counts and does NOT contain "second brain"', () => {
-    const md = readmeMd({ profileName: 'Dr. Famularo', counts: { sources: 12, concepts: 4 } })
-    expect(md).toContain("Dr. Famularo's evidence library")
+    const md = readmeMd({ profileName: 'Dr. Morgan', counts: { sources: 12, concepts: 4 } })
+    expect(md).toContain("Dr. Morgan's evidence library")
     expect(md).toContain('**12** sources')
     expect(md).toContain('**4** concepts')
     expect(md.toLowerCase()).not.toContain('second brain')

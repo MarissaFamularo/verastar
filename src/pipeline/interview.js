@@ -130,7 +130,7 @@ export const PROFILE_INTERVIEW_SCHEMA = {
 // she documented: an over-specified query that MeSH expansion turns into zero results.
 export const DRAFT_SYSTEM = `You are turning an interview with a clinician-researcher into the steering profile for their morning literature digest. Return JSON only.
 
-- name: how the digest should address them (e.g. "Dr. Famularo"). If they never said, use "Doctor".
+- name: how the digest should address them (e.g. "Dr. Morgan"). If they never said, use "Doctor".
 - northStars: 3–6 SHORT concept phrases (2–4 words) naming what they steer by, e.g. "CLTI outcomes", "carotid revascularization". These feed the rubric's relevance line, NOT the search.
 - projects: 1–4 short names of the concrete efforts they are driving (programs, studies, initiatives). Empty array if none were mentioned.
 - topics: ${MIN_TOPICS}–${MAX_TOPICS} rows, each { label, query }. This is the search plan and it is the most important field. One row per area they want watched — a busy area and a quiet one must never share a row, because each row gets its own PubMed search and its own cap.

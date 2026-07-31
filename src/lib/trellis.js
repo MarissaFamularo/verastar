@@ -36,7 +36,7 @@ function truncateDescription(text) {
 // One prompt-ready string per project — this is what the scorer and triage prompt see,
 // alongside the manual Active Work strings, so it has to read like one of those:
 // title, stage in parens, optional due date, optional trimmed description.
-// e.g. `Pop Artery Aneurysm (COSMOS) (Writing), due 2026-08-01 — Does anticoagulation…`
+// e.g. `Pop Artery Aneurysm (ORBIT) (Writing), due 2026-08-01 — Does anticoagulation…`
 export function trellisProjectLine(p) {
   let line = `${p.title} (${p.stage?.name ?? 'Unknown stage'})`
   // deadline_at is a date column; slice guards against a timestamp sneaking through.

@@ -20,7 +20,7 @@ describe('shapeWeekendRead', () => {
   it('keeps only pmids that map to a real saved paper', () => {
     const raw = {
       opener: 'Some emerged.',
-      threads: [{ anchor: 'Limb Preservation Program', pmids: ['111', '999', '222'], narrative: 'They converge.' }],
+      threads: [{ anchor: 'Limb Care Program', pmids: ['111', '999', '222'], narrative: 'They converge.' }],
       gaps: [],
     }
     const out = shapeWeekendRead(raw, { papers })
@@ -88,10 +88,10 @@ describe('buildWeekendContent', () => {
     const content = buildWeekendContent({
       papers: [paper('111', { title: 'BASIL-3', finding: 'Drug-coated devices helped.', tags: ['clti', 'bypass'] })],
       northStars: ['Carotid revascularization'],
-      projects: ['Limb Preservation Program'],
+      projects: ['Limb Care Program'],
     })
     expect(content).toContain('Carotid revascularization')
-    expect(content).toContain('Limb Preservation Program')
+    expect(content).toContain('Limb Care Program')
     expect(content).toContain('[111] BASIL-3')
     expect(content).toContain('Drug-coated devices helped.')
     expect(content).toContain('clti, bypass')
