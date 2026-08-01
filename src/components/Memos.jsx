@@ -5,10 +5,11 @@
 // the save path below also writes immediately when this device has the folder connected.
 
 import { useEffect, useState } from 'react'
-import { store } from '../lib/store.js'
+import { getProfile, saveProfile, store } from '../lib/store.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 import { writeMemoToLibrary } from '../lib/library.js'
+import { addMemoLabel, attachMemoToPaper, memoLabel } from '../lib/memoContext.js'
 
 // Newest first by last-touched moment — an edited memo surfaces back to the top.
 function sortMemos(list) {
@@ -26,17 +27,24 @@ function dayLabel(iso) {
   return d.toLocaleDateString('en-US', opts)
 }
 
-export default function Memos() {
+export default function Memos({ onContextChange }) {
   const [memos, setMemos] = useState([])
+  const [papers, setPapers] = useState([])
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editText, setEditText] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [contextId, setContextId] = useState(null)
+  const [contextLabel, setContextLabel] = useState('')
+  const [paperId, setPaperId] = useState('')
+  const [contextStatus, setContextStatus] = useState('')
 
   async function refresh() {
-    setMemos(sortMemos(await store.all('memos')))
+    const [nextMemos, nextPapers] = await Promise.all([store.all('memos'), store.all('papers')])
+    setMemos(sortMemos(nextMemos))
+    setPapers([...(nextPapers || [])].sort((a, b) => (a.title || '').localeCompare(b.title || '')))
   }
 
   useEffect(() => {
@@ -93,6 +101,35 @@ export default function Memos() {
     await store.delete('memos', id)
     setMemos((prev) => prev.filter((m) => m.id !== id))
     setConfirmDeleteId(null)
+  }
+
+  function openContext(memo) {
+    const opening = contextId !== memo.id
+    setContextId(opening ? memo.id : null)
+    setContextLabel(opening ? memoLabel(memo) : '')
+    setPaperId('')
+    setContextStatus('')
+  }
+
+  async function addToProfile(field) {
+    const current = await getProfile()
+    const { profile, added } = addMemoLabel(current, field, contextLabel)
+    if (added) {
+      await saveProfile(profile)
+      onContextChange?.()
+    }
+    const noun = field === 'projects' ? 'project' : 'north star'
+    setContextStatus(added ? `Added as a ${noun}.` : `Already in your ${noun}s.`)
+  }
+
+  async function attachToPaper(memo) {
+    const current = await store.get('papers', paperId)
+    const { paper, added } = attachMemoToPaper(current, memo)
+    if (added) {
+      await store.put('papers', paper.id, paper)
+      setPapers((prev) => prev.map((p) => (p.id === paper.id ? paper : p)))
+    }
+    setContextStatus(added ? 'Attached to the paper.' : 'Already attached to that paper.')
   }
 
   const inputStyle = {
@@ -175,6 +212,7 @@ export default function Memos() {
                   ) : (
                     <>
                       <button onClick={() => startEdit(memo)} className="cursor-pointer" style={{ border: 0, background: 'transparent', padding: 0, color: 'var(--color-fg-muted)', fontFamily: 'inherit', fontSize: 12 }}>Edit</button>
+                      <button onClick={() => openContext(memo)} aria-expanded={contextId === memo.id} className="cursor-pointer" style={{ border: 0, background: 'transparent', padding: 0, color: contextId === memo.id ? 'var(--color-accent)' : 'var(--color-fg-muted)', fontFamily: 'inherit', fontSize: 12 }}>Use in context</button>
                       <button onClick={() => setConfirmDeleteId(memo.id)} className="cursor-pointer" style={{ border: 0, background: 'transparent', padding: 0, color: 'var(--color-fg-muted)', fontFamily: 'inherit', fontSize: 12 }}>Delete</button>
                     </>
                   )}
@@ -190,9 +228,39 @@ export default function Memos() {
                 </div>
               </div>
             ) : (
-              <p style={{ margin: '9px 0 0', fontFamily: 'var(--font-serif)', fontSize: 15.5, lineHeight: 1.6, color: 'var(--color-fg-soft)', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
-                {memo.text}
-              </p>
+              <>
+                <p style={{ margin: '9px 0 0', fontFamily: 'var(--font-serif)', fontSize: 15.5, lineHeight: 1.6, color: 'var(--color-fg-soft)', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
+                  {memo.text}
+                </p>
+                {contextId === memo.id && (
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--hairline)' }}>
+                    <p style={{ margin: 0, fontSize: 10.5, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Feed your context</p>
+                    <input
+                      value={contextLabel}
+                      onChange={(e) => { setContextLabel(e.target.value); setContextStatus('') }}
+                      aria-label="Project or north star label"
+                      style={{ width: '100%', boxSizing: 'border-box', marginTop: 9, padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
+                    />
+                    <div className="flex flex-wrap" style={{ marginTop: 8, gap: 8 }}>
+                      <button onClick={() => addToProfile('projects')} disabled={!contextLabel.trim()} className="cursor-pointer" style={{ ...smallBtn(false), opacity: contextLabel.trim() ? 1 : 0.45 }}>Make this a project</button>
+                      <button onClick={() => addToProfile('northStars')} disabled={!contextLabel.trim()} className="cursor-pointer" style={{ ...smallBtn(false), opacity: contextLabel.trim() ? 1 : 0.45 }}>Add as a north star</button>
+                    </div>
+                    <div className="flex items-center flex-wrap" style={{ marginTop: 10, gap: 8 }}>
+                      <select
+                        value={paperId}
+                        onChange={(e) => { setPaperId(e.target.value); setContextStatus('') }}
+                        aria-label="Paper to attach memo to"
+                        style={{ flex: '1 1 240px', minWidth: 0, padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 12.5, fontFamily: 'inherit' }}
+                      >
+                        <option value="">{papers.length ? 'Choose a saved paper…' : 'No saved papers yet'}</option>
+                        {papers.map((paper) => <option key={paper.id} value={paper.id}>{paper.title || 'Untitled paper'}</option>)}
+                      </select>
+                      <button onClick={() => attachToPaper(memo)} disabled={!paperId} className="cursor-pointer" style={{ ...smallBtn(false), opacity: paperId ? 1 : 0.45 }}>Attach to paper</button>
+                    </div>
+                    {contextStatus && <p role="status" style={{ margin: '9px 0 0', fontSize: 11.5, color: 'var(--color-accent)' }}>{contextStatus}</p>}
+                  </div>
+                )}
+              </>
             )}
           </div>
         ))}

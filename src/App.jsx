@@ -1024,7 +1024,7 @@ export default function App() {
           {view === 'library' && <KnowledgeBase key="library" />}
           {view === 'starmap' && (isMobile ? <StarMapSmallSky key="starmap" /> : <ConstellationView key="starmap" />)}
           {view === 'connections' && <WeekendRead key="connections" />}
-          {view === 'memos' && <Memos key="memos" />}
+          {view === 'memos' && <Memos key="memos" onContextChange={() => getProfile().then((p) => setProfile(p || null))} />}
         </main>
       )}
 
