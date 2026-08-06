@@ -179,6 +179,14 @@ function scoreChip(score) {
   return { bg: 'rgba(255,255,255,.05)', color: 'var(--color-fg-muted)' }
 }
 
+// The funnel's number follows the best evidence currently available. Before a paper is
+// read, that is the title/abstract screen. Once it has been read, show the post-read fit
+// score instead; falling back keeps an interrupted pre-summary run from showing a blank.
+export function candidateDisplayScore(candidate, processedIds, triaged) {
+  const readScore = processedIds?.has(candidate?.id) ? Number(triaged?.[candidate?.id]?.score) : NaN
+  return Number.isFinite(readScore) ? readScore : candidate?.score
+}
+
 // The selection funnel surface: the wide candidate pool ranked by rubric fit, with the top
 // N pre-checked. The clinician confirms/adjusts the selection, then runs the digest on only
 // those — mirroring the ~50-candidates → ~10-kept step of a hand-run morning review. Once a
@@ -190,6 +198,7 @@ function CandidatePool({
   selectedIds,
   digestedIds,
   processedIds,
+  triaged,
   open,
   onToggleOpen,
   onToggle,
@@ -253,7 +262,8 @@ function CandidatePool({
             const cached = processedIds.has(c.id) && !inDigest
             const picked = inDigest || selectedIds.has(c.id)
             const types = (c.pubtypes || []).filter((t) => t && t !== 'Journal Article').join(' · ')
-            const sc = scoreChip(c.score)
+            const displayedScore = candidateDisplayScore(c, processedIds, triaged)
+            const sc = scoreChip(displayedScore)
             return (
               <li
                 key={c.id}
@@ -277,8 +287,12 @@ function CandidatePool({
                     style={{ width: 16, height: 16, accentColor: inDigest ? '#7fbf9a' : '#ef8f5b' }}
                   />
                 </label>
-                <span className="shrink-0" style={{ marginTop: 2, borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', background: sc.bg, color: sc.color }}>
-                  {c.score}
+                <span
+                  className="shrink-0"
+                  title={processedIds.has(c.id) && triaged?.[c.id] ? 'Fit score after reading' : 'Pre-read fit score'}
+                  style={{ marginTop: 2, borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', background: sc.bg, color: sc.color }}
+                >
+                  {displayedScore}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p style={{ margin: 0, fontSize: 13.5, fontWeight: 500, lineHeight: 1.35, color: 'var(--color-fg-soft)' }}>
@@ -987,11 +1001,16 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     setSearchNote('')
     setEmptyWindow(null)
     setCandidates([])
-    if (!keySet) {
+    // The read-only sample profile is the first screen a keyless visitor sees. Keep its
+    // proof deterministic and zero-spend even if this browser happens to retain an old
+    // key from another profile/session.
+    if (demo || !keySet) {
       setResults(KEYLESS_PROOF.results)
       setProcessedResults(KEYLESS_PROOF.results)
       setTriaged(KEYLESS_PROOF.triaged)
-      setScanNote('Zero-spend sample proof shown. Add a key to re-fetch and re-verify these three public trials live.')
+      setScanNote(demo
+        ? 'Zero-spend verifier proof shown on three public reference trials.'
+        : 'Zero-spend sample proof shown. Add a key to re-fetch and re-verify these three public trials live.')
       return
     }
     wakeLock.start()
@@ -1032,19 +1051,22 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     <section>
       {/* Run controls — the big centered primary action, with the deterministic proof
           surface as a small secondary beneath it. */}
-      {demo ? (
+      {demo && (
         <div style={{ padding: '15px 17px', borderRadius: 13, border: '1px solid rgba(143,189,230,.18)', background: 'rgba(143,189,230,.07)', color: 'var(--color-registry)', fontSize: 13.5, lineHeight: 1.55 }}>
           <span style={{ fontWeight: 600 }}>Sample digest · read only.</span> These public papers show what a populated morning looks like. This view does not read from or write to your profile, saved library, or digest history.
         </div>
-      ) : <div className="flex flex-col items-center" style={{ gap: 12, marginTop: 6 }}>
-        <button
-          onClick={() => startScan()}
-          disabled={!keySet || busy}
-          className="cursor-pointer"
-          style={{ padding: '14px 34px', borderRadius: 13, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15.5, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -10px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }}
-        >
-          {primaryLabel}
-        </button>
+      )}
+      <div className="flex flex-col items-center" style={{ gap: 12, marginTop: demo ? 12 : 6 }}>
+        {!demo && (
+          <button
+            onClick={() => startScan()}
+            disabled={!keySet || busy}
+            className="cursor-pointer"
+            style={{ padding: '14px 34px', borderRadius: 13, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15.5, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -10px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }}
+          >
+            {primaryLabel}
+          </button>
+        )}
         <button
           onClick={runShowcase}
           disabled={busy}
@@ -1054,7 +1076,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         >
           Verifier proof
         </button>
-      </div>}
+      </div>
 
       {/* "Today's scan" section rule. */}
       <div className="flex items-center" style={{ gap: 14, margin: '30px 0 4px' }}>
@@ -1137,6 +1159,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           selectedIds={selectedIds}
           digestedIds={digestedIds}
           processedIds={processedIds}
+          triaged={triaged}
           open={poolOpen}
           onToggleOpen={() => setPoolOpen((o) => !o)}
           onToggle={toggleCandidate}
