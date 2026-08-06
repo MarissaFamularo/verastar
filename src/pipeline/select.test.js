@@ -2,19 +2,172 @@
 // Locks the two things that make a thin day honest: nothing below the bar is ever
 // padded in, and zero papers is a reportable outcome rather than a failure.
 
-import { describe, it, expect } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { extractStructured } from '../lib/anthropic.js'
+import { fetchAbstractsByPmid } from './sources.js'
 import {
   applyScoreFloor,
+  applyPostReadFloor,
   normalizeScoreFloor,
+  preReadFloor,
   floorSummary,
   readFitLabel,
   belowFloorNote,
   DEFAULT_SCORE_FLOOR,
+  PRE_READ_MARGIN,
   SCALE,
+  SELECTION_SCHEMA,
+  SELECTION_BATCH_SIZE,
+  SELECTION_PARSE_ATTEMPTS,
+  selectCandidates,
 } from './select.js'
+
+vi.mock('../lib/anthropic.js', () => ({
+  extractStructured: vi.fn(),
+  MODELS: { triage: 'test-triage' },
+}))
+
+vi.mock('./sources.js', () => ({
+  fetchAbstractsByPmid: vi.fn(),
+}))
 
 // Scored pools always arrive sorted highest-first from selectCandidates.
 const pool = (...scores) => scores.map((score, i) => ({ id: `p${i}`, score }))
+
+const candidates = (count) =>
+  Array.from({ length: count }, (_, i) => ({
+    id: String(i + 1),
+    pmid: String(i + 1),
+    title: `Paper ${i + 1}`,
+    journal: 'Test Journal',
+    year: '2026',
+    pubtypes: ['Journal Article'],
+  }))
+
+describe('preReadFloor', () => {
+  it('treats the margin as score uncertainty: score + 20 must reach the final bar', () => {
+    expect(PRE_READ_MARGIN).toBe(20)
+    expect(preReadFloor(70)).toBe(50)
+    expect(preReadFloor(55)).toBe(35)
+    expect(preReadFloor(10)).toBe(0)
+  })
+})
+
+describe('applyPostReadFloor', () => {
+  it('excludes successful papers whose after-reading score is below the bar', () => {
+    const results = [
+      { paper: { id: 'high' } },
+      { paper: { id: 'low' } },
+      { paper: { id: 'failed' }, error: 'fetch failed' },
+      { paper: { id: 'retracted' }, error: 'retracted', retracted: true },
+    ]
+    const out = applyPostReadFloor(results, { high: { score: 92 }, low: { score: 12 } }, 55)
+    expect(out).toMatchObject({ cleared: 1, excluded: 1, total: 2, floor: 55 })
+    expect(out.kept.map((r) => r.paper.id)).toEqual(['high', 'failed'])
+  })
+
+  it('returns an empty digest when every read paper misses the bar', () => {
+    const out = applyPostReadFloor([{ paper: { id: 'p' } }], { p: { score: 54 } }, 55)
+    expect(out.kept).toEqual([])
+    expect(out.cleared).toBe(0)
+  })
+})
+
+describe('selectCandidates', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fetchAbstractsByPmid.mockResolvedValue({})
+  })
+
+  it('keeps the structured response compact: id and score only', () => {
+    const item = SELECTION_SCHEMA.properties.selections.items
+    expect(item.required).toEqual(['id', 'score'])
+    expect(Object.keys(item.properties)).toEqual(['id', 'score'])
+    expect(item.additionalProperties).toBe(false)
+  })
+
+  it('fetches abstracts in one attributed batch and includes them with the right candidates', async () => {
+    fetchAbstractsByPmid.mockResolvedValue({
+      1: 'A randomized trial found improved limb outcomes.',
+      2: 'A small descriptive imaging series.',
+    })
+    extractStructured.mockResolvedValue({ selections: [{ id: '1', score: 82 }, { id: '2', score: 24 }] })
+
+    const result = await selectCandidates({ candidates: candidates(2), rubric: 'Prioritize limb outcomes.' })
+
+    expect(fetchAbstractsByPmid).toHaveBeenCalledWith(['1', '2'])
+    const prompt = extractStructured.mock.calls[0][0].content
+    expect(prompt).toContain('[1] Paper 1')
+    expect(prompt).toContain('Abstract: A randomized trial found improved limb outcomes.')
+    expect(prompt.indexOf('improved limb outcomes')).toBeLessThan(prompt.indexOf('[2] Paper 2'))
+    expect(result.map(({ id, score }) => ({ id, score }))).toEqual([{ id: '1', score: 82 }, { id: '2', score: 24 }])
+  })
+
+  it('uses an already attached abstract without refetching that PMID', async () => {
+    const pool = candidates(2)
+    pool[0].abstract = 'Already cached evidence.'
+    extractStructured.mockResolvedValue({ selections: pool.map((c) => ({ id: c.id, score: 50 })) })
+
+    await selectCandidates({ candidates: pool })
+
+    expect(fetchAbstractsByPmid).toHaveBeenCalledWith(['2'])
+    expect(extractStructured.mock.calls[0][0].content).toContain('Abstract: Already cached evidence.')
+  })
+
+  it(`batches pools at ${SELECTION_BATCH_SIZE} and merges ties in original pool order`, async () => {
+    const pool = candidates(SELECTION_BATCH_SIZE * 2 + 5)
+    extractStructured.mockImplementation(async ({ content }) => {
+      const ids = [...content.matchAll(/^\[(\d+)\]/gm)].map((match) => match[1])
+      return { selections: [...ids].reverse().map((id) => ({ id, score: id === '65' ? 99 : 50 })) }
+    })
+
+    const result = await selectCandidates({ candidates: pool })
+
+    expect(extractStructured).toHaveBeenCalledTimes(3)
+    expect(extractStructured.mock.calls.map(([args]) => [...args.content.matchAll(/^\[(\d+)\]/gm)].length)).toEqual([30, 30, 5])
+    expect(result[0].id).toBe('65')
+    expect(result.slice(1).map((c) => c.id)).toEqual(pool.slice(0, -1).map((c) => c.id))
+  })
+
+  it(`retries malformed/truncated structured output at most ${SELECTION_PARSE_ATTEMPTS} times`, async () => {
+    extractStructured
+      .mockRejectedValueOnce(new SyntaxError('Unexpected end of JSON input'))
+      .mockResolvedValueOnce({ selections: [{ id: '1', score: 77 }] })
+
+    await expect(selectCandidates({ candidates: candidates(1) })).resolves.toMatchObject([{ id: '1', score: 77 }])
+    expect(extractStructured).toHaveBeenCalledTimes(2)
+  })
+
+  it('replaces raw parse failures with a friendly bounded error', async () => {
+    extractStructured.mockRejectedValue(new SyntaxError('Unexpected token } in JSON at position 14'))
+
+    await expect(selectCandidates({ candidates: candidates(1) })).rejects.toThrow(
+      "We couldn't finish scoring these papers. Please try again.",
+    )
+    expect(extractStructured).toHaveBeenCalledTimes(SELECTION_PARSE_ATTEMPTS)
+  })
+
+  it('does not retry non-parse API failures and still returns a friendly error', async () => {
+    extractStructured.mockRejectedValue(new Error('401 raw provider detail'))
+
+    await expect(selectCandidates({ candidates: candidates(1) })).rejects.toThrow(
+      "We couldn't finish scoring these papers. Please try again.",
+    )
+    expect(extractStructured).toHaveBeenCalledTimes(1)
+  })
+
+  it('assigns missing ids zero and clamps invalid model scores to the public 0–100 range', async () => {
+    extractStructured.mockResolvedValue({ selections: [{ id: '1', score: 140 }, { id: '2', score: -4 }] })
+
+    const result = await selectCandidates({ candidates: candidates(3) })
+
+    expect(result.map(({ id, score }) => ({ id, score }))).toEqual([
+      { id: '1', score: 100 },
+      { id: '2', score: 0 },
+      { id: '3', score: 0 },
+    ])
+  })
+})
 
 // The floor is only meaningful if the scale it filters on has fixed meanings. Measured
 // against a real 68-paper pool, an un-anchored prompt put 35 papers at 0–8 and left the
@@ -49,7 +202,7 @@ describe('normalizeScoreFloor', () => {
     expect(normalizeScoreFloor(59.6)).toBe(60)
   })
 
-  it('falls back to 60 for a profile that predates the field', () => {
+  it('falls back to the current default for a profile that predates the field', () => {
     expect(normalizeScoreFloor(undefined)).toBe(DEFAULT_SCORE_FLOOR)
     expect(normalizeScoreFloor(null)).toBe(DEFAULT_SCORE_FLOOR)
     expect(normalizeScoreFloor('')).toBe(DEFAULT_SCORE_FLOOR)
@@ -90,7 +243,7 @@ describe('applyScoreFloor', () => {
     expect(out).toMatchObject({ cleared: 0, total: 3 })
   })
 
-  it('defaults the floor to 60 for an old profile', () => {
+  it('defaults the floor to 70 for an old profile', () => {
     expect(applyScoreFloor(pool(70, 55), { count: 10 }).picked.map((c) => c.score)).toEqual([70])
   })
 
@@ -120,7 +273,7 @@ describe('applyScoreFloor', () => {
 describe('floorSummary', () => {
   it('says plainly how many cleared the bar', () => {
     expect(floorSummary({ total: 38, cleared: 4, picked: 4, floor: 60 })).toBe(
-      'On title and journal, 4 of 38 cleared your bar today (score 60+).',
+      'On title, abstract, and journal, 4 of 38 cleared your bar today (score 60+).',
     )
   })
 
@@ -138,7 +291,7 @@ describe('floorSummary', () => {
       { total: 12, cleared: 0, picked: 0, floor: 70 },
       { total: 20, cleared: 20, picked: 10, floor: 60 },
     ]) {
-      expect(floorSummary(args)).toContain('On title and journal')
+      expect(floorSummary(args)).toContain('On title, abstract, and journal')
     }
   })
 
@@ -146,10 +299,10 @@ describe('floorSummary', () => {
   // error, and prose reassuring her that a short digest is legitimate reads as defensive.
   it('reports a zero day as a bare fact', () => {
     expect(floorSummary({ total: 12, cleared: 0, picked: 0, floor: 70 })).toBe(
-      'On title and journal, nothing cleared your bar today — 12 papers scored, none reached 70.',
+      'On title, abstract, and journal, nothing cleared your bar today — 12 papers scored, none reached 70.',
     )
     expect(floorSummary({ total: 1, cleared: 0, picked: 0, floor: 60 })).toBe(
-      'On title and journal, nothing cleared your bar today — 1 paper scored, none reached 60.',
+      'On title, abstract, and journal, nothing cleared your bar today — 1 paper scored, none reached 60.',
     )
   })
 
@@ -161,7 +314,7 @@ describe('floorSummary', () => {
 
   it('reports the cap even when every candidate cleared', () => {
     expect(floorSummary({ total: 20, cleared: 20, picked: 10, floor: 60 })).toBe(
-      'On title and journal, all 20 cleared your bar — the top 10 made the digest.',
+      'On title, abstract, and journal, all 20 cleared your bar — the top 10 made the digest.',
     )
   })
 })

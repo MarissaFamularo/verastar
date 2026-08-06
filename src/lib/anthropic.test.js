@@ -3,7 +3,7 @@
 // setApiKey moves it between sessionStorage and localStorage without re-entry.
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { setApiKey, getApiKey, hasApiKey, isKeyRemembered, clearApiKey } from './anthropic.js'
+import { setApiKey, getApiKey, hasApiKey, isKeyRemembered, clearApiKey, modelRates, recordUsage, getUsageSummary } from './anthropic.js'
 
 function memStorage() {
   const m = new Map()
@@ -53,5 +53,19 @@ describe('api key storage', () => {
     clearApiKey()
     expect(hasApiKey()).toBe(false)
     expect(isKeyRemembered()).toBe(false)
+  })
+})
+
+describe('usage accounting', () => {
+  it('uses the dated Sonnet 5 rate and accumulates calls', () => {
+    expect(modelRates('claude-sonnet-5', new Date('2026-08-05T00:00:00Z'))).toEqual({ input: 2, output: 10 })
+    expect(modelRates('claude-sonnet-5', new Date('2026-09-02T00:00:00Z'))).toEqual({ input: 3, output: 15 })
+    recordUsage('claude-sonnet-5', { input_tokens: 1000, output_tokens: 100 }, new Date('2026-08-05T00:00:00Z'))
+    recordUsage('claude-haiku-4-5-20251001', { input_tokens: 1000, output_tokens: 100 }, new Date('2026-08-05T00:00:00Z'))
+    const summary = getUsageSummary()
+    expect(summary.calls).toBe(2)
+    expect(summary.inputTokens).toBe(2000)
+    expect(summary.outputTokens).toBe(200)
+    expect(summary.estimatedUsd).toBeCloseTo(0.0045, 8)
   })
 })

@@ -388,6 +388,19 @@ describe('searchSummary', () => {
     expect(line).toContain("aren't covered today")
   })
 
+  it('names every topic that returned no new matches', () => {
+    const line = searchSummary({
+      days: 3,
+      counts: [
+        { label: 'Transplant tolerance', count: 0, available: 0 },
+        { label: 'Machine perfusion', count: 3, available: 3 },
+        { label: 'Intestinal transplant', count: 0, available: 0 },
+      ],
+      found: 3,
+    })
+    expect(line).toContain('No new matches for Transplant tolerance, Intestinal transplant.')
+  })
+
   it('says nothing when nothing was searched', () => {
     expect(searchSummary({ days: 3 })).toBe('')
     expect(searchSummary()).toBe('')

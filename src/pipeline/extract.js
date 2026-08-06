@@ -57,6 +57,9 @@ Non-negotiable rules:
   numbers. If the paper writes 0·84 with a middle dot, copy 0·84.
 - Every number you put in value / ci_low / ci_high / p_value MUST appear inside its own
   source_quote. The quote is the receipt for the number.
+- Preserve the source's printed precision in source_quote. For example, copy "1.00" and
+  "P=0.00" exactly even though the numeric schema fields necessarily encode them as 1
+  and 0. A downstream formatter recovers the display spelling from this verbatim quote.
 - If you cannot find an exact supporting sentence, DO NOT include that quantity. Never
   invent a value, a confidence interval, or a citation. Omission is correct; fabrication
   is fatal.
@@ -66,6 +69,8 @@ Non-negotiable rules:
 - Order quantities by importance: the PRIMARY / headline effect estimate FIRST, then key
   secondary outcomes. The first item should be the number a clinician would quote.
 - design is your best classification of the study design.
+- Do not silently repair statistically implausible results. Extract what the source
+  prints verbatim; a deterministic downstream plausibility pass will warn separately.
 
 A downstream verifier will re-check every quote and number against the source text and
 flag anything it cannot prove. Precision beats recall.`

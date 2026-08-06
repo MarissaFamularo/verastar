@@ -18,6 +18,7 @@ import Anthropic from '@anthropic-ai/sdk'
 const KEY_STORAGE = 'verastar.anthropic_key'
 const NCBI_KEY_STORAGE = 'verastar.ncbi_key'
 const NCBI_EMAIL_STORAGE = 'verastar.ncbi_email'
+const USAGE_STORAGE = 'verastar.anthropic_usage.v1'
 
 export const MODELS = {
   // Extraction ran Opus for the hackathon; downgraded to Sonnet because the deterministic
@@ -27,6 +28,49 @@ export const MODELS = {
   triage: 'claude-sonnet-5',
   interview: 'claude-sonnet-5',
   fast: 'claude-haiku-4-5-20251001',
+}
+
+// Browser-local spend ledger. Anthropic returns token usage on every successful response,
+// including a response whose JSON is later rejected, so record it before parsing. Prices
+// are USD per million tokens; Sonnet 5's introductory rate ends after 2026-08-31.
+export function modelRates(model, now = new Date()) {
+  if (String(model).includes('haiku-4-5')) return { input: 1, output: 5 }
+  if (String(model).includes('sonnet-5')) {
+    return now < new Date('2026-09-01T00:00:00Z') ? { input: 2, output: 10 } : { input: 3, output: 15 }
+  }
+  return { input: 3, output: 15 }
+}
+
+function readUsage() {
+  try {
+    const raw = localStorage.getItem(USAGE_STORAGE)
+    const parsed = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? parsed : { calls: 0, inputTokens: 0, outputTokens: 0, estimatedUsd: 0 }
+  } catch {
+    return { calls: 0, inputTokens: 0, outputTokens: 0, estimatedUsd: 0 }
+  }
+}
+
+export function recordUsage(model, usage, now = new Date()) {
+  const input = Number(usage?.input_tokens || 0) + Number(usage?.cache_creation_input_tokens || 0)
+  const cached = Number(usage?.cache_read_input_tokens || 0)
+  const output = Number(usage?.output_tokens || 0)
+  const rates = modelRates(model, now)
+  const cost = ((input * rates.input) + (cached * rates.input * 0.1) + (output * rates.output)) / 1_000_000
+  const prev = readUsage()
+  const next = {
+    calls: Number(prev.calls || 0) + 1,
+    inputTokens: Number(prev.inputTokens || 0) + input + cached,
+    outputTokens: Number(prev.outputTokens || 0) + output,
+    estimatedUsd: Number(prev.estimatedUsd || 0) + cost,
+    updatedAt: now.toISOString(),
+  }
+  try { localStorage.setItem(USAGE_STORAGE, JSON.stringify(next)) } catch { /* private mode */ }
+  return next
+}
+
+export function getUsageSummary() {
+  return readUsage()
 }
 
 // --- key management (session-backed by default, localStorage when remembered) ---
@@ -110,6 +154,7 @@ export async function ping(prompt = 'Reply with exactly the word: pong') {
     max_tokens: 16,
     messages: [{ role: 'user', content: prompt }],
   })
+  recordUsage(MODELS.fast, res.usage)
   return res.content
     .filter((block) => block.type === 'text')
     .map((block) => block.text)
@@ -131,6 +176,7 @@ export async function extractStructured({ model = MODELS.extraction, system, con
     messages: [{ role: 'user', content }],
     output_config: { format: { type: 'json_schema', schema } },
   })
+  recordUsage(model, res.usage)
   const text = res.content
     .filter((block) => block.type === 'text')
     .map((block) => block.text)

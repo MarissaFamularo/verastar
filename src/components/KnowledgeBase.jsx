@@ -23,6 +23,8 @@ import { isSignedIn } from '../lib/supabase.js'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 import { useIsMobile } from '../lib/useMobile.js'
 import { setPaperFavorite } from '../lib/favorites.js'
+import { fetchCitations } from '../pipeline/sources.js'
+import { paperIndicatesRetraction, refreshSavedRetractions, removePaperFromConcepts } from '../pipeline/retractions.js'
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
@@ -39,6 +41,8 @@ export default function KnowledgeBase() {
   const [refiling, setRefiling] = useState('') // '' | progress string
   const [confirmRefile, setConfirmRefile] = useState(false)
   const [reorg, setReorg] = useState('') // '' | 'running' | result/error message
+  const [retractionAlerts, setRetractionAlerts] = useState([])
+  const [confirmRetractionDelete, setConfirmRetractionDelete] = useState(null)
   // On the phone the two chip rows eat most of a screen before the first paper —
   // collapsed behind one toggle line there; desktop keeps them always open.
   const isMobile = useIsMobile()
@@ -62,6 +66,20 @@ export default function KnowledgeBase() {
       backfillOaPdfs(all || [], (id, patch) =>
         setPapers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p))),
       )
+      // Retractions can happen years after a paper was saved. Refresh PubMed status on
+      // Library load and patch only newly retracted records; a network miss changes nothing.
+      refreshSavedRetractions(all || [], {
+        fetchCurrent: fetchCitations,
+        persist: (id, record) => store.put('papers', id, record),
+        onPatch: (id, patch) =>
+          setPapers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p))),
+      }).then((found) => {
+        if (!found.length) return
+        setRetractionAlerts(found.map(({ id, patch }) => {
+          const paper = (all || []).find((p) => p.id === id) || { id }
+          return { ...paper, ...patch }
+        }))
+      }).catch(() => {})
     })()
   }, [])
 
@@ -118,8 +136,20 @@ export default function KnowledgeBase() {
   }
 
   async function deletePaper(paper) {
+    const storedConcepts = await loadConcepts()
+    const patched = removePaperFromConcepts(storedConcepts, paper)
+    await Promise.all(patched.map((node) => store.put('graphNodes', node.id, node)))
     await store.delete('papers', paper.id)
     setPapers((prev) => prev.filter((p) => p.id !== paper.id))
+    if (patched.length) {
+      const byId = new Map(patched.map((node) => [node.id, node]))
+      setConcepts((prev) => prev.map((node) => byId.get(node.id) || node))
+    }
+    setRetractionAlerts((prev) => prev.filter((p) => p.id !== paper.id))
+    setConfirmRetractionDelete(null)
+    if (paperIndicatesRetraction(paper)) {
+      logEvent('retracted_paper_deleted', { pmid: paper.pmid || paper.id })
+    }
   }
 
   // Re-classify every saved paper into concepts/domains. Paid: one Claude call per paper + concept.
@@ -165,6 +195,27 @@ export default function KnowledgeBase() {
       <div style={{ display: 'flex', gap: 40, alignItems: 'flex-start', flexWrap: 'wrap' }}>
       <div style={{ flex: '1 1 440px', minWidth: 0, maxWidth: 720 }}>
       <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Your knowledge graph</p>
+      {retractionAlerts.map((paper) => (
+        <div key={paper.id} role="alert" style={{ marginTop: 14, borderRadius: 12, border: '1px solid rgba(224,96,90,.45)', background: 'rgba(224,96,90,.10)', padding: '13px 15px' }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--color-domain-vascular)' }}>Retracted</p>
+          <p style={{ margin: '5px 0 0', fontSize: 13.5, fontWeight: 600, lineHeight: 1.45, color: 'var(--color-fg-soft)' }}>{paper.title || `PMID ${paper.pmid}`}</p>
+          <p style={{ margin: '4px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-muted)' }}>
+            PubMed now classifies this saved paper as retracted. Keep it with a permanent warning for audit history, or delete its saved Library record, notes, verified values, tags, and concept membership. Past digest snapshots and files already written to disk are not deleted.
+          </p>
+          {confirmRetractionDelete === paper.id ? (
+            <div className="flex flex-wrap items-center" style={{ marginTop: 10, gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-domain-vascular)' }}>Delete this saved paper and its metadata?</span>
+              <button onClick={() => deletePaper(paper)} className="cursor-pointer" style={{ borderRadius: 8, border: 0, background: 'var(--color-domain-vascular)', color: '#fff', padding: '6px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>Delete permanently</button>
+              <button onClick={() => setConfirmRetractionDelete(null)} className="cursor-pointer" style={{ borderRadius: 8, border: '1px solid rgba(255,255,255,.14)', background: 'transparent', color: 'var(--color-fg-soft)', padding: '6px 10px', fontSize: 12, fontFamily: 'inherit' }}>Cancel</button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap" style={{ marginTop: 10, gap: 8 }}>
+              <button onClick={() => setRetractionAlerts((prev) => prev.filter((p) => p.id !== paper.id))} className="cursor-pointer" style={{ borderRadius: 8, border: '1px solid rgba(255,255,255,.14)', background: 'transparent', color: 'var(--color-fg-soft)', padding: '6px 10px', fontSize: 12, fontFamily: 'inherit' }}>Keep with warning</button>
+              <button onClick={() => setConfirmRetractionDelete(paper.id)} className="cursor-pointer" style={{ borderRadius: 8, border: 0, background: 'rgba(224,96,90,.18)', color: 'var(--color-domain-vascular)', padding: '6px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>Delete paper &amp; metadata</button>
+            </div>
+          )}
+        </div>
+      ))}
       {/* Desktop: title, re-file, and counts share one line. On the phone the
           re-file control drops to its own row under the title — beside it, the
           button wrapped into a tall pill that crowded out the counts. */}
@@ -418,6 +469,7 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }
   const [note, setNote] = useState(paper.notes || '')
   const dirty = note !== (paper.notes || '')
   const cite = [paper.citation?.author, paper.citation?.journal, paper.citation?.year].filter(Boolean).join(' · ')
+  const retracted = paperIndicatesRetraction(paper)
 
   const lastSaved = useRef(paper.notes || '')
   useEffect(() => {
@@ -461,6 +513,11 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }
     <div>
       <p style={{ margin: 0, fontSize: 14.5, fontWeight: 500, color: 'var(--color-fg-soft)', lineHeight: 1.4 }}>{paper.title}</p>
       {cite && <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>{cite}</p>}
+      {retracted && (
+        <p role="alert" style={{ margin: '7px 0 0', borderLeft: '2px solid var(--color-domain-vascular)', paddingLeft: 9, fontSize: 12, fontWeight: 600, lineHeight: 1.45, color: 'var(--color-domain-vascular)' }}>
+          Retracted — PubMed classifies this article as a Retracted Publication. Do not rely on its findings.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center" style={{ marginTop: 9, gap: 8 }}>
         <HeartButton active={!!paper.favorite} onClick={onToggleFavorite} />

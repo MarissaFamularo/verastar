@@ -10,12 +10,14 @@ import { filePaper, synthesizeGroup, consolidateDomains } from './deposit.js'
 import { maybeReorganize } from './categorize.js'
 import { resolveOaLink, oaPatch } from './openaccess.js'
 import { depositPaperToLibrary } from '../lib/library.js'
+import { citationIndicatesRetraction, retractionPatch } from './retractions.js'
 
 // Build the persisted paper record from a run result + its triage take. Pure. The verified numbers
 // are taken from the run's non-flagged rows (the app-owned channel); finding/relevance/tier come
 // from the triage take (the prose channel). Mirrors the record SpineCheck.toggleSave used to inline.
 export function buildPaperRecord(res, take, { title } = {}) {
   const verifiedRows = res.error ? [] : res.rows.filter((r) => !r.verdict.flagged)
+  const retraction = retractionPatch(res.citation)
   return {
     id: res.paper.id,
     pmid: res.paper.pmid,
@@ -42,12 +44,16 @@ export function buildPaperRecord(res, take, { title } = {}) {
     conceptId: null, // the concept node it's filed under
     notes: '',
     savedAt: new Date().toISOString(),
+    ...(retraction || {}),
   }
 }
 
 // Persist the record, then run the background enrichment (concept filing → summary, OA PDF link,
 // on-disk write). Returns the persisted record immediately; the background work is fire-and-forget.
 export async function savePaper(res, take, { title, source = 'unknown' } = {}) {
+  if (res?.retracted || citationIndicatesRetraction(res?.citation)) {
+    throw new Error('This article is marked as retracted in PubMed and was not saved.')
+  }
   const record = buildPaperRecord(res, take, { title })
   await store.put('papers', record.id, record)
   // Adoption telemetry on the ONE shared save path, so no entry point can forget it.

@@ -6,6 +6,7 @@
 // structured result with whatever could be fetched and a `tier` hint for verify.
 
 import { getNcbiKey, getNcbiEmail } from '../lib/anthropic.js'
+import { hasRetractedPublicationType } from './retractions.js'
 
 const EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 const IDCONV = 'https://www.ncbi.nlm.nih.gov/pmc/tools/idconv/api/v1/articles'
@@ -161,9 +162,40 @@ export async function fetchAbstracts(pmids) {
   return cleanAbstractText(await getText(url))
 }
 
+// Fetch many PubMed abstracts while preserving PMID attribution. The plain-text efetch
+// format used by fetchAbstracts is useful as a reading corpus, but records in it are not
+// reliably machine-separable. Selection needs to put the right abstract beside each title,
+// so it uses the XML representation and returns a PMID -> abstract object. A metadata-only
+// selection is still useful during an NCBI hiccup, hence the intentionally quiet fallback.
+export async function fetchAbstractsByPmid(pmids) {
+  const ids = [...new Set((Array.isArray(pmids) ? pmids : [pmids]).filter(Boolean).map(String))]
+  if (!ids.length) return {}
+  try {
+    const url = withKey(`${EUTILS}/efetch.fcgi?db=pubmed&id=${ids.join(',')}&retmode=xml`)
+    const xml = await getText(url)
+    const doc = new DOMParser().parseFromString(xml, 'text/xml')
+    const out = {}
+    for (const article of doc.querySelectorAll('PubmedArticle')) {
+      const pmid = nodeText(article.querySelector('PMID'))
+      if (!pmid) continue
+      const sections = Array.from(article.querySelectorAll('Abstract AbstractText'))
+        .map((node) => {
+          const text = nodeText(node)
+          const label = node.getAttribute('Label') || ''
+          return text ? (label ? `${label}: ${text}` : text) : ''
+        })
+        .filter(Boolean)
+      out[pmid] = sections.join('\n')
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
 // Fetch citation metadata for a PMID via esummary. The mere fact that PubMed returns a
 // record IS the "citation is real, not hallucinated" check — the single most common AI
-// digest failure. Returns { author, year, journal, pmid, url, doi, verified }.
+// digest failure. PubMed publication types also carry the authoritative retraction marker.
 export async function fetchCitation(pmid) {
   const url = `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`
   try {
@@ -180,7 +212,11 @@ export async function fetchCitation(pmid) {
     const year = (rec.pubdate || '').split(' ')[0] || ''
     const journal = rec.source || rec.fulljournalname || ''
     const doiMatch = (rec.elocationid || '').match(/10\.\S+/)
-    return { pmid, url, author, year, journal, title: rec.title || '', doi: doiMatch ? doiMatch[0] : null, verified: true }
+    const pubtypes = Array.isArray(rec.pubtype) ? rec.pubtype : []
+    return {
+      pmid, url, author, year, journal, title: rec.title || '', doi: doiMatch ? doiMatch[0] : null,
+      pubtypes, retracted: hasRetractedPublicationType(pubtypes), verified: true,
+    }
   } catch {
     // Network hiccup — we can't confirm the citation, so we don't claim it's verified.
     return { pmid, url, verified: false }
@@ -206,6 +242,7 @@ export async function fetchCitations(pmids) {
         const authors = rec.authors || []
         const first = authors[0]?.name || ''
         const author = authors.length > 1 ? `${first} et al.` : first
+        const pubtypes = Array.isArray(rec.pubtype) ? rec.pubtype : []
         return {
           pmid,
           url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
@@ -213,7 +250,8 @@ export async function fetchCitations(pmids) {
           journal: rec.source || rec.fulljournalname || '',
           year: (rec.pubdate || '').split(' ')[0] || '',
           author,
-          pubtypes: Array.isArray(rec.pubtype) ? rec.pubtype : [],
+          pubtypes,
+          retracted: hasRetractedPublicationType(pubtypes),
         }
       })
       .filter(Boolean)

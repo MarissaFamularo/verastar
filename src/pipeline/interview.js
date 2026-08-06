@@ -138,10 +138,11 @@ export const DRAFT_SYSTEM = `You are turning an interview with a clinician-resea
 
 How to write the query field — these rules come from the user's own working system, and breaking them returns zero papers:
 - Use simple OR-based queries. Complex AND chains expand to zero results due to MeSH expansion.
-- No field tags. Never write [tiab], [ti], [mh], [Title/Abstract] or any bracketed tag, and do not wrap phrases in quotes. PubMed's automatic term mapping is doing the work; quoting and tagging turn it off.
+- No field tags. Never write [tiab], [ti], [mh], [Title/Abstract] or any bracketed tag.
+- Quote an exact multi-word concept when splitting it into individual words would create cross-field noise (for example, "operational tolerance"). Leave broad clinical concepts unquoted when PubMed term expansion is useful. In either case, OR the phrase/concept with its useful synonyms.
 - JOIN CONCEPTS WITH OR, explicitly. Words sitting next to each other are ANDed by PubMed, so a string of four or five juxtaposed concepts is an AND chain wearing a disguise and it returns almost nothing over a three-day window.
 - Two to five anchor concepts per query. Never a single bare word.
-- Good: "aortic aneurysm OR aortic dissection OR TEVAR OR EVAR" · "peripheral artery disease OR limb ischemia OR diabetic foot OR wound healing amputation" · "carotid stenosis OR carotid endarterectomy OR carotid artery stenting" · "large language model healthcare clinical OR ChatGPT clinical OR GPT-4 medical"
+- Good: "aortic aneurysm OR aortic dissection OR TEVAR OR EVAR" · "\"operational tolerance\" OR immunosuppression withdrawal" · "carotid stenosis OR carotid endarterectomy OR carotid artery stenting" · "large language model healthcare clinical OR ChatGPT clinical OR GPT-4 medical"
 - Bad: "aortic aneurysm[tiab] AND (TEVAR OR EVAR) AND mortality" (AND chain plus field tag) · "carotid stenosis endarterectomy stenting stroke prevention" (five juxtaposed concepts, all ANDed — nearly empty) · "carotid" (too broad to be a topic)
 - Include the abbreviations and synonyms a surgeon would use, since those are how half the titles are written.
 

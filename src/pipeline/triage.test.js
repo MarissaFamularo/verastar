@@ -6,7 +6,7 @@
 // rankings and verified rows, no model call.
 
 import { describe, it, expect } from 'vitest'
-import { allowedNumbers, numbersGrounded, stripNumbers, sanitizeRanking } from './triage.js'
+import { allowedNumbers, numbersGrounded, stripNumbers, sanitizeRanking, OUTPUT_CONTRACT } from './triage.js'
 
 // Verified rows as the callers build them: { name, value } where value is fmtNum output.
 const V_HR = [{ name: 'hazard ratio', value: '0.84 (CI 0.61–1.16)' }]
@@ -21,6 +21,15 @@ const rk = (over = {}) => ({
   finding_plain: 'Improved outcomes.',
   relevance: 'Touches your CLTI perfusion work.',
   ...over,
+})
+
+describe('summary-writer claim strength contract', () => {
+  it('forbids superiority language for statistically inconclusive results', () => {
+    expect(OUTPUT_CONTRACT).toContain('non-significant P value')
+    expect(OUTPUT_CONTRACT).toMatch(/not evidence that one arm is better/i)
+    expect(OUTPUT_CONTRACT).toContain('does not prove equivalence')
+    expect(OUTPUT_CONTRACT).toContain('observational associations are not causal effects')
+  })
 })
 
 describe('allowedNumbers — the verified set a finding may draw from', () => {

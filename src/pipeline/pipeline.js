@@ -21,6 +21,7 @@ import {
   searchPaceMs,
 } from './sources.js'
 import { extractQuantities } from './extract.js'
+import { citationIndicatesRetraction } from './retractions.js'
 import { verify, normalize, extractNumbers, numbersEqual } from './verify.js'
 import {
   profileTopics,
@@ -145,7 +146,9 @@ export async function searchCandidates({
   const { pmids, topicsByPmid, counts, failed, skipped } = mergeTopicResults(results, { cap, skipIds })
   if (!pmids.length) return { candidates: [], counts, failed, skipped, days: windowDays }
 
-  const cites = await fetchCitations(pmids)
+  // PubMed's Retracted Publication type is authoritative and available in this metadata
+  // call, before any selection or paid extraction. Withdrawn papers never enter the funnel.
+  const cites = (await fetchCitations(pmids)).filter((citation) => !citationIndicatesRetraction(citation))
   const candidates = attachTopics(
     cites.map((c) => ({
       id: c.pmid,
@@ -174,6 +177,21 @@ export async function runPaper(paper, { onStage } = {}) {
     url: `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`,
     verified: false,
   }))
+
+  // Covers stale/restored candidate pools whose status changed after the original scan.
+  // The caller treats an error result as excluded from triage and the completed digest.
+  if (citationIndicatesRetraction(citation)) {
+    notify('error')
+    return {
+      paper,
+      citation,
+      design: null,
+      source: null,
+      rows: [],
+      error: 'Retracted publication — excluded from digest.',
+      retracted: true,
+    }
+  }
 
   try {
     notify('fetching')

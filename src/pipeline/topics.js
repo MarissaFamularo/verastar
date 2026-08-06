@@ -75,7 +75,7 @@ export const LOOKBACK_DAYS = [7, 30, 90]
 
 // Her documented rule for writing these, in one line, shown next to the field.
 export const TOPIC_HINT =
-  'Short, OR-based, one or two anchor concepts — e.g. "aortic aneurysm OR aortic dissection OR TEVAR OR EVAR". Long AND chains return nothing; PubMed expands terms for you.'
+  'Short, OR-based anchors. Put an exact multi-word concept in quotes (for example, "operational tolerance") so PubMed does not split it into noisy single words; OR it with useful synonyms. Long AND chains return little or nothing.'
 
 // The last-resort topic. A profile with no topics AND no north stars still has to search
 // something, and returning zero topics would render as "PubMed found nothing" — a lie about
@@ -286,6 +286,11 @@ export function searchSummary({ days, counts = [], failed = [], found = null } =
   if (failed.length) {
     const names = failed.map((f) => f?.label).filter(Boolean)
     out += ` ${failed.length} topic${failed.length === 1 ? '' : 's'} failed to search${names.length ? `: ${names.join(', ')}` : ''} — those areas aren't covered today.`
+  }
+  const quiet = (counts || []).filter((c) => c && Number(c.count) === 0)
+  if (quiet.length) {
+    const names = quiet.map((c) => c.label).filter(Boolean)
+    out += ` No new matches for ${names.join(', ')}.`
   }
   const held = heldBack(counts)
   if (held.length) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { setApiKey, getApiKey, hasApiKey, clearApiKey, isKeyRemembered, ping } from './lib/anthropic.js'
+import { setApiKey, getApiKey, hasApiKey, clearApiKey, isKeyRemembered, ping, getUsageSummary } from './lib/anthropic.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
 import { supabase, supabaseConfigured, currentUser, sendMagicLink, verifyEmailCode, signOut, isSignedIn } from './lib/supabase.js'
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
@@ -440,6 +440,7 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
   // Start over is two-step: the button reveals a confirm block with the erase choice.
   const [confirmReset, setConfirmReset] = useState(false)
   const [eraseAll, setEraseAll] = useState(false)
+  const usage = getUsageSummary()
   return (
     <div
       onClick={onClose}
@@ -534,6 +535,15 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
               ? 'Your key is remembered in this browser’s local storage on this device — never sent to our servers. Clear it any time.'
               : 'Your key lives only in this browser tab — never sent to our servers, never written to disk, and cleared when you close the tab. Check “Remember on this device” to keep it across restarts.'}
           </p>
+
+          <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
+            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
+              Estimated Claude spend on this device: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}>${usage.estimatedUsd < 0.01 ? usage.estimatedUsd.toFixed(4) : usage.estimatedUsd.toFixed(2)}</span>
+            </p>
+            <p style={{ margin: '3px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
+              {usage.calls} paid response{usage.calls === 1 ? '' : 's'} · {Number(usage.inputTokens || 0).toLocaleString()} input tokens · {Number(usage.outputTokens || 0).toLocaleString()} output tokens. Includes responses from runs that later failed; estimated from current Anthropic list prices.
+            </p>
+          </div>
 
           <ApiKeyExplainer />
 

@@ -14,10 +14,55 @@ import { normalize, extractNumbersWithIndex, numbersEqual } from '../pipeline/ve
 // variants) are distinct code points NFKC does not fold, so they map here.
 const P_OPERATORS = { '=': '=', '<': '<', '>': '>', '≤': '≤', '≥': '≥', '⩽': '≤', '⩾': '≥' }
 
+// Numeric JSON deliberately loses spelling (1.00 -> 1, .02 -> 0.02). Display values
+// come back from the verbatim receipt instead. This tokenizer retains the exact source
+// token while parsing a numeric twin solely for matching.
+const PRINTED_NUMBER_RE = /(?<![\d.·‧⋅∙•])[+\-‐‑‒–—−－]?(?:\d{1,3}(?:,\d{3})+(?:[.·‧⋅∙•]\d+)?|\d+[.·‧⋅∙•]\d+|[.·‧⋅∙•]\d+|\d+)(?!\d)(?![.·‧⋅∙•]\d)/g
+
+function printedTokens(quote) {
+  const out = []
+  const text = String(quote || '').normalize('NFKC')
+  const re = new RegExp(PRINTED_NUMBER_RE.source, 'g')
+  let match
+  while ((match = re.exec(text)) !== null) {
+    const normalized = normalize(match[0])
+    const value = Number(normalized)
+    if (Number.isFinite(value)) out.push({ raw: match[0], value, start: match.index, end: re.lastIndex })
+  }
+  return { text, tokens: out }
+}
+
+function printedValue(quantity, field) {
+  const target = quantity?.[field]
+  if (target == null) return ''
+  const { text, tokens } = printedTokens(quantity.source_quote)
+  if (!tokens.length) return String(target)
+
+  if (field === 'p_value') {
+    const semantic = tokens.find((token) => {
+      if (!numbersEqual(token.value, target)) return false
+      const before = text.slice(Math.max(0, token.start - 18), token.start)
+      return /\bp(?:\s*[- ]?value)?\s*(?:of\s*)?(?:<=|>=|[=<>≤≥⩽⩾])?\s*$/i.test(before)
+    })
+    return (semantic || tokens.find((t) => numbersEqual(t.value, target)))?.raw || String(target)
+  }
+
+  if (field === 'ci_low' || field === 'ci_high') {
+    const marker = text.search(/\b(?:ci|confidence\s+interval)\b/i)
+    const ciTokens = marker < 0 ? tokens : tokens.filter((t) => t.start > marker)
+    const lowIndex = ciTokens.findIndex((t) => numbersEqual(t.value, quantity.ci_low))
+    if (field === 'ci_low') return ciTokens[lowIndex]?.raw || String(target)
+    const high = ciTokens.slice(Math.max(0, lowIndex + 1)).find((t) => numbersEqual(t.value, target))
+    return high?.raw || String(target)
+  }
+
+  return tokens.find((t) => numbersEqual(t.value, target))?.raw || String(target)
+}
+
 // Derive the p-value operator from the quantity's verified quote. Tokenize the normalized
 // quote (representation may differ: "P = .02" vs claim 0.02, so tokens are matched with
 // numbersEqual, never string search), take the FIRST token equal to p_value, and scan
-// backwards over whitespace for an explicit operator character. Returns '=', '<', '>',
+// backwards from the first P-labelled matching token for an explicit operator. Returns '=', '<', '>',
 // '≤', '≥', or null when the quote states none (or there is no quote / no p_value).
 export function pOperator(quantity) {
   if (quantity == null || quantity.p_value == null) return null
@@ -25,19 +70,12 @@ export function pOperator(quantity) {
   if (!quote) return null
   for (const token of extractNumbersWithIndex(quote)) {
     if (!numbersEqual(token.value, quantity.p_value)) continue
-    let i = token.start - 1
-    while (i >= 0 && quote[i] === ' ') i--
-    if (i < 0) return null
-    // ASCII "<=" / ">=" — the "=" is only the tail; the real operator is the char before it,
-    // so read through to it ("P<=.05" states ≤, never =). Whitespace between is tolerated.
-    if (quote[i] === '=') {
-      let j = i - 1
-      while (j >= 0 && quote[j] === ' ') j--
-      if (j >= 0 && quote[j] === '<') return '≤'
-      if (j >= 0 && quote[j] === '>') return '≥'
-    }
-    // First matching token decides — a later duplicate never overrides.
-    return P_OPERATORS[quote[i]] || null
+    const before = quote.slice(Math.max(0, token.start - 18), token.start)
+    const match = before.match(/\bp(?:\s*[- ]?value)?\s*(?:of\s*)?(<=|>=|[=<>≤≥⩽⩾])?\s*$/i)
+    if (!match) continue
+    if (match[1] === '<=') return '≤'
+    if (match[1] === '>=') return '≥'
+    return P_OPERATORS[match[1]] || null
   }
   return null
 }
@@ -48,12 +86,15 @@ export function pOperator(quantity) {
 // misstatement in the fact channel.
 export function fmtNum(q) {
   if (q.value == null) return ''
-  let s = String(q.value)
+  let s = printedValue(q, 'value')
   if (q.unit) s += ` ${q.unit}`
-  if (q.ci_low != null && q.ci_high != null) s += ` (CI ${q.ci_low}–${q.ci_high})`
+  if (q.ci_low != null && q.ci_high != null) {
+    s += ` (CI ${printedValue(q, 'ci_low')}–${printedValue(q, 'ci_high')})`
+  }
   if (q.p_value != null) {
     const op = pOperator(q)
-    s += op ? `, P${op}${q.p_value}` : `, P ${q.p_value}`
+    const p = printedValue(q, 'p_value')
+    s += op ? `, P${op}${p}` : `, P ${p}`
   }
   return s
 }

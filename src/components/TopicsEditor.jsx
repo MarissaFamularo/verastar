@@ -96,7 +96,7 @@ export default function TopicsEditor({ topics, days, perTopic, northStars = [], 
       <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', lineHeight: 1.5 }}>
         Each topic gets its OWN PubMed search, so a busy area can't crowd out a quiet one.
         Your digest takes the newest {cap} per topic from the last {windowDays} day
-        {windowDays === 1 ? '' : 's'} — it never reaches further back on its own.
+        {windowDays === 1 ? '' : 's'} — up to {topics.length ? topics.length * cap : derived.length * cap} candidates before duplicates. More topics and a higher cap increase Claude usage; Settings shows the tokens and estimated spend, including failed runs.
       </p>
       <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-faint)', lineHeight: 1.5 }}>
         {TOPIC_HINT}

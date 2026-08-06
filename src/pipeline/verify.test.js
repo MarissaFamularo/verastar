@@ -9,7 +9,7 @@
 // earn a verified tier. If any of those regress, the product is broken.
 
 import { describe, it, expect } from 'vitest'
-import { verify, normalize, extractNumbers, numbersEqual, TIERS } from './verify.js'
+import { verify, normalize, extractNumbers, numbersEqual, plausibilityWarnings, TIERS } from './verify.js'
 
 // Convenience: build a quantity.
 const q = (fields) => ({ location_hint: '', ...fields })
@@ -60,6 +60,71 @@ describe('representation-equality', () => {
   it('never absorbs rounding', () => {
     expect(numbersEqual(0.84, 0.847)).toBe(false)
     expect(numbersEqual(0.02, 0.028)).toBe(false)
+  })
+})
+
+describe('statistical plausibility warnings', () => {
+  it('warns on a P value outside 0–1 without conflating source verification', () => {
+    const source = 'The estimated effect was 2.0 (P=1.2).'
+    const verified = verify(q({ value: 2, p_value: 1.2, source_quote: 'effect was 2.0 (P=1.2)' }), source)
+    expect(verified.tier).toBe(TIERS.FULL_TEXT)
+    expect(verified.warnings).toEqual([
+      expect.objectContaining({ kind: 'impossible-p-value', status: 'verified-as-printed' }),
+    ])
+
+    const unverified = verify(q({ value: 9, p_value: 1.2, source_quote: 'effect was 2.0 (P=1.2)' }), source)
+    expect(unverified.tier).toBe(TIERS.FLAGGED)
+    expect(unverified.warnings[0]).toEqual(expect.objectContaining({ status: 'unverified' }))
+  })
+
+  it('warns when the point estimate lies outside its CI or the CI is reversed', () => {
+    expect(plausibilityWarnings(q({ value: 3, ci_low: 1, ci_high: 2 }))[0].kind)
+      .toBe('estimate-outside-confidence-interval')
+    expect(plausibilityWarnings(q({ value: 2, ci_low: 4, ci_high: 1 }))[0].kind)
+      .toBe('reversed-confidence-interval')
+  })
+
+  it('warns on percentages above 100 only when the unit explicitly says percentage', () => {
+    expect(plausibilityWarnings(q({ value: 101, unit: '%' }))[0].kind).toBe('percentage-over-100')
+    expect(plausibilityWarnings(q({ value: 101, unit: 'patients' }))).toEqual([])
+  })
+
+  it('warns on reliably inferable 95% ratio CI/P incoherence', () => {
+    const warnings = plausibilityWarnings(q({
+      name: 'hazard ratio',
+      value: 1.5,
+      ci_low: 1.2,
+      ci_high: 1.8,
+      p_value: 0.2,
+      source_quote: 'hazard ratio 1.5 (95% CI 1.2–1.8; P=0.20)',
+    }))
+    expect(warnings).toEqual([expect.objectContaining({ kind: 'ci-p-incoherence' })])
+  })
+
+  it('warns on reliably inferable 95% difference CI/P incoherence', () => {
+    const warnings = plausibilityWarnings(q({
+      name: 'mean difference',
+      value: 0.2,
+      ci_low: -0.1,
+      ci_high: 0.4,
+      p_value: 0.01,
+      source_quote: 'mean difference 0.2 (95% CI -0.1 to 0.4; P=0.01)',
+    }))
+    expect(warnings).toEqual([expect.objectContaining({ kind: 'ci-p-incoherence' })])
+  })
+
+  it('does not infer CI/P coherence without an explicit 95% CI and known null scale', () => {
+    expect(plausibilityWarnings(q({
+      name: 'score', value: 1.5, ci_low: 1.2, ci_high: 1.8, p_value: 0.2,
+      source_quote: 'score 1.5 (CI 1.2–1.8; P=0.20)',
+    }))).toEqual([])
+  })
+
+  it('preserves rounded P=0.00 but marks it questionable', () => {
+    const warnings = plausibilityWarnings(q({ p_value: 0, source_quote: 'P=0.00' }), { verifiedAsPrinted: true })
+    expect(warnings).toEqual([
+      expect.objectContaining({ kind: 'zero-p-value', status: 'verified-as-printed' }),
+    ])
   })
 })
 

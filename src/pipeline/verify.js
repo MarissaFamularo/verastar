@@ -104,6 +104,107 @@ function someEqual(nums, target) {
   return nums.some((n) => numbersEqual(n, target))
 }
 
+// --- Statistical plausibility (warning-only) ---------------------------------
+
+// These checks never manufacture or revoke a verification tier. Verification answers
+// "does the source print this tuple?"; plausibility answers "does that printed tuple make
+// statistical sense?" Keeping those claims separate lets a source typo be honestly shown
+// as verified-as-printed while still receiving a conspicuous warning.
+const RATIO_MEASURE = /\b(?:hazard|odds|risk|rate|prevalence)\s+ratio\b|\brelative\s+risk\b/i
+const DIFFERENCE_MEASURE = /\b(?:mean|risk|rate|absolute|between-group|treatment)?\s*difference\b/i
+
+function statedPValueOperator(quantity) {
+  if (quantity?.p_value == null) return null
+  const quote = normalize(quantity.source_quote || '')
+  for (const token of extractNumbersWithIndex(quote)) {
+    if (!numbersEqual(token.value, quantity.p_value)) continue
+    const before = quote.slice(Math.max(0, token.start - 18), token.start)
+    const match = before.match(/\bp(?:\s*[- ]?value)?\s*(?:of\s*)?(<=|>=|[=<>≤≥⩽⩾])?\s*$/i)
+    if (!match) continue
+    return ({ '<=': '≤', '>=': '≥', '⩽': '≤', '⩾': '≥' })[match[1]] || match[1] || null
+  }
+  return null
+}
+
+function pDirection(quantity) {
+  const p = quantity?.p_value
+  if (p == null) return null
+  const op = statedPValueOperator(quantity)
+  if ((op === '<' || op === '≤') && p <= 0.05) return 'significant'
+  if ((op === '>' || op === '≥') && p >= 0.05) return 'not-significant'
+  if ((op === '=' || op == null) && p < 0.05) return 'significant'
+  if ((op === '=' || op == null) && p > 0.05) return 'not-significant'
+  return null // exact boundary p=.05 is too rounding-sensitive to warn on
+}
+
+function warning(kind, detail, verifiedAsPrinted) {
+  const status = verifiedAsPrinted ? 'verified-as-printed' : 'unverified'
+  const prefix = verifiedAsPrinted ? 'Verified as printed, but' : 'Unverified extraction; additionally,'
+  return { kind, status, message: `${prefix} ${detail}` }
+}
+
+export function plausibilityWarnings(quantity, { verifiedAsPrinted = false } = {}) {
+  const out = []
+  if (!quantity) return out
+
+  const p = quantity.p_value
+  if (p === 0) {
+    out.push(warning(
+      'zero-p-value',
+      'the reported P value is zero; an exact P value cannot be zero and this is likely rounded or affected by numerical underflow.',
+      verifiedAsPrinted,
+    ))
+  } else if (p != null && (!Number.isFinite(p) || p < 0 || p > 1)) {
+    out.push(warning('impossible-p-value', `the reported P value (${p}) is outside 0–1.`, verifiedAsPrinted))
+  }
+
+  const low = quantity.ci_low
+  const high = quantity.ci_high
+  const value = quantity.value
+  const completeCi = Number.isFinite(low) && Number.isFinite(high)
+  if (completeCi && low > high) {
+    out.push(warning('reversed-confidence-interval', `the reported CI runs from ${low} to ${high}.`, verifiedAsPrinted))
+  } else if (completeCi && Number.isFinite(value) && (value < low || value > high)) {
+    out.push(warning(
+      'estimate-outside-confidence-interval',
+      `the point estimate (${value}) lies outside its reported CI (${low}–${high}).`,
+      verifiedAsPrinted,
+    ))
+  }
+
+  const percentUnit = /^\s*(?:%|percent|percentage)\s*$/i.test(quantity.unit || '')
+  if (percentUnit && Number.isFinite(value) && value > 100) {
+    out.push(warning('percentage-over-100', `the reported percentage is ${value}%.`, verifiedAsPrinted))
+  }
+
+  // A P/CI coherence warning is safe only when the quote explicitly says 95% CI and the
+  // measure identifies its conventional null (1 for ratios, 0 for differences). We do
+  // not sum percentages across rows: without explicit mutually-exclusive group semantics,
+  // a total above 100 can be perfectly valid (multi-select responses, overlapping events).
+  const evidence = `${quantity.name || ''} ${quantity.source_quote || ''}`
+  const is95Ci = /\b95\s*%\s*(?:ci|confidence\s+interval)\b/i.test(evidence)
+  const nullValue = RATIO_MEASURE.test(evidence) ? 1 : DIFFERENCE_MEASURE.test(evidence) ? 0 : null
+  const direction = p >= 0 && p <= 1 ? pDirection(quantity) : null
+  if (completeCi && low <= high && is95Ci && nullValue != null && direction) {
+    const excludesNull = high < nullValue || low > nullValue
+    const containsNull = low < nullValue && high > nullValue
+    if (excludesNull && direction === 'not-significant') {
+      out.push(warning(
+        'ci-p-incoherence',
+        `the 95% CI excludes the null (${nullValue}) while the reported P value is not significant.`,
+        verifiedAsPrinted,
+      ))
+    } else if (containsNull && direction === 'significant') {
+      out.push(warning(
+        'ci-p-incoherence',
+        `the 95% CI contains the null (${nullValue}) while the reported P value is significant.`,
+        verifiedAsPrinted,
+      ))
+    }
+  }
+  return out
+}
+
 // --- Registry (CT.gov posted outcome) match -----------------------------------
 
 // Decision ②: the strongest badge (verified-registry) carries the strongest proof — the
@@ -185,7 +286,7 @@ function locate(normQuote, normCorpus) {
 //   opts     : { sourceTier?: 'full_text' | 'abstract_only',  // default 'full_text'
 //                registry?: Array<{ measure, value, ci_low, ci_high }> } // CT.gov posted rows
 //
-// Returns a verdict: { tier, flagged, found, consistent, matched, quoteNums, badNums, reason }
+// Returns a verdict including `warnings`, a separate statistical-plausibility channel.
 export function verify(quantity, source, opts = {}) {
   const sourceTier = opts.sourceTier || 'full_text'
 
@@ -263,6 +364,8 @@ export function verify(quantity, source, opts = {}) {
     reason = 'Verified against the full source text.'
   }
 
+  const warnings = plausibilityWarnings(quantity, { verifiedAsPrinted: found && consistent })
+
   return {
     tier,
     flagged: tier === TIERS.FLAGGED,
@@ -272,5 +375,6 @@ export function verify(quantity, source, opts = {}) {
     quoteNums,
     badNums,
     reason,
+    warnings,
   }
 }

@@ -7,8 +7,10 @@
 // title and the gate refuted the summary for lack of evidence, correctly. The fixtures
 // below are trimmed from her real 2026-07-29 digest.
 
-import { describe, it, expect } from 'vitest'
-import { cleanAbstractText } from './sources.js'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { cleanAbstractText, fetchCitation, fetchCitations } from './sources.js'
+
+afterEach(() => vi.unstubAllGlobals())
 
 // PMID 42516853 — 12 authors across 10 institutions. The abstract began at char 1,378 of
 // the raw record; the window was 900. This is the paper whose summary was withheld.
@@ -169,5 +171,43 @@ PMID: 40000001`
     expect(out).not.toMatch(/Brown B/)
     expect(out).not.toMatch(/Elsewhere/)
     expect(out).not.toMatch(/J Vasc Surg/)
+  })
+})
+
+describe('PubMed citation retraction metadata', () => {
+  function pubmedResponse(records) {
+    vi.stubGlobal('sessionStorage', {
+      getItem: vi.fn().mockReturnValue(null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ result: records }),
+    }))
+  }
+
+  it('marks a single citation from the Retracted Publication type', async () => {
+    pubmedResponse({
+      '123': {
+        uid: '123', title: 'A withdrawn trial.', pubdate: '2020', source: 'J Test',
+        authors: [{ name: 'Smith J' }], pubtype: ['Journal Article', 'Retracted Publication'],
+      },
+    })
+    const citation = await fetchCitation('123')
+    expect(citation).toMatchObject({ pmid: '123', verified: true, retracted: true })
+    expect(citation.pubtypes).toContain('Retracted Publication')
+  })
+
+  it('carries retraction status in batched candidate metadata', async () => {
+    pubmedResponse({
+      '123': { uid: '123', title: 'Withdrawn.', pubdate: '2020', pubtype: ['Retracted Publication'] },
+      '456': { uid: '456', title: 'Current.', pubdate: '2021', pubtype: ['Journal Article'] },
+    })
+    const citations = await fetchCitations(['123', '456'])
+    expect(citations.map((citation) => [citation.pmid, citation.retracted])).toEqual([
+      ['123', true],
+      ['456', false],
+    ])
   })
 })

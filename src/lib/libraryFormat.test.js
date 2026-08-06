@@ -78,7 +78,7 @@ describe('sourceNoteMd', () => {
         ],
       }),
     )
-    expect(md).toContain('Effect:** 0.84, P<0.001')
+    expect(md).toContain('Effect:** 0.84, P<0·001')
     expect(md).not.toContain('P=0.001')
   })
 

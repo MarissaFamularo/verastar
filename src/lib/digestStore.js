@@ -16,11 +16,12 @@ const KEY = 'daily:latest'
 
 // State -> storable record. selectedIds is a Set in the UI; persisted as an array so the
 // record stays plain data.
-export function serializeDigest({ results, triaged, candidates, selectedIds } = {}) {
+export function serializeDigest({ results, processedResults, triaged, candidates, selectedIds } = {}) {
   return {
     kind: 'daily',
     savedAt: new Date().toISOString(),
     results: results ?? [],
+    processedResults: processedResults ?? results ?? [],
     triaged: triaged ?? {},
     candidates: candidates ?? [],
     selectedIds: Array.from(selectedIds ?? []),
@@ -33,6 +34,7 @@ export function reviveDigest(record) {
   if (!record || record.kind !== 'daily') return null
   return {
     results: record.results ?? [],
+    processedResults: record.processedResults ?? record.results ?? [],
     triaged: record.triaged ?? {},
     candidates: record.candidates ?? [],
     selectedIds: new Set(record.selectedIds ?? []),

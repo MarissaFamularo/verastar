@@ -21,7 +21,7 @@ Rank lower: small single-arm or retrospective series, narrow subgroup analyses, 
 
 Skip: purely preclinical or animal work, editorials without new data, and topics outside vascular surgery and clinical AI unless they directly inform a project.`
 
-export const DEFAULT_SELECT_COUNT = 10
+export const DEFAULT_SELECT_COUNT = 5
 
 const DEMO_RUBRIC =
   `Prioritize clinically actionable human evidence in vascular care and applied clinical AI. Rank comparative studies, trials, and high-quality syntheses above descriptive reports. Include an occasional workflow or safety paper when it changes how clinical technology should be evaluated. Skip preclinical work and unrelated specialties.`
@@ -61,7 +61,7 @@ const SYSTEM = `You are setting up a personalized morning literature digest for 
 - northStars: 3–6 SHORT concept phrases (2–4 words each) naming the recurring topics they steer by. These are used verbatim as PubMed title/abstract search terms, so make them clean, searchable clinical concepts (e.g. "carotid revascularization", "CLTI outcomes", "AI in medicine") — NOT full sentences, NOT boolean queries.
 - projects: 1–4 short names of the concrete efforts they're driving (programs, studies, initiatives). If none are stated, return an empty array.
 - rubric: a short prose steering doc (3–5 sentences) describing what makes a paper worth THEIR morning — what to prioritize, what to rank lower, what to skip. Ground it in their answers. Write it in first person ("Prioritize…", "Skip…") so it reads as their own instruction. Do NOT include any output-format rules or numbers-handling instructions — only their editorial priorities.
-- selectCount: how many papers per day they want to see. Use their stated number; if none, use 10.
+- selectCount: how many papers per day they want to see. Use their stated number; if none, use 5.
 
 Draft confidently from whatever they gave you. It's a starting point they will refine.`
 

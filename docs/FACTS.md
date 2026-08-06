@@ -30,6 +30,10 @@
 - **DOI → PMID** (live swing): `esearch.fcgi?db=pubmed&term=<doi>[AID]&retmode=json`.
   Not in PubMed at all ⇒ **CrossRef fallback**: `api.crossref.org/works/<doi>` for
   metadata + abstract → abstract-only tier. Worst case flags; never throws.
+- Retractions: PubMed `esummary` publication type `Retracted Publication` is checked before
+  digest selection and when the saved Library opens. Crossref `update-to` relations are not
+  currently checked: the existing Crossref path is only a DOI metadata fallback for works with
+  no PubMed record, so it cannot safely override PubMed status without a separate relation audit.
 - CT.gov v2: `clinicaltrials.gov/api/v2/studies/<NCT>?fields=hasResults,resultsSection.outcomeMeasuresModule`
 - Optional free NCBI API key (raises eutils 3→10 req/s): a Setup field, stored in
   `sessionStorage`.

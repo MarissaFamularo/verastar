@@ -1,8 +1,8 @@
 // pipeline/select.js — the rubric-driven selection funnel (cheap pre-extraction pass).
 //
 // A hand-run morning digest starts from ~50+ candidates and keeps ~10. Verastar mirrors
-// that: search PubMed WIDE, then score every candidate's title + journal + publication
-// type against the clinician's own rubric in ONE cheap Sonnet call — no full-text fetch,
+// that: search PubMed WIDE, then score every candidate's abstract + citation metadata
+// against the clinician's own rubric in small cheap Sonnet calls — no full-text fetch,
 // no extraction. Only the selected top N go on to the expensive verify pipeline, so
 // searching wider costs almost nothing extra. Editing the rubric re-scores the SAME cached
 // pool (no re-fetch), which is what makes the live re-rank cheap.
@@ -11,6 +11,10 @@
 // selectCount only caps a good day. See applyScoreFloor at the bottom of this file.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
+import { fetchAbstractsByPmid } from './sources.js'
+
+export const SELECTION_BATCH_SIZE = 30
+export const SELECTION_PARSE_ATTEMPTS = 2
 
 export const SELECTION_SCHEMA = {
   type: 'object',
@@ -22,11 +26,10 @@ export const SELECTION_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'score', 'reason'],
+        required: ['id', 'score'],
         properties: {
           id: { type: 'string' }, // the candidate's pmid
           score: { type: 'integer' }, // 0–100 fit to the rubric; ranking only
-          reason: { type: 'string' }, // one short clause: why it scored where it did
         },
       },
     },
@@ -44,23 +47,63 @@ export const SELECTION_SCHEMA = {
 export const SCALE = `SCORING SCALE — use the whole range, and place each paper by what the band MEANS, not by ranking it against the other candidates:
 
 - 85–100 — practice-changing for a north star or active project. A well-powered trial, meta-analysis, or major guideline, in a strong journal, that could change what they do or how they counsel a patient.
-- 60–84 — worth their morning. Solid evidence bearing directly on a north star or active project: a good cohort study, a substantive review, a capable paper in a leading journal of their field. They would be glad they read it. THIS IS THE ORDINARY BAND FOR A GOOD PAPER — most days should produce several, and a paper does not have to be practice-changing to belong here.
-- 40–59 — adjacent. Right topic, but weaker design, a tangential angle, or an incremental result. Worth seeing only on a thin day.
+- 70–84 — worth their morning. Solid evidence bearing directly on a north star or active project: a good cohort study, a substantive review, a capable paper in a leading journal of their field. They would be glad they read it. THIS IS THE ORDINARY BAND FOR A GOOD PAPER — most days should produce several, and a paper does not have to be practice-changing to belong here.
+- 40–69 — adjacent. Right topic, but weaker design, a tangential angle, or an incremental result. Worth seeing only on a thin day.
 - 20–39 — on-topic but low-yield: single-center case series, niche technique notes, narrow descriptive work.
 - 0–19 — off-topic, or explicitly the kind of thing the rubric says to skip.
 
-The rubric's exclusions define what lands in 0–19. They do NOT drag down papers outside those categories: a solid study the rubric never spoke against belongs in 60–84 on its merits, and a rubric written mostly as a list of things to skip is still asking for the good papers to score like good papers. Do not compress the whole pool downward because most candidates are ordinary — score each paper against the bands, not against the field.`
+The rubric's exclusions define what lands in 0–19. They do NOT drag down papers outside those categories: a solid study the rubric never spoke against belongs in 70–84 on its merits, and a rubric written mostly as a list of things to skip is still asking for the good papers to score like good papers. Do not compress the whole pool downward because most candidates are ordinary — score each paper against the bands, not against the field.`
 
-const SYSTEM = `You are the gatekeeper for a busy clinician's morning literature digest. You get their rubric (their editorial priorities, in their own words), their north stars, their active projects, and a list of candidate papers — each with only its title, journal, year, and publication types. Score EVERY candidate 0–100 for how well it fits the rubric and deserves a slot in today's digest.
+const SYSTEM = `You are the gatekeeper for a busy clinician's morning literature digest. You get their rubric (their editorial priorities, in their own words), their north stars, their active projects, and a list of candidate papers with their abstracts when PubMed provides them. Score EVERY candidate 0–100 for how well it fits the rubric and deserves a slot in today's digest.
 
 ${SCALE}
 
-The rubric is the deciding voice — honor what it says to prioritize, downrank, and skip. Use journal and publication type as evidence-strength signals. Give each a one-clause reason. You are working from metadata only; be decisive but don't invent findings. Return a score for every candidate id you were given.`
+The rubric is the deciding voice — honor what it says to prioritize, downrank, and skip. Use the abstract to judge topic, design, and likely clinical value; use journal and publication type as evidence-strength signals. If an abstract is unavailable, judge from the metadata without inventing findings. Return only id and score for every candidate id you were given.`
+
+const selectionError = () => new Error("We couldn't finish scoring these papers. Please try again.")
+
+function isParseOrTruncationError(err) {
+  return err instanceof SyntaxError || /json|parse|unexpected end|unterminated|truncat/i.test(String(err?.message || ''))
+}
+
+function candidateBlock(c, abstract) {
+  const types = (c.pubtypes || []).filter((t) => t && t !== 'Journal Article').join(', ')
+  const metadata = `${c.journal || 'unknown journal'}${c.year ? ` (${c.year})` : ''}${types ? ` · ${types}` : ''}`
+  // Very long abstracts can crowd a whole batch out of the response budget. The front
+  // carries the objective/methods and 3,000 chars generally reaches results as well.
+  const evidence = String(abstract || '').replace(/\s+/g, ' ').trim().slice(0, 3000)
+  return `[${c.id}] ${c.title}\n  ${metadata}\n  Abstract: ${evidence || '(not available)'}`
+}
+
+async function scoreBatch({ batch, batchNumber, batchCount, rubricText, stars, projs, abstracts, model, maxTokens }) {
+  const content =
+    `RUBRIC (the deciding voice):\n${rubricText}\n\n` +
+    `North stars: ${stars}\nActive projects: ${projs}\n\n` +
+    `Candidate batch ${batchNumber} of ${batchCount} (${batch.length} papers):\n\n` +
+    batch.map((c) => candidateBlock(c, c.abstract ?? abstracts?.[String(c.pmid || c.id)])).join('\n\n')
+
+  for (let attempt = 1; attempt <= SELECTION_PARSE_ATTEMPTS; attempt++) {
+    try {
+      return await extractStructured({
+        model,
+        system: SYSTEM,
+        content,
+        schema: SELECTION_SCHEMA,
+        maxTokens,
+        thinking: { type: 'disabled' },
+      })
+    } catch (err) {
+      const retryable = isParseOrTruncationError(err)
+      if (!retryable || attempt === SELECTION_PARSE_ATTEMPTS) throw selectionError()
+    }
+  }
+  throw selectionError()
+}
 
 // Score a wide candidate pool against the rubric. `candidates` is
-// [{ id, title, journal, year, pubtypes }]. Returns the same list annotated with
-// { score, reason }, sorted highest-first — the caller slices the top N. One structured
-// call on the cheap model, thinking disabled (ranking, and adaptive thinking truncates JSON).
+// [{ id, title, journal, year, pubtypes, abstract? }]. Returns the same list annotated with
+// { score, reason }, sorted highest-first — the caller slices the top N. Structured calls
+// use the cheap model with thinking disabled (adaptive thinking can truncate JSON).
 export async function selectCandidates({
   rubric = '',
   northStars = [],
@@ -75,33 +118,40 @@ export async function selectCandidates({
   const projs = projects.length ? projects.join(', ') : '(none set)'
   const rubricText = (rubric || '').trim() || '(no rubric set — fall back to the north stars)'
 
-  const content =
-    `RUBRIC (the deciding voice):\n${rubricText}\n\n` +
-    `North stars: ${stars}\nActive projects: ${projs}\n\n` +
-    `Candidates (${candidates.length}):\n\n` +
-    candidates
-      .map((c) => {
-        const types = (c.pubtypes || []).filter((t) => t && t !== 'Journal Article').join(', ')
-        return `[${c.id}] ${c.title}\n  ${c.journal || 'unknown journal'}${c.year ? ` (${c.year})` : ''}${types ? ` · ${types}` : ''}`
-      })
-      .join('\n\n')
+  const missingAbstractIds = candidates.filter((c) => !c.abstract && (c.pmid || c.id)).map((c) => c.pmid || c.id)
+  const abstracts = (await fetchAbstractsByPmid(missingAbstractIds)) || {}
+  const batches = []
+  for (let i = 0; i < candidates.length; i += SELECTION_BATCH_SIZE) {
+    batches.push(candidates.slice(i, i + SELECTION_BATCH_SIZE))
+  }
 
-  const result = await extractStructured({
-    model,
-    system: SYSTEM,
-    content,
-    schema: SELECTION_SCHEMA,
-    maxTokens,
-    thinking: { type: 'disabled' },
-  })
-
-  const scoreById = new Map((result.selections || []).map((s) => [String(s.id), s]))
-  return candidates
-    .map((c) => {
-      const s = scoreById.get(String(c.id))
-      return { ...c, score: s?.score ?? 0, reason: s?.reason ?? '' }
+  // Run batches in order. Besides being gentler on a browser-held API key, this makes the
+  // call and merge order reproducible; final ties are explicitly resolved by pool order.
+  const selections = []
+  for (let i = 0; i < batches.length; i++) {
+    const result = await scoreBatch({
+      batch: batches[i],
+      batchNumber: i + 1,
+      batchCount: batches.length,
+      rubricText,
+      stars,
+      projs,
+      abstracts,
+      model,
+      maxTokens,
     })
-    .sort((a, b) => b.score - a.score)
+    selections.push(...(Array.isArray(result?.selections) ? result.selections : []))
+  }
+
+  const scoreById = new Map(
+    selections.map((s) => [String(s.id), Math.min(100, Math.max(0, Math.round(Number(s.score) || 0)))]),
+  )
+  return candidates
+    .map((c, index) => {
+      return { ...c, score: scoreById.get(String(c.id)) ?? 0, reason: '', _selectionIndex: index }
+    })
+    .sort((a, b) => b.score - a.score || a._selectionIndex - b._selectionIndex)
+    .map(({ _selectionIndex, ...candidate }) => candidate)
 }
 
 // --- the score floor: a slot has to be EARNED ---
@@ -111,7 +161,8 @@ export async function selectCandidates({
 // rubric norm is the opposite: if two papers pass, the digest has two. The floor is the
 // bar; selectCount is only a ceiling on how much of a good day she wants.
 
-export const DEFAULT_SCORE_FLOOR = 60
+export const DEFAULT_SCORE_FLOOR = 70
+export const PRE_READ_MARGIN = 20
 
 // Profiles predate this field, and the number arrives from a text input — anything
 // unusable falls back to the default rather than silently becoming a floor of 0 (which
@@ -125,6 +176,14 @@ export function normalizeScoreFloor(raw) {
   return Math.min(Math.max(n, 0), 100)
 }
 
+// Abstract scoring is an uncertain screen, not the final judgment. Give candidates a
+// fixed allowance so a paper can improve after full reading: score + margin >= final bar.
+export function preReadFloor(finalFloor, margin = PRE_READ_MARGIN) {
+  const bar = normalizeScoreFloor(finalFloor)
+  const allowance = Number.isFinite(Number(margin)) ? Math.max(0, Math.round(Number(margin))) : PRE_READ_MARGIN
+  return Math.max(0, bar - allowance)
+}
+
 // Floor first, THEN cap. `scored` is already sorted highest-first. Returns the picks
 // plus the counts the UI needs to say plainly what the floor did.
 export function applyScoreFloor(scored, { floor = DEFAULT_SCORE_FLOOR, count } = {}) {
@@ -132,6 +191,23 @@ export function applyScoreFloor(scored, { floor = DEFAULT_SCORE_FLOOR, count } =
   const ceiling = Number.isFinite(Number(count)) && Number(count) > 0 ? Math.round(Number(count)) : Infinity
   const cleared = (scored || []).filter((c) => Number(c?.score ?? 0) >= bar)
   return { picked: cleared.slice(0, ceiling), cleared: cleared.length, total: (scored || []).length, floor: bar }
+}
+
+// Re-apply the same admission bar to the better-informed score produced after reading.
+// Error results remain visible as errors; retracted results never belong in a digest.
+export function applyPostReadFloor(results, rankings = {}, floor = DEFAULT_SCORE_FLOOR) {
+  const bar = normalizeScoreFloor(floor)
+  const list = Array.isArray(results) ? results : []
+  const successful = list.filter((r) => !r?.error && !r?.retracted)
+  const cleared = successful.filter((r) => Number(rankings?.[r?.paper?.id]?.score) >= bar)
+  const errors = list.filter((r) => r?.error && !r?.retracted)
+  return {
+    kept: [...cleared, ...errors],
+    cleared: cleared.length,
+    excluded: successful.length - cleared.length,
+    total: successful.length,
+    floor: bar,
+  }
 }
 
 // The one honest sentence about today's funnel. Empty when the floor did nothing worth
@@ -144,28 +220,25 @@ export function applyScoreFloor(scored, { floor = DEFAULT_SCORE_FLOOR, count } =
 export function floorSummary({ total = 0, cleared = 0, picked = 0, floor = DEFAULT_SCORE_FLOOR } = {}) {
   if (!total) return ''
   if (!cleared)
-    return `On title and journal, nothing cleared your bar today — ${total} paper${total === 1 ? '' : 's'} scored, none reached ${floor}.`
+    return `On title, abstract, and journal, nothing cleared your bar today — ${total} paper${total === 1 ? '' : 's'} scored, none reached ${floor}.`
   if (cleared < total) {
-    const trimmed = `On title and journal, ${cleared} of ${total} cleared your bar today (score ${floor}+).`
+    const trimmed = `On title, abstract, and journal, ${cleared} of ${total} cleared your bar today (score ${floor}+).`
     return picked < cleared ? `${trimmed} The top ${picked} made the digest.` : trimmed
   }
-  return picked < cleared ? `On title and journal, all ${total} cleared your bar — the top ${picked} made the digest.` : ''
+  return picked < cleared ? `On title, abstract, and journal, all ${total} cleared your bar — the top ${picked} made the digest.` : ''
 }
 
 // --- the pre-read screen vs the post-read judgment ---------------------------
 //
 // TWO 0–100 scores reach the digest and they are not the same number. This file's score
-// (selectCandidates) reads title + journal + publication type BEFORE the paper is fetched,
+// (selectCandidates) reads the abstract + citation metadata BEFORE the full paper is fetched,
 // and it is the one the floor filters on. The card's number comes from pipeline/triage,
 // written AFTER the paper was fetched and read. Unlabelled, they read as the app
 // contradicting itself: "3 of 27 cleared your bar today (score 60+)" sitting directly
 // above a card marked 58. Both are true; only the labels were missing. So floorSummary
-// names its input ("on title and journal") and the card says "after reading" — and a
-// post-read score under the bar is stated on its own card, because a screen that
-// mis-ranked a paper is signal she can act on.
-//
-// Nothing here re-filters. She already paid to extract the paper; dropping it after the
-// fact would spend her money and show her nothing.
+// names its input ("on title, abstract, and journal") and the card says "after reading" — and a
+// the digest orchestrator re-applies the same floor after reading. A disagreement is
+// reported in the run summary; sub-threshold papers do not become digest padding.
 
 // Coerce a UI-supplied score/floor to a usable number, or null. '' and null must not
 // coerce to 0 the way Number() does — an absent score is not a score of zero.

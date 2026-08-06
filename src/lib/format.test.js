@@ -46,10 +46,9 @@ describe('pOperator — derive the operator from the verified quote', () => {
     expect(pOperator(q({ p_value: 0.22, source_quote: quote }))).toBe('=')
   })
 
-  it('first matching token wins when the p_value appears twice with different operators', () => {
+  it('first P-labelled matching token wins when the same number appears elsewhere', () => {
     expect(pOperator(q({ p_value: 0.05, source_quote: 'P<0.05 in A; P=0.05 in B' }))).toBe('<')
-    // ...including when the first appearance states none — never upgraded by a later one.
-    expect(pOperator(q({ p_value: 0.05, source_quote: 'alpha of 0.05; P=0.05' }))).toBe(null)
+    expect(pOperator(q({ p_value: 0.05, source_quote: 'alpha of 0.05; P=0.05' }))).toBe('=')
   })
 
   it('returns null for a missing/empty quote or a quantity without p_value', () => {
@@ -61,15 +60,37 @@ describe('pOperator — derive the operator from the verified quote', () => {
 })
 
 describe('fmtNum — the fact-channel value string', () => {
+  it('preserves printed significant figures from the verbatim quote', () => {
+    const precise = q({
+      value: 1,
+      ci_low: 1,
+      ci_high: 2.5,
+      p_value: 0,
+      source_quote: 'ratio 1.0 (95% CI 1.00–2.50; P=0.00)',
+    })
+    expect(fmtNum(precise)).toBe('1.0 (CI 1.00–2.50), P=0.00')
+  })
+
+  it('preserves source decimal marks and thousands separators', () => {
+    expect(fmtNum(q({ value: 0.84, source_quote: 'HR 0·84' }))).toBe('0·84')
+    expect(fmtNum(q({ value: 502157, source_quote: 'cohort of 502,157 participants' }))).toBe('502,157')
+    expect(fmtNum(q({ value: -0.4, source_quote: 'difference −0.40' }))).toBe('−0.40')
+  })
+
+  it('uses the P-labelled occurrence when its value duplicates the estimate', () => {
+    const duplicate = q({ value: 0.05, p_value: 0.05, source_quote: 'difference 0.05; P=0.050' })
+    expect(fmtNum(duplicate)).toBe('0.05, P=0.050')
+  })
+
   it('renders the quote\'s operator, never an invented "="', () => {
-    expect(fmtNum(q({ value: 0.001, p_value: 0.001, source_quote: '(P<0·001)' }))).toBe('0.001, P<0.001')
+    expect(fmtNum(q({ value: 0.001, p_value: 0.001, source_quote: '(P<0·001)' }))).toBe('0·001, P<0·001')
     expect(fmtNum(q({ value: 0.05, p_value: 0.05, source_quote: 'P>0.05' }))).toBe('0.05, P>0.05')
     expect(fmtNum(q({ value: 0.01, p_value: 0.01, source_quote: 'P≤0.01' }))).toBe('0.01, P≤0.01')
     expect(fmtNum(q({ value: 0.05, p_value: 0.05, source_quote: 'P<=0.05' }))).toBe('0.05, P≤0.05')
   })
 
   it('renders "=" ONLY when the quote states it', () => {
-    expect(fmtNum(q({ value: 0.02, p_value: 0.02, source_quote: 'P = .02' }))).toBe('0.02, P=0.02')
+    expect(fmtNum(q({ value: 0.02, p_value: 0.02, source_quote: 'P = .02' }))).toBe('.02, P=.02')
   })
 
   it('renders operator-free when the quote states none', () => {

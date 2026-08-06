@@ -49,6 +49,10 @@ const snapshot = () => ({
       rows: [{ quantity: { name: 'HR', value: 0.84 }, verdict: { found: true, tier: 'verified-full-text', flagged: false } }],
     },
   ],
+  processedResults: [
+    { paper: { id: '111', pmid: '111', title: 'BASIL-3' }, rows: [] },
+    { paper: { id: '222', pmid: '222', title: 'Below final bar but already read' }, rows: [] },
+  ],
   triaged: { 111: { score: 88, tier: 1, finding: 'No difference.', relevance: 'CLTI project.' } },
   candidates: [{ id: '111', pmid: '111', title: 'BASIL-3', score: 88 }],
   selectedIds: new Set(['111', '222']),
@@ -66,6 +70,7 @@ describe('daily digest round-trip', () => {
     await saveDailyDigest(state)
     const loaded = await loadDailyDigest()
     expect(loaded.results).toEqual(state.results)
+    expect(loaded.processedResults).toEqual(state.processedResults)
     expect(loaded.triaged).toEqual(state.triaged)
     expect(loaded.candidates).toEqual(state.candidates)
   })
@@ -87,9 +92,15 @@ describe('daily digest round-trip', () => {
     await saveDailyDigest({})
     const loaded = await loadDailyDigest()
     expect(loaded.results).toEqual([])
+    expect(loaded.processedResults).toEqual([])
     expect(loaded.triaged).toEqual({})
     expect(loaded.candidates).toEqual([])
     expect(loaded.selectedIds.size).toBe(0)
+  })
+
+  it('revives legacy snapshots by treating visible results as the paid-work cache', () => {
+    const revived = reviveDigest({ kind: 'daily', results: [{ paper: { id: '1' } }] })
+    expect(revived.processedResults).toEqual(revived.results)
   })
 })
 
