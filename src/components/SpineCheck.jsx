@@ -679,6 +679,10 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         }
       } catch (err) {
         console.warn('Triage failed (facts unaffected):', err.message)
+        setScanError(
+          `The papers were read and verified, but Claude could not finish their summaries: ${err.message}. ` +
+          'Your completed reading was saved; use “Finish this digest” to retry the summaries without reading the papers again.',
+        )
       }
       setRanking(false)
     }
@@ -843,8 +847,33 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       const chosen = scored.filter((c) => chosenIds.has(c.id))
       if (!chosen.length) return
       const outcomes = await runList(chosen, { injectCorrupt: false })
+      const completed = outcomes.filter((outcome) => !outcome.error).length
+      if (!completed) {
+        setScanError(
+          `The digest found ${chosen.length} paper${chosen.length === 1 ? '' : 's'}, but none could be read. ` +
+          'Open the paper list below to see each failure, then run the digest again.',
+        )
+      } else if (completed < outcomes.length) {
+        const failed = outcomes.length - completed
+        setScanError((current) =>
+          current || `${failed} of ${outcomes.length} papers could not be read. The completed papers were saved and are shown below.`,
+        )
+      }
       await recordSeen(scored, outcomes) // LAST — and only what actually ran or was passed over
+    } catch (err) {
+      console.warn('Digest run stopped:', err)
+      setScanError(
+        `The digest stopped before it could finish: ${err?.message || String(err)}. ` +
+        'Any papers already read were saved; use “Finish this digest” to continue without paying to read them again.',
+      )
     } finally {
+      // Every failure path must release the UI as well as the screen lock. Without this,
+      // an exception outside the deliberately caught search/selection calls leaves the
+      // page looking idle but the run button disabled — the original silent failure.
+      setSearching(false)
+      setSelecting(false)
+      setRunning(false)
+      setRanking(false)
       wakeLock.end()
     }
   }
@@ -983,8 +1012,19 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const digestedIds = new Set(results.map((r) => r.paper.id))
   const processedIds = new Set(processedResults.map((r) => r.paper.id))
 
-  const busy = running || searching || selecting
-  const primaryLabel = searching ? 'Searching…' : selecting ? 'Scoring…' : running ? 'Building digest…' : "Run today's digest"
+  // Ranking is still part of the run. Re-enabling the button here let a second click clear
+  // the digest while the first run was writing summaries, producing an apparently silent
+  // failure and a stale snapshot race.
+  const busy = running || searching || selecting || ranking
+  const primaryLabel = searching
+    ? 'Searching…'
+    : selecting
+      ? 'Scoring…'
+      : running
+        ? 'Building digest…'
+        : ranking
+          ? 'Writing summaries…'
+          : "Run today's digest"
   const showEmpty =
     !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote
 
