@@ -74,6 +74,7 @@ export default function AddPaper({ onAdded }) {
       const rankings = await triage({
         northStars: profile?.northStars ?? [],
         projects: profile?.projects ?? [],
+        journalPreferences: profile?.journalPreferences,
         rubric: profile?.rubric?.criteria ?? '',
         candidates: [
           {

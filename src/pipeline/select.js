@@ -3,7 +3,7 @@
 // A hand-run morning digest starts from ~50+ candidates and keeps ~10. Verastar mirrors
 // that: search PubMed WIDE, then score every candidate's abstract + citation metadata
 // against the clinician's own rubric in small cheap Sonnet calls — no full-text fetch,
-// no extraction. Only the selected top N go on to the expensive verify pipeline, so
+// no extraction. Only the selected coverage-first slate goes on to the expensive verify pipeline, so
 // searching wider costs almost nothing extra. Editing the rubric re-scores the SAME cached
 // pool (no re-fetch), which is what makes the live re-rank cheap.
 //
@@ -12,6 +12,7 @@
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 import { fetchAbstractsByPmid } from './sources.js'
+import { journalPreferenceText } from './journals.js'
 
 export const SELECTION_BATCH_SIZE = 30
 export const SELECTION_PARSE_ATTEMPTS = 2
@@ -58,7 +59,7 @@ const SYSTEM = `You are the gatekeeper for a busy clinician's morning literature
 
 ${SCALE}
 
-The rubric is the deciding voice — honor what it says to prioritize, downrank, and skip. Use the abstract to judge topic, design, and likely clinical value; use journal and publication type as evidence-strength signals. If an abstract is unavailable, judge from the metadata without inventing findings. Return only id and score for every candidate id you were given.`
+The rubric is the deciding voice — honor what it says to prioritize, downrank, and skip. Each candidate may include the search topic that found it and the north star explicitly mapped to that topic. Use that mapping as the paper's intended steering context; never invent a mapping for an unmapped topic. Use the abstract to judge topic, design, and likely clinical value; use journal and publication type as evidence-strength signals. If an abstract is unavailable, judge from the metadata without inventing findings. Return only id and score for every candidate id you were given.`
 
 const selectionError = () => new Error("We couldn't finish scoring these papers. Please try again.")
 
@@ -72,12 +73,16 @@ function candidateBlock(c, abstract) {
   // Very long abstracts can crowd a whole batch out of the response budget. The front
   // carries the objective/methods and 3,000 chars generally reaches results as well.
   const evidence = String(abstract || '').replace(/\s+/g, ' ').trim().slice(0, 3000)
-  return `[${c.id}] ${c.title}\n  ${metadata}\n  Abstract: ${evidence || '(not available)'}`
+  const steering = (Array.isArray(c.topicSteering) ? c.topicSteering : [])
+    .map((row) => `${row.topic || 'Unnamed topic'} → ${(row.northStars || []).length ? row.northStars.join(', ') : '(unmapped)'}`)
+    .join('; ')
+  return `[${c.id}] ${c.title}\n  ${metadata}\n  Search steering: ${steering || '(not available)'}\n  Abstract: ${evidence || '(not available)'}`
 }
 
-async function scoreBatch({ batch, batchNumber, batchCount, rubricText, stars, projs, abstracts, model, maxTokens }) {
+async function scoreBatch({ batch, batchNumber, batchCount, rubricText, journalText, stars, projs, abstracts, model, maxTokens }) {
   const content =
     `RUBRIC (the deciding voice):\n${rubricText}\n\n` +
+    `JOURNAL PREFERENCES (structured signal; they do not override hard exclusions):\n${journalText}\n\n` +
     `North stars: ${stars}\nActive projects: ${projs}\n\n` +
     `Candidate batch ${batchNumber} of ${batchCount} (${batch.length} papers):\n\n` +
     batch.map((c) => candidateBlock(c, c.abstract ?? abstracts?.[String(c.pmid || c.id)])).join('\n\n')
@@ -102,12 +107,13 @@ async function scoreBatch({ batch, batchNumber, batchCount, rubricText, stars, p
 
 // Score a wide candidate pool against the rubric. `candidates` is
 // [{ id, title, journal, year, pubtypes, abstract? }]. Returns the same list annotated with
-// { score, reason }, sorted highest-first — the caller slices the top N. Structured calls
+// { score, reason }, sorted highest-first — the caller applies the floor and slate pass. Structured calls
 // use the cheap model with thinking disabled (adaptive thinking can truncate JSON).
 export async function selectCandidates({
   rubric = '',
   northStars = [],
   projects = [],
+  journalPreferences,
   candidates,
   model = MODELS.triage,
   maxTokens = 4096,
@@ -117,6 +123,7 @@ export async function selectCandidates({
   const stars = northStars.length ? northStars.join(', ') : '(none set)'
   const projs = projects.length ? projects.join(', ') : '(none set)'
   const rubricText = (rubric || '').trim() || '(no rubric set — fall back to the north stars)'
+  const journalText = journalPreferenceText(journalPreferences)
 
   const missingAbstractIds = candidates.filter((c) => !c.abstract && (c.pmid || c.id)).map((c) => c.pmid || c.id)
   const abstracts = (await fetchAbstractsByPmid(missingAbstractIds)) || {}
@@ -134,6 +141,7 @@ export async function selectCandidates({
       batchNumber: i + 1,
       batchCount: batches.length,
       rubricText,
+      journalText,
       stars,
       projs,
       abstracts,
@@ -148,7 +156,14 @@ export async function selectCandidates({
   )
   return candidates
     .map((c, index) => {
-      return { ...c, score: scoreById.get(String(c.id)) ?? 0, reason: '', _selectionIndex: index }
+      const abstract = c.abstract ?? abstracts?.[String(c.pmid || c.id)]
+      return {
+        ...c,
+        ...(abstract ? { abstract } : {}),
+        score: scoreById.get(String(c.id)) ?? 0,
+        reason: '',
+        _selectionIndex: index,
+      }
     })
     .sort((a, b) => b.score - a.score || a._selectionIndex - b._selectionIndex)
     .map(({ _selectionIndex, ...candidate }) => candidate)
@@ -184,13 +199,132 @@ export function preReadFloor(finalFloor, margin = PRE_READ_MARGIN) {
   return Math.max(0, bar - allowance)
 }
 
-// Floor first, THEN cap. `scored` is already sorted highest-first. Returns the picks
-// plus the counts the UI needs to say plainly what the floor did.
+// Apply the search-topic take AFTER every bounded unseen candidate has a relevance score.
+// `scored` is highest-first with stable input order for ties; PubMed supplied that input
+// newest-first within each topic, so recency is exactly the tie-breaker and never the gate.
+// A cross-topic paper may win a place through several topics but appears only once.
+export function capScoredByTopic(scored, { cap, counts = [] } = {}) {
+  const candidates = Array.isArray(scored) ? scored : []
+  const ceiling = Number.isFinite(Number(cap)) && Number(cap) > 0 ? Math.round(Number(cap)) : Infinity
+  const rows = []
+  const rowKeys = new Set()
+  const addRow = (label, base = {}) => {
+    const clean = String(label || '').trim()
+    const key = clean.toLocaleLowerCase()
+    if (!clean || rowKeys.has(key)) return
+    rowKeys.add(key)
+    rows.push({ ...base, label: clean, _key: key })
+  }
+  for (const row of Array.isArray(counts) ? counts : []) addRow(row?.label, row || {})
+  for (const candidate of candidates) for (const topic of candidateTopics(candidate)) addRow(topic)
+
+  const retainedById = new Map()
+  const cappedCounts = rows.map((row) => {
+    const matching = candidates.filter((candidate) =>
+      candidateTopics(candidate).some((topic) => topic.toLocaleLowerCase() === row._key),
+    )
+    const winners = matching.slice(0, ceiling)
+    for (const candidate of winners) {
+      const id = String(candidate?.id ?? candidate?.pmid ?? '')
+      if (!id) continue
+      const labels = retainedById.get(id) || []
+      if (!labels.includes(row.label)) labels.push(row.label)
+      retainedById.set(id, labels)
+    }
+    const { _key, ...base } = row
+    return { ...base, count: winners.length, prescored: matching.length }
+  })
+
+  // Legacy/restored candidates without attribution stay reachable rather than vanishing
+  // merely because their snapshot predates per-topic provenance.
+  const retained = candidates
+    .filter((candidate) => {
+      const id = String(candidate?.id ?? candidate?.pmid ?? '')
+      return candidateTopics(candidate).length === 0 || retainedById.has(id)
+    })
+    .map((candidate) => {
+      const id = String(candidate?.id ?? candidate?.pmid ?? '')
+      return { ...candidate, retainedTopics: [...(retainedById.get(id) || [])] }
+    })
+
+  return { candidates: retained, counts: cappedCounts, prescored: candidates.length }
+}
+
+const candidateTopics = (candidate) => {
+  const seen = new Set()
+  return (Array.isArray(candidate?.topics) ? candidate.topics : [])
+    .map((topic) => String(topic || '').trim())
+    .filter((topic) => {
+      const key = topic.toLocaleLowerCase()
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
+
+// Floor first, THEN coverage, THEN score fill. `scored` is already sorted highest-first.
+// The coverage pass repeatedly takes the best remaining paper that adds at least one
+// topic. Multi-topic papers cover every topic attributed by the searches. Once no paper
+// can add coverage (or every eligible topic is represented), the remaining slots revert
+// to the global score order. Nothing below the floor can enter through either pass.
 export function applyScoreFloor(scored, { floor = DEFAULT_SCORE_FLOOR, count } = {}) {
   const bar = normalizeScoreFloor(floor)
   const ceiling = Number.isFinite(Number(count)) && Number(count) > 0 ? Math.round(Number(count)) : Infinity
   const cleared = (scored || []).filter((c) => Number(c?.score ?? 0) >= bar)
-  return { picked: cleared.slice(0, ceiling), cleared: cleared.length, total: (scored || []).length, floor: bar }
+  const eligibleTopicKeys = new Set(cleared.flatMap(candidateTopics).map((topic) => topic.toLocaleLowerCase()))
+  const coveredTopicKeys = new Set()
+  const picked = []
+  const pickedIds = new Set()
+
+  while (picked.length < ceiling) {
+    const next = cleared.find((candidate) =>
+      !pickedIds.has(candidate.id) &&
+      candidateTopics(candidate).some((topic) => !coveredTopicKeys.has(topic.toLocaleLowerCase())),
+    )
+    if (!next) break
+    picked.push(next)
+    pickedIds.add(next.id)
+    candidateTopics(next).forEach((topic) => coveredTopicKeys.add(topic.toLocaleLowerCase()))
+  }
+
+  const coveragePicked = picked.length
+  for (const candidate of cleared) {
+    if (picked.length >= ceiling) break
+    if (pickedIds.has(candidate.id)) continue
+    picked.push(candidate)
+    pickedIds.add(candidate.id)
+  }
+
+  return {
+    picked,
+    cleared: cleared.length,
+    total: (scored || []).length,
+    floor: bar,
+    coveragePicked,
+    scorePicked: picked.length - coveragePicked,
+    coveredTopics: coveredTopicKeys.size,
+    eligibleTopics: eligibleTopicKeys.size,
+  }
+}
+
+// Explain the slate-level decision separately from the paper-level score. "Eligible"
+// means a topic represented among papers that passed the screen; a searched topic with no
+// qualifying paper cannot be covered without weakening the user's bar.
+export function coverageSelectionSummary({
+  picked = 0,
+  coveragePicked = 0,
+  scorePicked = 0,
+  coveredTopics = 0,
+  eligibleTopics = 0,
+} = {}) {
+  if (!picked) return ''
+  if (!eligibleTopics) {
+    return `No topic attribution was available, so ${picked} paper${picked === 1 ? ' was' : 's were'} selected by score.`
+  }
+  const coverage = `Coverage-first selection chose ${coveragePicked} paper${coveragePicked === 1 ? '' : 's'} spanning ${coveredTopics} of ${eligibleTopics} eligible topic${eligibleTopics === 1 ? '' : 's'}`
+  return scorePicked
+    ? `${coverage}, then filled ${scorePicked} remaining slot${scorePicked === 1 ? '' : 's'} by score.`
+    : `${coverage}.`
 }
 
 // Re-apply the same admission bar to the better-informed score produced after reading.

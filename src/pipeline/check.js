@@ -49,10 +49,11 @@ export const CHECK_SCHEMA = {
   },
 }
 
-const SYSTEM = `You are a skeptical peer reviewer auditing one-sentence summaries ("claims") of medical papers before a clinician reads them. For each item you get the source snippet a claim was written from and the CLAIM itself. Judge ONLY whether the snippet supports the claim as stated:
+const SYSTEM = `You are a skeptical peer reviewer auditing one-sentence claims about medical papers before a clinician reads them. A claim may summarize a finding or state a methodological limitation. For each item you get the source snippet a claim was written from and the CLAIM itself. Judge ONLY whether the snippet supports the claim as stated:
 - the direction of effect (improved / reduced / no significant difference / non-inferior / increased risk)
 - what is compared to what, in which population, with which intervention
 - the strength of the language (a null or non-significant result stated as a benefit is unsupported; the snippet's "may" stated as "does" is overstated)
+- for a design caution, whether the named design, selection mechanism, matching method, exposure identification, setting, endpoint limitation, or causal constraint is supported by the snippet rather than invented
 Numeric values in the claim were already verified against the source by a separate deterministic gate — do NOT judge the numbers themselves, only the prose claim around them. A claim that is vaguer or more cautious than the snippet is supported. Refute (supported=false) when the claim reverses or overstates the direction, asserts an outcome the snippet does not state, or misattributes the population, intervention, or comparator. When genuinely uncertain whether the snippet supports the claim, refute — an unsupported claim shown to a clinician is worse than a supported one withheld. Return a verdict for EVERY item id you were given, each with a one-clause reason.`
 
 // Audit findings against their source snippets. `items` is [{ id, finding, snippet }].
@@ -68,14 +69,27 @@ export async function checkFindings({ items, model = MODELS.fast, maxTokens = 20
   )
   if (!checkable.length) return out
 
+  // A paper may now contribute two claims (finding + design caution). Group identical
+  // snippets so the full evidence window rides on the call once per paper, not once per
+  // claim; the new safety check should not double recurring input cost.
+  const groups = []
+  const bySnippet = new Map()
+  for (const item of checkable) {
+    const snippet = String(item.snippet).slice(0, SNIPPET_CHARS)
+    let group = bySnippet.get(snippet)
+    if (!group) {
+      group = { snippet, claims: [] }
+      bySnippet.set(snippet, group)
+      groups.push(group)
+    }
+    group.claims.push(item)
+  }
   const content =
-    `Items (${checkable.length}):\n\n` +
-    checkable
-      .map(
-        (i) =>
-          `[${i.id}]\nSNIPPET:\n${String(i.snippet).slice(0, SNIPPET_CHARS)}\nCLAIM: ${String(i.finding).trim()}`
-      )
-      .join('\n\n')
+    `Items (${checkable.length}) across ${groups.length} source${groups.length === 1 ? '' : 's'}:\n\n` +
+    groups.map((group) =>
+      `SNIPPET:\n${group.snippet}\nCLAIMS:\n` +
+      group.claims.map((i) => `[${i.id}] CLAIM: ${String(i.finding).trim()}`).join('\n')
+    ).join('\n\n')
 
   const result = await extractStructured({ model, system: SYSTEM, content, schema: CHECK_SCHEMA, maxTokens })
 

@@ -73,24 +73,37 @@ export function getUsageSummary() {
   return readUsage()
 }
 
-// --- key management (session-backed by default, localStorage when remembered) ---
+// --- credential management (session-backed by default, localStorage when remembered) ---
+
+function setCredential(storageKey, value, remember) {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) {
+    sessionStorage.removeItem(storageKey)
+    localStorage.removeItem(storageKey)
+    return
+  }
+  if (remember) {
+    localStorage.setItem(storageKey, trimmed)
+    sessionStorage.removeItem(storageKey)
+  } else {
+    sessionStorage.setItem(storageKey, trimmed)
+    localStorage.removeItem(storageKey)
+  }
+}
+
+function getCredential(storageKey) {
+  return sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey) || ''
+}
 
 // The key lives in exactly ONE of the two stores at a time: remember=true moves it to
 // localStorage (survives tab close, this device only), remember=false keeps it in
 // sessionStorage (gone on tab close).
 export function setApiKey(key, { remember = false } = {}) {
-  const trimmed = key.trim()
-  if (remember) {
-    localStorage.setItem(KEY_STORAGE, trimmed)
-    sessionStorage.removeItem(KEY_STORAGE)
-  } else {
-    sessionStorage.setItem(KEY_STORAGE, trimmed)
-    localStorage.removeItem(KEY_STORAGE)
-  }
+  setCredential(KEY_STORAGE, key, remember)
 }
 
 export function getApiKey() {
-  return sessionStorage.getItem(KEY_STORAGE) || localStorage.getItem(KEY_STORAGE) || ''
+  return getCredential(KEY_STORAGE)
 }
 
 export function hasApiKey() {
@@ -107,22 +120,48 @@ export function clearApiKey() {
   localStorage.removeItem(KEY_STORAGE)
 }
 
-// Optional free NCBI key raises eutils from 3 -> 10 req/s. Also sessionStorage-only.
-export function setNcbiKey(key) {
-  sessionStorage.setItem(NCBI_KEY_STORAGE, key.trim())
+// Optional free NCBI key raises eutils from 3 -> 10 req/s. With no explicit option it
+// follows the Anthropic key's current Remember choice, so onboarding cannot split the
+// three credentials across different persistence policies.
+export function setNcbiKey(key, { remember = isKeyRemembered() } = {}) {
+  setCredential(NCBI_KEY_STORAGE, key, remember)
 }
 
 export function getNcbiKey() {
-  return sessionStorage.getItem(NCBI_KEY_STORAGE) || ''
+  return getCredential(NCBI_KEY_STORAGE)
 }
 
 // Optional email identifies us politely to NCBI (their contact-before-block channel).
-export function setNcbiEmail(email) {
-  sessionStorage.setItem(NCBI_EMAIL_STORAGE, email.trim())
+export function setNcbiEmail(email, { remember = isKeyRemembered() } = {}) {
+  setCredential(NCBI_EMAIL_STORAGE, email, remember)
 }
 
 export function getNcbiEmail() {
-  return sessionStorage.getItem(NCBI_EMAIL_STORAGE) || ''
+  return getCredential(NCBI_EMAIL_STORAGE)
+}
+
+// Move every credential that currently exists to the same storage tier. This is the
+// Settings checkbox's one implementation and also repairs the old split state where the
+// Anthropic key was local but NCBI values were still session-only.
+export function setAllCredentialsRemembered(remember) {
+  for (const storageKey of [KEY_STORAGE, NCBI_KEY_STORAGE, NCBI_EMAIL_STORAGE]) {
+    const value = getCredential(storageKey)
+    if (value) setCredential(storageKey, value, remember)
+  }
+}
+
+export function getNcbiCredentialStatus() {
+  return {
+    keyActive: !!getNcbiKey(),
+    emailActive: !!getNcbiEmail(),
+    keyRemembered: !!localStorage.getItem(NCBI_KEY_STORAGE),
+    emailRemembered: !!localStorage.getItem(NCBI_EMAIL_STORAGE),
+  }
+}
+
+export function clearNcbiCredentials() {
+  setCredential(NCBI_KEY_STORAGE, '', false)
+  setCredential(NCBI_EMAIL_STORAGE, '', false)
 }
 
 // --- client ---

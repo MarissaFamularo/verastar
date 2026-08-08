@@ -17,9 +17,14 @@ import {
   overfetchFor,
   heldBack,
   mergeTopicResults,
+  mergeTopicResultsForScoring,
   attachTopics,
+  mappedNorthStars,
+  topicSteeringCoverage,
   lookbackOptions,
+  lookbackGap,
   searchSummary,
+  topicReportRows,
   parseTopicsText,
   DEFAULT_SEARCH_DAYS,
   MIN_SEARCH_DAYS,
@@ -79,14 +84,42 @@ describe('normalizeTopics', () => {
       { label: 'Aortic', query: 'aortic aneurysm' },
     ])
   })
+
+  it('preserves explicit north-star mappings and normalizes legacy mapping keys', () => {
+    expect(normalizeTopics([
+      { label: 'HPB', query: 'hepatic surgery OR biliary cancer', northStars: [' HPB outcomes ', 'HPB outcomes'] },
+      { label: 'Pediatric', query: 'pediatric transplant', northStar: 'Pediatric transplant' },
+    ])).toEqual([
+      { label: 'HPB', query: 'hepatic surgery OR biliary cancer', northStars: ['HPB outcomes'] },
+      { label: 'Pediatric', query: 'pediatric transplant', northStars: ['Pediatric transplant'] },
+    ])
+  })
+})
+
+describe('topic steering coverage', () => {
+  const stars = ['Allocation equity', 'HPB outcomes']
+
+  it('resolves mappings case-insensitively to the profile spelling', () => {
+    expect(mappedNorthStars({ northStars: ['allocation EQUITY', 'deleted star'] }, stars)).toEqual(['Allocation equity'])
+  })
+
+  it('names every unmapped topic without blocking valid mappings', () => {
+    const result = topicSteeringCoverage([
+      { label: 'Allocation', query: 'organ allocation', northStars: ['Allocation equity'] },
+      { label: 'HPB', query: 'hepatic surgery' },
+      { label: 'Pediatric', query: 'pediatric transplant', northStars: ['Deleted star'] },
+    ], stars)
+    expect(result).toMatchObject({ total: 3, covered: 1, complete: false })
+    expect(result.uncovered.map((row) => row.label)).toEqual(['HPB', 'Pediatric'])
+  })
 })
 
 describe('topicsFromStars / profileTopics', () => {
   it('derives topics from a legacy profile with no topics field', () => {
     const profile = { northStars: ['CLTI outcomes', 'Carotid revascularization'] }
     expect(profileTopics(profile)).toEqual([
-      { label: 'CLTI outcomes', query: 'CLTI outcomes' },
-      { label: 'Carotid revascularization', query: 'Carotid revascularization' },
+      { label: 'CLTI outcomes', query: 'CLTI outcomes', northStars: ['CLTI outcomes'] },
+      { label: 'Carotid revascularization', query: 'Carotid revascularization', northStars: ['Carotid revascularization'] },
     ])
   })
 
@@ -104,7 +137,7 @@ describe('topicsFromStars / profileTopics', () => {
 
   it('falls back to north stars when the topics field is present but unusable', () => {
     const profile = { topics: [{ label: '' }], northStars: ['CLTI outcomes'] }
-    expect(profileTopics(profile)).toEqual([{ label: 'CLTI outcomes', query: 'CLTI outcomes' }])
+    expect(profileTopics(profile)).toEqual([{ label: 'CLTI outcomes', query: 'CLTI outcomes', northStars: ['CLTI outcomes'] }])
   })
 
   it('never returns an empty plan — nothing to search would read as "PubMed found nothing"', () => {
@@ -256,6 +289,25 @@ describe('mergeTopicResults', () => {
   })
 })
 
+describe('mergeTopicResultsForScoring', () => {
+  it('keeps the bounded unseen pool uncapped so relevance can choose the survivors', () => {
+    const out = mergeTopicResultsForScoring([
+      { label: 'Registry methods', pmids: ['newest', 'middle', 'older'], retmax: 3 },
+    ])
+    expect(out.pmids).toEqual(['newest', 'middle', 'older'])
+    expect(out.counts[0]).toMatchObject({ count: 3, available: 3, more: true })
+  })
+
+  it('still removes seen papers before anything enters paid scoring', () => {
+    const out = mergeTopicResultsForScoring(
+      [{ label: 'AI methods', pmids: ['seen', 'newer', 'older'] }],
+      { skipIds: new Set(['seen']) },
+    )
+    expect(out.pmids).toEqual(['newer', 'older'])
+    expect(out.skipped).toBe(1)
+  })
+})
+
 // The reordering this module exists to get right. Capping BEFORE the seen filter meant the
 // cap counted repeats: day two spends a topic's ten slots on papers she read yesterday while
 // the unseen ones behind them never enter the pool and age out of the window unread.
@@ -320,6 +372,35 @@ describe('heldBack', () => {
   })
 })
 
+describe('topicReportRows', () => {
+  it('includes every successful topic, not only capped or empty ones', () => {
+    expect(topicReportRows([
+      { label: 'Allocation', count: 4, available: 4, more: false },
+      { label: 'Intestinal', count: 2, available: 2, more: false },
+      { label: 'Registry methodology', count: 4, available: 32, more: true },
+      { label: 'Pediatric transplant', count: 0, available: 0, more: false },
+    ])).toEqual([
+      { label: 'Allocation', retained: 4, available: 4, more: false, failed: false },
+      { label: 'Intestinal', retained: 2, available: 2, more: false, failed: false },
+      { label: 'Registry methodology', retained: 4, available: 32, more: true, failed: false },
+      { label: 'Pediatric transplant', retained: 0, available: 0, more: false, failed: false },
+    ])
+  })
+
+  it('includes failed topics explicitly and tolerates stale input', () => {
+    expect(topicReportRows(null, [{ label: 'AI methods', error: 'timeout' }])).toEqual([
+      { label: 'AI methods', retained: null, available: null, more: false, failed: true, error: 'timeout' },
+    ])
+    expect(topicReportRows()).toEqual([])
+  })
+
+  it('carries the pre-score denominator when relevance capping has run', () => {
+    expect(topicReportRows([{ label: 'AI methods', count: 4, prescored: 27, available: 32, more: true }])[0]).toEqual({
+      label: 'AI methods', retained: 4, prescored: 27, available: 32, more: true, failed: false,
+    })
+  })
+})
+
 describe('attachTopics', () => {
   it('carries attribution onto the candidate objects', () => {
     const out = attachTopics([{ pmid: 'x', title: 'T' }], { x: ['Aortic', 'Limb'] })
@@ -337,6 +418,21 @@ describe('attachTopics', () => {
     out[0].topics.push('Mutated')
     expect(map.x).toEqual(['Aortic'])
   })
+
+  it('attaches the north-star mapping for every search topic that found the paper', () => {
+    const out = attachTopics(
+      [{ pmid: 'x' }],
+      { x: ['Allocation', 'HPB'] },
+      [
+        { label: 'Allocation', query: 'allocation', northStars: ['Allocation equity'] },
+        { label: 'HPB', query: 'hepatic surgery' },
+      ],
+    )
+    expect(out[0].topicSteering).toEqual([
+      { topic: 'Allocation', northStars: ['Allocation equity'] },
+      { topic: 'HPB', northStars: [] },
+    ])
+  })
 })
 
 describe('lookbackOptions', () => {
@@ -352,13 +448,47 @@ describe('lookbackOptions', () => {
   })
 })
 
+describe('lookbackGap', () => {
+  const now = new Date('2026-08-08T09:00:00-04:00')
+
+  it('offers the elapsed interval when it exceeds the saved window', () => {
+    expect(lookbackGap('2026-08-01T18:00:00-04:00', 3, now)).toEqual({
+      elapsedDays: 7,
+      savedDays: 3,
+      suggestedDays: 7,
+      truncated: false,
+      uncoveredDays: 0,
+    })
+  })
+
+  it('stays silent when the configured window already meets the last scan', () => {
+    expect(lookbackGap('2026-08-05T08:00:00-04:00', 3, now)).toBeNull()
+    expect(lookbackGap('2026-08-01T08:00:00-04:00', 7, now)).toBeNull()
+  })
+
+  it('caps the catch-up and quantifies the unrecoverable interval', () => {
+    const gap = lookbackGap('2026-04-30T08:00:00-04:00', 3, now)
+    expect(gap).toMatchObject({ elapsedDays: 100, suggestedDays: 90, truncated: true, uncoveredDays: 10 })
+  })
+
+  it('ignores a missing, malformed, or future checkpoint', () => {
+    expect(lookbackGap(null, 3, now)).toBeNull()
+    expect(lookbackGap('not-a-date', 3, now)).toBeNull()
+    expect(lookbackGap('2026-08-09T08:00:00-04:00', 3, now)).toBeNull()
+  })
+
+  it('uses calendar days across a daylight-saving transition', () => {
+    expect(lookbackGap('2026-10-31T08:00:00-04:00', 2, new Date('2026-11-03T08:00:00-05:00'))?.elapsedDays).toBe(3)
+  })
+})
+
 describe('searchSummary', () => {
   it('states the window — it is the digest\'s central claim', () => {
     const line = searchSummary({ days: 3, counts: [{ label: 'A', count: 4, available: 4 }], found: 4 })
     expect(line).toBe('Searched 1 topic over the last 3 days — 4 new papers.')
   })
 
-  it('names the topics the cap held back, with the numbers', () => {
+  it('does not emit a partial per-topic list when a cap held papers back', () => {
     const line = searchSummary({
       days: 3,
       counts: [
@@ -367,13 +497,13 @@ describe('searchSummary', () => {
       ],
       found: 16,
     })
-    expect(line).toContain('Aortic Disease 10 of 41')
-    expect(line).not.toContain('Carotid 6')
+    expect(line).toBe('Searched 2 topics over the last 3 days — 16 new papers.')
+    expect(line).not.toContain('Per topic')
   })
 
-  it('marks the denominator as a floor when there were more beyond the fetch', () => {
+  it('leaves capped denominators to the complete topic report', () => {
     const line = searchSummary({ days: 3, counts: [{ label: 'Aortic', count: 10, available: 40, more: true }], found: 10 })
-    expect(line).toContain('Aortic 10 of 40+')
+    expect(line).toBe('Searched 1 topic over the last 3 days — 10 new papers.')
   })
 
   it('names the topics that failed rather than just counting them', () => {
@@ -404,6 +534,15 @@ describe('searchSummary', () => {
   it('says nothing when nothing was searched', () => {
     expect(searchSummary({ days: 3 })).toBe('')
     expect(searchSummary()).toBe('')
+  })
+
+  it('distinguishes papers pre-scored from candidates retained after topic caps', () => {
+    expect(searchSummary({
+      days: 7,
+      counts: [{ label: 'AI methods', count: 4, prescored: 27, available: 32, more: true }],
+      found: 4,
+      prescored: 27,
+    })).toBe('Searched 1 topic over the last 7 days — pre-scored 27 unseen papers; retained 4 candidates after per-topic relevance caps.')
   })
 })
 

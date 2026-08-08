@@ -8,9 +8,12 @@
 // below are trimmed from her real 2026-07-29 digest.
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { cleanAbstractText, fetchCitation, fetchCitations } from './sources.js'
+import { cleanAbstractText, fetchCitation, fetchCitations, NCBI_BATCH_SIZE } from './sources.js'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 // PMID 42516853 — 12 authors across 10 institutions. The abstract began at char 1,378 of
 // the raw record; the window was 900. This is the paper whose summary was withheld.
@@ -176,11 +179,14 @@ PMID: 40000001`
 
 describe('PubMed citation retraction metadata', () => {
   function pubmedResponse(records) {
-    vi.stubGlobal('sessionStorage', {
+    const emptyStorage = {
       getItem: vi.fn().mockReturnValue(null),
       setItem: vi.fn(),
       removeItem: vi.fn(),
-    })
+    }
+    vi.stubGlobal('sessionStorage', emptyStorage)
+    // Credential lookup now checks both tiers because NCBI details follow Remember.
+    vi.stubGlobal('localStorage', { ...emptyStorage, getItem: vi.fn().mockReturnValue(null) })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ result: records }),
@@ -209,5 +215,35 @@ describe('PubMed citation retraction metadata', () => {
       ['123', true],
       ['456', false],
     ])
+  })
+
+  it('chunks a large pre-score metadata pool and preserves requested order', async () => {
+    vi.useFakeTimers()
+    const emptyStorage = { getItem: vi.fn().mockReturnValue(null), setItem: vi.fn(), removeItem: vi.fn() }
+    vi.stubGlobal('sessionStorage', emptyStorage)
+    vi.stubGlobal('localStorage', { ...emptyStorage, getItem: vi.fn().mockReturnValue(null) })
+    const ids = Array.from({ length: NCBI_BATCH_SIZE + 1 }, (_, index) => String(10000000 + index))
+    const fetchMock = vi.fn().mockImplementation(async (rawUrl) => {
+      const requested = new URL(rawUrl).searchParams.get('id').split(',')
+      return {
+        ok: true,
+        json: async () => ({
+          result: Object.fromEntries(requested.map((id) => [id, {
+            uid: id,
+            title: `Paper ${id}`,
+            pubdate: '2026',
+            pubtype: ['Journal Article'],
+          }])),
+        }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const pending = fetchCitations(ids)
+    await vi.runAllTimersAsync()
+    const citations = await pending
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(citations.map((citation) => citation.pmid)).toEqual(ids)
   })
 })

@@ -50,7 +50,8 @@ This is the whole point. Provenance is the product, not a footer.
 1. **Set your north stars.** Define the concepts you're steering by, plus any active
    projects. This is your steering profile (the app version of a context portfolio).
 2. **Tune your digest rubric.** What counts as "worth your salt" — study design,
-   sample size, relevance to a north star, novelty. You set the bar.
+   sample size, relevance to a north star, novelty — with journal preferences stored as
+   compact structured tiers. You set the bar.
 3. **Daily digest.** Each morning: papers from the last 1–3 days that advance your
    north stars, ranked by your rubric. Each item links to the DOI and offers the PDF
    when access allows.
@@ -104,9 +105,9 @@ backend, and the app shows no sign-in UI at all.
    it is safe in the bundle because RLS is the security boundary. Never put a
    `service_role` key in env or client code).
 
-Signed in, your library lives in your account so it works on every device — and the
-disk folder remains your own plain-files copy. Your Anthropic key is never stored
-server-side either way.
+Signed in, your steering profile and library live in your account so they work on every
+device — and the disk folder remains your own plain-files copy. Your Anthropic and NCBI
+credentials remain browser-only and are never stored server-side.
 
 ---
 

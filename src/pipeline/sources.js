@@ -84,6 +84,15 @@ async function getJson(url) {
 // It is never surfaced, by any run, ever. That is precisely the silent permanent miss the
 // tight window and the seen-ledger exist to prevent, so the window counts from `edat`.
 export const DEFAULT_DATETYPE = 'edat'
+export const NCBI_BATCH_SIZE = 200
+
+const chunks = (items, size = NCBI_BATCH_SIZE) => {
+  const out = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
+}
+
+const paceBatch = () => new Promise((resolve) => setTimeout(resolve, searchPaceMs()))
 
 // Search PubMed, return an array of PMIDs (strings). `days` restricts to records that
 // entered PubMed in that window (see DEFAULT_DATETYPE), sorted newest-first. `datetype` is
@@ -170,27 +179,32 @@ export async function fetchAbstracts(pmids) {
 export async function fetchAbstractsByPmid(pmids) {
   const ids = [...new Set((Array.isArray(pmids) ? pmids : [pmids]).filter(Boolean).map(String))]
   if (!ids.length) return {}
-  try {
-    const url = withKey(`${EUTILS}/efetch.fcgi?db=pubmed&id=${ids.join(',')}&retmode=xml`)
-    const xml = await getText(url)
-    const doc = new DOMParser().parseFromString(xml, 'text/xml')
-    const out = {}
-    for (const article of doc.querySelectorAll('PubmedArticle')) {
-      const pmid = nodeText(article.querySelector('PMID'))
-      if (!pmid) continue
-      const sections = Array.from(article.querySelectorAll('Abstract AbstractText'))
-        .map((node) => {
-          const text = nodeText(node)
-          const label = node.getAttribute('Label') || ''
-          return text ? (label ? `${label}: ${text}` : text) : ''
-        })
-        .filter(Boolean)
-      out[pmid] = sections.join('\n')
+  const out = {}
+  const batches = chunks(ids)
+  for (let i = 0; i < batches.length; i++) {
+    if (i > 0) await paceBatch()
+    try {
+      const url = withKey(`${EUTILS}/efetch.fcgi?db=pubmed&id=${batches[i].join(',')}&retmode=xml`)
+      const xml = await getText(url)
+      const doc = new DOMParser().parseFromString(xml, 'text/xml')
+      for (const article of doc.querySelectorAll('PubmedArticle')) {
+        const pmid = nodeText(article.querySelector('PMID'))
+        if (!pmid) continue
+        const sections = Array.from(article.querySelectorAll('Abstract AbstractText'))
+          .map((node) => {
+            const text = nodeText(node)
+            const label = node.getAttribute('Label') || ''
+            return text ? (label ? `${label}: ${text}` : text) : ''
+          })
+          .filter(Boolean)
+        out[pmid] = sections.join('\n')
+      }
+    } catch {
+      // One bad batch degrades to metadata-only scoring for those ids; other batches still
+      // carry abstracts and the entire scan never fails because of an NCBI hiccup.
     }
-    return out
-  } catch {
-    return {}
   }
+  return out
 }
 
 // Fetch citation metadata for a PMID via esummary. The mere fact that PubMed returns a
@@ -230,20 +244,23 @@ export async function fetchCitation(pmid) {
 export async function fetchCitations(pmids) {
   const ids = (Array.isArray(pmids) ? pmids : [pmids]).map(String)
   if (!ids.length) return []
-  try {
-    const data = await getJson(
-      withKey(`${EUTILS}/esummary.fcgi?db=pubmed&id=${ids.join(',')}&retmode=json`),
-    )
-    const result = data?.result || {}
-    return ids
-      .map((pmid) => {
+  const byId = new Map()
+  const batches = chunks(ids)
+  for (let i = 0; i < batches.length; i++) {
+    if (i > 0) await paceBatch()
+    try {
+      const data = await getJson(
+        withKey(`${EUTILS}/esummary.fcgi?db=pubmed&id=${batches[i].join(',')}&retmode=json`),
+      )
+      const result = data?.result || {}
+      for (const pmid of batches[i]) {
         const rec = result[pmid]
-        if (!rec || rec.error || !rec.title) return null
+        if (!rec || rec.error || !rec.title) continue
         const authors = rec.authors || []
         const first = authors[0]?.name || ''
         const author = authors.length > 1 ? `${first} et al.` : first
         const pubtypes = Array.isArray(rec.pubtype) ? rec.pubtype : []
-        return {
+        byId.set(pmid, {
           pmid,
           url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
           title: rec.title || '',
@@ -252,12 +269,15 @@ export async function fetchCitations(pmids) {
           author,
           pubtypes,
           retracted: hasRetractedPublicationType(pubtypes),
-        }
-      })
-      .filter(Boolean)
-  } catch {
-    return []
+        })
+      }
+    } catch {
+      // Keep successful batches; unresolved ids simply do not enter paid scoring.
+    }
   }
+  return ids
+    .map((pmid) => byId.get(pmid) || null)
+    .filter(Boolean)
 }
 
 // PMID -> PMCID via idconv. Returns e.g. "PMC11848676" or null (not in OA).

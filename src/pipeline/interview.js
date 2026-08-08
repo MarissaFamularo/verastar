@@ -25,6 +25,7 @@
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 import { normalizeTopics } from './topics.js'
 import { DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT, DEFAULT_SCORE_FLOOR } from './onboard.js'
+import { normalizeJournalPreferences } from './journals.js'
 
 // Her cap, kept as her cap. Six exchanges is roughly two minutes of typing, and past that
 // the marginal answer stops improving the queries and starts costing her the setup.
@@ -103,7 +104,7 @@ export const INTERVIEW_TURN_SCHEMA = {
 export const PROFILE_INTERVIEW_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['name', 'northStars', 'projects', 'topics', 'rubric'],
+  required: ['name', 'northStars', 'projects', 'topics', 'journalPreferences', 'rubric'],
   properties: {
     name: { type: 'string' },
     northStars: { type: 'array', items: { type: 'string' } },
@@ -113,11 +114,21 @@ export const PROFILE_INTERVIEW_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['label', 'query'],
+        required: ['label', 'query', 'northStars'],
         properties: {
           label: { type: 'string' }, // what she reads in the digest, e.g. "Aortic Disease"
           query: { type: 'string' }, // what PubMed runs, e.g. "aortic aneurysm OR TEVAR"
+          // One or more EXACT names from the top-level northStars array. Several search
+          // buckets may share one steering concept; one bucket may support several.
+          northStars: { type: 'array', items: { type: 'string' } },
         },
+      },
+    },
+    journalPreferences: {
+      type: 'object', additionalProperties: false, required: ['mustNotMiss', 'preferred'],
+      properties: {
+        mustNotMiss: { type: 'array', items: { type: 'string' } },
+        preferred: { type: 'array', items: { type: 'string' } },
       },
     },
     rubric: { type: 'string' },
@@ -133,8 +144,9 @@ export const DRAFT_SYSTEM = `You are turning an interview with a clinician-resea
 - name: how the digest should address them (e.g. "Dr. Morgan"). If they never said, use "Doctor".
 - northStars: 3–6 SHORT concept phrases (2–4 words) naming what they steer by, e.g. "CLTI outcomes", "carotid revascularization". These feed the rubric's relevance line, NOT the search.
 - projects: 1–4 short names of the concrete efforts they are driving (programs, studies, initiatives). Empty array if none were mentioned.
-- topics: ${MIN_TOPICS}–${MAX_TOPICS} rows, each { label, query }. This is the search plan and it is the most important field. One row per area they want watched — a busy area and a quiet one must never share a row, because each row gets its own PubMed search and its own cap.
-- rubric: 3–6 sentences of first-person steering prose ("Prioritize…", "Rank lower…", "Skip…") drawn from what they told you about tier-1 journals, study designs, their conference bar, whether LLM papers are in scope, and their hard exclusions. Name their journals and their exclusions explicitly. No output-format rules, no numbers-handling instructions, no invented preferences.
+- journalPreferences: named journals belong here only. Put tier-1 / must-not-miss journals in mustNotMiss and softer preferences in preferred. Empty arrays if none were named.
+- topics: ${MIN_TOPICS}–${MAX_TOPICS} rows, each { label, query, northStars }. This is the search plan and it is the most important field. One row per area they want watched — a busy area and a quiet one must never share a row, because each row gets its own PubMed search and its own cap. The topic's northStars array must contain one or more EXACT strings from the top-level northStars array. Every topic must map to at least one north star; if a requested area has no suitable steering concept, add a concise north star for it rather than leaving the topic unmapped.
+- rubric: 3–6 sentences of first-person steering prose ("Prioritize…", "Rank lower…", "Skip…") drawn from what they told you about study designs, their conference bar, whether LLM papers are in scope, and their hard exclusions. Do not repeat journal names or lists here; those belong only in journalPreferences. The rubric scores ONE current paper at a time: do not include requests to inspect the saved library or prior runs, compare or allocate across candidates, monitor future events, schedule alerts, or control output formatting. No numbers-handling instructions and no invented preferences.
 
 How to write the query field — these rules come from the user's own working system, and breaking them returns zero papers:
 - Use simple OR-based queries. Complex AND chains expand to zero results due to MeSH expansion.
@@ -235,6 +247,7 @@ export function normalizeInterviewDraft(
     name: str(draft.name) || 'Doctor',
     northStars: strings(draft.northStars),
     projects: strings(draft.projects),
+    journalPreferences: normalizeJournalPreferences(draft.journalPreferences),
     topics: normalizeTopics(draft.topics),
     rubric: {
       criteria: str(draft.rubric) || DEFAULT_RUBRIC,
@@ -367,7 +380,7 @@ export function checkTopics(topics) {
 // The profile keys the interview owns. Anything else in a saved profile — her API-key
 // preferences, the search window, the demo flag, fields a later version adds — is HERS and
 // survives a re-interview untouched.
-export const INTERVIEW_FIELDS = ['name', 'northStars', 'projects', 'topics', 'rubric', 'search']
+export const INTERVIEW_FIELDS = ['name', 'northStars', 'projects', 'topics', 'journalPreferences', 'rubric', 'search']
 
 // Merge a fresh draft into whatever profile already exists.
 //

@@ -88,7 +88,7 @@ describe('triage() — the gate is wired in, and can never block the digest', ()
   ]
   const RANKINGS = {
     rankings: [
-      { id: 'p1', score: 90, tier: 1, finding: 'Reduced amputation.', finding_plain: 'Reduced amputation.', relevance: 'CLTI work.' },
+      { id: 'p1', score: 90, tier: 1, finding: 'Reduced amputation.', finding_plain: 'Reduced amputation.', design_caution: '', relevance: 'CLTI work.' },
     ],
   }
 
@@ -104,13 +104,49 @@ describe('triage() — the gate is wired in, and can never block the digest', ()
     expect(out[0].check).toEqual({ verdict: 'refuted', reason: 'overstated' })
   })
 
+  it('supplies topic-to-north-star steering to the post-read scorer', async () => {
+    extractStructured.mockImplementation(async ({ schema, content }) => {
+      if (schema === TRIAGE_SCHEMA) {
+        expect(content).toContain('Allocation → Allocation equity')
+        expect(content).toContain('HPB → (unmapped)')
+        return RANKINGS
+      }
+      if (schema === CHECK_SCHEMA) return { verdicts: [] }
+      throw new Error('unexpected schema')
+    })
+
+    await triage({ candidates: [{
+      ...CANDIDATES[0],
+      topicSteering: [
+        { topic: 'Allocation', northStars: ['Allocation equity'] },
+        { topic: 'HPB', northStars: [] },
+      ],
+    }] })
+  })
+
+  it('supplies structured journal tiers to the post-read scorer', async () => {
+    extractStructured.mockImplementation(async ({ schema, content }) => {
+      if (schema === TRIAGE_SCHEMA) {
+        expect(content).toContain('Must-not-miss journals: JAMA')
+        expect(content).toContain('Preferred journals: BMJ')
+        return RANKINGS
+      }
+      if (schema === CHECK_SCHEMA) return { verdicts: [] }
+      throw new Error('unexpected schema')
+    })
+    await triage({
+      candidates: CANDIDATES,
+      journalPreferences: { mustNotMiss: ['JAMA'], preferred: ['BMJ'] },
+    })
+  })
+
   it('audits the AS-RENDERED finding — post number guard, not the raw model output', async () => {
     extractStructured.mockImplementation(async ({ schema, content }) => {
       if (schema === TRIAGE_SCHEMA)
         return {
           rankings: [
             // Unbacked digit: the guard will fall back to finding_plain before the audit.
-            { id: 'p1', score: 90, tier: 1, finding: 'Reduced amputation by 42%.', finding_plain: 'Reduced amputation.', relevance: 'CLTI.' },
+            { id: 'p1', score: 90, tier: 1, finding: 'Reduced amputation by 42%.', finding_plain: 'Reduced amputation.', design_caution: '', relevance: 'CLTI.' },
           ],
         }
       if (schema === CHECK_SCHEMA) {
@@ -123,6 +159,43 @@ describe('triage() — the gate is wired in, and can never block the digest', ()
     const out = await triage({ candidates: CANDIDATES })
     expect(out[0].finding).toBe('Reduced amputation.')
     expect(out[0].check.verdict).toBe('supported')
+  })
+
+  it('audits a design caution against the same snippet and attaches its own verdict', async () => {
+    extractStructured.mockImplementation(async ({ schema, content }) => {
+      if (schema === TRIAGE_SCHEMA) return {
+        rankings: [{
+          id: 'p1',
+          score: 90,
+          tier: 2,
+          finding: 'Perfusion was associated with favorable outcomes.',
+          finding_plain: 'Perfusion was associated with favorable outcomes.',
+          design_caution: 'The observational registry comparison cannot establish a universal standard of care.',
+          relevance: 'Machine perfusion work.',
+        }],
+      }
+      if (schema === CHECK_SCHEMA) {
+        expect(content).toContain('[design-caution:p1]')
+        expect(content).toContain('[design-caution:p1] CLAIM: The observational registry comparison cannot establish a universal standard of care.')
+        expect(content.match(/SNIPPET:/g)).toHaveLength(1)
+        return { verdicts: [
+          { id: 'p1', supported: true, reason: '' },
+          { id: 'design-caution:p1', supported: true, reason: '' },
+        ] }
+      }
+      throw new Error('unexpected schema')
+    })
+
+    const out = await triage({ candidates: [{
+      id: 'p1',
+      title: 'National registry analysis',
+      design: 'retrospective_cohort',
+      summary: 'We performed an observational registry comparison among accepted recipients.',
+      verified: [],
+    }] })
+
+    expect(out[0].designCaution).toContain('cannot establish a universal standard of care')
+    expect(out[0].cautionCheck).toEqual({ verdict: 'supported', reason: '' })
   })
 
   it('degrades to unchecked when the gate itself throws — rankings are untouched', async () => {

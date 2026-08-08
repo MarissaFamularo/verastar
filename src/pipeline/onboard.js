@@ -8,6 +8,7 @@
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 import { DEFAULT_SCORE_FLOOR } from './select.js'
+import { normalizeJournalPreferences } from './journals.js'
 
 // The user-owned steering criteria feed triage (the reasoning channel). The app's
 // integrity rules (the number-free two-channel contract, the output schema) live in
@@ -36,6 +37,7 @@ export const DEMO_PROFILE = {
   name: 'Dr. Morgan',
   northStars: ['Limb preservation', 'Carotid disease', 'Clinical AI'],
   projects: ['Evidence Practice Review'],
+  journalPreferences: { mustNotMiss: [], preferred: [] },
   rubric: { criteria: DEMO_RUBRIC, selectCount: DEFAULT_SELECT_COUNT, scoreFloor: DEFAULT_SCORE_FLOOR },
   onboarded: true,
 }
@@ -45,22 +47,30 @@ export const DEMO_PROFILE = {
 export const PROFILE_DRAFT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['name', 'northStars', 'projects', 'rubric', 'selectCount'],
+  required: ['name', 'northStars', 'projects', 'journalPreferences', 'rubric', 'selectCount'],
   properties: {
     name: { type: 'string' }, // how the digest greets them, e.g. "Dr. Reyes"
     northStars: { type: 'array', items: { type: 'string' } },
     projects: { type: 'array', items: { type: 'string' } },
+    journalPreferences: {
+      type: 'object', additionalProperties: false, required: ['mustNotMiss', 'preferred'],
+      properties: {
+        mustNotMiss: { type: 'array', items: { type: 'string' } },
+        preferred: { type: 'array', items: { type: 'string' } },
+      },
+    },
     rubric: { type: 'string' }, // the steering criteria prose (becomes rubric.criteria)
     selectCount: { type: 'integer' }, // papers per day to select
   },
 }
 
-const SYSTEM = `You are setting up a personalized morning literature digest for a busy clinician-researcher. From their short intake answers, draft a steering profile they will review and edit. Return:
+export const PROFILE_DRAFT_SYSTEM = `You are setting up a personalized morning literature digest for a busy clinician-researcher. From their short intake answers, draft a steering profile they will review and edit. Return:
 
 - name: how the digest should address them (e.g. "Dr. Morgan"). If they don't give a name, use "Doctor".
 - northStars: 3–6 SHORT concept phrases (2–4 words each) naming the recurring topics they steer by. These are used verbatim as PubMed title/abstract search terms, so make them clean, searchable clinical concepts (e.g. "carotid revascularization", "CLTI outcomes", "AI in medicine") — NOT full sentences, NOT boolean queries.
 - projects: 1–4 short names of the concrete efforts they're driving (programs, studies, initiatives). If none are stated, return an empty array.
-- rubric: a short prose steering doc (3–5 sentences) describing what makes a paper worth THEIR morning — what to prioritize, what to rank lower, what to skip. Ground it in their answers. Write it in first person ("Prioritize…", "Skip…") so it reads as their own instruction. Do NOT include any output-format rules or numbers-handling instructions — only their editorial priorities.
+- journalPreferences: put named journals in mustNotMiss when they should always reach the reader, or preferred when they are a positive signal. Use empty arrays when none were stated.
+- rubric: a short prose steering doc (3–5 sentences) describing what makes ONE current paper worth THEIR morning — what to prioritize, what to rank lower, what to skip. Ground it in their answers. Write it in first person ("Prioritize…", "Skip…") so it reads as their own instruction. Keep journal names and lists out of this prose because they belong in journalPreferences. Do NOT include requests to inspect the saved library or prior runs, compare or allocate across candidates, monitor future events, schedule alerts, output-format rules, or numbers-handling instructions — only their paper-level editorial priorities.
 - selectCount: how many papers per day they want to see. Use their stated number; if none, use 5.
 
 Draft confidently from whatever they gave you. It's a starting point they will refine.`
@@ -78,7 +88,7 @@ export async function draftProfile({ answers, model = MODELS.interview, maxToken
 
   const draft = await extractStructured({
     model,
-    system: SYSTEM,
+    system: PROFILE_DRAFT_SYSTEM,
     content,
     schema: PROFILE_DRAFT_SCHEMA,
     maxTokens,
@@ -89,6 +99,7 @@ export async function draftProfile({ answers, model = MODELS.interview, maxToken
     name: (draft.name || 'Doctor').trim(),
     northStars: (draft.northStars || []).map((s) => s.trim()).filter(Boolean),
     projects: (draft.projects || []).map((s) => s.trim()).filter(Boolean),
+    journalPreferences: normalizeJournalPreferences(draft.journalPreferences),
     rubric: {
       criteria: (draft.rubric || DEFAULT_RUBRIC).trim(),
       selectCount: Number(draft.selectCount) > 0 ? Math.round(draft.selectCount) : DEFAULT_SELECT_COUNT,

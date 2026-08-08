@@ -1,5 +1,18 @@
 import { useEffect, useState } from 'react'
-import { setApiKey, getApiKey, hasApiKey, clearApiKey, isKeyRemembered, ping, getUsageSummary } from './lib/anthropic.js'
+import {
+  setApiKey,
+  getApiKey,
+  hasApiKey,
+  clearApiKey,
+  isKeyRemembered,
+  ping,
+  getUsageSummary,
+  setNcbiKey,
+  setNcbiEmail,
+  getNcbiCredentialStatus,
+  setAllCredentialsRemembered,
+  clearNcbiCredentials,
+} from './lib/anthropic.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
 import { supabase, supabaseConfigured, currentUser, sendMagicLink, verifyEmailCode, signOut, isSignedIn } from './lib/supabase.js'
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
@@ -361,7 +374,7 @@ function AccountSection({ account }) {
             </div>
           )}
           <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
-            Signing in stores your literature library and usage events on our servers —
+            Signing in stores your steering profile, literature library, and usage events on our servers —
             never patient data, and never sold. You always hold your own flat-file copy
             on disk. Usage data may be analyzed, in aggregate, for research.
           </p>
@@ -395,8 +408,9 @@ function ApiKeyExplainer() {
           <p style={h}>What it is</p>
           <p style={p}>
             An API key is a personal passcode that lets software use Claude, the AI model that reads and
-            scores papers for you. Verastar doesn&rsquo;t have its own server or accounts — your browser talks
-            directly to Anthropic (the company that makes Claude) using your key. You load prepaid credit
+            scores papers for you. Your browser talks directly to Anthropic using your key; the key is never
+            sent to Verastar&rsquo;s servers. If you sign in, your steering profile and saved library sync through
+            your Verastar account, separately from that browser-only credential. You load prepaid credit
             on your Anthropic account and each run draws it down. No subscription, no markup, and spending
             can never exceed the credit you&rsquo;ve loaded.
           </p>
@@ -437,10 +451,31 @@ function ApiKeyExplainer() {
 function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, onStartOver, onToggleRemember, status, reply, error, account }) {
   const [keyInput, setKeyInput] = useState('')
   const [remember, setRemember] = useState(false)
+  const [ncbiKeyInput, setNcbiKeyInput] = useState('')
+  const [ncbiEmailInput, setNcbiEmailInput] = useState('')
+  const [ncbiVersion, setNcbiVersion] = useState(0)
   // Start over is two-step: the button reveals a confirm block with the erase choice.
   const [confirmReset, setConfirmReset] = useState(false)
   const [eraseAll, setEraseAll] = useState(false)
   const usage = getUsageSummary()
+  const ncbi = getNcbiCredentialStatus()
+  void ncbiVersion // state revision makes direct browser-storage writes re-render this block
+
+  function saveNcbi(e) {
+    e.preventDefault()
+    if (ncbiEmailInput.trim()) setNcbiEmail(ncbiEmailInput, { remember: remembered })
+    if (ncbiKeyInput.trim()) setNcbiKey(ncbiKeyInput, { remember: remembered })
+    setNcbiEmailInput('')
+    setNcbiKeyInput('')
+    setNcbiVersion((v) => v + 1)
+  }
+
+  function clearNcbi() {
+    clearNcbiCredentials()
+    setNcbiEmailInput('')
+    setNcbiKeyInput('')
+    setNcbiVersion((v) => v + 1)
+  }
   return (
     <div
       onClick={onClose}
@@ -532,9 +567,43 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
           )}
           <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
             {saved && remembered
-              ? 'Your key is remembered in this browser’s local storage on this device — never sent to our servers. Clear it any time.'
-              : 'Your key lives only in this browser tab — never sent to our servers, never written to disk, and cleared when you close the tab. Check “Remember on this device” to keep it across restarts.'}
+              ? 'Your browser credentials are remembered in local storage on this device — never sent to our servers. Clear them any time.'
+              : 'Your browser credentials live only in this tab — never sent to our servers, never written to disk, and cleared when you close the tab. Check “Remember on this device” to keep them across restarts.'}
           </p>
+
+          <div style={{ marginTop: 14, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '12px 13px' }}>
+            <div className="flex items-center" style={{ gap: 8 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>NCBI / PubMed credentials</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: ncbi.keyActive ? 'var(--color-verified-soft)' : 'var(--color-abstract)' }}>
+                API key {ncbi.keyActive ? (ncbi.keyRemembered ? 'active · remembered' : 'active · this session') : 'missing'}
+              </span>
+            </div>
+            <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
+              Email {ncbi.emailActive ? (ncbi.emailRemembered ? 'active · remembered' : 'active · this session') : 'missing'} · API key raises the PubMed request limit.
+            </p>
+            <form onSubmit={saveNcbi} style={{ marginTop: 10 }}>
+              <input
+                type="email"
+                value={ncbiEmailInput}
+                onChange={(e) => setNcbiEmailInput(e.target.value)}
+                placeholder={ncbi.emailActive ? 'Replace NCBI email' : 'NCBI email · optional'}
+                autoComplete="off"
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
+              />
+              <input
+                type="password"
+                value={ncbiKeyInput}
+                onChange={(e) => setNcbiKeyInput(e.target.value)}
+                placeholder={ncbi.keyActive ? 'Replace NCBI API key' : 'NCBI API key · optional'}
+                autoComplete="off"
+                style={{ marginTop: 7, width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
+              />
+              <div className="flex" style={{ marginTop: 8, gap: 8 }}>
+                <button type="submit" disabled={!ncbiEmailInput.trim() && !ncbiKeyInput.trim()} style={{ padding: '6px 10px', border: 0, borderRadius: 8, background: 'var(--color-accent)', color: '#1c1206', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit', opacity: !ncbiEmailInput.trim() && !ncbiKeyInput.trim() ? 0.5 : 1 }}>Save NCBI details</button>
+                {(ncbi.keyActive || ncbi.emailActive) && <button type="button" onClick={clearNcbi} style={{ padding: '6px 10px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 8, background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 11.5, fontFamily: 'inherit' }}>Clear NCBI details</button>}
+              </div>
+            </form>
+          </div>
 
           <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
             <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
@@ -764,6 +833,10 @@ export default function App() {
   const [migrationOffer, setMigrationOffer] = useState(null)
 
   useEffect(() => {
+    // One-time repair for pre-fix browsers: the Anthropic key may already be remembered
+    // while NCBI credentials from the same setup still sit in sessionStorage. Align every
+    // value that remains available before the user can lose it on the next restart.
+    if (hasApiKey()) setAllCredentialsRemembered(isKeyRemembered())
     // initStore() resolves auth and picks the backend (cloud vs IndexedDB) — it must
     // finish before the first read. Domains hydrate before any view mounts so sync
     // color/label lookups are ready.
@@ -849,6 +922,7 @@ export default function App() {
 
   function handleSave(k, remember) {
     setApiKey(k, { remember })
+    setAllCredentialsRemembered(remember)
     setSaved(true)
     setRemembered(remember)
     setStatus('idle')
@@ -860,7 +934,7 @@ export default function App() {
   function handleToggleRemember(remember) {
     const k = getApiKey()
     if (!k) return
-    setApiKey(k, { remember })
+    setAllCredentialsRemembered(remember)
     setRemembered(remember)
   }
   function handleClear() {
@@ -883,6 +957,7 @@ export default function App() {
       if (account) await signOut()
       await Promise.all(COLLECTIONS.map((c) => idbStore.clear(c)))
       clearApiKey()
+      clearNcbiCredentials()
       window.location.reload()
       return
     }

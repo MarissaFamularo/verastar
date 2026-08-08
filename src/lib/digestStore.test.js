@@ -33,6 +33,8 @@ import {
   digestGaps,
   restoreNote,
   digestDateLine,
+  saveSuccessfulScan,
+  loadSuccessfulScan,
 } from './digestStore.js'
 import { store, __data } from './store.js'
 
@@ -55,6 +57,11 @@ const snapshot = () => ({
   ],
   triaged: { 111: { score: 88, tier: 1, finding: 'No difference.', relevance: 'CLTI project.' } },
   candidates: [{ id: '111', pmid: '111', title: 'BASIL-3', score: 88 }],
+  preCapCandidates: [
+    { id: '111', pmid: '111', title: 'BASIL-3', score: 88 },
+    { id: '333', pmid: '333', title: 'Pre-scored before topic cap', score: 60 },
+  ],
+  searchContext: { counts: [{ label: 'CLTI', count: 1, available: 2, prescored: 2 }], failed: [], days: 7 },
   selectedIds: new Set(['111', '222']),
 })
 
@@ -73,6 +80,8 @@ describe('daily digest round-trip', () => {
     expect(loaded.processedResults).toEqual(state.processedResults)
     expect(loaded.triaged).toEqual(state.triaged)
     expect(loaded.candidates).toEqual(state.candidates)
+    expect(loaded.preCapCandidates).toEqual(state.preCapCandidates)
+    expect(loaded.searchContext).toEqual(state.searchContext)
   })
 
   it('revives selectedIds as a Set', async () => {
@@ -101,6 +110,8 @@ describe('daily digest round-trip', () => {
   it('revives legacy snapshots by treating visible results as the paid-work cache', () => {
     const revived = reviveDigest({ kind: 'daily', results: [{ paper: { id: '1' } }] })
     expect(revived.processedResults).toEqual(revived.results)
+    expect(revived.preCapCandidates).toEqual([])
+    expect(revived.searchContext).toEqual({ counts: [], failed: [], days: null })
   })
 })
 
@@ -130,6 +141,30 @@ describe('record design', () => {
 
   it('serializeDigest never emits a `type` field (reserved by WeekendRead)', () => {
     expect('type' in serializeDigest(snapshot())).toBe(false)
+  })
+})
+
+describe('successful scan checkpoint', () => {
+  it('survives clearing the transient daily digest', async () => {
+    await saveDailyDigest(snapshot())
+    await saveSuccessfulScan({ completedAt: '2026-08-01T14:00:00.000Z', windowDays: 7 })
+    await clearDailyDigest()
+
+    expect(await loadDailyDigest()).toBeNull()
+    expect(await loadSuccessfulScan()).toEqual({ completedAt: '2026-08-01T14:00:00.000Z', windowDays: 7 })
+  })
+
+  it('rejects a malformed or foreign checkpoint', async () => {
+    await store.put('digests', 'daily:last-successful-scan', { kind: 'weekend', completedAt: '2026-08-01T14:00:00.000Z' })
+    expect(await loadSuccessfulScan()).toBeNull()
+    await store.put('digests', 'daily:last-successful-scan', { kind: 'daily-scan-checkpoint', completedAt: 'not-a-date' })
+    expect(await loadSuccessfulScan()).toBeNull()
+  })
+
+  it('does not masquerade as a weekend read', async () => {
+    await saveSuccessfulScan({ completedAt: '2026-08-01T14:00:00.000Z', windowDays: 3 })
+    const weekendView = (await store.all('digests')).filter((d) => d?.type === 'weekend' && d?.read)
+    expect(weekendView).toEqual([])
   })
 })
 

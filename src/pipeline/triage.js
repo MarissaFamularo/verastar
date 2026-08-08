@@ -15,6 +15,7 @@
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 import { normalize, extractNumbers, extractNumbersWithIndex, numbersEqual } from './verify.js'
 import { checkFindings, SNIPPET_CHARS } from './check.js'
+import { journalPreferenceText } from './journals.js'
 
 export const TRIAGE_SCHEMA = {
   type: 'object',
@@ -26,13 +27,14 @@ export const TRIAGE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'score', 'tier', 'finding', 'finding_plain', 'relevance'],
+        required: ['id', 'score', 'tier', 'finding', 'finding_plain', 'design_caution', 'relevance'],
         properties: {
           id: { type: 'string' },
           score: { type: 'integer' }, // 0–100 fit to north stars/projects; ranking only
           tier: { type: 'integer' }, // evidence tier: 1 = strongest, 3 = weakest
           finding: { type: 'string' }, // may carry VERIFIED numbers; guard-checked
           finding_plain: { type: 'string' }, // digit-free restatement; the guard's fallback
+          design_caution: { type: 'string' }, // digit-free methodological limit; separately audited
           relevance: { type: 'string' },
         },
       },
@@ -50,7 +52,8 @@ export const OUTPUT_CONTRACT = `You brief a busy clinician-researcher on today's
 - tier: integer 1–3 evidence strength. 1 = strongest (well-powered RCT, meta-analysis of RCTs, or a rigorous practice-relevant study); 2 = solid observational / cohort / smaller trial; 3 = limited (case series, single-arm, preliminary). Judge from study design, apparent sample size, and rigor.
 - finding: ONE plain sentence — what the study SHOWED, the takeaway a clinician would repeat to a colleague, stated directionally (improved / reduced / no significant difference / non-inferior / increased risk). Weave in the key result so the proof is in the claim (e.g. "reduced mortality by 8% versus placebo", "HR 0.84 for amputation-free survival") — but ONLY numbers copied VERBATIM from that paper's "Verified results" list, formatted exactly as given there. Never rescale, round, convert, subtract, or derive a new number from a verified one, and never take a number from the snippet, the title, or another paper. When no verified value fits the sentence — or the paper has none (e.g. a narrative review or methods piece) — write the finding entirely number-free and summarize its conclusion from the snippet. Never invent a specific result. EVERY paper gets a finding.
 - finding_plain: the SAME takeaway restated with NO digits at all — convey magnitude in words ("significantly improved", "roughly halved the risk", "no meaningful difference"). The app renders this instead of finding if any number in finding fails its verification guard, so it must stand alone. If finding is already number-free, repeat it here.
-- relevance: ONE short clause on why it matters to THIS clinician — name the specific north star or project it touches (e.g. "adjacent to your CLTI perfusion work" or "validates your hospital-free-days endpoint").
+- design_caution: ONE plain, number-free sentence naming a material design limitation that constrains how strongly the finding can be used. Ground it in the supplied design and snippet; never invent a limitation the methods do not support. For observational comparisons, distinguish association from causation and identify consequential selection/conditioning, matching, surrogate exposure identification, single-center scope, or endpoint limitations when the snippet states them. An observational study advocating adoption or "standard of care" MUST say that its design cannot by itself establish a causal or universal standard. Use an empty string only when there is no material design caution supported by the supplied evidence.
+- relevance: ONE short clause on why it matters to THIS clinician — name the specific north star or project it touches (e.g. "adjacent to your CLTI perfusion work" or "validates your hospital-free-days endpoint"). When search-topic steering is supplied, prefer the north star explicitly mapped to the topic that found the paper. Never invent a mapping for a topic marked unmapped.
 
 CLAIM-STRENGTH RULES — apply these to BOTH finding and finding_plain:
 - A numerical difference with a non-significant P value, or a confidence interval containing the measure's null, is NOT evidence that one arm is better. You may state the numerical direction cautiously, but must say the evidence was inconclusive or that there was no statistically clear difference. Never call it "clearly better", "superior", "improved", "reduced", "proved", or "demonstrated" without statistical support.
@@ -58,7 +61,7 @@ CLAIM-STRENGTH RULES — apply these to BOTH finding and finding_plain:
 - A non-significant result does not prove equivalence or "no effect". Say "no statistically clear difference" unless the study actually tested and established equivalence or non-inferiority.
 - When a reported effect estimate, confidence interval, P value, and source conclusion appear to conflict, preserve the uncertainty rather than choosing the strongest interpretation.
 
-HARD RULE: finding may contain ONLY numbers that appear verbatim in that paper's Verified results — the app deterministically checks every digit and discards the sentence if one is unbacked, so an unlisted number means your finding is thrown away. finding_plain and relevance may not contain ANY number, effect size, hazard/risk ratio, confidence interval, p-value, percentage, or sample size — no digits, ever.`
+HARD RULE: finding may contain ONLY numbers that appear verbatim in that paper's Verified results — the app deterministically checks every digit and discards the sentence if one is unbacked, so an unlisted number means your finding is thrown away. finding_plain, design_caution, and relevance may not contain ANY number, effect size, hazard/risk ratio, confidence interval, p-value, percentage, or sample size — no digits, ever.`
 
 // --- The number guard --------------------------------------------------------
 //
@@ -120,9 +123,9 @@ export function stripNumbers(text) {
 
 // The guard proper. Given one raw ranking and that paper's verified values, return the
 // ranking that is allowed to render: finding falls back to finding_plain (then to a
-// hard strip) the moment it carries an unbacked number; finding_plain and relevance are
-// number-free by contract, so any digit in them is stripped outright. Pure — unit-tested
-// without a model call.
+// hard strip) the moment it carries an unbacked number; finding_plain, design_caution,
+// and relevance are number-free by contract, so any digit in them is stripped outright.
+// Pure — unit-tested without a model call.
 export function sanitizeRanking(rk, verified) {
   const allowed = allowedNumbers(verified)
   // Digit-free by contract: pass through untouched when the guard sees no gated number
@@ -139,6 +142,7 @@ export function sanitizeRanking(rk, verified) {
     finding: numbersGrounded(finding, allowed)
       ? finding
       : plain(rk?.finding_plain) || stripNumbers(finding),
+    designCaution: plain(rk?.design_caution),
     relevance: plain(rk?.relevance),
   }
 }
@@ -163,6 +167,7 @@ function buildSystem(rubric) {
 export async function triage({
   northStars = [],
   projects = [],
+  journalPreferences,
   rubric = '',
   candidates,
   model = MODELS.triage,
@@ -171,13 +176,17 @@ export async function triage({
   const stars = northStars.length ? northStars.join(', ') : '(none set)'
   const projs = projects.length ? projects.join(', ') : '(none set)'
   const content =
-    `North stars: ${stars}\nActive projects: ${projs}\n\nCandidates:\n\n` +
+    `North stars: ${stars}\nActive projects: ${projs}\n` +
+    `Journal preferences (structured signal; they do not override hard exclusions):\n${journalPreferenceText(journalPreferences)}\n\nCandidates:\n\n` +
     candidates
       .map((c) => {
         const facts = (c.verified || []).length
           ? c.verified.map((v) => `  - ${v.name}: ${v.value}`).join('\n')
           : '  (no verified values)'
-        return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\n${(c.summary || '').slice(0, SNIPPET_CHARS)}\nVerified results:\n${facts}`
+        const steering = (Array.isArray(c.topicSteering) ? c.topicSteering : [])
+          .map((row) => `${row.topic || 'Unnamed topic'} → ${(row.northStars || []).length ? row.northStars.join(', ') : '(unmapped)'}`)
+          .join('; ')
+        return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\nSearch steering: ${steering || '(not available)'}\n${(c.summary || '').slice(0, SNIPPET_CHARS)}\nVerified results:\n${facts}`
       })
       .join('\n\n')
 
@@ -198,19 +207,20 @@ export async function triage({
   )
 
   // The prose gate (pipeline/check.js) — an adversarial second model audits each
-  // AS-RENDERED finding (post-number-guard) against the same snippet the writer saw:
-  // direction of effect, comparator, population, strength of claim. Advisory and
-  // non-blocking: any failure here degrades to 'unchecked' and the digest renders as it
-  // would have without the gate. The UI withholds 'refuted' findings.
+  // AS-RENDERED finding and design caution (post-number-guard) against the same snippet
+  // the writer saw. Advisory and non-blocking: any failure here degrades to 'unchecked'.
+  // The UI withholds refuted findings and cautions.
   const summaryById = new Map(candidates.map((c) => [String(c.id), c.summary || '']))
   let checks = new Map()
   try {
     checks = await checkFindings({
-      items: sanitized.map((rk) => ({
-        id: rk.id,
-        finding: rk.finding,
-        snippet: summaryById.get(String(rk.id)) || '',
-      })),
+      items: sanitized.flatMap((rk) => {
+        const snippet = summaryById.get(String(rk.id)) || ''
+        return [
+          { id: rk.id, finding: rk.finding, snippet },
+          { id: `design-caution:${rk.id}`, finding: rk.designCaution, snippet },
+        ]
+      }),
     })
   } catch (err) {
     console.warn('Prose check failed (findings render unchecked):', err.message)
@@ -218,5 +228,6 @@ export async function triage({
   return sanitized.map((rk) => ({
     ...rk,
     check: checks.get(String(rk.id)) || { verdict: 'unchecked', reason: '' },
+    cautionCheck: checks.get(`design-caution:${rk.id}`) || { verdict: 'unchecked', reason: '' },
   }))
 }

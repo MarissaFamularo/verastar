@@ -30,11 +30,29 @@ import {
   OPENING_QUESTION,
   FALLBACK_QUESTIONS,
   INTERVIEW_FIELDS,
+  PROFILE_INTERVIEW_SCHEMA,
+  DRAFT_SYSTEM,
 } from './interview.js'
 import { DEFAULT_SELECT_COUNT, DEFAULT_RUBRIC } from './onboard.js'
 import { DEFAULT_SCORE_FLOOR } from './select.js'
 
 const codes = (query) => topicIssues(query).map((i) => i.code)
+
+describe('generated profile steering coverage', () => {
+  it('requires every generated topic to name its north-star mapping', () => {
+    const item = PROFILE_INTERVIEW_SCHEMA.properties.topics.items
+    expect(item.required).toContain('northStars')
+    expect(item.properties.northStars.type).toBe('array')
+    expect(DRAFT_SYSTEM).toMatch(/Every topic must map to at least one north star/i)
+    expect(DRAFT_SYSTEM).toMatch(/EXACT strings from the top-level northStars array/i)
+  })
+
+  it('generates structured journal tiers without repeating them in rubric prose', () => {
+    expect(PROFILE_INTERVIEW_SCHEMA.required).toContain('journalPreferences')
+    expect(PROFILE_INTERVIEW_SCHEMA.properties.journalPreferences.required).toEqual(['mustNotMiss', 'preferred'])
+    expect(DRAFT_SYSTEM).toMatch(/Do not repeat journal names or lists here/i)
+  })
+})
 
 // A real-world queries.json, used here as fixtures. Measured against PubMed (30-day edat,
 // 2026-07-26), the juxtaposed rows return a fraction of what their OR-joined equivalents do:
@@ -265,6 +283,14 @@ describe('normalizeInterviewDraft — the model output is never trusted raw', ()
 
   it('a non-array northStars is not a crash', () => {
     expect(normalizeInterviewDraft({ northStars: 'CLTI' }).northStars).toEqual([])
+  })
+
+  it('preserves generated topic-to-north-star mappings for review', () => {
+    const draft = normalizeInterviewDraft({
+      northStars: ['Allocation equity'],
+      topics: [{ label: 'Allocation', query: 'organ allocation OR deceased donor offers', northStars: ['Allocation equity'] }],
+    })
+    expect(draft.topics[0].northStars).toEqual(['Allocation equity'])
   })
 })
 

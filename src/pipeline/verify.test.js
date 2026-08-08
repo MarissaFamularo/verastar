@@ -170,6 +170,41 @@ describe('verify — EVAL adversarial triples', () => {
     expect(v.badNums).toEqual([])
   })
 
+  it('reported estimate range: both endpoints verify as the result rather than a CI', () => {
+    const source = 'The mean posterior probability ranged from 0.823–0.855 across models.'
+    const v = verify(
+      q({ value: null, range_low: 0.823, range_high: 0.855, source_quote: 'mean posterior probability ranged from 0.823–0.855' }),
+      source,
+    )
+    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.badNums).toEqual([])
+  })
+
+  it('[false-verify guard] one wrong reported-range endpoint flags the whole quantity', () => {
+    const source = 'Adjusted Cox models yielded HR 3.43–3.52.'
+    const v = verify(
+      q({ value: null, range_low: 3.43, range_high: 3.53, unit: 'HR', source_quote: 'HR 3.43–3.52' }),
+      source,
+    )
+    expect(v.tier).toBe(TIERS.FLAGGED)
+    expect(v.badNums).toContain(3.53)
+  })
+
+  it('[false-verify guard] rejects a partial range or a range collapsed beside a scalar', () => {
+    const source = 'Adjusted Cox models yielded HR 3.43–3.52.'
+    const partial = verify(
+      q({ value: null, range_low: 3.43, range_high: null, source_quote: 'HR 3.43–3.52' }),
+      source,
+    )
+    const collapsed = verify(
+      q({ value: 3.43, range_low: 3.43, range_high: 3.52, source_quote: 'HR 3.43–3.52' }),
+      source,
+    )
+    expect(partial.tier).toBe(TIERS.FLAGGED)
+    expect(collapsed.tier).toBe(TIERS.FLAGGED)
+    expect(partial.shapeError).toMatch(/either one scalar value or both endpoints/)
+  })
+
   it('[false-verify guard] integer collision: claim 84 (an N), quote has 1984 only -> flagged', () => {
     const source = 'The registry was first established in 1984 for vascular outcomes.'
     const v = verify(q({ value: 84, source_quote: 'established in 1984 for' }), source)

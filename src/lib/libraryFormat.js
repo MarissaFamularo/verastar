@@ -118,8 +118,13 @@ export function sourceNoteMd(paper) {
   } else if (p.finding) {
     parts.push('', '## Finding', '', p.finding)
   }
+  if (p.designCaution && p.cautionCheck?.verdict !== 'refuted') {
+    parts.push('', '## Design caution', '', p.designCaution)
+  }
 
-  const quantities = (p.quantities || []).filter((q) => q && q.value != null)
+  const quantities = (p.quantities || []).filter(
+    (q) => q && (q.value != null || (q.range_low != null && q.range_high != null)),
+  )
   if (quantities.length) {
     parts.push('', '## Verified evidence', '')
     parts.push('_Each value below was re-verified against the source. The tier is what the app proved,')

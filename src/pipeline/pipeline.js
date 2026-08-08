@@ -28,8 +28,9 @@ import {
   normalizeSearchDays,
   normalizeTopicCap,
   overfetchFor,
-  mergeTopicResults,
+  mergeTopicResultsForScoring,
   attachTopics,
+  mappedNorthStars,
 } from './topics.js'
 
 // Public identifiers only — the app re-verifies every value live (docs/FACTS.md).
@@ -109,8 +110,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 //     ids: esearch returns bare ids and is free, so we ask for `overfetchFor(cap, days)` —
 //     which scales with the window, since a wider one is proportionally more repeats — and
 //     throw most of them away.
-//   - ONE metadata call, over the SURVIVORS. The esummary fetch happens after the skip and
-//     the cap, so filtering earlier makes the batched call smaller, not bigger.
+//   - BOUNDED PRE-SCORE POOL. PubMed retmax bounds each topic, the seen filter removes free
+//     repeats first, then citation metadata and abstracts are scored before the topic cap.
+//     Relevance—not newest-N—therefore decides which papers survive into the funnel.
 //
 // Returns { candidates, counts, failed, skipped, days }: the honest account of what was
 // searched, what the cap held back, and how much was dropped as already-seen — which is
@@ -124,6 +126,10 @@ export async function searchCandidates({
   skipIds,
 } = {}) {
   const plan = profileTopics({ topics, northStars })
+  // Resolve stored mappings against the live north-star list before any candidate reaches
+  // a scorer. A deleted star becomes explicitly unmapped rather than remaining active as
+  // stale profile text.
+  const steeringPlan = plan.map((topic) => ({ ...topic, northStars: mappedNorthStars(topic, northStars) }))
   const windowDays = normalizeSearchDays(days)
   const cap = normalizeTopicCap(perTopic)
   const retmax = overfetchFor(cap, windowDays)
@@ -143,8 +149,8 @@ export async function searchCandidates({
     }
   }
 
-  const { pmids, topicsByPmid, counts, failed, skipped } = mergeTopicResults(results, { cap, skipIds })
-  if (!pmids.length) return { candidates: [], counts, failed, skipped, days: windowDays }
+  const { pmids, topicsByPmid, counts, failed, skipped } = mergeTopicResultsForScoring(results, { skipIds })
+  if (!pmids.length) return { candidates: [], counts, failed, skipped, days: windowDays, cap }
 
   // PubMed's Retracted Publication type is authoritative and available in this metadata
   // call, before any selection or paid extraction. Withdrawn papers never enter the funnel.
@@ -162,8 +168,9 @@ export async function searchCandidates({
       pubtypes: c.pubtypes,
     })),
     topicsByPmid,
+    steeringPlan,
   )
-  return { candidates, counts, failed, skipped, days: windowDays }
+  return { candidates, counts, failed, skipped, days: windowDays, cap }
 }
 
 // Run the full pipeline on one paper. Returns:

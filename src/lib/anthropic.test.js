@@ -3,7 +3,23 @@
 // setApiKey moves it between sessionStorage and localStorage without re-entry.
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { setApiKey, getApiKey, hasApiKey, isKeyRemembered, clearApiKey, modelRates, recordUsage, getUsageSummary } from './anthropic.js'
+import {
+  setApiKey,
+  getApiKey,
+  hasApiKey,
+  isKeyRemembered,
+  clearApiKey,
+  setNcbiKey,
+  getNcbiKey,
+  setNcbiEmail,
+  getNcbiEmail,
+  setAllCredentialsRemembered,
+  getNcbiCredentialStatus,
+  clearNcbiCredentials,
+  modelRates,
+  recordUsage,
+  getUsageSummary,
+} from './anthropic.js'
 
 function memStorage() {
   const m = new Map()
@@ -53,6 +69,68 @@ describe('api key storage', () => {
     clearApiKey()
     expect(hasApiKey()).toBe(false)
     expect(isKeyRemembered()).toBe(false)
+  })
+})
+
+describe('unified browser credential persistence', () => {
+  it('NCBI credentials follow the Anthropic Remember choice by default', () => {
+    setApiKey('sk-ant-test', { remember: true })
+    setNcbiKey('ncbi-key')
+    setNcbiEmail('researcher@example.edu')
+
+    expect(getNcbiCredentialStatus()).toEqual({
+      keyActive: true,
+      emailActive: true,
+      keyRemembered: true,
+      emailRemembered: true,
+    })
+    expect(globalThis.sessionStorage.getItem('verastar.ncbi_key')).toBe(null)
+    expect(globalThis.sessionStorage.getItem('verastar.ncbi_email')).toBe(null)
+  })
+
+  it('one toggle migrates all three credentials between storage tiers', () => {
+    setApiKey('sk-ant-test')
+    setNcbiKey('ncbi-key')
+    setNcbiEmail('researcher@example.edu')
+
+    setAllCredentialsRemembered(true)
+    expect(isKeyRemembered()).toBe(true)
+    expect(getNcbiCredentialStatus().keyRemembered).toBe(true)
+    expect(getNcbiCredentialStatus().emailRemembered).toBe(true)
+
+    setAllCredentialsRemembered(false)
+    expect(isKeyRemembered()).toBe(false)
+    expect(getNcbiCredentialStatus().keyRemembered).toBe(false)
+    expect(getNcbiCredentialStatus().emailRemembered).toBe(false)
+    expect(getNcbiKey()).toBe('ncbi-key')
+    expect(getNcbiEmail()).toBe('researcher@example.edu')
+  })
+
+  it('remembered NCBI credentials survive a simulated browser restart', () => {
+    setApiKey('sk-ant-test', { remember: true })
+    setNcbiKey('ncbi-key')
+    setNcbiEmail('researcher@example.edu')
+
+    globalThis.sessionStorage = memStorage()
+
+    expect(getApiKey()).toBe('sk-ant-test')
+    expect(getNcbiKey()).toBe('ncbi-key')
+    expect(getNcbiEmail()).toBe('researcher@example.edu')
+  })
+
+  it('repairs the legacy split state and clears NCBI values from both stores', () => {
+    setApiKey('sk-ant-test', { remember: true })
+    setNcbiKey('ncbi-key', { remember: false })
+    setNcbiEmail('researcher@example.edu', { remember: false })
+
+    setAllCredentialsRemembered(true)
+    expect(globalThis.sessionStorage.getItem('verastar.ncbi_key')).toBe(null)
+    expect(getNcbiCredentialStatus().keyRemembered).toBe(true)
+
+    clearNcbiCredentials()
+    expect(getNcbiKey()).toBe('')
+    expect(getNcbiEmail()).toBe('')
+    expect(getNcbiCredentialStatus().keyActive).toBe(false)
   })
 })
 

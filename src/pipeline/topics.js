@@ -86,6 +86,18 @@ function str(value) {
   return typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : ''
 }
 
+function cleanStrings(value) {
+  const seen = new Set()
+  return (Array.isArray(value) ? value : value == null ? [] : [value])
+    .map(str)
+    .filter((item) => {
+      const key = item.toLocaleLowerCase()
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
+
 // Anything -> a usable [{ label, query }]. Total: malformed rows are dropped, never thrown
 // on, because this runs on a profile blob that a previous version of the app wrote.
 export function normalizeTopics(raw) {
@@ -115,7 +127,8 @@ export function normalizeTopics(raw) {
     const key = q.toLowerCase()
     if (seen.has(key)) continue // the same query twice is the same PubMed call twice
     seen.add(key)
-    out.push({ label: l, query: q })
+    const mapped = cleanStrings(row.northStars ?? row.north_stars ?? row.steeredBy ?? row.northStar)
+    out.push({ label: l, query: q, ...(mapped.length ? { northStars: mapped } : {}) })
   }
   return out
 }
@@ -125,7 +138,28 @@ export function normalizeTopics(raw) {
 // one: "CLTI outcomes" as a plain term lets PubMed map it, where "CLTI outcomes"[tiab] finds
 // only the papers that used those two words side by side.
 export function topicsFromStars(northStars) {
-  return normalizeTopics((northStars || []).map((s) => ({ label: s, query: s })))
+  return normalizeTopics((northStars || []).map((s) => ({ label: s, query: s, northStars: [s] })))
+}
+
+// Resolve a topic's stored mapping against the north stars that still exist. Comparison is
+// case-insensitive, but the profile's canonical spelling wins. A mapping to a deleted star
+// is deliberately treated as uncovered rather than silently redirected.
+export function mappedNorthStars(topic, northStars = []) {
+  const canonical = new Map(cleanStrings(northStars).map((star) => [star.toLocaleLowerCase(), star]))
+  return cleanStrings(topic?.northStars ?? topic?.north_stars ?? topic?.steeredBy ?? topic?.northStar)
+    .map((star) => canonical.get(star.toLocaleLowerCase()))
+    .filter(Boolean)
+}
+
+// Non-blocking profile audit data. Every explicit search topic needs at least one live
+// steering concept; derived topics already map one-to-one in topicsFromStars().
+export function topicSteeringCoverage(topics, northStars = []) {
+  const rows = normalizeTopics(topics).map((topic, index) => {
+    const mapped = mappedNorthStars(topic, northStars)
+    return { index, label: topic.label, mapped, covered: mapped.length > 0 }
+  })
+  const uncovered = rows.filter((row) => !row.covered)
+  return { rows, uncovered, covered: rows.length - uncovered.length, total: rows.length, complete: uncovered.length === 0 }
 }
 
 // The topics a profile actually searches. Structured topics win; a profile that predates
@@ -189,15 +223,16 @@ export function capTopicPmids(pmids, cap = DEFAULT_TOPIC_CAP) {
 // been shown or saved. Returns:
 //   { pmids, topicsByPmid, counts, failed, skipped }
 //
-// ORDER IS THE POINT: skip-then-cap, never cap-then-skip. Filtering after the cap meant the
+// ORDER IS THE POINT on the capped compatibility path: skip-then-cap, never cap-then-skip. Filtering after the cap meant the
 // cap counted repeats — a topic's ten slots spent on eight papers she read yesterday, while
 // the unseen ones behind them never entered the pool, were never stamped, and aged out of
 // the window unread. Skipping first costs nothing (the ledger is keyed by pmid, so it needs
 // no metadata) and makes `cap` mean ten papers she has never seen.
 //
-// Order within the pool is round-robin across topics, not topic-by-topic: the merged pool is
+// The pre-score path skips but deliberately does not cap here; capScoredByTopic applies the
+// take after relevance. Order within either pool is round-robin across topics, not topic-by-topic: the merged pool is
 // what the funnel lists, so a 60-paper aortic day must not push carotid to the bottom.
-export function mergeTopicResults(results, { cap = DEFAULT_TOPIC_CAP, skipIds } = {}) {
+function mergeTopicRows(results, { cap = null, skipIds } = {}) {
   const rows = (Array.isArray(results) ? results : []).filter(Boolean)
   const failed = []
   const counts = []
@@ -214,7 +249,10 @@ export function mergeTopicResults(results, { cap = DEFAULT_TOPIC_CAP, skipIds } 
     const raw = cleanIds(row.pmids)
     const unseen = skipIds ? filterUnseen(raw, skipIds) : raw
     skipped += raw.length - unseen.length
-    const ids = capTopicPmids(unseen, cap)
+    // `cap === null` is the pre-score pool: bounded by the PubMed retmax, but not yet
+    // allowed to prefer newest over relevance. The legacy/public merge path passes a
+    // normalized cap and retains its skip-then-cap behavior for existing callers.
+    const ids = cap === null ? unseen : capTopicPmids(unseen, cap)
     // `more` = PubMed handed back everything we asked for, so there are papers beyond this
     // topic's fetch. It turns "10 of 40 new" into the honest "10 of 40+ new".
     const asked = Number(row.retmax)
@@ -243,14 +281,37 @@ export function mergeTopicResults(results, { cap = DEFAULT_TOPIC_CAP, skipIds } 
   return { pmids, topicsByPmid, counts, failed, skipped }
 }
 
+export function mergeTopicResults(results, { cap = DEFAULT_TOPIC_CAP, skipIds } = {}) {
+  return mergeTopicRows(results, { cap: normalizeTopicCap(cap), skipIds })
+}
+
+// The bounded pool that earns a relevance score BEFORE the per-topic take is applied.
+// PubMed's `retmax` still limits every topic, and the seen/library filter still runs first;
+// only the premature newest-N slice is omitted.
+export function mergeTopicResultsForScoring(results, { skipIds } = {}) {
+  return mergeTopicRows(results, { cap: null, skipIds })
+}
+
 // Carry topic attribution onto the candidate objects the funnel scores and displays.
 // Candidates that came back from esummary keyed by pmid; library-shaped records only carry
 // `id`, so accept either (same rule as seen.js/candidateId).
-export function attachTopics(candidates, topicsByPmid = {}) {
+export function attachTopics(candidates, topicsByPmid = {}, topicPlan) {
   const map = topicsByPmid && typeof topicsByPmid === 'object' ? topicsByPmid : {}
+  const steeringByLabel = new Map()
+  if (Array.isArray(topicPlan)) {
+    for (const topic of normalizeTopics(topicPlan)) {
+      const key = topic.label.toLocaleLowerCase()
+      const current = steeringByLabel.get(key) || []
+      steeringByLabel.set(key, cleanStrings([...current, ...(topic.northStars || [])]))
+    }
+  }
   return (candidates || []).map((c) => {
     const id = str(c?.pmid) || str(c?.id)
-    return { ...c, topics: map[id] ? [...map[id]] : [] }
+    const topics = map[id] ? [...map[id]] : []
+    const topicSteering = Array.isArray(topicPlan)
+      ? topics.map((topic) => ({ topic, northStars: [...(steeringByLabel.get(str(topic).toLocaleLowerCase()) || [])] }))
+      : null
+    return { ...c, topics, ...(topicSteering ? { topicSteering } : {}) }
   })
 }
 
@@ -259,6 +320,34 @@ export function attachTopics(candidates, topicsByPmid = {}) {
 export function lookbackOptions(days) {
   const current = normalizeSearchDays(days)
   return LOOKBACK_DAYS.filter((d) => d > current)
+}
+
+function localMidnight(value) {
+  if (value === null || value === undefined || value === '') return null
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
+// Is the next configured scan wide enough to meet the preceding successful scan without
+// a calendar-day hole? Publication searches work in date windows, so local calendar days
+// are the relevant unit (and avoid a daylight-saving hour turning three days into four).
+// The suggestion is one-run-only; normalizeSearchDays supplies the product's hard ceiling.
+export function lookbackGap(lastCompletedAt, configuredDays, now = new Date()) {
+  const previous = localMidnight(lastCompletedAt)
+  const current = localMidnight(now)
+  if (previous === null || current === null || current <= previous) return null
+  const elapsedDays = Math.round((current - previous) / 86400000)
+  const savedDays = normalizeSearchDays(configuredDays)
+  if (elapsedDays <= savedDays) return null
+  const suggestedDays = Math.min(elapsedDays, MAX_SEARCH_DAYS)
+  return {
+    elapsedDays,
+    savedDays,
+    suggestedDays,
+    truncated: elapsedDays > MAX_SEARCH_DAYS,
+    uncoveredDays: Math.max(0, elapsedDays - MAX_SEARCH_DAYS),
+  }
 }
 
 // Topics where the per-topic cap held papers back (or where the fetch itself ran out before
@@ -271,17 +360,48 @@ export function heldBack(counts = []) {
   )
 }
 
+// Complete per-topic report data for the scan disclosure. Unlike heldBack(), this never
+// filters to only exceptional rows: a healthy uncapped topic is exactly the row whose
+// omission made a tester infer a false zero. Successful rows retain the search-plan order;
+// failures follow because mergeTopicResults keeps them in a separate collection.
+export function topicReportRows(counts = [], failed = []) {
+  const successful = (Array.isArray(counts) ? counts : []).filter(Boolean).map((c) => ({
+    label: str(c.label) || 'Unnamed topic',
+    retained: Number.isFinite(Number(c.count)) ? Number(c.count) : 0,
+    available: Number.isFinite(Number(c.available)) ? Number(c.available) : 0,
+    ...(Number.isFinite(Number(c.prescored)) ? { prescored: Number(c.prescored) } : {}),
+    more: !!c.more,
+    failed: false,
+  }))
+  const failures = (Array.isArray(failed) ? failed : []).filter(Boolean).map((f) => ({
+    label: str(f.label) || 'Unnamed topic',
+    retained: null,
+    available: null,
+    more: false,
+    failed: true,
+    error: str(f.error) || 'search failed',
+  }))
+  return [...successful, ...failures]
+}
+
 // The one honest sentence about what was actually searched. The window is stated because it
 // is the digest's central claim; a topic that failed is NAMED because "9 topics searched"
-// with no names leaves her unable to tell which area she's flying blind in this morning; and
-// a topic the cap bit is named for the same reason.
-export function searchSummary({ days, counts = [], failed = [], found = null } = {}) {
+// with no names leaves her unable to tell which area she's flying blind in this morning.
+// Complete retained counts live in topicReportRows(); keeping them out of this sentence
+// prevents a partial “Per topic” list from masquerading as a complete one.
+export function searchSummary({ days, counts = [], failed = [], found = null, prescored = null } = {}) {
   const windowDays = normalizeSearchDays(days)
   const topics = (counts?.length || 0) + (failed?.length || 0)
   if (!topics) return ''
   let out = `Searched ${topics} topic${topics === 1 ? '' : 's'} over the last ${windowDays} day${windowDays === 1 ? '' : 's'}`
   const n = Number(found)
-  if (Number.isFinite(n)) out += ` — ${n} new paper${n === 1 ? '' : 's'}`
+  const wide = Number(prescored)
+  const hasWide = prescored !== null && prescored !== undefined && prescored !== '' && Number.isFinite(wide)
+  if (Number.isFinite(n) && hasWide) {
+    out += ` — pre-scored ${wide} unseen paper${wide === 1 ? '' : 's'}; retained ${n} candidate${n === 1 ? '' : 's'} after per-topic relevance caps`
+  } else if (Number.isFinite(n)) {
+    out += ` — ${n} new paper${n === 1 ? '' : 's'}`
+  }
   out += '.'
   if (failed.length) {
     const names = failed.map((f) => f?.label).filter(Boolean)
@@ -291,14 +411,6 @@ export function searchSummary({ days, counts = [], failed = [], found = null } =
   if (quiet.length) {
     const names = quiet.map((c) => c.label).filter(Boolean)
     out += ` No new matches for ${names.join(', ')}.`
-  }
-  const held = heldBack(counts)
-  if (held.length) {
-    // "+" when PubMed returned everything we asked for: there are more beyond the fetch, so
-    // the denominator is a floor, not a total. Claiming a precise "of 40" there would be the
-    // same class of quiet lie as widening the window.
-    const parts = held.map((c) => `${c.label} ${c.count} of ${c.available}${c.more ? '+' : ''}`)
-    out += ` Per topic: ${parts.join(', ')} — raise "per topic" in your profile to see more.`
   }
   return out
 }

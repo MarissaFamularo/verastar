@@ -29,7 +29,9 @@ import ChipGroup from './ChipGroup.jsx'
 import ProfileInterview from './ProfileInterview.jsx'
 import QueryFlags from './QueryFlags.jsx'
 import RubricEditor from './RubricEditor.jsx'
+import { normalizeJournalPreferences } from '../pipeline/journals.js'
 import TopicsEditor from './TopicsEditor.jsx'
+import ProfileStorageDisclosure from './ProfileStorageDisclosure.jsx'
 
 const QUESTIONS = [
   {
@@ -240,6 +242,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
       name: (draft.name || 'Doctor').trim(),
       northStars: draft.northStars || [],
       projects: draft.projects || [],
+      journalPreferences: normalizeJournalPreferences(draft.journalPreferences),
       topics: normalizeTopics(draft.topics),
       search: {
         days: normalizeSearchDays(draft.search?.days),
@@ -458,6 +461,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
           searches, your north stars, and your ranking rubric. You edit all of it before
           anything is saved.
         </p>
+        <ProfileStorageDisclosure style={{ maxWidth: 560 }} />
         <div style={{ marginTop: 26 }}>
           <ProfileInterview
             preview={preview}
@@ -491,6 +495,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
           scan falls back to searching your north-star phrases, which is broader and noisier.
           The interview writes real queries; you can also add them yourself on the next screen.
         </p>
+        <ProfileStorageDisclosure style={{ maxWidth: 560 }} />
 
         <div className="flex flex-col" style={{ marginTop: 26, gap: 20 }}>
           {QUESTIONS.map((q) => (
@@ -555,6 +560,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
         worth two minutes: each one is a real PubMed query that runs every morning. You can
         always tune all of it later from Settings.
       </p>
+      <ProfileStorageDisclosure style={{ maxWidth: 620 }} />
 
       <div className="flex flex-col" style={{ marginTop: 24, gap: 22 }}>
         <div>
@@ -572,6 +578,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
             days={draft?.search?.days}
             perTopic={draft?.search?.perTopic}
             northStars={draft?.northStars || []}
+            onNorthStarsChange={(northStars) => setField({ northStars })}
             onChange={({ topics, days, perTopic }) => setField({ topics, search: { days, perTopic } })}
           />
           <QueryFlags topics={draft?.topics || []} />
@@ -599,6 +606,8 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
           criteria={draft?.rubric?.criteria ?? DEFAULT_RUBRIC}
           selectCount={draft?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT}
           scoreFloor={normalizeScoreFloor(draft?.rubric?.scoreFloor)}
+          journalPreferences={normalizeJournalPreferences(draft?.journalPreferences)}
+          onJournalPreferencesChange={(journalPreferences) => setField({ journalPreferences })}
           onChange={(rubric) => setField({ rubric })}
         />
       </div>

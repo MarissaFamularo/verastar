@@ -70,6 +70,21 @@ describe('sourceNoteMd', () => {
     expect(md).toContain('https://pubmed.ncbi.nlm.nih.gov/12345/')
   })
 
+  it('renders a verified reported range even though it has no scalar value', () => {
+    const md = sourceNoteMd(paper({
+      quantities: [{
+        name: 'Adjusted hazard ratios',
+        value: null,
+        range_low: 3.43,
+        range_high: 3.52,
+        unit: 'HR',
+        source_quote: 'adjusted Cox models HR 3.43–3.52',
+        tier: 'verified-full-text',
+      }],
+    }))
+    expect(md).toContain('**Adjusted hazard ratios:** 3.43–3.52 HR')
+  })
+
   it('renders a p-value with the operator the quote states — never an invented "="', () => {
     const md = sourceNoteMd(
       paper({
@@ -123,6 +138,20 @@ describe('sourceNoteMd', () => {
       expect(md).toContain('## Finding\n\nDrug-coated devices reduced reintervention.')
       expect(md).not.toContain('Summary withheld')
     }
+  })
+
+  it('renders a supported design caution separately and withholds a refuted one', () => {
+    const caution = 'The observational comparison cannot establish a universal standard of care.'
+    const supported = sourceNoteMd(paper({
+      designCaution: caution,
+      cautionCheck: { verdict: 'supported', reason: '' },
+    }))
+    const refuted = sourceNoteMd(paper({
+      designCaution: caution,
+      cautionCheck: { verdict: 'refuted', reason: 'not stated in methods' },
+    }))
+    expect(supported).toContain(`## Design caution\n\n${caution}`)
+    expect(refuted).not.toContain(caution)
   })
 })
 

@@ -59,6 +59,27 @@ function printedValue(quantity, field) {
   return tokens.find((t) => numbersEqual(t.value, target))?.raw || String(target)
 }
 
+// Recover both printed endpoints and the source's separator for a reported estimate
+// range. The endpoints are matched in order so a duplicated number elsewhere in the quote
+// cannot make the display reverse or splice the range. If the source spelling cannot be
+// recovered, fall back to the parsed endpoints joined by an en dash; verification still
+// controls whether the quantity is allowed to render at all.
+function printedRange(quantity) {
+  const low = quantity?.range_low
+  const high = quantity?.range_high
+  if (low == null || high == null) return ''
+  const { text, tokens } = printedTokens(quantity.source_quote)
+  const lowIndex = tokens.findIndex((t) => numbersEqual(t.value, low))
+  const highToken = lowIndex < 0
+    ? null
+    : tokens.slice(lowIndex + 1).find((t) => numbersEqual(t.value, high))
+  const lowToken = tokens[lowIndex]
+  if (!lowToken || !highToken) return `${low}–${high}`
+  const between = text.slice(lowToken.end, highToken.start)
+  const separator = /^\s*(?:[-‐-―−－]|to)\s*$/i.test(between) ? between : '–'
+  return `${lowToken.raw}${separator}${highToken.raw}`
+}
+
 // Derive the p-value operator from the quantity's verified quote. Tokenize the normalized
 // quote (representation may differ: "P = .02" vs claim 0.02, so tokens are matched with
 // numbersEqual, never string search), take the FIRST token equal to p_value, and scan
@@ -85,8 +106,9 @@ export function pOperator(quantity) {
 // otherwise it renders operator-free ("P 0.02") — an "=" the source never said is a
 // misstatement in the fact channel.
 export function fmtNum(q) {
-  if (q.value == null) return ''
-  let s = printedValue(q, 'value')
+  const hasRange = q.range_low != null && q.range_high != null
+  if (q.value == null && !hasRange) return ''
+  let s = hasRange ? printedRange(q) : printedValue(q, 'value')
   if (q.unit) s += ` ${q.unit}`
   if (q.ci_low != null && q.ci_high != null) {
     s += ` (CI ${printedValue(q, 'ci_low')}–${printedValue(q, 'ci_high')})`

@@ -45,6 +45,42 @@ describe('digest retraction exclusion', () => {
     expect(result.candidates.map((paper) => paper.pmid)).toEqual(['1'])
   })
 
+  it('carries only live topic-to-north-star mappings onto candidates', async () => {
+    sourceMocks.searchPubmed.mockResolvedValue(['1'])
+    sourceMocks.fetchCitations.mockResolvedValue([{ pmid: '1', title: 'Allocation paper', pubtypes: ['Journal Article'] }])
+
+    const result = await searchCandidates({
+      topics: [{ label: 'Allocation', query: 'organ allocation', northStars: ['Allocation equity', 'Deleted star'] }],
+      northStars: ['Allocation equity'],
+      perTopic: 10,
+      days: 3,
+      paceMs: 0,
+    })
+
+    expect(result.candidates[0].topicSteering).toEqual([
+      { topic: 'Allocation', northStars: ['Allocation equity'] },
+    ])
+  })
+
+  it('returns the bounded unseen pool before the per-topic cap', async () => {
+    sourceMocks.searchPubmed.mockResolvedValue(['newest', 'middle', 'older'])
+    sourceMocks.fetchCitations.mockResolvedValue([
+      { pmid: 'newest', title: 'Newest', pubtypes: ['Journal Article'] },
+      { pmid: 'middle', title: 'Middle', pubtypes: ['Journal Article'] },
+      { pmid: 'older', title: 'Older but potentially more relevant', pubtypes: ['Journal Article'] },
+    ])
+
+    const result = await searchCandidates({
+      topics: [{ label: 'Registry methods', query: 'registry methods' }],
+      perTopic: 1,
+      days: 7,
+      paceMs: 0,
+    })
+
+    expect(result.cap).toBe(1)
+    expect(result.candidates.map((paper) => paper.pmid)).toEqual(['newest', 'middle', 'older'])
+  })
+
   it('stops a restored candidate if PubMed now marks it retracted', async () => {
     sourceMocks.fetchCitation.mockResolvedValue({
       pmid: '2', title: 'Withdrawn evidence', pubtypes: ['Retracted Publication'], retracted: true,

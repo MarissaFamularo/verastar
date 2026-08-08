@@ -28,6 +28,7 @@ import { paperIndicatesRetraction, refreshSavedRetractions, removePaperFromConce
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
+import { fmtNum } from '../lib/format.js'
 
 export default function KnowledgeBase() {
   const [concepts, setConcepts] = useState([])
@@ -466,10 +467,13 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
 // One saved paper: title, mono citation, collapsible finding, editable note, prunable tags, links.
 function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }) {
   const [showFinding, setShowFinding] = useState(false)
+  const [showEvidence, setShowEvidence] = useState(false)
   const [note, setNote] = useState(paper.notes || '')
   const dirty = note !== (paper.notes || '')
   const cite = [paper.citation?.author, paper.citation?.journal, paper.citation?.year].filter(Boolean).join(' · ')
   const retracted = paperIndicatesRetraction(paper)
+  const verifiedCount = Array.isArray(paper.quantities) ? paper.quantities.length : 0
+  const hasScore = paper.score != null && Number.isFinite(Number(paper.score))
 
   const lastSaved = useRef(paper.notes || '')
   useEffect(() => {
@@ -521,8 +525,15 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }
 
       <div className="flex flex-wrap items-center" style={{ marginTop: 9, gap: 8 }}>
         <HeartButton active={!!paper.favorite} onClick={onToggleFavorite} />
-        {paper.finding && (
+        {hasScore && <span style={{ ...pill, cursor: 'default', fontFamily: 'var(--font-mono)', color: 'var(--color-accent-bright)' }}>Fit {Math.round(Number(paper.score))}</span>}
+        {paper.saveSource === 'manual' && <span style={{ ...pill, cursor: 'default' }}>Added manually</span>}
+        {(paper.finding || paper.designCaution || paper.relevance) && (
           <button onClick={() => setShowFinding((s) => !s)} style={pill}>{showFinding ? 'Hide summary' : 'Summary'}</button>
+        )}
+        {verifiedCount > 0 && (
+          <button onClick={() => setShowEvidence((s) => !s)} style={{ ...pill, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>
+            {verifiedCount} verified value{verifiedCount === 1 ? '' : 's'} {showEvidence ? '▴' : '▾'}
+          </button>
         )}
         <a href={paper.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: 'var(--color-accent)' }}>
           View article ↗
@@ -547,6 +558,32 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }
         ) : (
           <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>{paper.finding}</p>
         )
+      )}
+      {showFinding && paper.designCaution && paper.cautionCheck?.verdict !== 'refuted' && (
+        <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--color-abstract)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
+          <span style={{ fontWeight: 600, color: 'var(--color-abstract)' }}>Design caution:</span>{' '}
+          {paper.designCaution}
+        </p>
+      )}
+      {showFinding && paper.relevance && (
+        <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--color-accent)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
+          <span style={{ fontWeight: 600, color: 'var(--color-accent-bright)' }}>Why it fits:</span>{' '}
+          {paper.relevance}
+        </p>
+      )}
+      {showEvidence && verifiedCount > 0 && (
+        <div style={{ marginTop: 9, borderRadius: 9, border: '1px solid rgba(127,191,154,.2)', background: 'rgba(127,191,154,.04)', padding: '8px 10px' }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>VERIFIED VALUES</p>
+          <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {paper.quantities.map((quantity, index) => (
+              <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
+                <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{fmtNum(quantity)}</span>
+                {quantity.source_quote && <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--color-fg-faint)' }}>&ldquo;{quantity.source_quote}&rdquo;</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <TagRow tags={paper.tags} onRemove={onRemoveTag} />

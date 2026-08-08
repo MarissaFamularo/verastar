@@ -11,6 +11,8 @@ import {
   normalizeScoreFloor,
   preReadFloor,
   floorSummary,
+  coverageSelectionSummary,
+  capScoredByTopic,
   readFitLabel,
   belowFloorNote,
   DEFAULT_SCORE_FLOOR,
@@ -112,6 +114,34 @@ describe('selectCandidates', () => {
 
     expect(fetchAbstractsByPmid).toHaveBeenCalledWith(['2'])
     expect(extractStructured.mock.calls[0][0].content).toContain('Abstract: Already cached evidence.')
+  })
+
+  it('supplies explicit topic-to-north-star steering and marks unmapped topics', async () => {
+    const [paper] = candidates(1)
+    paper.topicSteering = [
+      { topic: 'Allocation', northStars: ['Allocation equity'] },
+      { topic: 'HPB', northStars: [] },
+    ]
+    extractStructured.mockResolvedValue({ selections: [{ id: paper.id, score: 80 }] })
+
+    await selectCandidates({ candidates: [paper], northStars: ['Allocation equity', 'HPB outcomes'] })
+
+    const prompt = extractStructured.mock.calls[0][0].content
+    expect(prompt).toContain('Allocation → Allocation equity')
+    expect(prompt).toContain('HPB → (unmapped)')
+  })
+
+  it('sends journal tiers as compact structured context', async () => {
+    extractStructured.mockResolvedValue({ selections: [{ id: '1', score: 80 }] })
+    await selectCandidates({
+      candidates: candidates(1),
+      rubric: 'Prioritize rigorous comparative evidence.',
+      journalPreferences: { mustNotMiss: ['JAMA'], preferred: ['Annals of Surgery'] },
+    })
+    const prompt = extractStructured.mock.calls[0][0].content
+    expect(prompt).toContain('Must-not-miss journals: JAMA')
+    expect(prompt).toContain('Preferred journals: Annals of Surgery')
+    expect(prompt.match(/JAMA/g)).toHaveLength(1)
   })
 
   it(`batches pools at ${SELECTION_BATCH_SIZE} and merges ties in original pool order`, async () => {
@@ -220,6 +250,53 @@ describe('normalizeScoreFloor', () => {
   })
 })
 
+describe('capScoredByTopic — relevance before newest-N', () => {
+  it('retains the highest-scoring papers even when they were older in PubMed order', () => {
+    // Input to selectCandidates was newest → oldest; its score sort moves the older strong
+    // paper first. The topic cap must follow that score order, not restore newest-N.
+    const scored = [
+      { id: 'older-best', score: 95, topics: ['Registry methods'] },
+      { id: 'newest', score: 70, topics: ['Registry methods'] },
+      { id: 'middle', score: 60, topics: ['Registry methods'] },
+    ]
+    const out = capScoredByTopic(scored, {
+      cap: 2,
+      counts: [{ label: 'Registry methods', available: 32, more: true }],
+    })
+    expect(out.candidates.map((candidate) => candidate.id)).toEqual(['older-best', 'newest'])
+    expect(out.counts[0]).toMatchObject({ count: 2, prescored: 3, available: 32, more: true })
+  })
+
+  it('uses stable PubMed order as the tie-breaker', () => {
+    const scored = [
+      { id: 'newer', score: 80, topics: ['AI'] },
+      { id: 'older', score: 80, topics: ['AI'] },
+    ]
+    expect(capScoredByTopic(scored, { cap: 1 }).candidates.map((candidate) => candidate.id)).toEqual(['newer'])
+  })
+
+  it('merges cross-topic winners once while preserving every search attribution', () => {
+    const scored = [
+      { id: 'cross', score: 95, topics: ['Allocation', 'AI'] },
+      { id: 'allocation', score: 90, topics: ['Allocation'] },
+      { id: 'ai', score: 85, topics: ['AI'] },
+    ]
+    const out = capScoredByTopic(scored, { cap: 1 })
+    expect(out.candidates).toHaveLength(1)
+    expect(out.candidates[0]).toMatchObject({ id: 'cross', topics: ['Allocation', 'AI'], retainedTopics: ['Allocation', 'AI'] })
+    expect(out.counts.map((row) => [row.label, row.count, row.prescored])).toEqual([
+      ['Allocation', 1, 2],
+      ['AI', 1, 2],
+    ])
+  })
+
+  it('keeps legacy candidates with no topic attribution reachable', () => {
+    expect(capScoredByTopic([{ id: 'legacy', score: 80 }], { cap: 1 }).candidates).toMatchObject([
+      { id: 'legacy', retainedTopics: [] },
+    ])
+  })
+})
+
 describe('applyScoreFloor', () => {
   it('never pads below the floor — a thin day gets a short digest', () => {
     const out = applyScoreFloor(pool(91, 84, 40, 22, 10), { floor: 60, count: 10 })
@@ -231,6 +308,59 @@ describe('applyScoreFloor', () => {
     const out = applyScoreFloor(pool(95, 90, 85, 80, 75), { floor: 60, count: 3 })
     expect(out.picked).toHaveLength(3)
     expect(out.cleared).toBe(5)
+  })
+
+  it('covers eligible topics before filling remaining slots by global score', () => {
+    const scored = [
+      { id: 'a1', score: 99, topics: ['Allocation'] },
+      { id: 'a2', score: 98, topics: ['Allocation'] },
+      { id: 'l1', score: 92, topics: ['Liver clinical'] },
+      { id: 'm1', score: 88, topics: ['Machine perfusion'] },
+      { id: 'a3', score: 87, topics: ['Allocation'] },
+    ]
+    const out = applyScoreFloor(scored, { floor: 55, count: 4 })
+
+    expect(out.picked.map((candidate) => candidate.id)).toEqual(['a1', 'l1', 'm1', 'a2'])
+    expect(out).toMatchObject({ coveragePicked: 3, scorePicked: 1, coveredTopics: 3, eligibleTopics: 3 })
+  })
+
+  it('lets one paper cover every topic attributed to it', () => {
+    const scored = [
+      { id: 'cross', score: 95, topics: ['Allocation', 'Liver clinical'] },
+      { id: 'allocation', score: 94, topics: ['Allocation'] },
+      { id: 'machine', score: 90, topics: ['Machine perfusion'] },
+    ]
+    const out = applyScoreFloor(scored, { floor: 55, count: 2 })
+
+    expect(out.picked.map((candidate) => candidate.id)).toEqual(['cross', 'machine'])
+    expect(out).toMatchObject({ coveragePicked: 2, scorePicked: 0, coveredTopics: 3, eligibleTopics: 3 })
+  })
+
+  it('prioritizes the highest-scoring coverage when there are more topics than slots', () => {
+    const scored = [
+      { id: 'high', score: 95, topics: ['High-volume'] },
+      { id: 'middle', score: 85, topics: ['Middle-volume'] },
+      { id: 'small', score: 75, topics: ['Small field'] },
+    ]
+
+    expect(applyScoreFloor(scored, { floor: 55, count: 2 }).picked.map((candidate) => candidate.id)).toEqual(['high', 'middle'])
+  })
+
+  it('never uses topic coverage to admit a paper below the floor', () => {
+    const scored = [
+      { id: 'qualified', score: 80, topics: ['Allocation'] },
+      { id: 'weak', score: 54, topics: ['Uncovered field'] },
+    ]
+    const out = applyScoreFloor(scored, { floor: 55, count: 10 })
+
+    expect(out.picked.map((candidate) => candidate.id)).toEqual(['qualified'])
+    expect(out.eligibleTopics).toBe(1)
+  })
+
+  it('uses score order when topic attribution is unavailable', () => {
+    const out = applyScoreFloor(pool(90, 80, 70), { floor: 55, count: 2 })
+    expect(out.picked.map((candidate) => candidate.id)).toEqual(['p0', 'p1'])
+    expect(out).toMatchObject({ coveragePicked: 0, scorePicked: 2, coveredTopics: 0, eligibleTopics: 0 })
   })
 
   it('keeps a candidate sitting exactly on the floor', () => {
@@ -267,6 +397,20 @@ describe('applyScoreFloor', () => {
     const scored = pool(90, 20)
     applyScoreFloor(scored, { floor: 60, count: 1 })
     expect(scored.map((c) => c.score)).toEqual([90, 20])
+  })
+})
+
+describe('coverageSelectionSummary', () => {
+  it('states how coverage and score fill divided a capped slate', () => {
+    expect(coverageSelectionSummary({ picked: 10, coveragePicked: 8, scorePicked: 2, coveredTopics: 9, eligibleTopics: 12 })).toBe(
+      'Coverage-first selection chose 8 papers spanning 9 of 12 eligible topics, then filled 2 remaining slots by score.',
+    )
+  })
+
+  it('is explicit when attribution is unavailable', () => {
+    expect(coverageSelectionSummary({ picked: 2, scorePicked: 2 })).toBe(
+      'No topic attribution was available, so 2 papers were selected by score.',
+    )
   })
 })
 

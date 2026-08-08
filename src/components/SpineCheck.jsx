@@ -7,17 +7,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
-import { saveDailyDigest, loadDailyDigest, clearDailyDigest, withOaLinks, digestGaps, restoreNote } from '../lib/digestStore.js'
+import {
+  saveDailyDigest,
+  loadDailyDigest,
+  clearDailyDigest,
+  saveSuccessfulScan,
+  loadSuccessfulScan,
+  withOaLinks,
+  digestGaps,
+  restoreNote,
+} from '../lib/digestStore.js'
 import { digestProjects } from '../lib/trellis.js'
 import { wakeLock } from '../lib/wakeLock.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import {
   selectCandidates,
+  capScoredByTopic,
   applyScoreFloor,
   applyPostReadFloor,
   normalizeScoreFloor,
   preReadFloor,
+  coverageSelectionSummary,
   readFitLabel,
   belowFloorNote,
 } from '../pipeline/select.js'
@@ -27,7 +38,9 @@ import {
   profileSearchDays,
   profileTopicCap,
   lookbackOptions,
+  lookbackGap,
   searchSummary,
+  topicReportRows,
 } from '../pipeline/topics.js'
 import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { savePaper } from '../pipeline/save.js'
@@ -187,8 +200,8 @@ export function candidateDisplayScore(candidate, processedIds, triaged) {
   return Number.isFinite(readScore) ? readScore : candidate?.score
 }
 
-// The selection funnel surface: the wide candidate pool ranked by rubric fit, with the top
-// N pre-checked. The clinician confirms/adjusts the selection, then runs the digest on only
+// The selection funnel surface: the wide candidate pool ranked by rubric fit, with a
+// coverage-first slate pre-checked. The clinician confirms/adjusts the selection, then runs the digest on only
 // those — mirroring the ~50-candidates → ~10-kept step of a hand-run morning review. Once a
 // digest exists the pool COLLAPSES (the digest is the centerpiece); reopening it lets you
 // check more papers and top up the digest later WITHOUT re-running the ones already done —
@@ -230,7 +243,7 @@ function CandidatePool({
               ? open
                 ? 'Check any others to add them to the digest — only the new ones run; the rest stay as they are.'
                 : `${available} more paper${available === 1 ? '' : 's'} available — open the list to add any without re-running the digest.`
-              : 'Every recent match, ranked against your rubric. The top papers are pre-selected; adjust below, then run the digest on just those.'}
+              : 'The best relevance-scored matches retained from each search topic. Pre-selection covers eligible topics first, then fills remaining slots by score; adjust below, then run the digest on just those.'}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end" style={{ gap: 8 }}>
@@ -326,6 +339,15 @@ function CandidatePool({
                     already read · instant add
                   </span>
                 )}
+                {picked && c.selectionRole && (
+                  <span
+                    className="shrink-0"
+                    title={c.selectionRole === 'coverage' ? 'Pre-selected because this paper adds topic coverage' : 'Pre-selected by score after eligible topics were covered'}
+                    style={{ marginTop: 2, borderRadius: 999, background: 'rgba(233,196,106,.1)', padding: '2px 8px', fontSize: 10, fontWeight: 600, color: 'var(--color-gold-soft)' }}
+                  >
+                    {c.selectionRole === 'coverage' ? 'topic coverage' : 'score fill'}
+                  </span>
+                )}
               </li>
             )
           })}
@@ -342,6 +364,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const [searching, setSearching] = useState(false)
   const [selecting, setSelecting] = useState(false) // selection funnel LLM call in flight
   const [candidates, setCandidates] = useState([]) // scored candidate pool (funnel output)
+  const [preCapCandidates, setPreCapCandidates] = useState([]) // bounded scored pool retained for honest re-ranks
+  const [searchContext, setSearchContext] = useState({ counts: [], failed: [], days: null })
   const [selectedIds, setSelectedIds] = useState(() => new Set()) // ids chosen for the digest
   const [poolOpen, setPoolOpen] = useState(false) // funnel is a disclosure — collapsed by default
   const [scanError, setScanError] = useState('')
@@ -351,9 +375,17 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // What the search actually did — topics searched, window, and any topic whose query
   // failed. Kept separate from scanNote because scanNote is claimed by the scoring funnel.
   const [searchNote, setSearchNote] = useState('')
+  // Every topic's retained count, including ordinary uncapped rows. The old summary kept
+  // only capped topics, making omitted successful topics look like false zeroes.
+  const [topicReport, setTopicReport] = useState([])
+  const [topicReportOpen, setTopicReportOpen] = useState(false)
   // The window a scan just came back empty on, or null. Non-null is what puts the explicit
   // "look back further" offer on screen — the app never widens the window by itself.
   const [emptyWindow, setEmptyWindow] = useState(null)
+  // A configured window shorter than the time since the last completed scan would leave a
+  // permanent publication-date hole. This offers an explicit one-run catch-up; it never
+  // changes the saved profile window or widens a search without consent.
+  const [coveragePrompt, setCoveragePrompt] = useState(null)
   const [stages, setStages] = useState({})
   const [results, setResults] = useState(() => demo ? DEMO_DIGEST.results : []) // runPaper results (live, showcase, or read-only demo)
   // Every paid extraction, including papers excluded by the final post-read bar. Keeping
@@ -376,7 +408,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // Latest digest state, mirrored every render — async runs would otherwise persist stale
   // closed-over values. ranRef stops a slow restore from clobbering a run already started.
   const digestRef = useRef(null)
-  digestRef.current = { results, processedResults, triaged, candidates, selectedIds }
+  digestRef.current = { results, processedResults, triaged, candidates, preCapCandidates, searchContext, selectedIds }
   const ranRef = useRef(false)
   // In-flight for the WHOLE run — the papers AND the ranking call that follows. Guards ONLY
   // the open-access-link effect below (~line 400) from racing in and writing a snapshot off
@@ -404,6 +436,18 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     onDigestDate(new Date().toISOString())
   }
 
+  // Best-effort like the seen ledger: failure means a redundant catch-up prompt later,
+  // never a failed digest now. A partial PubMed search must not call this — one failed
+  // topic is still a hole even when every other topic completed.
+  async function recordSuccessfulScan(windowDays) {
+    try {
+      await saveSuccessfulScan({ windowDays })
+      setCoveragePrompt(null)
+    } catch (err) {
+      console.warn('Successful-scan checkpoint failed (digest unaffected):', err.message)
+    }
+  }
+
   const titleOf = (res) => res.paper.title || res.citation?.title || `PMID ${res.paper.pmid}`
 
   // Load which papers are already in the Knowledge Base (persisted in IndexedDB),
@@ -414,6 +458,17 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setSavedIds(new Set((papers || []).map((p) => p.id)))
       setFavIds(new Set((papers || []).filter((p) => p.favorite).map((p) => p.id)))
     })
+  }, [demo])
+
+  // Load the independent successful-scan checkpoint. `daily:latest` cannot stand in for
+  // this because it is deleted before every scan and written during incomplete paper runs.
+  useEffect(() => {
+    if (demo) return
+    Promise.all([getProfile(), loadSuccessfulScan()])
+      .then(([profile, checkpoint]) => {
+        setCoveragePrompt(lookbackGap(checkpoint?.completedAt, profileSearchDays(profile)))
+      })
+      .catch(console.warn)
   }, [demo])
 
   // The selection bar. normalizeScoreFloor is the same fallback scorePool applies, so a
@@ -441,6 +496,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         setProcessedResults(saved.processedResults)
         setTriaged(saved.triaged)
         setCandidates(saved.candidates)
+        setPreCapCandidates(saved.preCapCandidates)
+        setSearchContext(saved.searchContext)
+        setTopicReport(topicReportRows(saved.searchContext?.counts, saved.searchContext?.failed))
         setSelectedIds(saved.selectedIds)
         // Say what actually came back. A snapshot can be missing summaries — the ranking call
         // failed, or an older build wrote one mid-run — and a page of blank cards under a
@@ -649,11 +707,14 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         const rankings = await triage({
           northStars: profile?.northStars ?? [],
           projects: await digestProjects(profile),
+          journalPreferences: profile?.journalPreferences,
           rubric: profile?.rubric?.criteria ?? '',
           candidates: ok.map((r) => ({
             id: r.paper.id,
             title: titleOf(r),
             design: r.design,
+            topics: r.paper.topics,
+            topicSteering: r.paper.topicSteering,
             summary: r.sourceDoc?.text || '',
             // The finding is written only from values the app verified.
             verified: r.rows
@@ -663,7 +724,15 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         })
         const byId = {}
         for (const rk of rankings) {
-          byId[rk.id] = { score: rk.score, tier: rk.tier, finding: rk.finding, relevance: rk.relevance, check: rk.check }
+          byId[rk.id] = {
+            score: rk.score,
+            tier: rk.tier,
+            finding: rk.finding,
+            designCaution: rk.designCaution,
+            relevance: rk.relevance,
+            check: rk.check,
+            cautionCheck: rk.cautionCheck,
+          }
         }
         setTriaged(byId)
         triagedNow = byId
@@ -724,31 +793,61 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // slot. Shared by the initial scan and the re-rank button. `pool` is candidate stubs;
   // selection fetches their abstracts before scoring. Floor first, then the count cap — a thin day yields a short digest,
   // never ten slots padded out with whatever scored highest among the mediocre.
-  async function scorePool(pool) {
+  async function scorePool(pool, context = searchContext) {
     const profile = await getProfile()
-    const scored = await selectCandidates({
+    const wideScored = await selectCandidates({
       rubric: profile?.rubric?.criteria ?? '',
       northStars: profile?.northStars ?? [],
       projects: await digestProjects(profile),
+      journalPreferences: profile?.journalPreferences,
       candidates: pool,
     })
-    setCandidates(scored)
+    const capped = capScoredByTopic(wideScored, {
+      cap: profileTopicCap(profile),
+      counts: context?.counts,
+    })
+    const scored = capped.candidates
+    const nextContext = { ...(context || {}), counts: capped.counts }
+    setPreCapCandidates(wideScored)
+    setSearchContext(nextContext)
+    setTopicReport(topicReportRows(capped.counts, context?.failed))
     const finalFloor = normalizeScoreFloor(profile?.rubric?.scoreFloor)
     const screeningFloor = preReadFloor(finalFloor)
-    const { picked, cleared, total, floor } = applyScoreFloor(scored, {
+    const selection = applyScoreFloor(scored, {
       floor: screeningFloor,
       count: profile?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT,
     })
+    const { picked, cleared, total, floor } = selection
     const chosenIds = new Set(picked.map((c) => c.id))
+    const coverageIds = new Set(picked.slice(0, selection.coveragePicked).map((c) => c.id))
+    const ranked = scored.map((candidate) => ({
+      ...candidate,
+      selectionRole: chosenIds.has(candidate.id) ? (coverageIds.has(candidate.id) ? 'coverage' : 'score') : '',
+    }))
+    setCandidates(ranked)
     setSelectedIds(chosenIds)
     setScoreFloor(finalFloor) // the post-read admission bar; screening gets a 20-point allowance
+    const slate = picked.length < cleared ? ` ${coverageSelectionSummary({ picked: picked.length, ...selection })}` : ''
     const screened = cleared
-      ? `On title, abstract, and journal, ${cleared} of ${total} came within 20 points of your final bar of ${finalFloor}.${picked.length < cleared ? ` The top ${picked.length} will be read.` : ''}`
+      ? `On title, abstract, and journal, ${cleared} of ${total} came within 20 points of your final bar of ${finalFloor}.${slate}`
       : `On title, abstract, and journal, nothing came within 20 points of your final bar of ${finalFloor} today.`
     setScanNote(screened)
     // The pool + picks survive a tab switch even before any digest runs.
-    persistDigest({ candidates: scored, selectedIds: chosenIds })
-    return { scored, chosenIds, cleared, floor: finalFloor, screeningFloor }
+    persistDigest({
+      candidates: ranked,
+      preCapCandidates: wideScored,
+      searchContext: nextContext,
+      selectedIds: chosenIds,
+    })
+    return {
+      scored: ranked,
+      chosenIds,
+      cleared,
+      floor: finalFloor,
+      screeningFloor,
+      prescored: capped.prescored,
+      counts: capped.counts,
+    }
   }
 
   // Stamp a pool as shown. Called ONLY after a digest run has finished — an orphan stamp
@@ -788,6 +887,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setScanError('')
       setScanNote('')
       setSearchNote('')
+      setTopicReport([])
+      setTopicReportOpen(false)
       setEmptyWindow(null)
       ranRef.current = true
       setRestored(null)
@@ -795,6 +896,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setProcessedResults([])
       setTriaged({})
       setCandidates([])
+      setPreCapCandidates([])
+      setSearchContext({ counts: [], failed: [], days: null })
       // Clear the persisted digest too — closing mid-scan must not resurrect stale results.
       clearDailyDigest().catch(console.warn)
       onDigestDate(null) // yesterday's date must not sit over a scan that's running now
@@ -802,6 +905,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setSearching(true)
       let fresh = []
       let searchDays = override
+      let allTopicsSearched = false
+      let scanContext = { counts: [], failed: [], days: searchDays }
       try {
         const profile = await getProfile()
         searchDays = override ?? profileSearchDays(profile)
@@ -820,11 +925,19 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         })
         fresh = search.candidates
         searchDays = search.days
+        allTopicsSearched = search.failed.length === 0
+        scanContext = { counts: search.counts, failed: search.failed, days: searchDays }
+        setSearchContext(scanContext)
         // Say what was searched BEFORE saying what came of it: a topic whose query failed is a
         // hole in today's coverage, and a topic the cap bit has more waiting — neither is
         // visible in a digest that just looks short.
         setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: fresh.length }))
         if (!fresh.length) {
+          setTopicReport(topicReportRows(search.counts, search.failed))
+          setTopicReportOpen(true)
+          // A true zero/newly-caught-up result still closes the interval: PubMed completed
+          // every topic search and there is no candidate work at risk of being discarded.
+          if (allTopicsSearched) await recordSuccessfulScan(searchDays)
           setSearching(false)
           setEmptyWindow(searchDays)
           // Two different true sentences, and the difference matters to her: a quiet field is
@@ -845,14 +958,29 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       }
       setSearching(false)
       setSelecting(true)
-      let scored, chosenIds
+      let scored, chosenIds, scoredCounts, prescored
       try {
-        ;({ scored, chosenIds } = await scorePool(fresh))
+        ;({ scored, chosenIds, counts: scoredCounts, prescored } = await scorePool(fresh, {
+          counts: scanContext.counts,
+          failed: scanContext.failed,
+          days: searchDays,
+        }))
       } catch (err) {
         setScanError(`Selection failed: ${err.message}`)
         setSelecting(false)
         return
       }
+      setTopicReportOpen(true)
+      setSearchNote(searchSummary({
+        days: searchDays,
+        counts: scoredCounts,
+        failed: scanContext.failed,
+        found: scored.length,
+        prescored,
+      }))
+      // Search + screening completed and the full candidate pool is persisted/visible.
+      // From this point even a zero-paper final slate is a successfully covered scan.
+      if (allTopicsSearched) await recordSuccessfulScan(searchDays)
       setSelecting(false)
       // Auto-run the digest on the papers that cleared the floor — one button, digest pops.
       // Nobody clearing it is a legitimate morning: scorePool has already said so plainly,
@@ -900,7 +1028,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     setScanError('')
     setScanNote('')
     try {
-      await scorePool(candidates.map(({ score, reason, ...c }) => c)) // strip old scores
+      const source = preCapCandidates.length ? preCapCandidates : candidates
+      await scorePool(source.map(({ score, reason, selectionRole, retainedTopics, ...c }) => c))
     } catch (err) {
       setScanError(`Re-rank failed: ${err.message}`)
     }
@@ -999,6 +1128,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     setScanError('')
     setScanNote('')
     setSearchNote('')
+    setTopicReport([])
+    setTopicReportOpen(false)
     setEmptyWindow(null)
     setCandidates([])
     // The read-only sample profile is the first screen a keyless visitor sees. Keep its
@@ -1067,6 +1198,24 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             {primaryLabel}
           </button>
         )}
+        {!demo && coveragePrompt && (
+          <div style={{ maxWidth: 620, borderRadius: 12, border: `1px solid ${coveragePrompt.truncated ? 'rgba(230,184,119,.35)' : 'rgba(143,189,230,.24)'}`, background: coveragePrompt.truncated ? 'rgba(230,184,119,.08)' : 'rgba(143,189,230,.07)', padding: '10px 13px', textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: 12.5, color: coveragePrompt.truncated ? 'var(--color-abstract)' : 'var(--color-fg-muted)', lineHeight: 1.5 }}>
+              {coveragePrompt.truncated
+                ? `Last successful scan was ${coveragePrompt.elapsedDays} days ago. Verastar can search at most ${coveragePrompt.suggestedDays} days, so the earliest ${coveragePrompt.uncoveredDays} day${coveragePrompt.uncoveredDays === 1 ? '' : 's'} cannot be recovered by this scan.`
+                : `Last successful scan was ${coveragePrompt.elapsedDays} days ago — search ${coveragePrompt.suggestedDays} days once to avoid a coverage gap?`}
+            </p>
+            <button
+              onClick={() => startScan({ days: coveragePrompt.suggestedDays })}
+              disabled={!keySet || busy}
+              className="cursor-pointer"
+              title={`Search the last ${coveragePrompt.suggestedDays} days once; your saved ${coveragePrompt.savedDays}-day window will not change`}
+              style={{ marginTop: 7, borderRadius: 999, border: '1px solid rgba(143,189,230,.3)', background: 'transparent', color: 'var(--color-registry)', padding: '5px 13px', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
+            >
+              Search {coveragePrompt.suggestedDays} days once
+            </button>
+          </div>
+        )}
         <button
           onClick={runShowcase}
           disabled={busy}
@@ -1096,6 +1245,35 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           the morning was rich or empty: the window is the digest's central claim, and a
           missing topic is the one thing a full-looking digest would never reveal. */}
       {searchNote && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--color-fg-faint)', lineHeight: 1.55, maxWidth: 620, fontFamily: 'var(--font-mono)' }}>{searchNote}</p>}
+      {topicReport.length > 0 && (
+        <details open={topicReportOpen} onToggle={(e) => setTopicReportOpen(e.currentTarget.open)} style={{ margin: '8px 0 0', maxWidth: 620 }}>
+          <summary className="cursor-pointer" style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>
+            Per-topic results ({topicReport.length})
+          </summary>
+          <p style={{ margin: '6px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
+            Retained after relevance scoring · scored from the bounded unseen pool · new after removing papers already shown or saved.
+          </p>
+          <ul style={{ margin: '7px 0 0 17px', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {topicReport.map((row, index) => (
+              <li key={`${row.label}-${index}`} className="flex items-baseline" style={{ gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11.5, lineHeight: 1.45 }}>
+                <span style={{ minWidth: 0, flex: 1, color: 'var(--color-fg-muted)' }}>{row.label}</span>
+                <span style={{ flexShrink: 0, color: row.failed ? 'var(--color-domain-vascular)' : 'var(--color-fg-faint)' }}>
+                  {row.failed
+                    ? 'search failed'
+                    : row.prescored !== undefined
+                      ? `${row.retained} retained · ${row.prescored} scored · ${row.available}${row.more ? '+' : ''} new`
+                      : `${row.retained} of ${row.available}${row.more ? '+' : ''}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {topicReport.some((row) => !row.failed && (row.retained < row.available || row.more)) && (
+            <p style={{ margin: '7px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
+              A + means PubMed had more beyond the fetched results. Raise “per topic” in your profile to retain more.
+            </p>
+          )}
+        </details>
+      )}
       {selecting && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is scoring every candidate against your rubric…</p>}
       {scanError && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{scanError}</p>}
       {/* A short day and a nothing-new day are outcomes, not errors — muted, never red. */}
@@ -1152,7 +1330,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         </p>
       )}
 
-      {/* The selection funnel: the wide candidate pool, scored against the rubric, top N pre-checked. */}
+      {/* The selection funnel: the wide candidate pool, scored against the rubric, with a
+          coverage-first slate pre-checked and the remaining slots filled by score. */}
       {candidates.length > 0 && (
         <CandidatePool
           candidates={candidates}
@@ -1263,6 +1442,17 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                     <button onClick={() => openSource(heroRow.quantity, heroRow.verdict, res.sourceDoc, title)} className="cursor-pointer whitespace-nowrap" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-verified-soft)' }}>
                       verified values are unaffected ↗
                     </button>
+                  )}
+                </p>
+              )}
+              {take?.designCaution && take?.cautionCheck?.verdict !== 'refuted' && (
+                <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--color-abstract)', paddingLeft: 10, fontSize: 13.5, lineHeight: 1.55, color: 'var(--color-fg-dim)' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--color-abstract)' }}>Design caution:</span>{' '}
+                  {take.designCaution}
+                  {take?.cautionCheck?.verdict === 'supported' && (
+                    <span title="A second model confirmed that this methodological limitation is supported by the source" className="whitespace-nowrap" style={{ marginLeft: 5, fontSize: 11.5, color: 'var(--color-verified-soft)', opacity: 0.85 }}>
+                      ✓ checked
+                    </span>
                   )}
                 </p>
               )}

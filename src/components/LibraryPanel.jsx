@@ -150,7 +150,7 @@ export default function FileToDisk({ embedded = false }) {
             plain markdown you own, openable in Finder. The app only ever touches that one folder.{' '}
             {isSignedIn()
               ? 'Your account keeps the library in sync on every device — this folder is your own copy, in files any agent can read.'
-              : 'Nothing leaves your machine.'}
+              : 'Your saved library stays in this browser and connected folder.'}
           </p>
         </>
       )}

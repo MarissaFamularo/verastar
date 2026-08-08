@@ -161,6 +161,11 @@ export function plausibilityWarnings(quantity, { verifiedAsPrinted = false } = {
   const low = quantity.ci_low
   const high = quantity.ci_high
   const value = quantity.value
+  const rangeLow = quantity.range_low
+  const rangeHigh = quantity.range_high
+  if (Number.isFinite(rangeLow) && Number.isFinite(rangeHigh) && rangeLow > rangeHigh) {
+    out.push(warning('reversed-estimate-range', `the reported estimate range runs from ${rangeLow} to ${rangeHigh}.`, verifiedAsPrinted))
+  }
   const completeCi = Number.isFinite(low) && Number.isFinite(high)
   if (completeCi && low > high) {
     out.push(warning('reversed-confidence-interval', `the reported CI runs from ${low} to ${high}.`, verifiedAsPrinted))
@@ -281,7 +286,8 @@ function locate(normQuote, normCorpus) {
 // --- The gate -----------------------------------------------------------------
 
 // verify(quantity, source, opts)
-//   quantity : { value, ci_low?, ci_high?, p_value?, source_quote, location_hint? }
+//   quantity : { value?, range_low?, range_high?, ci_low?, ci_high?, p_value?,
+//                source_quote, location_hint? }
 //   source   : string  OR  { text?: string, tables?: string }
 //   opts     : { sourceTier?: 'full_text' | 'abstract_only',  // default 'full_text'
 //                registry?: Array<{ measure, value, ci_low, ci_high }> } // CT.gov posted rows
@@ -326,6 +332,8 @@ export function verify(quantity, source, opts = {}) {
   }
   const present = []
   if (quantity.value != null) present.push(['value', quantity.value])
+  if (quantity.range_low != null) present.push(['range_low', quantity.range_low])
+  if (quantity.range_high != null) present.push(['range_high', quantity.range_high])
   if (quantity.ci_low != null) present.push(['ci_low', quantity.ci_low])
   if (quantity.ci_high != null) present.push(['ci_high', quantity.ci_high])
   if (quantity.p_value != null) present.push(['p_value', quantity.p_value])
@@ -334,8 +342,21 @@ export function verify(quantity, source, opts = {}) {
   for (const [, num] of present) {
     if (!someEqual(quoteNums, num)) badNums.push(num)
   }
+  // Exactly one estimate shape is valid. Legacy scalar records omit the range fields,
+  // which is equivalent to both being null and remains backward-compatible. A partial
+  // range, no estimate, or scalar+range tuple must never earn a verified badge even if
+  // the quote itself happens to be locatable.
+  const hasScalar = quantity.value != null
+  const hasRangeLow = quantity.range_low != null
+  const hasRangeHigh = quantity.range_high != null
+  const validEstimateShape = hasScalar
+    ? !hasRangeLow && !hasRangeHigh
+    : hasRangeLow && hasRangeHigh
+  const shapeError = validEstimateShape
+    ? ''
+    : 'Quantity must contain either one scalar value or both endpoints of one reported range.'
   // If the quote wasn't located, consistency is moot — it's flagged regardless.
-  const consistent = found && badNums.length === 0
+  const consistent = found && validEstimateShape && badNums.length === 0
 
   // 4. Assign tier. Registry is the strongest tier and outranks abstract-only, so it is
   // checked first — a registry-matched value posted by CT.gov is proven regardless of which
@@ -346,6 +367,9 @@ export function verify(quantity, source, opts = {}) {
   if (!found) {
     tier = TIERS.FLAGGED
     reason = 'Quote not found in source text.'
+  } else if (!validEstimateShape) {
+    tier = TIERS.FLAGGED
+    reason = shapeError
   } else if (!consistent) {
     tier = TIERS.FLAGGED
     reason = `Quote located, but ${badNums.join(', ')} is not present in it — the value does not match the source.`
@@ -374,6 +398,7 @@ export function verify(quantity, source, opts = {}) {
     matched,
     quoteNums,
     badNums,
+    shapeError,
     reason,
     warnings,
   }

@@ -1,9 +1,12 @@
 // pipeline/extract.js — structured extraction (Opus 4.8).
 //
 // The model's output surface is deliberately narrow: it may only emit
-// (value, source_quote, location) tuples. There is NO schema field for a free-floating
+// (scalar-or-range, source_quote, location) tuples. There is NO schema field for a free-floating
 // number, so the model literally cannot assert a quantity without attaching a receipt.
 // Everything it returns is untrusted until verify.js re-derives it from source text.
+// A reported estimate range is represented by range_low/range_high, never collapsed into
+// the scalar `value` field. Confidence intervals remain separate: they describe uncertainty
+// around an estimate, while an estimate range says the paper reported values as a span.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 
@@ -33,10 +36,12 @@ export const EXTRACTION_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'],
+        required: ['name', 'value', 'range_low', 'range_high', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'],
         properties: {
           name: { type: 'string' },
-          value: { type: 'number' },
+          value: { anyOf: [{ type: 'number' }, { type: 'null' }] },
+          range_low: { anyOf: [{ type: 'number' }, { type: 'null' }] },
+          range_high: { anyOf: [{ type: 'number' }, { type: 'null' }] },
           unit: { anyOf: [{ type: 'string' }, { type: 'null' }] },
           ci_low: { anyOf: [{ type: 'number' }, { type: 'null' }] },
           ci_high: { anyOf: [{ type: 'number' }, { type: 'null' }] },
@@ -55,8 +60,14 @@ Non-negotiable rules:
 - source_quote MUST be copied VERBATIM from the provided source text — an exact
   substring, character for character. Do NOT paraphrase, re-punctuate, or "clean up"
   numbers. If the paper writes 0·84 with a middle dot, copy 0·84.
-- Every number you put in value / ci_low / ci_high / p_value MUST appear inside its own
+- Every number you put in value / range_low / range_high / ci_low / ci_high / p_value MUST appear inside its own
   source_quote. The quote is the receipt for the number.
+- A quantity must use exactly ONE estimate shape:
+  - Scalar result: put the estimate in value and set range_low/range_high to null.
+  - Reported estimate range: set value to null and put both endpoints in
+    range_low/range_high. Never coerce a reported range to its first endpoint.
+  A reported estimate range is NOT a confidence interval. Keep ci_low/ci_high for a CI
+  explicitly identified as such by the source.
 - Preserve the source's printed precision in source_quote. For example, copy "1.00" and
   "P=0.00" exactly even though the numeric schema fields necessarily encode them as 1
   and 0. A downstream formatter recovers the display spelling from this verbatim quote.

@@ -12,6 +12,7 @@ import { allowedNumbers, numbersGrounded, stripNumbers, sanitizeRanking, OUTPUT_
 const V_HR = [{ name: 'hazard ratio', value: '0.84 (CI 0.61–1.16)' }]
 const V_PCT = [{ name: 'mortality reduction', value: '8 %' }]
 const V_FULL = [{ name: 'TcPO2 difference', value: '11.2 mmHg (CI 8.1–14.5), P<0.001' }]
+const V_RANGE = [{ name: 'adjusted hazard ratios', value: '3.43–3.52 HR' }]
 
 const rk = (over = {}) => ({
   id: 'p1',
@@ -19,6 +20,7 @@ const rk = (over = {}) => ({
   tier: 1,
   finding: 'Improved outcomes.',
   finding_plain: 'Improved outcomes.',
+  design_caution: '',
   relevance: 'Touches your CLTI perfusion work.',
   ...over,
 })
@@ -29,6 +31,8 @@ describe('summary-writer claim strength contract', () => {
     expect(OUTPUT_CONTRACT).toMatch(/not evidence that one arm is better/i)
     expect(OUTPUT_CONTRACT).toContain('does not prove equivalence')
     expect(OUTPUT_CONTRACT).toContain('observational associations are not causal effects')
+    expect(OUTPUT_CONTRACT).toMatch(/observational study advocating adoption.*MUST say/i)
+    expect(OUTPUT_CONTRACT).toContain('surrogate exposure identification')
   })
 })
 
@@ -38,6 +42,9 @@ describe('allowedNumbers — the verified set a finding may draw from', () => {
   })
   it('reads the CI en-dash as a range, never a negative second bound', () => {
     expect(allowedNumbers(V_HR)).toEqual([0.84, 0.61, 1.16])
+  })
+  it('allows both endpoints of a verified reported range in digest prose', () => {
+    expect(allowedNumbers(V_RANGE)).toEqual([3.43, 3.52])
   })
   it('is empty for a paper with no verified values (and for junk rows)', () => {
     expect(allowedNumbers([])).toEqual([])
@@ -113,7 +120,7 @@ describe('sanitizeRanking — the guard every ranking passes before it can rende
       V_PCT
     )
     expect(out.finding).toBe('Reduced mortality by 8% versus placebo.')
-    expect(out).toEqual({ id: 'p1', score: 80, tier: 1, finding: out.finding, relevance: 'Touches your CLTI perfusion work.' })
+    expect(out).toEqual({ id: 'p1', score: 80, tier: 1, finding: out.finding, designCaution: '', relevance: 'Touches your CLTI perfusion work.' })
   })
 
   it('drops a fabricated number to the number-free finding_plain', () => {
@@ -160,6 +167,14 @@ describe('sanitizeRanking — the guard every ranking passes before it can rende
     expect(clean.relevance).toBe('Touches your CLTI perfusion work.')
   })
 
+  it('design caution is separate from the finding and strips unverified digits', () => {
+    const out = sanitizeRanking(rk({
+      design_caution: 'The 30-day observational analysis cannot establish causality.',
+    }), V_PCT)
+    expect(out.finding).toBe('Improved outcomes.')
+    expect(out.designCaution).toBe('The day observational analysis cannot establish causality.')
+  })
+
   it('decimal edge: 0.84 in prose never satisfies a verified 0.847 (or vice versa)', () => {
     const out = sanitizeRanking(
       rk({ finding: 'HR 0.84 overall.', finding_plain: 'Lower hazard overall.' }),
@@ -171,6 +186,7 @@ describe('sanitizeRanking — the guard every ranking passes before it can rende
   it('missing fields degrade safely', () => {
     const out = sanitizeRanking({ id: 'x', score: 1, tier: 3 }, undefined)
     expect(out.finding).toBe('')
+    expect(out.designCaution).toBe('')
     expect(out.relevance).toBe('')
   })
 })

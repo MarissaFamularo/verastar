@@ -13,10 +13,11 @@ import { store } from './store.js'
 
 const COLLECTION = 'digests'
 const KEY = 'daily:latest'
+const LAST_SCAN_KEY = 'daily:last-successful-scan'
 
 // State -> storable record. selectedIds is a Set in the UI; persisted as an array so the
 // record stays plain data.
-export function serializeDigest({ results, processedResults, triaged, candidates, selectedIds } = {}) {
+export function serializeDigest({ results, processedResults, triaged, candidates, preCapCandidates, searchContext, selectedIds } = {}) {
   return {
     kind: 'daily',
     savedAt: new Date().toISOString(),
@@ -24,6 +25,8 @@ export function serializeDigest({ results, processedResults, triaged, candidates
     processedResults: processedResults ?? results ?? [],
     triaged: triaged ?? {},
     candidates: candidates ?? [],
+    preCapCandidates: preCapCandidates ?? candidates ?? [],
+    searchContext: searchContext ?? { counts: [], failed: [], days: null },
     selectedIds: Array.from(selectedIds ?? []),
   }
 }
@@ -37,6 +40,8 @@ export function reviveDigest(record) {
     processedResults: record.processedResults ?? record.results ?? [],
     triaged: record.triaged ?? {},
     candidates: record.candidates ?? [],
+    preCapCandidates: record.preCapCandidates ?? record.candidates ?? [],
+    searchContext: record.searchContext ?? { counts: [], failed: [], days: null },
     selectedIds: new Set(record.selectedIds ?? []),
     savedAt: record.savedAt ?? null,
   }
@@ -130,4 +135,25 @@ export async function loadDailyDigest() {
 // A fresh scan clears this first so closing mid-scan can't resurrect stale results.
 export function clearDailyDigest() {
   return store.delete(COLLECTION, KEY)
+}
+
+// The coverage checkpoint is deliberately separate from `daily:latest`: a fresh scan
+// deletes that transient UI snapshot before searching, and the paper loop writes partial
+// snapshots while it is still running. Advancing the checkpoint on either event would
+// make a failed run look like a covered interval. Call this only after search + screening
+// completed and the candidate result is available to the user (including a true zero day).
+export function saveSuccessfulScan({ completedAt = new Date().toISOString(), windowDays } = {}) {
+  return store.put(COLLECTION, LAST_SCAN_KEY, {
+    kind: 'daily-scan-checkpoint',
+    completedAt,
+    windowDays,
+  })
+}
+
+export async function loadSuccessfulScan() {
+  const record = await store.get(COLLECTION, LAST_SCAN_KEY)
+  if (!record || record.kind !== 'daily-scan-checkpoint') return null
+  const completedAt = new Date(record.completedAt)
+  if (Number.isNaN(completedAt.getTime())) return null
+  return { completedAt: record.completedAt, windowDays: record.windowDays }
 }

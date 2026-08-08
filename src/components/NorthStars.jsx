@@ -3,8 +3,9 @@
 // Four fields, and the split between the first two is the load-bearing one: search TOPICS
 // decide what PubMed is asked for (one query each), north stars and projects make the
 // rubric's relevance line personal, and the rubric decides which candidates are worth the
-// morning and how they rank. All persist locally (IndexedDB via store.js) and drive the
-// digest. The onboarding quiz drafts these; this is where they're refined afterward.
+// morning and how they rank. store.js keeps them in IndexedDB while signed out and the
+// account backend while signed in. The onboarding quiz drafts these; this is where they're
+// refined afterward.
 
 import { useEffect, useState } from 'react'
 import { hasApiKey } from '../lib/anthropic.js'
@@ -15,11 +16,13 @@ import { isMobileNow } from '../lib/useMobile.js'
 import { DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { normalizeScoreFloor } from '../pipeline/select.js'
 import { normalizeTopics, normalizeSearchDays, normalizeTopicCap } from '../pipeline/topics.js'
+import { normalizeJournalPreferences } from '../pipeline/journals.js'
 import ChipGroup from './ChipGroup.jsx'
 import ProfileInterview from './ProfileInterview.jsx'
 import QueryFlags from './QueryFlags.jsx'
 import RubricEditor from './RubricEditor.jsx'
 import TopicsEditor from './TopicsEditor.jsx'
+import ProfileStorageDisclosure from './ProfileStorageDisclosure.jsx'
 
 const STAR_SEED = ['CLTI outcomes', 'Carotid revascularization', 'AI in medicine']
 const PROJECT_SEED = ['Limb Care Program', 'Vascular Outcomes Study']
@@ -27,6 +30,7 @@ const PROJECT_SEED = ['Limb Care Program', 'Vascular Outcomes Study']
 export default function NorthStars() {
   const [stars, setStars] = useState([])
   const [projects, setProjects] = useState([])
+  const [journalPreferences, setJournalPreferences] = useState(() => normalizeJournalPreferences())
   const [rubric, setRubric] = useState({
     criteria: DEFAULT_RUBRIC,
     selectCount: DEFAULT_SELECT_COUNT,
@@ -55,6 +59,7 @@ export default function NorthStars() {
     getProfile().then((profile) => {
       setStars(profile?.northStars ?? [])
       setProjects(profile?.projects ?? [])
+      setJournalPreferences(normalizeJournalPreferences(profile?.journalPreferences))
       setRubric({
         criteria: profile?.rubric?.criteria ?? DEFAULT_RUBRIC,
         selectCount: profile?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT,
@@ -95,12 +100,13 @@ export default function NorthStars() {
         ...(profile || {}),
         northStars: stars,
         projects,
+        journalPreferences: normalizeJournalPreferences(journalPreferences),
         rubric,
         topics: normalizeTopics(topics),
         search,
       }),
     )
-  }, [stars, projects, rubric, topics, search, loaded])
+  }, [stars, projects, journalPreferences, rubric, topics, search, loaded])
 
   // A fresh draft lands in the editors, NOT straight in storage: the save effect above then
   // persists it exactly the way a hand edit is persisted. An empty field in the draft leaves
@@ -108,6 +114,7 @@ export default function NorthStars() {
   function applyDraft(draft) {
     if (draft.northStars?.length) setStars(draft.northStars)
     if (draft.projects?.length) setProjects(draft.projects)
+    if (draft.journalPreferences) setJournalPreferences(normalizeJournalPreferences(draft.journalPreferences))
     if (draft.topics?.length) setTopics(draft.topics)
     if (draft.rubric?.criteria) setRubric((r) => ({ ...r, criteria: draft.rubric.criteria }))
     setInterviewing(false)
@@ -125,6 +132,7 @@ export default function NorthStars() {
         the rubric your digest ranks against. Your daily digest surfaces and selects papers
         using these.
       </p>
+      <ProfileStorageDisclosure />
 
       {interviewing ? (
         <div style={{ marginTop: 18, borderRadius: 12, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-1)', padding: '18px 18px 20px' }}>
@@ -251,6 +259,7 @@ export default function NorthStars() {
           days={search.days}
           perTopic={search.perTopic}
           northStars={stars}
+          onNorthStarsChange={setStars}
           onChange={({ topics: next, days, perTopic }) => {
             setTopics(next)
             setSearch({ days, perTopic })
@@ -264,6 +273,8 @@ export default function NorthStars() {
           criteria={rubric.criteria}
           selectCount={rubric.selectCount}
           scoreFloor={rubric.scoreFloor}
+          journalPreferences={journalPreferences}
+          onJournalPreferencesChange={setJournalPreferences}
           onChange={setRubric}
         />
       </div>

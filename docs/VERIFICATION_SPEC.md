@@ -26,7 +26,7 @@ truth from the fetched source text.
 free-form output. Three properties make it real:
 
 1. **Constrained output surface.** The model is only permitted to emit
-   `(value, source_quote, location)` tuples. The extraction schema has **no field for a
+   `(scalar-or-range, source_quote, location)` tuples. The extraction schema has **no field for a
    free-floating numeric claim** — the model cannot say "a large benefit" with a number
    attached; it can only fill slots that each carry their own receipt. The gate is the
    *shape* of what the model is allowed to say.
@@ -51,8 +51,9 @@ free-form output. Three properties make it real:
 
 ## Algorithm
 
-For each extracted quantity `q` (with `q.value`, optional `q.ci_low`, `q.ci_high`,
-`q.p_value`, `q.source_quote`, `q.location_hint`), against `sourceText`:
+For each extracted quantity `q` (with either scalar `q.value` or both
+`q.range_low`/`q.range_high`, plus optional `q.ci_low`, `q.ci_high`, `q.p_value`,
+`q.source_quote`, `q.location_hint`), against `sourceText`:
 
 ### 1. Normalize (both quote and source text)
 - Unicode **NFKC**.
@@ -75,7 +76,10 @@ Instead:
 - Regex **all numeric tokens** out of the **matched span** (boundary-delimited:
   `(?<![\d.])\d+(?:\.\d+)?(?![\d.])` after normalization).
 - Parse each to a float → `quoteNums`.
-- For each of `q.value`, `q.ci_low`, `q.ci_high`, `q.p_value` that is present, require
+- Require exactly one estimate shape: a scalar value, or both endpoints of a reported
+  estimate range. A partial range or scalar-plus-range tuple is flagged.
+- For each of `q.value`, `q.range_low`, `q.range_high`, `q.ci_low`, `q.ci_high`,
+  `q.p_value` that is present, require
   a float in `quoteNums` that is **representation-equal**: equal after normalizing
   `0.84 = .84 = 0.840`. Compare with an epsilon that only absorbs float
   representation (`1e-9`), **not rounding** — `0.84` must not satisfy `0.847`.

@@ -77,6 +77,28 @@ describe('fmtNum — the fact-channel value string', () => {
     expect(fmtNum(q({ value: -0.4, source_quote: 'difference −0.40' }))).toBe('−0.40')
   })
 
+  it('renders complete reported ranges with source precision and separator', () => {
+    expect(fmtNum(q({
+      value: null,
+      range_low: 0.823,
+      range_high: 0.855,
+      source_quote: 'mean posterior probability 0.823–0.855',
+    }))).toBe('0.823–0.855')
+    expect(fmtNum(q({
+      value: null,
+      range_low: 3.43,
+      range_high: 3.52,
+      unit: 'HR',
+      source_quote: 'adjusted Cox models HR 3.43–3.52',
+    }))).toBe('3.43–3.52 HR')
+    expect(fmtNum(q({
+      value: null,
+      range_low: 1,
+      range_high: 2.5,
+      source_quote: 'values ranged from 1.00 to 2.50',
+    }))).toBe('1.00 to 2.50')
+  })
+
   it('uses the P-labelled occurrence when its value duplicates the estimate', () => {
     const duplicate = q({ value: 0.05, p_value: 0.05, source_quote: 'difference 0.05; P=0.050' })
     expect(fmtNum(duplicate)).toBe('0.05, P=0.050')

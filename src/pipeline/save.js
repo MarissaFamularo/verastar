@@ -15,7 +15,7 @@ import { citationIndicatesRetraction, retractionPatch } from './retractions.js'
 // Build the persisted paper record from a run result + its triage take. Pure. The verified numbers
 // are taken from the run's non-flagged rows (the app-owned channel); finding/relevance/tier come
 // from the triage take (the prose channel). Mirrors the record SpineCheck.toggleSave used to inline.
-export function buildPaperRecord(res, take, { title } = {}) {
+export function buildPaperRecord(res, take, { title, source = 'unknown' } = {}) {
   const verifiedRows = res.error ? [] : res.rows.filter((r) => !r.verdict.flagged)
   const retraction = retractionPatch(res.citation)
   return {
@@ -24,12 +24,18 @@ export function buildPaperRecord(res, take, { title } = {}) {
     pmcid: res.source?.pmcid || null, // proven-free PMC copy — the Library's full-text fallback
     title: title || res.paper.title || res.citation?.title || `PMID ${res.paper.pmid}`,
     citation: res.citation || null,
+    design: res.design || null,
+    score: take?.score != null && Number.isFinite(Number(take.score))
+      ? Math.min(100, Math.max(0, Math.round(Number(take.score))))
+      : null,
     tier: take?.tier ?? null,
     finding: take?.finding ?? '',
+    designCaution: take?.designCaution ?? '',
     relevance: take?.relevance ?? '',
     // Prose-gate verdict for the finding ({ verdict, reason }) — 'refuted' means the
     // digest withheld this sentence; stored so Library surfaces can honor it too.
     check: take?.check ?? { verdict: 'unchecked', reason: '' },
+    cautionCheck: take?.cautionCheck ?? { verdict: 'unchecked', reason: '' },
     quantities: verifiedRows.map((r) => ({ ...r.quantity, tier: r.verdict.tier })),
     fullText: res.sourceDoc?.text || '', // untruncated — the concept summarizer + library note use it
     tables: res.sourceDoc?.tables || '',
@@ -43,6 +49,7 @@ export function buildPaperRecord(res, take, { title } = {}) {
     tags: [],
     conceptId: null, // the concept node it's filed under
     notes: '',
+    saveSource: source,
     savedAt: new Date().toISOString(),
     ...(retraction || {}),
   }
@@ -54,7 +61,7 @@ export async function savePaper(res, take, { title, source = 'unknown' } = {}) {
   if (res?.retracted || citationIndicatesRetraction(res?.citation)) {
     throw new Error('This article is marked as retracted in PubMed and was not saved.')
   }
-  const record = buildPaperRecord(res, take, { title })
+  const record = buildPaperRecord(res, take, { title, source })
   await store.put('papers', record.id, record)
   // Adoption telemetry on the ONE shared save path, so no entry point can forget it.
   // `source` says which doorway: the digest's checkbox/heart or the manual Add a paper.
