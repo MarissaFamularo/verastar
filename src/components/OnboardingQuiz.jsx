@@ -1,7 +1,8 @@
 // components/OnboardingQuiz.jsx — the first-run flow: "watch it build my profile in 60 seconds."
 //
 // Faithful port of design/Onboarding.dc.html onto the real pipeline:
-// welcome → connect (BYOK — the only place a brand-new user can enter a key) →
+// welcome → account (configured production only) → connect (BYOK — the only place
+// a brand-new user can enter a key) →
 // INTERVIEW (a real conversation, one question at a time — ProfileInterview.jsx) →
 // review (edit the drafted topics, stars and rubric, then enter).
 // A demo path on the welcome screen seeds DEMO_PROFILE so the app demos keyless.
@@ -32,6 +33,7 @@ import RubricEditor from './RubricEditor.jsx'
 import { normalizeJournalPreferences } from '../pipeline/journals.js'
 import TopicsEditor from './TopicsEditor.jsx'
 import ProfileStorageDisclosure from './ProfileStorageDisclosure.jsx'
+import { setupStartStep } from '../lib/accountGate.js'
 
 const QUESTIONS = [
   {
@@ -127,7 +129,7 @@ function DraftingConstellation() {
   )
 }
 
-export default function OnboardingQuiz({ onDone, preview = false }) {
+export default function OnboardingQuiz({ onDone, preview = false, account = null }) {
   const [step, setStep] = useState('welcome') // welcome | signin | connect | interview | intake | drafting | review
   const [keyInput, setKeyInput] = useState('')
   const [ncbiInput, setNcbiInput] = useState('')
@@ -137,7 +139,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
   // Which path produced the draft, so "back" from review returns where she came from.
   const [path, setPath] = useState('interview') // interview | intake
   const [error, setError] = useState('')
-  // Returning-user sign-in from the welcome screen (accounts configured only).
+  // Account creation/sign-in from the welcome screen (accounts configured only).
   const [signinEmail, setSigninEmail] = useState('')
   const [signinState, setSigninState] = useState('idle') // idle | sending | sent | error
   const [signinError, setSigninError] = useState('')
@@ -187,7 +189,8 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
     setStep('interview')
   }
 
-  // Send the returning-user magic link. Finishing sign-in is the email's job — via
+  // Send the account magic link. Supabase creates a new account when needed; the
+  // same flow signs returning users in. Finishing sign-in is the email's job — via
   // the emailed CODE typed here (works everywhere, including the installed
   // home-screen app, where the link would open the browser's separate storage
   // world instead), or via the link on a regular browser tab. Either way a session
@@ -281,7 +284,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
         </p>
         <div className="flex flex-col items-center" style={{ marginTop: 36, gap: 16 }}>
           <button
-            onClick={() => setStep('connect')}
+            onClick={() => setStep(setupStartStep({ configured: supabaseConfigured, account, preview }))}
             className="cursor-pointer"
             style={{ ...primaryBtn, padding: '14px 30px', borderRadius: 12, boxShadow: '0 10px 34px -10px rgba(239,143,91,.75)' }}
           >
@@ -293,8 +296,8 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
           <p style={{ margin: '-6px 0 0', fontSize: 12, color: 'var(--color-fg-faint)' }}>
             Public paper metadata, no key needed — read-only and separate from your library.
           </p>
-          {/* Returning users skip setup entirely — their library lives in their account.
-              Hidden in ?firstrun=1 preview: sending a link is a real action, and preview saves nothing. */}
+          {/* Returning users can sign in directly. New users reach the same screen from
+              the primary setup button, so a real library is never silently local-only. */}
           {supabaseConfigured && !preview && (
             <button onClick={() => setStep('signin')} className="cursor-pointer" style={{ ...ghostLink, marginTop: 6, color: 'var(--color-fg-soft)' }}>
               Have an account? <span style={{ color: 'var(--color-accent)' }}>Sign in</span>
@@ -305,15 +308,15 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
     )
   }
 
-  // ===== SIGN IN (returning user on a new device) =====
+  // ===== ACCOUNT (new or returning user) =====
   if (step === 'signin') {
     return (
       <div>
-        <p style={stepMark}>SIGN IN</p>
-        <h2 className="vs-step-title" style={stepTitle}>Welcome back.</h2>
+        <p style={stepMark}>ACCOUNT</p>
+        <h2 className="vs-step-title" style={stepTitle}>Secure your library.</h2>
         <p style={stepLede}>
-          Your library lives in your account. Enter the email you signed up with and we&rsquo;ll
-          send a one-time code — type it here and your library follows you. No password, ever.
+          Enter your email and we&rsquo;ll send a one-time code. This creates your account if
+          you&rsquo;re new, or opens your existing library if you&rsquo;re returning. No password, ever.
         </p>
         {signinState === 'sent' ? (
           <div style={{ maxWidth: 520 }}>
@@ -362,7 +365,7 @@ export default function OnboardingQuiz({ onDone, preview = false }) {
             )}
             <div className="flex items-center" style={{ marginTop: 20, gap: 18 }}>
               <button type="submit" disabled={signinState === 'sending'} className="cursor-pointer" style={{ ...primaryBtn, opacity: signinState === 'sending' ? 0.6 : 1 }}>
-                {signinState === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
+                {signinState === 'sending' ? 'Sending…' : 'Email me a code'}
               </button>
               <button type="button" onClick={() => { setStep('welcome'); setSigninState('idle'); setSigninError('') }} className="cursor-pointer" style={ghostLink}>
                 ← Back

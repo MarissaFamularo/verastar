@@ -109,6 +109,13 @@ Signed in, your steering profile and library live in your account so they work o
 device — and the disk folder remains your own plain-files copy. Your Anthropic and NCBI
 credentials remain browser-only and are never stored server-side.
 
+On a configured deployment, setting up a real digest begins with passwordless email
+authentication so new libraries are cloud-backed from their first saved record. The
+populated demo remains account-free and separate. Libraries created locally before this
+account-first flow are prompted on their next visit to sign in and move their existing
+browser data into the account; the move remains explicit and never uploads API keys or
+the device-local disk-folder handle.
+
 ---
 
 ## Status

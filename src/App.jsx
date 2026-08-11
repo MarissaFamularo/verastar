@@ -23,6 +23,7 @@ import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import { useIsMobile, isMobileNow } from './lib/useMobile.js'
 import { logEvent } from './lib/events.js'
 import { digestDateLine } from './lib/digestStore.js'
+import { needsExistingLibrarySync } from './lib/accountGate.js'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
@@ -381,6 +382,119 @@ function AccountSection({ account }) {
         </>
       )}
     </>
+  )
+}
+
+// Existing browser-only library recovery. This appears on every fresh visit until
+// the user signs in or dismisses it for the current page load. Signing in reloads
+// the app; the existing empty-cloud migration check then offers the actual move.
+function ExistingLibrarySyncGate({ onNotNow }) {
+  const [email, setEmail] = useState('')
+  const [sendState, setSendState] = useState('idle') // idle | sending | sent | error
+  const [sendError, setSendError] = useState('')
+  const [code, setCode] = useState('')
+  const [verifyState, setVerifyState] = useState('idle') // idle | verifying | error
+  const [verifyError, setVerifyError] = useState('')
+
+  async function send(e) {
+    e.preventDefault()
+    if (!email.trim()) return
+    setSendState('sending')
+    setSendError('')
+    try {
+      await sendMagicLink(email.trim())
+      setSendState('sent')
+    } catch (err) {
+      setSendError(err?.message || String(err))
+      setSendState('error')
+    }
+  }
+
+  async function verify(e) {
+    e.preventDefault()
+    if (!code.trim()) return
+    setVerifyState('verifying')
+    setVerifyError('')
+    try {
+      await verifyEmailCode(email.trim(), code.trim())
+      window.location.reload()
+    } catch (err) {
+      setVerifyError(err?.message || String(err))
+      setVerifyState('error')
+    }
+  }
+
+  return (
+    <div className="relative flex items-center justify-center" style={{ minHeight: '100vh', padding: '56px 32px', background: 'radial-gradient(120% 80% at 50% -10%,#1a2138,#0b0e18 55%,#08090d)' }}>
+      <div className="vs-stars-deep absolute" style={{ inset: 0 }} />
+      <div className="relative" style={{ width: 560, maxWidth: '100%' }}>
+        <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '.14em', color: '#6d7484' }}>YOUR EXISTING LIBRARY</p>
+        <h1 style={{ margin: '14px 0 0', fontFamily: 'var(--font-serif)', fontSize: 36, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)' }}>
+          Secure and sync your library.
+        </h1>
+        <p style={{ margin: '14px 0 0', fontSize: 15.5, lineHeight: 1.65, color: 'var(--color-fg-dim)' }}>
+          Your Verastar library currently lives only in this browser. Connect an email account
+          to protect it and use it on every device. Your Anthropic and NCBI credentials stay on
+          this device and are never uploaded.
+        </p>
+
+        {sendState === 'sent' ? (
+          <>
+            <div style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55 }}>
+              <span style={{ fontWeight: 600 }}>Email sent to {email.trim()}</span> — enter the
+              6-digit code here. If you use the installed app, use this code instead of opening
+              the email link in a separate browser.
+            </div>
+            <form onSubmit={verify} className="flex" style={{ gap: 10, marginTop: 14 }}>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="6-digit code"
+                autoFocus
+                style={{ flex: 1, minWidth: 0, padding: '12px 15px', borderRadius: 11, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 15, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
+              />
+              <button type="submit" disabled={verifyState === 'verifying'} className="cursor-pointer" style={{ padding: '12px 20px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: verifyState === 'verifying' ? 0.6 : 1 }}>
+                {verifyState === 'verifying' ? 'Checking…' : 'Secure my library'}
+              </button>
+            </form>
+            {verifyState === 'error' && (
+              <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600 }}>That code didn&rsquo;t work:</span> {verifyError}
+              </div>
+            )}
+          </>
+        ) : (
+          <form onSubmit={send} style={{ marginTop: 26 }}>
+            <label style={{ display: 'block', fontSize: 13, color: '#aab0be', fontWeight: 500 }}>Account email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              autoFocus
+              style={{ marginTop: 8, width: '100%', padding: '12px 15px', borderRadius: 11, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
+            />
+            {sendState === 'error' && (
+              <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {sendError}
+              </div>
+            )}
+            <div className="flex items-center" style={{ marginTop: 22, gap: 18 }}>
+              <button type="submit" disabled={sendState === 'sending' || !email.trim()} className="cursor-pointer" style={{ padding: '12px 22px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: sendState === 'sending' || !email.trim() ? 0.5 : 1 }}>
+                {sendState === 'sending' ? 'Sending…' : 'Email me a secure code'}
+              </button>
+              <button type="button" onClick={onNotNow} className="cursor-pointer" style={{ border: 0, background: 'transparent', padding: 0, color: 'var(--color-fg-muted)', fontSize: 14, fontFamily: 'inherit' }}>
+                Not now
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -828,6 +942,9 @@ export default function App() {
 
   const [bootError, setBootError] = useState('')
   const [account, setAccount] = useState(null) // { email } when signed in
+  // Existing real libraries created before account-first onboarding are still in
+  // IndexedDB. Prompt on each fresh visit until the user authenticates and migrates.
+  const [existingLibrarySync, setExistingLibrarySync] = useState(false)
   // First signed-in boot with a local library and an empty cloud → the one-time
   // "move this library into your account" offer. { paperCount } while showing.
   const [migrationOffer, setMigrationOffer] = useState(null)
@@ -847,6 +964,12 @@ export default function App() {
       // rows grouped by user and day; `mobile` splits phone vs desktop habits.
       logEvent('app_opened', { mobile: isMobileNow() })
       const [p] = await Promise.all([getProfile(), loadDomains()])
+      setExistingLibrarySync(needsExistingLibrarySync({
+        configured: supabaseConfigured,
+        user,
+        profile: p,
+        preview: firstrunPreview,
+      }))
       if (user && !p?.onboarded) {
         // Cloud has no profile yet — check whether this browser holds a library to
         // carry in. Cloud wins when it has anything; local import is offered only
@@ -1006,6 +1129,10 @@ export default function App() {
     return <MigrationOffer account={account} paperCount={migrationOffer.paperCount} onDecline={() => setMigrationOffer(null)} />
   }
 
+  if (existingLibrarySync) {
+    return <ExistingLibrarySyncGate onNotNow={() => setExistingLibrarySync(false)} />
+  }
+
   if (onboarded === false || firstrunPreview) {
     // First run: the five-step onboarding flow on the night-sky canvas (design/Onboarding.dc.html).
     const exitPreview = () => {
@@ -1024,6 +1151,7 @@ export default function App() {
         <div className="relative" style={{ width: 600, maxWidth: '100%' }}>
           <OnboardingQuiz
             preview={firstrunPreview && onboarded !== false}
+            account={account}
             onDone={() => {
               if (firstrunPreview) exitPreview()
               setSaved(hasApiKey())
