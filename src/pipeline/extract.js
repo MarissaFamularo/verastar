@@ -114,6 +114,7 @@ export async function extractQuantities({ studyId, sourceText, model = MODELS.ex
     content,
     schema: EXTRACTION_SCHEMA,
     maxTokens,
+    thinking: { type: 'disabled' },
   })
   // Guarantee study_id is set even if the model omitted it.
   if (!result.study_id) result.study_id = studyId
