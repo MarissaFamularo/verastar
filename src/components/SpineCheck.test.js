@@ -1,7 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
-import SpineCheck, { candidateDisplayScore } from './SpineCheck.jsx'
+import SpineCheck, { candidateDisplayScore, ScanDetails } from './SpineCheck.jsx'
 
 function memoryStorage() {
   const values = new Map()
@@ -40,5 +40,33 @@ describe('candidate funnel score', () => {
 
   it('falls back to the screening score when reading finished before ranking', () => {
     expect(candidateDisplayScore(candidate, new Set(['paper-1']), {})).toBe(45)
+  })
+})
+
+describe('completed scan disclosure', () => {
+  it('keeps the scan receipt in the DOM but collapsed behind headline counts', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        ScanDetails,
+        { candidates: 70, digest: 8, open: false },
+        React.createElement('p', null, 'Searched 9 topics over the last 3 days.'),
+      ),
+    )
+
+    expect(html).toContain('<details')
+    expect(html).not.toContain('<details open=""')
+    expect(html).toContain('Today’s scan')
+    expect(html).toContain('70 candidates · 8 in digest')
+    expect(html).toContain('View details')
+    expect(html).toContain('Searched 9 topics over the last 3 days.')
+  })
+
+  it('labels an opened receipt with the matching close action', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ScanDetails, { candidates: 70, digest: 8, open: true }),
+    )
+
+    expect(html).toContain('<details open=""')
+    expect(html).toContain('Hide details')
   })
 })

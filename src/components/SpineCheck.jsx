@@ -202,6 +202,29 @@ export function candidateDisplayScore(candidate, processedIds, triaged) {
   return Number.isFinite(readScore) ? readScore : candidate?.score
 }
 
+// The completed scan is an audit receipt, not the page's primary content. Keep the
+// headline counts visible while the search, scoring, and candidate controls sit behind
+// one native disclosure. Alerts and recovery actions deliberately live outside this
+// component so a collapsed receipt can never hide something that needs attention.
+export function ScanDetails({ candidates = 0, digest = 0, open = false, onToggle = () => {}, children }) {
+  return (
+    <details open={open} onToggle={(e) => onToggle(e.currentTarget.open)} style={{ margin: '30px 0 4px' }}>
+      <summary
+        className="cursor-pointer"
+        style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 14, listStyle: 'none' }}
+      >
+        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontStyle: 'italic', color: 'var(--color-fg-dim)' }}>Today’s scan</span>
+        <span style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
+        <span style={{ fontSize: 12, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>
+          {candidates} candidates{digest ? ` · ${digest} in digest` : ''}
+        </span>
+        <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>{open ? 'Hide details' : 'View details'}</span>
+      </summary>
+      <div style={{ paddingBottom: 2 }}>{children}</div>
+    </details>
+  )
+}
+
 // The selection funnel surface: the wide candidate pool ranked by rubric fit, with a
 // coverage-first slate pre-checked. The clinician confirms/adjusts the selection, then runs the digest on only
 // those — mirroring the ~50-candidates → ~10-kept step of a hand-run morning review. Once a
@@ -380,7 +403,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // Every topic's retained count, including ordinary uncapped rows. The old summary kept
   // only capped topics, making omitted successful topics look like false zeroes.
   const [topicReport, setTopicReport] = useState([])
-  const [topicReportOpen, setTopicReportOpen] = useState(false)
+  const [scanDetailsOpen, setScanDetailsOpen] = useState(false)
   // The window a scan just came back empty on, or null. Non-null is what puts the explicit
   // "look back further" offer on screen — the app never widens the window by itself.
   const [emptyWindow, setEmptyWindow] = useState(null)
@@ -502,6 +525,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         setSearchContext(saved.searchContext)
         setTopicReport(topicReportRows(saved.searchContext?.counts, saved.searchContext?.failed))
         setSelectedIds(saved.selectedIds)
+        setScanDetailsOpen(false)
         // Say what actually came back. A snapshot can be missing summaries — the ranking call
         // failed, or an older build wrote one mid-run — and a page of blank cards under a
         // cheerful "restored" line is indistinguishable from a broken app.
@@ -939,7 +963,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setScanNote('')
       setSearchNote('')
       setTopicReport([])
-      setTopicReportOpen(false)
+      setScanDetailsOpen(false)
       setEmptyWindow(null)
       ranRef.current = true
       setRestored(null)
@@ -985,7 +1009,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: fresh.length }))
         if (!fresh.length) {
           setTopicReport(topicReportRows(search.counts, search.failed))
-          setTopicReportOpen(true)
+          setScanDetailsOpen(true)
           // A true zero/newly-caught-up result still closes the interval: PubMed completed
           // every topic search and there is no candidate work at risk of being discarded.
           if (allTopicsSearched) await recordSuccessfulScan(searchDays)
@@ -1021,7 +1045,6 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         setSelecting(false)
         return
       }
-      setTopicReportOpen(true)
       setSearchNote(searchSummary({
         days: searchDays,
         counts: scoredCounts,
@@ -1038,8 +1061,12 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       // the pool stays open below, and nothing is stamped seen (she was never shown a digest
       // of them, so tomorrow may well surface them again against a lower bar).
       const chosen = scored.filter((c) => chosenIds.has(c.id))
-      if (!chosen.length) return
+      if (!chosen.length) {
+        setScanDetailsOpen(true)
+        return
+      }
       const { outcomes } = await runWithCoverageFallback(chosen, scored, scoredCounts)
+      setScanDetailsOpen(false)
       const completed = outcomes.filter((outcome) => !outcome.error).length
       if (!completed) {
         setScanError(
@@ -1097,6 +1124,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     try {
       const { outcomes } = await runWithCoverageFallback(chosen, candidates, searchContext?.counts)
       setPoolOpen(false)
+      setScanDetailsOpen(false)
       // The whole pool is offered up, not just the papers she ran: she saw the rest in the
       // funnel and passed on them, so re-offering those tomorrow is the repeat this ledger
       // exists to stop. Also covers the hand-run path where the floor cleared nobody and
@@ -1120,6 +1148,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       const nextResults = [...nextById.values()]
       setResults(nextResults)
       setPoolOpen(false)
+      setScanDetailsOpen(false)
       persistDigest({ results: nextResults, processedResults, triaged })
       setScanNote((prev) => `${prev ? `${prev} ` : ''}Added ${cachedAdds.length} already-read paper${cachedAdds.length === 1 ? '' : 's'} from cache — no Claude call.`)
       await recordSeen(candidates, cachedAdds.map((r) => ({ id: r.paper.id, error: null })))
@@ -1133,6 +1162,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         append: true,
         forceIncludeIds: new Set(additions.map((c) => c.id)),
       })
+      setScanDetailsOpen(false)
       // mergeSeen keeps first-seen stamps, so re-stamping the pool on every top-up is a no-op.
       await recordSeen(candidates, outcomes)
     } finally {
@@ -1157,6 +1187,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     wakeLock.start()
     try {
       const { outcomes } = await runList(chosen, { append: true })
+      setScanDetailsOpen(false)
       await recordSeen(candidates, outcomes)
     } finally {
       wakeLock.end()
@@ -1180,7 +1211,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     setScanNote('')
     setSearchNote('')
     setTopicReport([])
-    setTopicReportOpen(false)
+    setScanDetailsOpen(false)
     setEmptyWindow(null)
     setCandidates([])
     // The read-only sample profile is the first screen a keyless visitor sees. Keep its
@@ -1229,6 +1260,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           : "Run today's digest"
   const showEmpty =
     !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote
+  const hasScanDetails = !demo && !!(
+    searchNote || topicReport.length || scanNote || candidates.length || (restored && !restored.incomplete)
+  )
 
   return (
     <section>
@@ -1279,62 +1313,21 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         </button>
       </div>
 
-      {/* "Today's scan" section rule. */}
-      <div className="flex items-center" style={{ gap: 14, margin: '30px 0 4px' }}>
-        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontStyle: 'italic', color: 'var(--color-fg-dim)' }}>{demo ? 'Sample digest' : "Today's scan"}</span>
-        <span style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
-        {candidates.length > 0 && (
-          <span style={{ fontSize: 12, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>
-            {candidates.length} candidates{results.length ? ` · ${results.length} in digest` : ''}
-          </span>
-        )}
-      </div>
+      {/* Before a scan there is only a quiet section rule. Once a receipt exists, the same
+          line becomes one disclosure so the digest can begin immediately underneath it. */}
+      {!hasScanDetails && (
+        <div className="flex items-center" style={{ gap: 14, margin: '30px 0 4px' }}>
+          <span style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontStyle: 'italic', color: 'var(--color-fg-dim)' }}>{demo ? 'Sample digest' : "Today's scan"}</span>
+          <span style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
+        </div>
+      )}
 
-      {/* Status lines. */}
+      {/* Actionable state never goes inside the receipt: closing audit details must not hide
+          live progress, a failure, or the one button that can recover paid work. */}
       {!demo && !keySet && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Add your API key in Settings first.</p>}
       {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed — one query per topic…</p>}
-      {/* What was actually searched, including any topic whose query failed. Stated whether
-          the morning was rich or empty: the window is the digest's central claim, and a
-          missing topic is the one thing a full-looking digest would never reveal. */}
-      {searchNote && <p style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--color-fg-faint)', lineHeight: 1.55, maxWidth: 620, fontFamily: 'var(--font-mono)' }}>{searchNote}</p>}
-      {topicReport.length > 0 && (
-        <details open={topicReportOpen} onToggle={(e) => setTopicReportOpen(e.currentTarget.open)} style={{ margin: '8px 0 0', maxWidth: 620 }}>
-          <summary className="cursor-pointer" style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>
-            Per-topic results ({topicReport.length})
-          </summary>
-          <p style={{ margin: '6px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
-            Retained after relevance scoring · scored from the bounded unseen pool · new after removing papers already shown or saved.
-          </p>
-          <ul style={{ margin: '7px 0 0 17px', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {topicReport.map((row, index) => (
-              <li key={`${row.label}-${index}`} className="flex items-baseline" style={{ gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11.5, lineHeight: 1.45 }}>
-                <span style={{ minWidth: 0, flex: 1, color: 'var(--color-fg-muted)' }}>{row.label}</span>
-                <span style={{ flexShrink: 0, color: row.failed ? 'var(--color-domain-vascular)' : 'var(--color-fg-faint)' }}>
-                  {row.failed
-                    ? 'search failed'
-                    : row.prescored !== undefined
-                      ? `${row.retained} retained · ${row.prescored} scored · ${row.available}${row.more ? '+' : ''} new`
-                      : `${row.retained} of ${row.available}${row.more ? '+' : ''}`}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {(topicReconciliation.retained.multiTopic > 0 || topicReconciliation.scored.multiTopic > 0) && (
-            <p style={{ margin: '7px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
-              Unique totals reconcile differently from the topic rows: {topicReconciliation.retained.unique} retained paper{topicReconciliation.retained.unique === 1 ? '' : 's'} produced {topicReconciliation.retained.assignments} topic assignment{topicReconciliation.retained.assignments === 1 ? '' : 's'} ({topicReconciliation.retained.multiTopic} matched multiple topics); {topicReconciliation.scored.unique} scored paper{topicReconciliation.scored.unique === 1 ? '' : 's'} produced {topicReconciliation.scored.assignments} topic assignment{topicReconciliation.scored.assignments === 1 ? '' : 's'} ({topicReconciliation.scored.multiTopic} matched multiple topics).
-            </p>
-          )}
-          {topicReport.some((row) => !row.failed && (row.retained < row.available || row.more)) && (
-            <p style={{ margin: '7px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
-              A + means PubMed had more beyond the fetched results. Raise “per topic” in your profile to retain more.
-            </p>
-          )}
-        </details>
-      )}
       {selecting && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is scoring every candidate against your rubric…</p>}
       {scanError && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{scanError}</p>}
-      {/* A short day and a nothing-new day are outcomes, not errors — muted, never red. */}
-      {scanNote && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: 'var(--color-fg-dim)', lineHeight: 1.55, maxWidth: 620 }}>{scanNote}</p>}
       {/* The ONLY way the window ever gets wider. An empty morning is a true fact about a
           3-day window; quietly re-running it at 30 days to fill the page would make the one
           line she trusts the one line that's false. So she asks — and because the wider run
@@ -1359,24 +1352,22 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       {/* A restore that came back short says so, in amber — same treatment as a withheld
           summary, because it's the same kind of fact: the app is telling her what it does
           NOT have. A whole restore keeps the quiet muted line. */}
-      {restored && (
+      {restored?.incomplete && (
         <div style={{ margin: '12px 0 0' }}>
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: restored.incomplete ? 'var(--color-abstract)' : 'var(--color-fg-muted)' }}>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-abstract)' }}>
             {restored.note}
           </p>
           {/* Finish rather than restart: the papers already verified are in `results` and
               runAndRank (via resumeDigest) skips re-extracting them — only what never ran
               gets fetched, then the whole set is (re-)ranked. */}
-          {restored.incomplete && (
-            <button
-              onClick={resumeDigest}
-              disabled={!keySet || busy}
-              className="cursor-pointer"
-              style={{ marginTop: 8, borderRadius: 999, border: '1px solid rgba(239,143,91,.4)', background: 'transparent', color: 'var(--color-accent)', padding: '6px 14px', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
-            >
-              {busy ? 'Finishing…' : 'Finish this digest'}
-            </button>
-          )}
+          <button
+            onClick={resumeDigest}
+            disabled={!keySet || busy}
+            className="cursor-pointer"
+            style={{ marginTop: 8, borderRadius: 999, border: '1px solid rgba(239,143,91,.4)', background: 'transparent', color: 'var(--color-accent)', padding: '6px 14px', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
+          >
+            {busy ? 'Finishing…' : 'Finish this digest'}
+          </button>
         </div>
       )}
       {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
@@ -1387,24 +1378,68 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         </p>
       )}
 
-      {/* The selection funnel: the wide candidate pool, scored against the rubric, with a
-          coverage-first slate pre-checked and the remaining slots filled by score. */}
-      {candidates.length > 0 && (
-        <CandidatePool
-          candidates={candidates}
-          selectedIds={selectedIds}
-          digestedIds={digestedIds}
-          processedIds={processedIds}
-          triaged={triaged}
-          open={poolOpen}
-          onToggleOpen={() => setPoolOpen((o) => !o)}
-          onToggle={toggleCandidate}
-          onRunDigest={runDigest}
-          onAddToDigest={addToDigest}
-          onRescore={rescore}
-          selecting={selecting}
-          running={running}
-        />
+      {hasScanDetails && (
+        <ScanDetails
+          candidates={candidates.length}
+          digest={results.length}
+          open={scanDetailsOpen}
+          onToggle={setScanDetailsOpen}
+        >
+          {/* The search window, topic accounting, funnel outcome, and optional candidate
+              controls are preserved verbatim as the scan receipt. */}
+          {searchNote && <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--color-fg-faint)', lineHeight: 1.55, maxWidth: 620, fontFamily: 'var(--font-mono)' }}>{searchNote}</p>}
+          {topicReport.length > 0 && (
+            <div style={{ margin: '10px 0 0', maxWidth: 620 }}>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-fg-muted)' }}>Per-topic results ({topicReport.length})</p>
+              <p style={{ margin: '6px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
+                Retained after relevance scoring · scored from the bounded unseen pool · new after removing papers already shown or saved.
+              </p>
+              <ul style={{ margin: '7px 0 0 17px', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {topicReport.map((row, index) => (
+                  <li key={`${row.label}-${index}`} className="flex items-baseline" style={{ gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11.5, lineHeight: 1.45 }}>
+                    <span style={{ minWidth: 0, flex: 1, color: 'var(--color-fg-muted)' }}>{row.label}</span>
+                    <span style={{ flexShrink: 0, color: row.failed ? 'var(--color-domain-vascular)' : 'var(--color-fg-faint)' }}>
+                      {row.failed
+                        ? 'search failed'
+                        : row.prescored !== undefined
+                          ? `${row.retained} retained · ${row.prescored} scored · ${row.available}${row.more ? '+' : ''} new`
+                          : `${row.retained} of ${row.available}${row.more ? '+' : ''}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {(topicReconciliation.retained.multiTopic > 0 || topicReconciliation.scored.multiTopic > 0) && (
+                <p style={{ margin: '7px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
+                  Unique totals reconcile differently from the topic rows: {topicReconciliation.retained.unique} retained paper{topicReconciliation.retained.unique === 1 ? '' : 's'} produced {topicReconciliation.retained.assignments} topic assignment{topicReconciliation.retained.assignments === 1 ? '' : 's'} ({topicReconciliation.retained.multiTopic} matched multiple topics); {topicReconciliation.scored.unique} scored paper{topicReconciliation.scored.unique === 1 ? '' : 's'} produced {topicReconciliation.scored.assignments} topic assignment{topicReconciliation.scored.assignments === 1 ? '' : 's'} ({topicReconciliation.scored.multiTopic} matched multiple topics).
+                </p>
+              )}
+              {topicReport.some((row) => !row.failed && (row.retained < row.available || row.more)) && (
+                <p style={{ margin: '7px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
+                  A + means PubMed had more beyond the fetched results. Raise “per topic” in your profile to retain more.
+                </p>
+              )}
+            </div>
+          )}
+          {scanNote && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: 'var(--color-fg-dim)', lineHeight: 1.55, maxWidth: 620 }}>{scanNote}</p>}
+          {restored && !restored.incomplete && <p style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-fg-muted)' }}>{restored.note}</p>}
+          {candidates.length > 0 && (
+            <CandidatePool
+              candidates={candidates}
+              selectedIds={selectedIds}
+              digestedIds={digestedIds}
+              processedIds={processedIds}
+              triaged={triaged}
+              open={poolOpen}
+              onToggleOpen={() => setPoolOpen((o) => !o)}
+              onToggle={toggleCandidate}
+              onRunDigest={runDigest}
+              onAddToDigest={addToDigest}
+              onRescore={rescore}
+              selecting={selecting}
+              running={running}
+            />
+          )}
+        </ScanDetails>
       )}
 
       {/* The digest — one observatory card per paper. */}
