@@ -1,7 +1,13 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
-import SpineCheck, { candidateDisplayScore, ScanDetails } from './SpineCheck.jsx'
+import SpineCheck, {
+  candidateDisplayScore,
+  DigestRunControls,
+  failedDigestResults,
+  retryBaseSnapshot,
+  ScanDetails,
+} from './SpineCheck.jsx'
 
 function memoryStorage() {
   const values = new Map()
@@ -68,5 +74,41 @@ describe('completed scan disclosure', () => {
 
     expect(html).toContain('<details open=""')
     expect(html).toContain('Hide details')
+  })
+})
+
+describe('failed digest retry', () => {
+  const success = { paper: { id: 'ok' }, rows: [] }
+  const failed = { paper: { id: 'failed' }, error: 'Unexpected end of JSON input', rows: [] }
+  const excludedButProcessed = { paper: { id: 'below-floor' }, rows: [] }
+
+  it('identifies only visible non-retraction failures', () => {
+    expect(failedDigestResults([success, failed, { ...failed, retracted: true }])).toEqual([failed])
+  })
+
+  it('removes only failed attempts from the retry base', () => {
+    const snapshot = retryBaseSnapshot({
+      results: [success, failed],
+      processedResults: [success, failed, excludedButProcessed],
+      triaged: { ok: { score: 80 } },
+    })
+
+    expect(snapshot.results).toEqual([success])
+    expect(snapshot.processedResults).toEqual([success, excludedButProcessed])
+    expect([...snapshot.failedIds]).toEqual(['failed'])
+    expect(snapshot.triaged).toEqual({ ok: { score: 80 } })
+  })
+
+  it('makes retry primary and warns that a new scan replaces the digest', () => {
+    const html = renderToStaticMarkup(React.createElement(DigestRunControls, {
+      failedCount: 1,
+      hasExistingScan: true,
+      keySet: true,
+    }))
+
+    expect(html).toContain('Retry 1 failed paper')
+    expect(html).toContain('Start a new scan')
+    expect(html).toContain('new unseen-paper pool and replaces the digest on screen')
+    expect(html).not.toContain("Run today&#x27;s digest")
   })
 })

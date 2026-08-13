@@ -225,6 +225,66 @@ export function ScanDetails({ candidates = 0, digest = 0, open = false, onToggle
   )
 }
 
+export function failedDigestResults(results = []) {
+  return (Array.isArray(results) ? results : []).filter((result) => result?.error && !result?.retracted)
+}
+
+// Retrying a failed card must remove only that failed attempt from the append base. All
+// successful reads, including those below the final display bar, stay cached and are
+// re-ranked with the retry; the candidate pool and search receipt remain untouched.
+export function retryBaseSnapshot({ results = [], processedResults = [], triaged = {} } = {}) {
+  const failedIds = new Set(failedDigestResults(results).map((result) => String(result?.paper?.id || '')).filter(Boolean))
+  return {
+    failedIds,
+    results: results.filter((result) => !failedIds.has(String(result?.paper?.id || ''))),
+    processedResults: processedResults.filter((result) => !failedIds.has(String(result?.paper?.id || ''))),
+    triaged,
+  }
+}
+
+export function DigestRunControls({
+  failedCount = 0,
+  hasExistingScan = false,
+  busy = false,
+  retrying = false,
+  keySet = false,
+  busyLabel = 'Building digest…',
+  onRetry = () => {},
+  onStartNew = () => {},
+}) {
+  const primaryStyle = { padding: '14px 34px', borderRadius: 13, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15.5, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -10px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }
+  const secondaryStyle = { padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }
+
+  if (failedCount > 0) {
+    return (
+      <>
+        <button onClick={onRetry} disabled={!keySet || busy} className="cursor-pointer" style={primaryStyle}>
+          {retrying ? `Retrying ${failedCount} failed paper${failedCount === 1 ? '' : 's'}…` : `Retry ${failedCount} failed paper${failedCount === 1 ? '' : 's'}`}
+        </button>
+        <button onClick={onStartNew} disabled={!keySet || busy} className="cursor-pointer" style={secondaryStyle}>
+          Start a new scan
+        </button>
+        <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)', textAlign: 'center' }}>
+          A new scan uses a new unseen-paper pool and replaces the digest on screen.
+        </p>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <button onClick={onStartNew} disabled={!keySet || busy} className="cursor-pointer" style={primaryStyle}>
+        {busy ? busyLabel : hasExistingScan ? 'Start a new scan' : "Run today's digest"}
+      </button>
+      {hasExistingScan && (
+        <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)', textAlign: 'center' }}>
+          Starts with a new unseen-paper pool and replaces the digest on screen.
+        </p>
+      )}
+    </>
+  )
+}
+
 // The selection funnel surface: the wide candidate pool ranked by rubric fit, with a
 // coverage-first slate pre-checked. The clinician confirms/adjusts the selection, then runs the digest on only
 // those — mirroring the ~50-candidates → ~10-kept step of a hand-run morning review. Once a
@@ -386,6 +446,7 @@ function CandidatePool({
 // header can date the digest it is actually showing rather than the day it is read.
 export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const [running, setRunning] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const [searching, setSearching] = useState(false)
   const [selecting, setSelecting] = useState(false) // selection funnel LLM call in flight
   const [candidates, setCandidates] = useState([]) // scored candidate pool (funnel output)
@@ -1194,6 +1255,36 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     }
   }
 
+  // A retry is not a new scan. It preserves the successful cards, cached reads, candidate
+  // pool, search receipt, and seen ledger, then runs only the paper cards that failed.
+  async function retryFailedPapers() {
+    const failed = failedDigestResults(results)
+    if (!failed.length) return
+    const baseSnapshot = retryBaseSnapshot({ results, processedResults, triaged })
+    const papers = failed.map((result) => result.paper).filter(Boolean)
+    if (!papers.length) return
+
+    setRetrying(true)
+    setScanError('')
+    wakeLock.start()
+    try {
+      const retried = await runList(papers, { append: true, baseSnapshot })
+      const retryOutcomes = retried.outcomes.filter((outcome) => baseSnapshot.failedIds.has(String(outcome.id)))
+      const stillFailed = retryOutcomes.filter((outcome) => outcome.error).length
+      if (stillFailed) {
+        setScanError(`${stillFailed} of ${papers.length} retried paper${papers.length === 1 ? '' : 's'} still could not be read. The existing digest was preserved.`)
+      }
+      setPoolOpen(false)
+      setScanDetailsOpen(false)
+      await recordSeen(papers, retryOutcomes)
+    } catch (err) {
+      setScanError(`The failed-paper retry stopped: ${err?.message || String(err)}. The existing digest was preserved.`)
+    } finally {
+      setRetrying(false)
+      wakeLock.end()
+    }
+  }
+
   function toggleCandidate(id) {
     // Papers already in the digest are locked in — you add more, you don't uncheck done work.
     if (results.some((r) => r.paper.id === id)) return
@@ -1243,12 +1334,13 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // Which candidates are already in the digest (locked in; can't be re-run, only added to).
   const digestedIds = new Set(results.map((r) => r.paper.id))
   const processedIds = new Set(processedResults.map((r) => r.paper.id))
+  const failedResults = failedDigestResults(results)
   const topicReconciliation = topicAssignmentReconciliation(candidates, preCapCandidates)
 
   // Ranking is still part of the run. Re-enabling the button here let a second click clear
   // the digest while the first run was writing summaries, producing an apparently silent
   // failure and a stale snapshot race.
-  const busy = running || searching || selecting || ranking
+  const busy = running || searching || selecting || ranking || retrying
   const primaryLabel = searching
     ? 'Searching…'
     : selecting
@@ -1260,6 +1352,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           : "Run today's digest"
   const showEmpty =
     !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote
+  const hasExistingScan = !!(results.length || candidates.length || searchNote || scanNote)
   const hasScanDetails = !demo && !!(
     searchNote || topicReport.length || scanNote || candidates.length || (restored && !restored.incomplete)
   )
@@ -1275,14 +1368,16 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       )}
       <div className="flex flex-col items-center" style={{ gap: 12, marginTop: demo ? 12 : 6 }}>
         {!demo && (
-          <button
-            onClick={() => startScan()}
-            disabled={!keySet || busy}
-            className="cursor-pointer"
-            style={{ padding: '14px 34px', borderRadius: 13, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15.5, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -10px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }}
-          >
-            {primaryLabel}
-          </button>
+          <DigestRunControls
+            failedCount={failedResults.length}
+            hasExistingScan={hasExistingScan}
+            busy={busy}
+            retrying={retrying}
+            keySet={keySet}
+            busyLabel={primaryLabel}
+            onRetry={retryFailedPapers}
+            onStartNew={() => startScan()}
+          />
         )}
         {!demo && coveragePrompt && (
           <div style={{ maxWidth: 620, borderRadius: 12, border: `1px solid ${coveragePrompt.truncated ? 'rgba(230,184,119,.35)' : 'rgba(143,189,230,.24)'}`, background: coveragePrompt.truncated ? 'rgba(230,184,119,.08)' : 'rgba(143,189,230,.07)', padding: '10px 13px', textAlign: 'center' }}>
