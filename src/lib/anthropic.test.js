@@ -19,6 +19,8 @@ import {
   modelRates,
   recordUsage,
   getUsageSummary,
+  parseStructuredResponse,
+  StructuredOutputError,
 } from './anthropic.js'
 
 function memStorage() {
@@ -145,5 +147,38 @@ describe('usage accounting', () => {
     expect(summary.inputTokens).toBe(2000)
     expect(summary.outputTokens).toBe(200)
     expect(summary.estimatedUsd).toBeCloseTo(0.0045, 8)
+  })
+})
+
+describe('structured response completion', () => {
+  it('parses a naturally completed structured response', () => {
+    expect(parseStructuredResponse({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: '{"ok":true}' }],
+    })).toEqual({ ok: true })
+  })
+
+  it('classifies max-token output as retryable before parsing partial JSON', () => {
+    expect(() => parseStructuredResponse({
+      stop_reason: 'max_tokens',
+      content: [{ type: 'text', text: '{"ok":' }],
+    })).toThrow(StructuredOutputError)
+
+    try {
+      parseStructuredResponse({ stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"ok":' }] })
+    } catch (err) {
+      expect(err).toMatchObject({ retryable: true, stopReason: 'max_tokens' })
+    }
+  })
+
+  it('classifies malformed or empty structured output as retryable', () => {
+    for (const content of [[{ type: 'text', text: '{"ok":' }], []]) {
+      try {
+        parseStructuredResponse({ stop_reason: 'end_turn', content })
+        throw new Error('expected parseStructuredResponse to throw')
+      } catch (err) {
+        expect(err).toMatchObject({ retryable: true })
+      }
+    }
   })
 })

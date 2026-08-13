@@ -201,6 +201,44 @@ export async function ping(prompt = 'Reply with exactly the word: pong') {
     .trim()
 }
 
+export class StructuredOutputError extends Error {
+  constructor(message, { stopReason = null, retryable = false } = {}) {
+    super(message)
+    this.name = 'StructuredOutputError'
+    this.stopReason = stopReason
+    this.retryable = retryable
+  }
+}
+
+// A 200 response is not necessarily complete. Structured output can still be cut off at
+// the output or context limit, and parsing that partial text only reports a misleading raw
+// SyntaxError. Classify the response first so callers can retry the right failures.
+export function parseStructuredResponse(res) {
+  const stopReason = res?.stop_reason || null
+  if (stopReason === 'max_tokens' || stopReason === 'model_context_window_exceeded') {
+    throw new StructuredOutputError('Claude structured output was incomplete.', { stopReason, retryable: true })
+  }
+  if (stopReason === 'refusal') {
+    throw new StructuredOutputError('Claude declined this structured-output request.', { stopReason })
+  }
+  if (stopReason && stopReason !== 'end_turn') {
+    throw new StructuredOutputError(`Claude stopped structured output early (${stopReason}).`, { stopReason })
+  }
+
+  const text = (res?.content || [])
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
+  if (!text.trim()) {
+    throw new StructuredOutputError('Claude returned no structured output.', { stopReason, retryable: true })
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new StructuredOutputError('Claude returned incomplete structured output.', { stopReason, retryable: true })
+  }
+}
+
 // Structured-output call. `schema` is a JSON Schema per the output_config contract
 // (additionalProperties:false + required on every object; nullable via anyOf; no
 // minimum/maximum/minLength/recursion). Returns the parsed object. NOTE: never pass
@@ -216,9 +254,5 @@ export async function extractStructured({ model = MODELS.extraction, system, con
     output_config: { format: { type: 'json_schema', schema } },
   })
   recordUsage(model, res.usage)
-  const text = res.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('')
-  return JSON.parse(text)
+  return parseStructuredResponse(res)
 }

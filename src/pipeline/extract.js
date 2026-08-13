@@ -10,6 +10,9 @@
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 
+export const EXTRACTION_MAX_TOKENS = 8192
+export const EXTRACTION_RETRY_MAX_TOKENS = 16384
+
 // Strict JSON schema per docs/FACTS.md, adjusted to the locked structured-output rules:
 // every object has additionalProperties:false + required; optional fields are nullable
 // via anyOf and listed in required (the API rejects properties-not-in-required patterns).
@@ -106,16 +109,28 @@ flag anything it cannot prove. Precision beats recall.`
 // Extract quantities from source text. Returns the parsed object matching
 // EXTRACTION_SCHEMA. Callers pass the result straight into verify.js — nothing here is
 // trusted.
-export async function extractQuantities({ studyId, sourceText, model = MODELS.extraction, maxTokens = 4096 }) {
+export async function extractQuantities({ studyId, sourceText, model = MODELS.extraction, maxTokens = EXTRACTION_MAX_TOKENS }) {
   const content = `study_id: ${studyId}\n\nSOURCE TEXT:\n${sourceText}`
-  const result = await extractStructured({
-    model,
-    system: SYSTEM,
-    content,
-    schema: EXTRACTION_SCHEMA,
-    maxTokens,
-    thinking: { type: 'disabled' },
-  })
+  let result
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      result = await extractStructured({
+        model,
+        system: SYSTEM,
+        content,
+        schema: EXTRACTION_SCHEMA,
+        maxTokens: attempt === 1 ? maxTokens : Math.max(maxTokens, EXTRACTION_RETRY_MAX_TOKENS),
+        thinking: { type: 'disabled' },
+      })
+      break
+    } catch (err) {
+      const retryable = err?.retryable === true || err instanceof SyntaxError || /json|parse|unexpected end|unterminated|truncat|incomplete structured/i.test(String(err?.message || ''))
+      if (!retryable) throw err
+      if (attempt === 2) {
+        throw new Error('Claude could not finish extracting this paper after two attempts. Try this paper again later.')
+      }
+    }
+  }
   // Guarantee study_id is set even if the model omitted it.
   if (!result.study_id) result.study_id = studyId
   return result
