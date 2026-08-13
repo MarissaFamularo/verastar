@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildPaperRecord } from './save.js'
+import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 
 describe('buildPaperRecord — design appraisal survives a manual or digest save', () => {
   it('persists design caution separately from the finding and verified facts', () => {
@@ -7,6 +8,7 @@ describe('buildPaperRecord — design appraisal survives a manual or digest save
       paper: { id: '42335023', pmid: '42335023' },
       citation: { title: 'National comparative analysis' },
       design: 'retrospective_cohort',
+      extractionVersion: CURRENT_EXTRACTION_VERSION,
       source: { pmcid: null },
       sourceDoc: { text: 'Registry source', tables: '' },
       rows: [],
@@ -24,12 +26,19 @@ describe('buildPaperRecord — design appraisal survives a manual or digest save
     const paper = buildPaperRecord(res, take, { source: 'manual' })
 
     expect(paper.design).toBe('retrospective_cohort')
+    expect(paper.extractionVersion).toBe(CURRENT_EXTRACTION_VERSION)
     expect(paper.designCaution).toBe(take.designCaution)
     expect(paper.cautionCheck).toEqual({ verdict: 'supported', reason: '' })
     expect(paper.finding).toBe(take.finding)
     expect(paper.score).toBe(88)
     expect(paper.relevance).toBe(take.relevance)
     expect(paper.saveSource).toBe('manual')
+  })
+
+  it('keeps an older or missing run stamp instead of falsely upgrading it at save time', () => {
+    const base = { paper: { id: '1', pmid: '1' }, citation: {}, source: {}, sourceDoc: {}, rows: [] }
+    expect(buildPaperRecord(base, {}).extractionVersion).toBe(null)
+    expect(buildPaperRecord({ ...base, extractionVersion: '2026-07-01.v1' }, {}).extractionVersion).toBe('2026-07-01.v1')
   })
 
   it('persists only verified rows for the expandable evidence list', () => {

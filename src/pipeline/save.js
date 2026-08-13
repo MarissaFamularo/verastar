@@ -25,6 +25,9 @@ export function buildPaperRecord(res, take, { title, source = 'unknown' } = {}) 
     title: title || res.paper.title || res.citation?.title || `PMID ${res.paper.pmid}`,
     citation: res.citation || null,
     design: res.design || null,
+    // Comes from the run itself, not from save-time code. A restored digest extracted by
+    // an older build must remain honestly old even if the clinician saves it today.
+    extractionVersion: res.extractionVersion || null,
     score: take?.score != null && Number.isFinite(Number(take.score))
       ? Math.min(100, Math.max(0, Math.round(Number(take.score))))
       : null,

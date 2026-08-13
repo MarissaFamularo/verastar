@@ -1,12 +1,12 @@
 // pipeline/extract.js — structured extraction (Opus 4.8).
 //
 // The model's output surface is deliberately narrow: it may only emit
-// (scalar-or-range, source_quote, location) tuples. There is NO schema field for a free-floating
+// semantically typed quantitative tuples with a source_quote and location. There is NO schema field for a free-floating
 // number, so the model literally cannot assert a quantity without attaching a receipt.
 // Everything it returns is untrusted until verify.js re-derives it from source text.
-// A reported estimate range is represented by range_low/range_high, never collapsed into
-// the scalar `value` field. Confidence intervals remain separate: they describe uncertainty
-// around an estimate, while an estimate range says the paper reported values as a span.
+// Two-number results remain distinguishable as a range, a change over time, or a comparison
+// between labeled groups. Confidence intervals remain separate: they describe uncertainty
+// around an estimate rather than the estimate's semantic shape.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 
@@ -36,12 +36,17 @@ export const EXTRACTION_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'value', 'range_low', 'range_high', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'],
+        required: ['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'],
         properties: {
           name: { type: 'string' },
+          quantity_type: { type: 'string', enum: ['single', 'range', 'change', 'comparison'] },
           value: { anyOf: [{ type: 'number' }, { type: 'null' }] },
           range_low: { anyOf: [{ type: 'number' }, { type: 'null' }] },
           range_high: { anyOf: [{ type: 'number' }, { type: 'null' }] },
+          first_label: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          first_value: { anyOf: [{ type: 'number' }, { type: 'null' }] },
+          second_label: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          second_value: { anyOf: [{ type: 'number' }, { type: 'null' }] },
           unit: { anyOf: [{ type: 'string' }, { type: 'null' }] },
           ci_low: { anyOf: [{ type: 'number' }, { type: 'null' }] },
           ci_high: { anyOf: [{ type: 'number' }, { type: 'null' }] },
@@ -60,12 +65,24 @@ Non-negotiable rules:
 - source_quote MUST be copied VERBATIM from the provided source text — an exact
   substring, character for character. Do NOT paraphrase, re-punctuate, or "clean up"
   numbers. If the paper writes 0·84 with a middle dot, copy 0·84.
-- Every number you put in value / range_low / range_high / ci_low / ci_high / p_value MUST appear inside its own
+- Every number you put in value / range_low / range_high / first_value / second_value / ci_low / ci_high / p_value MUST appear inside its own
   source_quote. The quote is the receipt for the number.
 - A quantity must use exactly ONE estimate shape:
-  - Scalar result: put the estimate in value and set range_low/range_high to null.
-  - Reported estimate range: set value to null and put both endpoints in
-    range_low/range_high. Never coerce a reported range to its first endpoint.
+  - single: put the estimate in value. Set every range and first/second field to null.
+  - range: put the two endpoints in range_low/range_high. Set value and every
+    first/second field to null. Use this ONLY when the source describes a true span,
+    interval, minimum-to-maximum range, or values across models. Never use it for two
+    groups or two time points.
+  - change: put the earlier value in first_value and the later value in second_value.
+    If the quote names the time points or states, copy those exact labels into
+    first_label and second_label (for example, "baseline" and "follow-up"); if it only
+    says "increased from" or "decreased from", set both labels to null. Set value and
+    range fields to null. The first/second order must always preserve earlier-to-later.
+  - comparison: put each group value in first_value/second_value and copy the exact
+    corresponding group labels from the quote into first_label/second_label. Preserve
+    source order even if the second group is named first elsewhere. Set value and range
+    fields to null.
+  Any labels you supply must be non-empty exact substrings of source_quote, not inferred descriptions.
   A reported estimate range is NOT a confidence interval. Keep ci_low/ci_high for a CI
   explicitly identified as such by the source.
 - Preserve the source's printed precision in source_quote. For example, copy "1.00" and

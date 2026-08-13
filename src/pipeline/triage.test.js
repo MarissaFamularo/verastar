@@ -34,6 +34,13 @@ describe('summary-writer claim strength contract', () => {
     expect(OUTPUT_CONTRACT).toMatch(/observational study advocating adoption.*MUST say/i)
     expect(OUTPUT_CONTRACT).toContain('surrogate exposure identification')
   })
+
+  it('separates editorial importance from evidence strength', () => {
+    expect(OUTPUT_CONTRACT).toMatch(/NOT an evidence-strength score/i)
+    expect(OUTPUT_CONTRACT).toMatch(/Do not automatically subtract.*small, single-center, observational/i)
+    expect(OUTPUT_CONTRACT).toMatch(/indication-defining.*high score.*weaker tier.*design caution/is)
+    expect(OUTPUT_CONTRACT).toMatch(/Never use a design label as a substitute for importance/i)
+  })
 })
 
 describe('allowedNumbers — the verified set a finding may draw from', () => {

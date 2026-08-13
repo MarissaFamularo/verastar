@@ -26,6 +26,8 @@ import {
   capScoredByTopic,
   applyScoreFloor,
   applyPostReadFloor,
+  planCoverageFallbacks,
+  topicAssignmentReconciliation,
   normalizeScoreFloor,
   preReadFloor,
   coverageSelectionSummary,
@@ -637,11 +639,18 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     }
   }
 
-  async function runAndRank(papers, { injectCorrupt = false, append = false, forceIncludeIds = new Set() } = {}) {
+  async function runAndRank(papers, {
+    injectCorrupt = false,
+    append = false,
+    forceIncludeIds = new Set(),
+    baseSnapshot = null,
+    suppressRunEvent = false,
+  } = {}) {
     setRunning(true)
     ranRef.current = true
     setRestored(null)
-    const base = append ? processedResults : []
+    const base = append ? (baseSnapshot?.processedResults ?? processedResults) : []
+    const baseVisible = append ? (baseSnapshot?.results ?? results) : []
     if (!append) {
       setResults([])
       setProcessedResults([])
@@ -659,8 +668,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     // until the combined re-rank replaces it. Declared before the loop: each paper's
     // incremental persist below needs it too, so a digest already showing summaries for
     // the base papers doesn't restore looking blanker than it is.
-    let triagedNow = append ? triaged : {}
-    let visible = append ? [...results] : collected
+    let triagedNow = append ? (baseSnapshot?.triaged ?? triaged) : {}
+    let visible = append ? [...baseVisible] : collected
     for (const paper of toRun) {
       const res = await runPaper(paper, { onStage })
       processed.push(res)
@@ -676,7 +685,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setProcessedResults([...collected])
       // During an append, do not temporarily re-show every cached paper that previously
       // missed the final bar. Show only the existing digest plus genuinely new work.
-      setResults(append ? [...results, res] : [...collected])
+      visible = append ? [...visible, res] : [...collected]
+      setResults([...visible])
       // Persist after EVERY paper, not just at the end of the whole run. Each extraction is
       // a paid Claude call, and a run is minutes long — if the screen sleeps mid-loop (the
       // wake lock is advisory and can fail to hold) the papers already verified must not be
@@ -688,7 +698,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       // the seen ledger is untouched either way (recordSeen only ever runs after the whole
       // run finishes).
       persistDigest({
-        results: withOaLinks(append ? [...results, res] : collected, oaResolved.current),
+        results: withOaLinks(visible, oaResolved.current),
         processedResults: withOaLinks(collected, oaResolved.current),
         triaged: triagedNow,
       })
@@ -700,6 +710,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     // (reviews, methods pieces) still belong in the digest. A failure here never touches
     // the proven facts.
     const ok = collected.filter((r) => !r.error)
+    let postNow = null
     if (ok.length) {
       setRanking(true)
       try {
@@ -743,6 +754,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         // paper below the bar is not padding in the digest.
         if (!injectCorrupt) {
           const post = applyPostReadFloor(collected, byId, profile?.rubric?.scoreFloor)
+          postNow = post
           const bar = post.floor
           const forced = collected.filter((r) => forceIncludeIds.has(r.paper.id) && !r.error && !r.retracted)
           const visibleById = new Map([...post.kept, ...forced].map((r) => [r.paper.id, r]))
@@ -779,14 +791,53 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     })
     // Adoption telemetry: one row per completed run. `showcase` marks the keyless demo
     // trials, `append` the add-more path — both would otherwise inflate real-run counts.
-    logEvent('digest_run', {
-      papers: visible.length,
-      processed: processed.length,
-      errors: collected.filter((r) => r.error).length,
-      append: !!append,
-      showcase: !!injectCorrupt,
+    if (!suppressRunEvent) {
+      logEvent('digest_run', {
+        papers: visible.length,
+        processed: processed.length,
+        errors: collected.filter((r) => r.error).length,
+        append: !!append,
+        showcase: !!injectCorrupt,
+      })
+    }
+    return {
+      outcomes: processed.map((r) => ({ id: r.paper.id, error: r.error })),
+      results: visible,
+      processedResults: collected,
+      triaged: triagedNow,
+      post: postNow,
+    }
+  }
+
+  async function runWithCoverageFallback(chosen, pool, counts) {
+    const initial = await runList(chosen, { injectCorrupt: false, suppressRunEvent: true })
+    const fallback = planCoverageFallbacks({
+      candidates: pool,
+      processedResults: initial.processedResults,
+      visibleResults: initial.results,
+      rankings: initial.triaged,
+      floor: initial.post?.floor ?? scoreFloor,
+      counts,
     })
-    return processed.map((r) => ({ id: r.paper.id, error: r.error }))
+    let final = initial
+    if (fallback.candidates.length) {
+      const topicCount = fallback.rescuedTopics.length
+      setScanNote((prev) => `${prev ? `${prev} ` : ''}Coverage fallback is reading ${fallback.candidates.length} additional paper${fallback.candidates.length === 1 ? '' : 's'} for ${topicCount} empty protected topic${topicCount === 1 ? '' : 's'}.`)
+      final = await runList(fallback.candidates, {
+        append: true,
+        baseSnapshot: initial,
+        suppressRunEvent: true,
+      })
+    }
+    logEvent('digest_run', {
+      papers: final.results.length,
+      processed: final.outcomes.length,
+      errors: final.outcomes.filter((outcome) => outcome.error).length,
+      append: false,
+      showcase: false,
+      coverageFallbacks: fallback.candidates.length,
+    })
+    return final
   }
 
   // Score a candidate pool against the current rubric and pre-check the ones that EARNED a
@@ -988,7 +1039,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       // of them, so tomorrow may well surface them again against a lower bar).
       const chosen = scored.filter((c) => chosenIds.has(c.id))
       if (!chosen.length) return
-      const outcomes = await runList(chosen, { injectCorrupt: false })
+      const { outcomes } = await runWithCoverageFallback(chosen, scored, scoredCounts)
       const completed = outcomes.filter((outcome) => !outcome.error).length
       if (!completed) {
         setScanError(
@@ -1044,7 +1095,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     if (!chosen.length) return
     wakeLock.start()
     try {
-      const outcomes = await runList(chosen, { injectCorrupt: false })
+      const { outcomes } = await runWithCoverageFallback(chosen, candidates, searchContext?.counts)
       setPoolOpen(false)
       // The whole pool is offered up, not just the papers she ran: she saw the rest in the
       // funnel and passed on them, so re-offering those tomorrow is the repeat this ledger
@@ -1078,7 +1129,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     try {
       // Append mode returns outcomes for the WHOLE digest, so a paper that errored on an
       // earlier run stays excluded here too — it still hasn't been shown to her.
-      const outcomes = await runList(additions, {
+      const { outcomes } = await runList(additions, {
         append: true,
         forceIncludeIds: new Set(additions.map((c) => c.id)),
       })
@@ -1105,7 +1156,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     if (!chosen.length && !results.length) return
     wakeLock.start()
     try {
-      const outcomes = await runList(chosen, { append: true })
+      const { outcomes } = await runList(chosen, { append: true })
       await recordSeen(candidates, outcomes)
     } finally {
       wakeLock.end()
@@ -1161,6 +1212,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // Which candidates are already in the digest (locked in; can't be re-run, only added to).
   const digestedIds = new Set(results.map((r) => r.paper.id))
   const processedIds = new Set(processedResults.map((r) => r.paper.id))
+  const topicReconciliation = topicAssignmentReconciliation(candidates, preCapCandidates)
 
   // Ranking is still part of the run. Re-enabling the button here let a second click clear
   // the digest while the first run was writing summaries, producing an apparently silent
@@ -1267,6 +1319,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
               </li>
             ))}
           </ul>
+          {(topicReconciliation.retained.multiTopic > 0 || topicReconciliation.scored.multiTopic > 0) && (
+            <p style={{ margin: '7px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
+              Unique totals reconcile differently from the topic rows: {topicReconciliation.retained.unique} retained paper{topicReconciliation.retained.unique === 1 ? '' : 's'} produced {topicReconciliation.retained.assignments} topic assignment{topicReconciliation.retained.assignments === 1 ? '' : 's'} ({topicReconciliation.retained.multiTopic} matched multiple topics); {topicReconciliation.scored.unique} scored paper{topicReconciliation.scored.unique === 1 ? '' : 's'} produced {topicReconciliation.scored.assignments} topic assignment{topicReconciliation.scored.assignments === 1 ? '' : 's'} ({topicReconciliation.scored.multiTopic} matched multiple topics).
+            </p>
+          )}
           {topicReport.some((row) => !row.failed && (row.retained < row.available || row.more)) && (
             <p style={{ margin: '7px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
               A + means PubMed had more beyond the fetched results. Raise “per topic” in your profile to retain more.

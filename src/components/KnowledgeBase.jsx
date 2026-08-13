@@ -29,6 +29,7 @@ import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
 import { fmtNum } from '../lib/format.js'
+import { extractionVersionStatus } from '../lib/evidenceVersion.js'
 
 export default function KnowledgeBase() {
   const [concepts, setConcepts] = useState([])
@@ -474,6 +475,7 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }
   const retracted = paperIndicatesRetraction(paper)
   const verifiedCount = Array.isArray(paper.quantities) ? paper.quantities.length : 0
   const hasScore = paper.score != null && Number.isFinite(Number(paper.score))
+  const extractionStatus = extractionVersionStatus(paper)
 
   const lastSaved = useRef(paper.notes || '')
   useEffect(() => {
@@ -527,6 +529,16 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }
         <HeartButton active={!!paper.favorite} onClick={onToggleFavorite} />
         {hasScore && <span style={{ ...pill, cursor: 'default', fontFamily: 'var(--font-mono)', color: 'var(--color-accent-bright)' }}>Fit {Math.round(Number(paper.score))}</span>}
         {paper.saveSource === 'manual' && <span style={{ ...pill, cursor: 'default' }}>Added manually</span>}
+        {extractionStatus !== 'current' && (
+          <span
+            title={extractionStatus === 'legacy'
+              ? 'Saved before extraction versioning. Its evidence has not been automatically changed.'
+              : 'Saved with an older extraction version. Its evidence has not been automatically changed.'}
+            style={{ ...pill, cursor: 'default', color: 'var(--color-abstract)' }}
+          >
+            {extractionStatus === 'legacy' ? 'Legacy extraction' : 'Extraction update available'}
+          </span>
+        )}
         {(paper.finding || paper.designCaution || paper.relevance) && (
           <button onClick={() => setShowFinding((s) => !s)} style={pill}>{showFinding ? 'Hide summary' : 'Summary'}</button>
         )}

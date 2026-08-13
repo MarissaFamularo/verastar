@@ -30,6 +30,7 @@ const paper = (over = {}) => ({
   domain: 'vascular',
   tags: ['clti', 'bypass'],
   savedAt: '2026-07-09T14:22:00.000Z',
+  extractionVersion: '2026-08-12.quantity-semantics-v2',
   ...over,
 })
 
@@ -61,6 +62,11 @@ describe('sourceNoteMd', () => {
     expect(md).toContain('pmid: 12345')
     expect(md).toContain('domain: "Vascular Surgery & Limb Preservation"') // domainLabel, not the raw key
     expect(md).toContain('tags: [clti, bypass]')
+    expect(md).toContain('extraction_version: 2026-08-12.quantity-semantics-v2')
+  })
+
+  it('marks an unversioned paper as legacy in the owned file', () => {
+    expect(sourceNoteMd(paper({ extractionVersion: null }))).toContain('extraction_version: legacy')
   })
 
   it('renders each verified quantity WITH its tier and a PubMed link', () => {

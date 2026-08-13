@@ -104,6 +104,23 @@ describe('fmtNum — the fact-channel value string', () => {
     expect(fmtNum(duplicate)).toBe('0.05, P=0.050')
   })
 
+  it('renders a change directionally rather than as a range', () => {
+    expect(fmtNum(q({
+      quantity_type: 'change', first_value: 2.4, second_value: 9.5, unit: '%',
+      source_quote: 'DCD HTx increased from 2.4% to 9.5%',
+    }))).toBe('from 2.4 to 9.5 %')
+  })
+
+  it('renders comparison labels beside the correct values', () => {
+    expect(fmtNum(q({
+      quantity_type: 'comparison',
+      first_label: 'Period 2', first_value: 24,
+      second_label: 'period 1', second_value: 40,
+      unit: 'days',
+      source_quote: 'Period 2 had 24 versus 40 days in period 1',
+    }))).toBe('Period 2: 24 versus period 1: 40 days')
+  })
+
   it('renders the quote\'s operator, never an invented "="', () => {
     expect(fmtNum(q({ value: 0.001, p_value: 0.001, source_quote: '(P<0·001)' }))).toBe('0·001, P<0·001')
     expect(fmtNum(q({ value: 0.05, p_value: 0.05, source_quote: 'P>0.05' }))).toBe('0.05, P>0.05')

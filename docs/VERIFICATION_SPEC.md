@@ -26,7 +26,7 @@ truth from the fetched source text.
 free-form output. Three properties make it real:
 
 1. **Constrained output surface.** The model is only permitted to emit
-   `(scalar-or-range, source_quote, location)` tuples. The extraction schema has **no field for a
+   `(typed quantity, source_quote, location)` tuples. The extraction schema has **no field for a
    free-floating numeric claim** — the model cannot say "a large benefit" with a number
    attached; it can only fill slots that each carry their own receipt. The gate is the
    *shape* of what the model is allowed to say.
@@ -51,8 +51,8 @@ free-form output. Three properties make it real:
 
 ## Algorithm
 
-For each extracted quantity `q` (with either scalar `q.value` or both
-`q.range_low`/`q.range_high`, plus optional `q.ci_low`, `q.ci_high`, `q.p_value`,
+For each extracted quantity `q` (a `single`, `range`, `change`, or `comparison`, with
+the corresponding value fields, plus optional `q.ci_low`, `q.ci_high`, `q.p_value`,
 `q.source_quote`, `q.location_hint`), against `sourceText`:
 
 ### 1. Normalize (both quote and source text)
@@ -76,9 +76,11 @@ Instead:
 - Regex **all numeric tokens** out of the **matched span** (boundary-delimited:
   `(?<![\d.])\d+(?:\.\d+)?(?![\d.])` after normalization).
 - Parse each to a float → `quoteNums`.
-- Require exactly one estimate shape: a scalar value, or both endpoints of a reported
-  estimate range. A partial range or scalar-plus-range tuple is flagged.
-- For each of `q.value`, `q.range_low`, `q.range_high`, `q.ci_low`, `q.ci_high`,
+- Require exactly one declared estimate shape: a scalar, true range, directional change,
+  or labeled group comparison. Changes preserve earlier-to-later order. Comparisons
+  require both group labels to occur in the quote. Mixed or incomplete shapes are flagged.
+- For each of `q.value`, `q.range_low`, `q.range_high`, `q.first_value`,
+  `q.second_value`, `q.ci_low`, `q.ci_high`,
   `q.p_value` that is present, require
   a float in `quoteNums` that is **representation-equal**: equal after normalizing
   `0.84 = .84 = 0.840`. Compare with an epsilon that only absorbs float

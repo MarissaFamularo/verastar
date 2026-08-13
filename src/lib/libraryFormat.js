@@ -101,6 +101,7 @@ export function sourceNoteMd(paper) {
     ['domain', domainLabel(p.domain)],
     ['tags', p.tags || []],
     ['pdf', p.pdfUrl || ''],
+    ['extraction_version', p.extractionVersion || 'legacy'],
     ['saved', p.savedAt || ''],
   ])
 
@@ -123,7 +124,11 @@ export function sourceNoteMd(paper) {
   }
 
   const quantities = (p.quantities || []).filter(
-    (q) => q && (q.value != null || (q.range_low != null && q.range_high != null)),
+    (q) => q && (
+      q.value != null ||
+      (q.range_low != null && q.range_high != null) ||
+      (q.first_value != null && q.second_value != null)
+    ),
   )
   if (quantities.length) {
     parts.push('', '## Verified evidence', '')

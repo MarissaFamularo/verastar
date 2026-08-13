@@ -21,6 +21,7 @@ import {
   searchPaceMs,
 } from './sources.js'
 import { extractQuantities } from './extract.js'
+import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 import { citationIndicatesRetraction } from './retractions.js'
 import { verify, normalize, extractNumbers, numbersEqual } from './verify.js'
 import {
@@ -239,6 +240,7 @@ export async function runPaper(paper, { onStage } = {}) {
       paper,
       citation,
       design: extracted.design,
+      extractionVersion: CURRENT_EXTRACTION_VERSION,
       source: { tier: source.tier, hasBody: source.hasBody, pmcid: source.pmcid || null },
       sourceDoc: { text: source.text, tables: source.tables }, // kept for corrupt-reverify
       rows,

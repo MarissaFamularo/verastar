@@ -47,10 +47,10 @@ export const SELECTION_SCHEMA = {
 // Naming what each band MEANS is what makes the number a measurement instead of a mood.
 export const SCALE = `SCORING SCALE — use the whole range, and place each paper by what the band MEANS, not by ranking it against the other candidates:
 
-- 85–100 — practice-changing for a north star or active project. A well-powered trial, meta-analysis, or major guideline, in a strong journal, that could change what they do or how they counsel a patient.
-- 70–84 — worth their morning. Solid evidence bearing directly on a north star or active project: a good cohort study, a substantive review, a capable paper in a leading journal of their field. They would be glad they read it. THIS IS THE ORDINARY BAND FOR A GOOD PAPER — most days should produce several, and a paper does not have to be practice-changing to belong here.
-- 40–69 — adjacent. Right topic, but weaker design, a tangential angle, or an incremental result. Worth seeing only on a thin day.
-- 20–39 — on-topic but low-yield: single-center case series, niche technique notes, narrow descriptive work.
+- 85–100 — indispensable for a north star or active project: landmark, indication-defining, field-leading, rare long-term, or otherwise capable of materially changing the clinician's understanding, decisions, or research direction.
+- 70–84 — worth their morning. Bears directly and meaningfully on a north star or active project; they would be glad they read it. THIS IS THE ORDINARY BAND FOR A GOOD PAPER — most days should produce several, and a paper does not have to be practice-changing to belong here.
+- 40–69 — adjacent. Right topic, but tangential, incremental, duplicative, or unlikely to affect the clinician's understanding or work. Worth seeing only on a thin day.
+- 20–39 — on-topic but low editorial yield: niche detail, narrow descriptive work, or little new information for the clinician's stated priorities.
 - 0–19 — off-topic, or explicitly the kind of thing the rubric says to skip.
 
 The rubric's exclusions define what lands in 0–19. They do NOT drag down papers outside those categories: a solid study the rubric never spoke against belongs in 70–84 on its merits, and a rubric written mostly as a list of things to skip is still asking for the good papers to score like good papers. Do not compress the whole pool downward because most candidates are ordinary — score each paper against the bands, not against the field.`
@@ -59,7 +59,11 @@ const SYSTEM = `You are the gatekeeper for a busy clinician's morning literature
 
 ${SCALE}
 
-The rubric is the deciding voice — honor what it says to prioritize, downrank, and skip. Each candidate may include the search topic that found it and the north star explicitly mapped to that topic. Use that mapping as the paper's intended steering context; never invent a mapping for an unmapped topic. Use the abstract to judge topic, design, and likely clinical value; use journal and publication type as evidence-strength signals. If an abstract is unavailable, judge from the metadata without inventing findings. Return only id and score for every candidate id you were given.`
+The rubric is the deciding voice — honor what it says to prioritize, downrank, and skip. Each candidate may include the search topic that found it and the north star explicitly mapped to that topic. Use that mapping as the paper's intended steering context; never invent a mapping for an unmapped topic.
+
+SEPARATE EDITORIAL IMPORTANCE FROM EVIDENCE STRENGTH. This score decides whether the paper deserves the clinician's attention; it is not an evidence-grade score. Do not automatically downrank a paper because it is small, single-center, observational, or lacks external validation. Ask what evidence is realistically attainable for this question: an indication-defining study, field-leading prospective series, or rare long-term follow-up may be highly important even when its design limits generalizability. Conversely, do not promote a paper merely because it is randomized, multicenter, large, or a systematic review. Design and journal may affect the score when the clinician's rubric explicitly prioritizes them or when they materially change the paper's likely editorial value, but never use a design label as a substitute for importance.
+
+If an abstract is unavailable, judge from the metadata without inventing findings. Return only id and score for every candidate id you were given.`
 
 const selectionError = () => new Error("We couldn't finish scoring these papers. Please try again.")
 
@@ -250,7 +254,7 @@ export function capScoredByTopic(scored, { cap, counts = [] } = {}) {
   return { candidates: retained, counts: cappedCounts, prescored: candidates.length }
 }
 
-const candidateTopics = (candidate) => {
+export const candidateTopics = (candidate) => {
   const seen = new Set()
   return (Array.isArray(candidate?.topics) ? candidate.topics : [])
     .map((topic) => String(topic || '').trim())
@@ -260,6 +264,95 @@ const candidateTopics = (candidate) => {
       seen.add(key)
       return true
     })
+}
+
+// Per-topic audit rows count one paper once for every topic it matched, while the funnel
+// headline counts unique papers. Return both denominators so the UI can reconcile them
+// explicitly instead of leaving a mathematically impossible-looking table.
+export function topicAssignmentReconciliation(retainedCandidates, scoredCandidates) {
+  const summarize = (source, retained = false) => {
+    const list = Array.isArray(source) ? source : []
+    const unique = new Map()
+    list.forEach((candidate, index) => {
+      const id = String(candidate?.id ?? candidate?.pmid ?? `index:${index}`)
+      if (!unique.has(id)) unique.set(id, candidate)
+    })
+    const papers = [...unique.values()]
+    const topicCounts = papers.map((candidate) => candidateTopics({
+      topics: retained && Array.isArray(candidate?.retainedTopics) ? candidate.retainedTopics : candidate?.topics,
+    }).length)
+    return {
+      unique: papers.length,
+      assignments: topicCounts.reduce((sum, count) => sum + count, 0),
+      multiTopic: topicCounts.filter((count) => count > 1).length,
+      unattributed: topicCounts.filter((count) => count === 0).length,
+    }
+  }
+  return {
+    retained: summarize(retainedCandidates, true),
+    scored: summarize(scoredCandidates),
+  }
+}
+
+// A coverage slot is only useful if its topic survives the better-informed post-read
+// score. When a coverage-picked paper misses the final bar, choose at most one unread
+// replacement for each topic that would otherwise be empty. Thin topics go first; a
+// multi-topic replacement may rescue several at once. The replacement must still have
+// passed the permissive pre-read screen, and reading it does not guarantee admission.
+export function planCoverageFallbacks({ candidates, processedResults, visibleResults, rankings, floor, counts } = {}) {
+  const pool = Array.isArray(candidates) ? candidates : []
+  const processed = Array.isArray(processedResults) ? processedResults : []
+  const visible = Array.isArray(visibleResults) ? visibleResults : []
+  const bar = normalizeScoreFloor(floor)
+  const screenFloor = preReadFloor(bar)
+  const processedById = new Map(processed.map((result) => [String(result?.paper?.id ?? ''), result]))
+  const processedIds = new Set(processedById.keys())
+  const covered = new Set(visible
+    .filter((result) => !result?.error && !result?.retracted)
+    .flatMap((result) => candidateTopics(result?.paper))
+    .map((topic) => topic.toLocaleLowerCase()))
+
+  const empty = new Map()
+  for (const candidate of pool) {
+    if (candidate?.selectionRole !== 'coverage') continue
+    const result = processedById.get(String(candidate.id))
+    if (!result || result.error || result.retracted) continue
+    if (Number(rankings?.[candidate.id]?.score) >= bar) continue
+    for (const topic of candidateTopics(candidate)) {
+      const key = topic.toLocaleLowerCase()
+      if (!covered.has(key)) empty.set(key, topic)
+    }
+  }
+
+  const volumes = new Map((Array.isArray(counts) ? counts : []).map((row) => [
+    String(row?.label || '').trim().toLocaleLowerCase(),
+    Number(row?.prescored ?? row?.count ?? Infinity),
+  ]))
+  const orderedTopics = [...empty.entries()].sort((a, b) =>
+    (volumes.get(a[0]) ?? Infinity) - (volumes.get(b[0]) ?? Infinity) || a[1].localeCompare(b[1]),
+  )
+  const assigned = new Set()
+  const picked = []
+  const pickedIds = new Set()
+
+  for (const [topicKey] of orderedTopics) {
+    if (assigned.has(topicKey)) continue
+    const next = pool.find((candidate) =>
+      !processedIds.has(String(candidate.id)) &&
+      !pickedIds.has(String(candidate.id)) &&
+      Number(candidate?.score) >= screenFloor &&
+      candidateTopics(candidate).some((topic) => topic.toLocaleLowerCase() === topicKey),
+    )
+    if (!next) continue
+    picked.push(next)
+    pickedIds.add(String(next.id))
+    for (const topic of candidateTopics(next)) {
+      const key = topic.toLocaleLowerCase()
+      if (empty.has(key)) assigned.add(key)
+    }
+  }
+
+  return { candidates: picked, emptyTopics: [...empty.values()], rescuedTopics: [...assigned], floor: bar }
 }
 
 // Floor first, THEN coverage, THEN score fill. `scored` is already sorted highest-first.

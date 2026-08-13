@@ -8,6 +8,8 @@ import { fetchAbstractsByPmid } from './sources.js'
 import {
   applyScoreFloor,
   applyPostReadFloor,
+  planCoverageFallbacks,
+  topicAssignmentReconciliation,
   normalizeScoreFloor,
   preReadFloor,
   floorSummary,
@@ -72,6 +74,105 @@ describe('applyPostReadFloor', () => {
     const out = applyPostReadFloor([{ paper: { id: 'p' } }], { p: { score: 54 } }, 55)
     expect(out.kept).toEqual([])
     expect(out.cleared).toBe(0)
+  })
+})
+
+describe('planCoverageFallbacks', () => {
+  const result = (id, topics, extra = {}) => ({ paper: { id, topics }, ...extra })
+
+  it('reads the next eligible candidate when a coverage topic is empty after reading', () => {
+    const candidates = [
+      { id: 'first', score: 82, topics: ['Transplant oncology'], selectionRole: 'coverage' },
+      { id: 'next', score: 78, topics: ['Transplant oncology'] },
+    ]
+    const out = planCoverageFallbacks({
+      candidates,
+      processedResults: [result('first', ['Transplant oncology'])],
+      visibleResults: [],
+      rankings: { first: { score: 50 } },
+      floor: 55,
+    })
+    expect(out.candidates.map((candidate) => candidate.id)).toEqual(['next'])
+    expect(out.emptyTopics).toEqual(['Transplant oncology'])
+  })
+
+  it('does nothing when another admitted paper already covers the protected topic', () => {
+    const candidates = [
+      { id: 'first', score: 82, topics: ['HCC'], selectionRole: 'coverage' },
+      { id: 'next', score: 78, topics: ['HCC'] },
+    ]
+    const out = planCoverageFallbacks({
+      candidates,
+      processedResults: [result('first', ['HCC']), result('kept', ['HCC'])],
+      visibleResults: [result('kept', ['HCC'])],
+      rankings: { first: { score: 50 }, kept: { score: 80 } },
+      floor: 55,
+    })
+    expect(out.candidates).toEqual([])
+  })
+
+  it('prioritizes thin topics and permits only one fallback per empty topic', () => {
+    const candidates = [
+      { id: 'crowded-first', score: 90, topics: ['Crowded'], selectionRole: 'coverage' },
+      { id: 'thin-first', score: 85, topics: ['Thin'], selectionRole: 'coverage' },
+      { id: 'thin-next', score: 70, topics: ['Thin'] },
+      { id: 'thin-third', score: 69, topics: ['Thin'] },
+      { id: 'crowded-next', score: 80, topics: ['Crowded'] },
+    ]
+    const out = planCoverageFallbacks({
+      candidates,
+      processedResults: [result('crowded-first', ['Crowded']), result('thin-first', ['Thin'])],
+      visibleResults: [],
+      rankings: { 'crowded-first': { score: 40 }, 'thin-first': { score: 45 } },
+      floor: 55,
+      counts: [{ label: 'Crowded', prescored: 32 }, { label: 'Thin', prescored: 3 }],
+    })
+    expect(out.candidates.map((candidate) => candidate.id)).toEqual(['thin-next', 'crowded-next'])
+  })
+
+  it('never spends a fallback read on a paper below the permissive pre-read floor', () => {
+    const out = planCoverageFallbacks({
+      candidates: [
+        { id: 'first', score: 60, topics: ['Thin'], selectionRole: 'coverage' },
+        { id: 'weak', score: 34, topics: ['Thin'] },
+      ],
+      processedResults: [result('first', ['Thin'])],
+      visibleResults: [],
+      rankings: { first: { score: 40 } },
+      floor: 55,
+    })
+    expect(out.candidates).toEqual([])
+  })
+})
+
+describe('topicAssignmentReconciliation', () => {
+  it('reconciles unique papers with duplicated per-topic assignments', () => {
+    const retained = [
+      { id: 'a', topics: ['Allocation', 'Equity'] },
+      { id: 'b', topics: ['Allocation'] },
+      { id: 'c', topics: ['Machine perfusion'] },
+    ]
+    const scored = [...retained, { id: 'd', topics: ['Equity', 'Methods', 'Registry'] }]
+    expect(topicAssignmentReconciliation(retained, scored)).toEqual({
+      retained: { unique: 3, assignments: 4, multiTopic: 1, unattributed: 0 },
+      scored: { unique: 4, assignments: 7, multiTopic: 2, unattributed: 0 },
+    })
+  })
+
+  it('deduplicates repeated candidate records and reports missing attribution honestly', () => {
+    const repeated = { id: 'a', topics: ['Allocation'] }
+    expect(topicAssignmentReconciliation([repeated, repeated, { id: 'b' }], [])).toEqual({
+      retained: { unique: 2, assignments: 1, multiTopic: 0, unattributed: 1 },
+      scored: { unique: 0, assignments: 0, multiTopic: 0, unattributed: 0 },
+    })
+  })
+
+  it('uses post-cap retained topics for retained assignments but all matches for scored assignments', () => {
+    const candidate = { id: 'cross', topics: ['A', 'B'], retainedTopics: ['A'] }
+    expect(topicAssignmentReconciliation([candidate], [candidate])).toEqual({
+      retained: { unique: 1, assignments: 1, multiTopic: 0, unattributed: 0 },
+      scored: { unique: 1, assignments: 2, multiTopic: 1, unattributed: 0 },
+    })
   })
 })
 
@@ -222,6 +323,13 @@ describe('the scoring scale is anchored to the floor', () => {
 
   it('forbids scoring papers relative to the pool, which is what compressed it downward', () => {
     expect(SCALE).toMatch(/not (by ranking it )?against the other candidates|not against the field/i)
+  })
+
+  it('anchors the highest band to editorial importance without making conventional design a prerequisite', () => {
+    const topBand = SCALE.split('\n').find((l) => l.trim().startsWith('- 85'))
+    expect(topBand).toMatch(/indication-defining/i)
+    expect(topBand).toMatch(/rare long-term/i)
+    expect(topBand).not.toMatch(/well-powered|meta-analysis|strong journal/i)
   })
 })
 

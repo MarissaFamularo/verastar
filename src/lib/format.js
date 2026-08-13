@@ -106,9 +106,21 @@ export function pOperator(quantity) {
 // otherwise it renders operator-free ("P 0.02") — an "=" the source never said is a
 // misstatement in the fact channel.
 export function fmtNum(q) {
+  const hasPair = q.first_value != null && q.second_value != null
   const hasRange = q.range_low != null && q.range_high != null
-  if (q.value == null && !hasRange) return ''
-  let s = hasRange ? printedRange(q) : printedValue(q, 'value')
+  if (q.value == null && !hasRange && !hasPair) return ''
+  let s
+  if (hasPair && q.quantity_type === 'change') {
+    const first = printedValue(q, 'first_value')
+    const second = printedValue(q, 'second_value')
+    s = q.first_label && q.second_label
+      ? `${q.first_label}: ${first} to ${q.second_label}: ${second}`
+      : `from ${first} to ${second}`
+  } else if (hasPair && q.quantity_type === 'comparison') {
+    s = `${q.first_label}: ${printedValue(q, 'first_value')} versus ${q.second_label}: ${printedValue(q, 'second_value')}`
+  } else {
+    s = hasRange ? printedRange(q) : printedValue(q, 'value')
+  }
   if (q.unit) s += ` ${q.unit}`
   if (q.ci_low != null && q.ci_high != null) {
     s += ` (CI ${printedValue(q, 'ci_low')}–${printedValue(q, 'ci_high')})`

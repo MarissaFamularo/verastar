@@ -286,7 +286,8 @@ function locate(normQuote, normCorpus) {
 // --- The gate -----------------------------------------------------------------
 
 // verify(quantity, source, opts)
-//   quantity : { value?, range_low?, range_high?, ci_low?, ci_high?, p_value?,
+//   quantity : { quantity_type?, value?, range_low?, range_high?, first_label?,
+//                first_value?, second_label?, second_value?, ci_low?, ci_high?, p_value?,
 //                source_quote, location_hint? }
 //   source   : string  OR  { text?: string, tables?: string }
 //   opts     : { sourceTier?: 'full_text' | 'abstract_only',  // default 'full_text'
@@ -334,6 +335,8 @@ export function verify(quantity, source, opts = {}) {
   if (quantity.value != null) present.push(['value', quantity.value])
   if (quantity.range_low != null) present.push(['range_low', quantity.range_low])
   if (quantity.range_high != null) present.push(['range_high', quantity.range_high])
+  if (quantity.first_value != null) present.push(['first_value', quantity.first_value])
+  if (quantity.second_value != null) present.push(['second_value', quantity.second_value])
   if (quantity.ci_low != null) present.push(['ci_low', quantity.ci_low])
   if (quantity.ci_high != null) present.push(['ci_high', quantity.ci_high])
   if (quantity.p_value != null) present.push(['p_value', quantity.p_value])
@@ -342,19 +345,33 @@ export function verify(quantity, source, opts = {}) {
   for (const [, num] of present) {
     if (!someEqual(quoteNums, num)) badNums.push(num)
   }
-  // Exactly one estimate shape is valid. Legacy scalar records omit the range fields,
-  // which is equivalent to both being null and remains backward-compatible. A partial
-  // range, no estimate, or scalar+range tuple must never earn a verified badge even if
-  // the quote itself happens to be locatable.
+  // Exactly one semantic estimate shape is valid. Legacy records have no quantity_type;
+  // infer only scalar or range so already-saved evidence remains readable. New two-value
+  // records must declare whether they are a change or comparison and carry both labels.
   const hasScalar = quantity.value != null
   const hasRangeLow = quantity.range_low != null
   const hasRangeHigh = quantity.range_high != null
-  const validEstimateShape = hasScalar
-    ? !hasRangeLow && !hasRangeHigh
-    : hasRangeLow && hasRangeHigh
+  const hasFirst = quantity.first_value != null
+  const hasSecond = quantity.second_value != null
+  const firstLabel = String(quantity.first_label || '').trim()
+  const secondLabel = String(quantity.second_label || '').trim()
+  const declaredType = quantity.quantity_type || (hasScalar ? 'single' : (hasRangeLow && hasRangeHigh ? 'range' : ''))
+  const labelsInQuote = firstLabel && secondLabel &&
+    normQuote.includes(normalize(firstLabel)) && normQuote.includes(normalize(secondLabel))
+  const noLabels = !firstLabel && !secondLabel
+  const scalarShape = hasScalar && !hasRangeLow && !hasRangeHigh && !hasFirst && !hasSecond && !firstLabel && !secondLabel
+  const rangeShape = !hasScalar && hasRangeLow && hasRangeHigh && !hasFirst && !hasSecond && !firstLabel && !secondLabel
+  const pairedBase = !hasScalar && !hasRangeLow && !hasRangeHigh && hasFirst && hasSecond
+  const validEstimateShape = declaredType === 'single'
+    ? scalarShape
+    : declaredType === 'range'
+      ? rangeShape
+      : declaredType === 'change'
+        ? pairedBase && (noLabels || !!labelsInQuote)
+        : declaredType === 'comparison' && pairedBase && !!labelsInQuote
   const shapeError = validEstimateShape
     ? ''
-    : 'Quantity must contain either one scalar value or both endpoints of one reported range.'
+    : 'Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison.'
   // If the quote wasn't located, consistency is moot — it's flagged regardless.
   const consistent = found && validEstimateShape && badNums.length === 0
 

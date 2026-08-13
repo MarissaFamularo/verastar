@@ -108,19 +108,25 @@
     "study_id":{"type":"string"},
     "design":{"type":"string","enum":["RCT","prospective_cohort","retrospective_cohort","meta_analysis","single_arm","case_series","other"]},
     "quantities":{"type":"array","items":{"type":"object","additionalProperties":false,
-      "required":["name","value","range_low","range_high","unit","ci_low","ci_high","p_value","source_quote","location_hint"],
+      "required":["name","quantity_type","value","range_low","range_high","first_label","first_value","second_label","second_value","unit","ci_low","ci_high","p_value","source_quote","location_hint"],
       "properties":{
         "name":{"type":"string"},
+        "quantity_type":{"type":"string","enum":["single","range","change","comparison"]},
         "value":{"anyOf":[{"type":"number"},{"type":"null"}]},
         "range_low":{"anyOf":[{"type":"number"},{"type":"null"}]},
         "range_high":{"anyOf":[{"type":"number"},{"type":"null"}]},
+        "first_label":{"anyOf":[{"type":"string"},{"type":"null"}]},
+        "first_value":{"anyOf":[{"type":"number"},{"type":"null"}]},
+        "second_label":{"anyOf":[{"type":"string"},{"type":"null"}]},
+        "second_value":{"anyOf":[{"type":"number"},{"type":"null"}]},
         "unit":{"anyOf":[{"type":"string"},{"type":"null"}]},
         "ci_low":{"anyOf":[{"type":"number"},{"type":"null"}]},
         "ci_high":{"anyOf":[{"type":"number"},{"type":"null"}]},
         "p_value":{"anyOf":[{"type":"number"},{"type":"null"}]},
         "source_quote":{"type":"string"},"location_hint":{"type":"string"}}}}}}
 ```
-Each quantity uses exactly one estimate shape: scalar `value`, or both
-`range_low`/`range_high`. A reported estimate range is distinct from a confidence interval.
+Each quantity declares exactly one semantic estimate shape: `single`, `range`, `change`,
+or `comparison`. Changes preserve time direction; comparisons keep each exact source group
+label beside its value. A reported estimate range is distinct from both and from a confidence interval.
 `design` drives the refuse-to-pool guard. `source_quote` + `location_hint` are inputs to
 verify — trusted by nothing until matched against source text.

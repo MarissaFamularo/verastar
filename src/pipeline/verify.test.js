@@ -202,7 +202,53 @@ describe('verify — EVAL adversarial triples', () => {
     )
     expect(partial.tier).toBe(TIERS.FLAGGED)
     expect(collapsed.tier).toBe(TIERS.FLAGGED)
-    expect(partial.shapeError).toMatch(/either one scalar value or both endpoints/)
+    expect(partial.shapeError).toMatch(/exactly one declared shape/)
+  })
+
+  it('verifies a directional change without misclassifying it as a range', () => {
+    const source = 'DCD HTx has increased from 2.4% to 9.5% during the study period.'
+    const v = verify(q({
+      quantity_type: 'change',
+      value: null,
+      range_low: null,
+      range_high: null,
+      first_label: null,
+      first_value: 2.4,
+      second_label: null,
+      second_value: 9.5,
+      source_quote: 'DCD HTx has increased from 2.4% to 9.5%',
+    }), source)
+    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.badNums).toEqual([])
+  })
+
+  it('verifies a comparison only when each value retains its source group label', () => {
+    const source = 'Period 2 had a shorter median waitlist than period 1 (24 versus 40 days).'
+    const quantity = {
+      quantity_type: 'comparison',
+      value: null,
+      range_low: null,
+      range_high: null,
+      first_label: 'Period 2',
+      first_value: 24,
+      second_label: 'period 1',
+      second_value: 40,
+      source_quote: 'Period 2 had a shorter median waitlist than period 1 (24 versus 40 days)',
+    }
+    expect(verify(q(quantity), source).tier).toBe(TIERS.FULL_TEXT)
+    expect(verify(q({ ...quantity, first_label: null }), source).tier).toBe(TIERS.FLAGGED)
+    expect(verify(q({ ...quantity, first_label: 'Later cohort' }), source).tier).toBe(TIERS.FLAGGED)
+  })
+
+  it('[false-verify guard] rejects change or comparison values stored as a range', () => {
+    const source = 'The rate increased from 2.4% to 9.5%.'
+    const v = verify(q({
+      quantity_type: 'change', value: null, range_low: 2.4, range_high: 9.5,
+      first_label: null, first_value: null, second_label: null, second_value: null,
+      source_quote: 'increased from 2.4% to 9.5%',
+    }), source)
+    expect(v.tier).toBe(TIERS.FLAGGED)
+    expect(v.shapeError).toMatch(/labeled change/i)
   })
 
   it('[false-verify guard] integer collision: claim 84 (an N), quote has 1984 only -> flagged', () => {
