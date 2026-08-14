@@ -30,6 +30,16 @@ import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
 import { fmtNum } from '../lib/format.js'
 import { extractionVersionStatus } from '../lib/evidenceVersion.js'
+import { needsDigestDetails, refreshSavedPaperEvidence } from '../pipeline/refreshEvidence.js'
+
+const REFRESH_STAGE_LABEL = {
+  fetching: 'Fetching…',
+  extracting: 'Extracting…',
+  verifying: 'Verifying…',
+  summarizing: 'Summarizing…',
+  saving: 'Saving…',
+  done: 'Done',
+}
 
 export default function KnowledgeBase() {
   const [concepts, setConcepts] = useState([])
@@ -113,6 +123,12 @@ export default function KnowledgeBase() {
 
   async function removePaperTag(paper, tag) {
     await savePaper(paper.id, { tags: (paper.tags || []).filter((t) => t !== tag) })
+  }
+
+  async function createDigestDetails(paper, onStage) {
+    const next = await refreshSavedPaperEvidence(paper, { onStage })
+    setPapers((prev) => prev.map((p) => (p.id === paper.id ? next : p)))
+    return next
   }
 
   // Through lib/favorites.js, NOT the local savePaper patch — the heart must log its
@@ -383,6 +399,8 @@ export default function KnowledgeBase() {
                 onDeleteConcept={() => deleteConcept(group)}
                 onDeletePaper={deletePaper}
                 onToggleFavorite={toggleFavorite}
+                onCreateDetails={createDigestDetails}
+                canCreateDetails={keySet}
               />
             ))}
             {unfiled.length > 0 && (
@@ -392,7 +410,7 @@ export default function KnowledgeBase() {
                 </p>
                 <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {unfiled.map((p) => (
-                    <PaperRow key={p.id} paper={p} onRemoveTag={(t) => removePaperTag(p, t)} onSaveNote={(notes) => savePaper(p.id, { notes })} onDelete={() => deletePaper(p)} onToggleFavorite={() => toggleFavorite(p)} />
+                    <PaperRow key={p.id} paper={p} onRemoveTag={(t) => removePaperTag(p, t)} onSaveNote={(notes) => savePaper(p.id, { notes })} onDelete={() => deletePaper(p)} onToggleFavorite={() => toggleFavorite(p)} onCreateDetails={(onStage) => createDigestDetails(p, onStage)} canCreateDetails={keySet} />
                   ))}
                 </ul>
               </div>
@@ -415,7 +433,7 @@ export default function KnowledgeBase() {
 // One concept node: colored TOPIC eyebrow + glow dot (the hub tier — falls back to the domain
 // for a hub-less concept), Spectral title, synthesized summary, prunable concept tags, and the
 // source papers under it (each with an editable note + tags).
-function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveConceptTag, onRemovePaperTag, onSaveNote, onDeleteConcept, onDeletePaper, onToggleFavorite }) {
+function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveConceptTag, onRemovePaperTag, onSaveNote, onDeleteConcept, onDeletePaper, onToggleFavorite, onCreateDetails, canCreateDetails }) {
   const [open, setOpen] = useState(true)
   const color = topicColor || domainColor(concept.domain)
   return (
@@ -451,7 +469,7 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
         <ul style={{ margin: 0, padding: 0, listStyle: 'none', borderTop: '1px solid var(--hairline)' }}>
           {papers.map((p, i) => (
             <li key={p.id} style={{ padding: '16px 26px', borderTop: i === 0 ? 'none' : '1px solid var(--hairline-soft)' }}>
-              <PaperRow paper={p} onRemoveTag={(t) => onRemovePaperTag(p, t)} onSaveNote={(notes) => onSaveNote(p.id, notes)} onDelete={() => onDeletePaper(p)} onToggleFavorite={() => onToggleFavorite(p)} />
+              <PaperRow paper={p} onRemoveTag={(t) => onRemovePaperTag(p, t)} onSaveNote={(notes) => onSaveNote(p.id, notes)} onDelete={() => onDeletePaper(p)} onToggleFavorite={() => onToggleFavorite(p)} onCreateDetails={(onStage) => onCreateDetails(p, onStage)} canCreateDetails={canCreateDetails} />
             </li>
           ))}
           {papers.length === 0 && (
@@ -465,17 +483,102 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
   )
 }
 
-// One saved paper: title, mono citation, collapsible finding, editable note, prunable tags, links.
-function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }) {
-  const [showFinding, setShowFinding] = useState(false)
-  const [showEvidence, setShowEvidence] = useState(false)
+// The saved snapshot from the paper's digest/manual-add run. One disclosure owns the whole
+// context so the summary, project connection, caution, verified values, and reading links do not
+// look like unrelated fragments. Exported for focused rendering tests.
+export function SavedDigestDetails({ paper }) {
+  const verifiedCount = Array.isArray(paper.quantities) ? paper.quantities.length : 0
+  const extractionStatus = extractionVersionStatus(paper)
+  const articleUrl = paper.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`
+  const fullTextUrl = paper.pdfUrl || paper.oaUrl || pmcUrl(paper.pmcid)
+
+  return (
+    <div style={{ marginTop: 10, borderRadius: 10, border: '1px solid var(--hairline)', background: 'rgba(255,255,255,.015)', padding: '12px 14px' }}>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: '.06em', color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>SAVED DIGEST DETAILS</p>
+
+      {paper.relevance && (
+        <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--color-accent)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
+          <span style={{ fontWeight: 600, color: 'var(--color-accent-bright)' }}>Why it connects to your work:</span>{' '}
+          {paper.relevance}
+        </p>
+      )}
+
+      {paper.finding && (
+        paper.check?.verdict === 'refuted' ? (
+          <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-abstract)' }}>
+            ⚠︎ Summary withheld — the source check couldn't confirm it
+            {paper.check?.reason ? ` (${paper.check.reason})` : ''}. Read the paper before repeating a takeaway.
+          </p>
+        ) : (
+          <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
+            <span style={{ fontWeight: 600, color: 'var(--color-fg-soft)' }}>Checked summary:</span>{' '}
+            {paper.finding}
+            {paper.check?.verdict === 'supported' && <span style={{ marginLeft: 5, color: 'var(--color-verified-soft)' }}>✓ checked</span>}
+          </p>
+        )
+      )}
+
+      {paper.designCaution && paper.cautionCheck?.verdict !== 'refuted' && (
+        <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--color-abstract)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
+          <span style={{ fontWeight: 600, color: 'var(--color-abstract)' }}>Design caution:</span>{' '}
+          {paper.designCaution}
+        </p>
+      )}
+
+      {verifiedCount > 0 ? (
+        <div style={{ marginTop: 10, borderRadius: 9, border: '1px solid rgba(127,191,154,.2)', background: 'rgba(127,191,154,.04)', padding: '8px 10px' }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>VERIFIED VALUES</p>
+          <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {paper.quantities.map((quantity, index) => (
+              <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
+                <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{fmtNum(quantity)}</span>
+                {quantity.source_quote && <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--color-fg-faint)' }}>&ldquo;{quantity.source_quote}&rdquo;</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p style={{ margin: '10px 0 0', fontSize: 11.5, lineHeight: 1.45, color: 'var(--color-fg-faint)', fontStyle: 'italic' }}>
+          {extractionStatus === 'legacy'
+            ? 'No verified values were saved with this legacy extraction.'
+            : 'No numerical claims were verified for this paper.'}
+        </p>
+      )}
+
+      {!paper.finding && !paper.relevance && !paper.designCaution && (
+        <p style={{ margin: '10px 0 0', fontSize: 11.5, lineHeight: 1.45, color: 'var(--color-fg-faint)', fontStyle: 'italic' }}>
+          No summary or connection to your work was saved with this paper.
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center" style={{ marginTop: 11, gap: 12 }}>
+        <a href={articleUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: 'var(--color-accent)' }}>
+          View article ↗
+        </a>
+        {fullTextUrl && (
+          <a href={fullTextUrl} target="_blank" rel="noopener noreferrer" style={{ borderRadius: 7, padding: '3px 9px', fontSize: 11, fontWeight: 600, color: '#fff', background: 'rgba(224,96,90,.85)' }}>
+            {paper.pdfUrl ? 'PDF' : paper.oaUrl ? 'Free full text' : 'Full text (PMC)'}
+          </a>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// One saved paper: title, mono citation, one digest-details disclosure, editable note, tags.
+export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite, onCreateDetails, canCreateDetails = true }) {
+  const [showDigestDetails, setShowDigestDetails] = useState(false)
+  const [refreshStage, setRefreshStage] = useState('')
+  const [refreshError, setRefreshError] = useState('')
   const [note, setNote] = useState(paper.notes || '')
   const dirty = note !== (paper.notes || '')
   const cite = [paper.citation?.author, paper.citation?.journal, paper.citation?.year].filter(Boolean).join(' · ')
   const retracted = paperIndicatesRetraction(paper)
-  const verifiedCount = Array.isArray(paper.quantities) ? paper.quantities.length : 0
   const hasScore = paper.score != null && Number.isFinite(Number(paper.score))
   const extractionStatus = extractionVersionStatus(paper)
+  const detailsId = `paper-details-${String(paper.id || paper.pmid).replace(/[^a-zA-Z0-9_-]/g, '-')}`
+  const canRefresh = needsDigestDetails(paper)
 
   const lastSaved = useRef(paper.notes || '')
   useEffect(() => {
@@ -489,6 +592,20 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }
     if (!dirty) return
     lastSaved.current = note
     onSaveNote(note)
+  }
+
+  async function createDetails() {
+    if (!canCreateDetails || !onCreateDetails || refreshStage) return
+    setRefreshError('')
+    setRefreshStage('fetching')
+    try {
+      await onCreateDetails((stage) => setRefreshStage(stage))
+      setShowDigestDetails(true)
+      setRefreshStage('')
+    } catch (err) {
+      setRefreshStage('')
+      setRefreshError(err?.message || 'Digest details could not be created. The saved paper was not changed.')
+    }
   }
 
   const pill = { borderRadius: 7, padding: '3px 9px', fontSize: 11, background: 'var(--surface-2)', color: 'var(--color-fg-dim)', border: 0, cursor: 'pointer' }
@@ -539,64 +656,37 @@ function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFavorite }
             {extractionStatus === 'legacy' ? 'Legacy extraction' : 'Extraction update available'}
           </span>
         )}
-        {(paper.finding || paper.designCaution || paper.relevance) && (
-          <button onClick={() => setShowFinding((s) => !s)} style={pill}>{showFinding ? 'Hide summary' : 'Summary'}</button>
-        )}
-        {verifiedCount > 0 && (
-          <button onClick={() => setShowEvidence((s) => !s)} style={{ ...pill, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>
-            {verifiedCount} verified value{verifiedCount === 1 ? '' : 's'} {showEvidence ? '▴' : '▾'}
-          </button>
-        )}
-        <a href={paper.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: 'var(--color-accent)' }}>
-          View article ↗
-        </a>
+        <button
+          type="button"
+          onClick={() => setShowDigestDetails((open) => !open)}
+          aria-expanded={showDigestDetails}
+          aria-controls={detailsId}
+          style={{ ...pill, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}
+        >
+          {showDigestDetails ? '▾ Hide digest details' : '▸ Digest details'}
+        </button>
         <button onClick={share} style={{ ...pill, background: 'rgba(239,143,91,.14)', color: 'var(--color-accent-bright)', fontWeight: 600 }}>Share ↑</button>
-        {(paper.pdfUrl || paper.oaUrl || paper.pmcid) && (
-          <a href={paper.pdfUrl || paper.oaUrl || pmcUrl(paper.pmcid)} target="_blank" rel="noopener noreferrer" style={{ borderRadius: 7, padding: '3px 9px', fontSize: 11, fontWeight: 600, color: '#fff', background: 'rgba(224,96,90,.85)' }}>
-            {paper.pdfUrl ? 'PDF' : paper.oaUrl ? 'Free full text' : 'Full text (PMC)'}
-          </a>
+        {canRefresh && (
+          <button
+            type="button"
+            onClick={createDetails}
+            disabled={!canCreateDetails || !!refreshStage}
+            title={!canCreateDetails ? 'Set your API key in Settings to create digest details with Claude' : 'Uses your Claude key to re-read and verify this paper'}
+            style={{ ...pill, background: 'rgba(230,184,119,.12)', color: 'var(--color-abstract)', fontWeight: 600, opacity: !canCreateDetails || refreshStage ? 0.55 : 1 }}
+          >
+            {refreshStage ? (REFRESH_STAGE_LABEL[refreshStage] || 'Working…') : '✦ Create digest details'}
+          </button>
         )}
         <button onClick={onDelete} className="cursor-pointer" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-fg-faint)', background: 'transparent', border: 0 }}>Delete</button>
       </div>
 
-      {/* A finding the prose gate refuted is withheld here too — the Library shows the digest's
-          warning copy instead of the sentence. 'unchecked'/'supported' render unchanged. */}
-      {showFinding && paper.finding && (
-        paper.check?.verdict === 'refuted' ? (
-          <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-abstract)' }}>
-            ⚠︎ Summary withheld — the source check couldn't confirm it
-            {paper.check?.reason ? ` (${paper.check.reason})` : ''}. Read the paper before repeating a takeaway.
-          </p>
-        ) : (
-          <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>{paper.finding}</p>
-        )
-      )}
-      {showFinding && paper.designCaution && paper.cautionCheck?.verdict !== 'refuted' && (
-        <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--color-abstract)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
-          <span style={{ fontWeight: 600, color: 'var(--color-abstract)' }}>Design caution:</span>{' '}
-          {paper.designCaution}
+      {refreshError && (
+        <p role="alert" style={{ margin: '8px 0 0', fontSize: 11.5, lineHeight: 1.45, color: 'var(--color-domain-vascular)' }}>
+          {refreshError}
         </p>
       )}
-      {showFinding && paper.relevance && (
-        <p style={{ margin: '9px 0 0', borderLeft: '2px solid var(--color-accent)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
-          <span style={{ fontWeight: 600, color: 'var(--color-accent-bright)' }}>Why it fits:</span>{' '}
-          {paper.relevance}
-        </p>
-      )}
-      {showEvidence && verifiedCount > 0 && (
-        <div style={{ marginTop: 9, borderRadius: 9, border: '1px solid rgba(127,191,154,.2)', background: 'rgba(127,191,154,.04)', padding: '8px 10px' }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>VERIFIED VALUES</p>
-          <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {paper.quantities.map((quantity, index) => (
-              <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
-                <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{fmtNum(quantity)}</span>
-                {quantity.source_quote && <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--color-fg-faint)' }}>&ldquo;{quantity.source_quote}&rdquo;</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+
+      {showDigestDetails && <div id={detailsId}><SavedDigestDetails paper={paper} /></div>}
 
       <TagRow tags={paper.tags} onRemove={onRemoveTag} />
 
