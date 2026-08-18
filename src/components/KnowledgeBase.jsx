@@ -28,6 +28,7 @@ import { paperIndicatesRetraction, refreshSavedRetractions, removePaperFromConce
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
+import SharePaperButton from './SharePaperButton.jsx'
 import { fmtNum } from '../lib/format.js'
 import { extractionVersionStatus } from '../lib/evidenceVersion.js'
 import { needsDigestDetails, refreshSavedPaperEvidence } from '../pipeline/refreshEvidence.js'
@@ -610,28 +611,6 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
 
   const pill = { borderRadius: 7, padding: '3px 9px', fontSize: 11, background: 'var(--surface-2)', color: 'var(--color-fg-dim)', border: 0, cursor: 'pointer' }
 
-  // Share the paper itself (canonical PubMed/DOI link, not app state): native share sheet
-  // on phones, mailto fallback on desktop. A cancelled share sheet rejects — that's not an error.
-  async function share() {
-    const url = paper.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`
-    const text = [paper.title, cite].filter(Boolean).join(' — ')
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: paper.title, text, url })
-        // Only a COMPLETED share sheet lands here (cancel rejects above) — a real share is
-        // the strongest quality signal a paper can earn, so it's worth a telemetry row.
-        logEvent('paper_shared', { pmid: paper.pmid || paper.id, method: 'native' })
-      } catch {}
-    } else {
-      const ft = paper.pdfUrl || paper.oaUrl || pmcUrl(paper.pmcid)
-      const body = [text, url, ft && `Full text: ${ft}`].filter(Boolean).join('\n')
-      window.location.href = `mailto:?subject=${encodeURIComponent(paper.title)}&body=${encodeURIComponent(body)}`
-      // mailto hands off to the mail client — we can't see send vs abandon, so the event
-      // honestly records intent, not completion.
-      logEvent('paper_shared', { pmid: paper.pmid || paper.id, method: 'mailto' })
-    }
-  }
-
   return (
     <div>
       <p style={{ margin: 0, fontSize: 14.5, fontWeight: 500, color: 'var(--color-fg-soft)', lineHeight: 1.4 }}>{paper.title}</p>
@@ -665,7 +644,7 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
         >
           {showDigestDetails ? '▾ Hide digest details' : '▸ Digest details'}
         </button>
-        <button onClick={share} style={{ ...pill, background: 'rgba(239,143,91,.14)', color: 'var(--color-accent-bright)', fontWeight: 600 }}>Share ↑</button>
+        <SharePaperButton paper={paper} />
         {canRefresh && (
           <button
             type="button"

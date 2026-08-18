@@ -49,6 +49,7 @@ import { savePaper } from '../pipeline/save.js'
 import { setPaperFavorite } from '../lib/favorites.js'
 import { logEvent } from '../lib/events.js'
 import HeartButton from './HeartButton.jsx'
+import SharePaperButton from './SharePaperButton.jsx'
 import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
@@ -1560,7 +1561,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                 {!res.error && (!stage || stage === 'done') ? <VerificationChip count={verifiedRows.length} sourceTier={res.source?.tier} /> : stage && stage !== 'done' ? (
                   <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>{STAGE_LABEL[stage]}</span>
                 ) : null}
-                <div className="flex items-center" style={{ marginLeft: 'auto', gap: 14 }}>
+                <div className="flex flex-wrap items-center justify-end" style={{ marginLeft: 'auto', gap: 14, maxWidth: '100%' }}>
                   {readFitLabel(take) && (
                     <span
                       title="Fit to your rubric scored after the paper was fetched and read — not the pre-read title-abstract-and-journal screen the digest was selected on"
@@ -1569,6 +1570,18 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                     >
                       {readFitLabel(take)}
                     </span>
+                  )}
+                  {!res.error && (
+                    <SharePaperButton
+                      paper={{
+                        ...paper,
+                        title,
+                        citation: res.citation,
+                        oaUrl: res.oa?.url,
+                        pmcid: res.source?.pmcid,
+                      }}
+                      surface="digest"
+                    />
                   )}
                   {demo ? (
                     <span style={{ fontSize: 12, color: 'var(--color-fg-faint)' }}>Sample · read only</span>
