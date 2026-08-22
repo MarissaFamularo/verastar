@@ -20,6 +20,7 @@ import { backfillOaPdfs } from '../pipeline/save.js'
 import { pmcUrl } from '../pipeline/openaccess.js'
 import { listDomains, domainColor, domainLabel } from '../lib/domains.js'
 import { isSignedIn } from '../lib/supabase.js'
+import { PAPERTRELLIS_URL } from '../lib/trellis.js'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 import { useIsMobile } from '../lib/useMobile.js'
 import { setPaperFavorite } from '../lib/favorites.js'
@@ -625,6 +626,7 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
         <HeartButton active={!!paper.favorite} onClick={onToggleFavorite} />
         {hasScore && <span style={{ ...pill, cursor: 'default', fontFamily: 'var(--font-mono)', color: 'var(--color-accent-bright)' }}>Fit {Math.round(Number(paper.score))}</span>}
         {paper.saveSource === 'manual' && <span style={{ ...pill, cursor: 'default' }}>Added manually</span>}
+        {paper.saveSource === 'papertrellis' && <span style={{ ...pill, cursor: 'default' }}>From PaperTrellis</span>}
         {extractionStatus !== 'current' && (
           <span
             title={extractionStatus === 'legacy'
@@ -666,6 +668,25 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
       )}
 
       {showDigestDetails && <div id={detailsId}><SavedDigestDetails paper={paper} /></div>}
+
+      {Array.isArray(paper.trellisProjects) && paper.trellisProjects.length > 0 && (
+        <p style={{ margin: '8px 0 0', fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-fg-muted)' }}>
+          Used in PaperTrellis:{' '}
+          {paper.trellisProjects.map((project, index) => (
+            <span key={project.id || index}>
+              {index > 0 && ', '}
+              <a
+                href={`${PAPERTRELLIS_URL}/projects/${project.id}/literature`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: 'var(--color-verified-soft)', textDecoration: 'none' }}
+              >
+                {project.title || 'a project'}
+              </a>
+            </span>
+          ))}
+        </p>
+      )}
 
       <TagRow tags={paper.tags} onRemove={onRemoveTag} />
 

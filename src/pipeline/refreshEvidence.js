@@ -10,8 +10,12 @@ import { extractionVersionStatus } from '../lib/evidenceVersion.js'
 import { depositPaperToLibrary } from '../lib/library.js'
 import { runPaper } from './pipeline.js'
 import { triage } from './triage.js'
-import { buildPaperRecord } from './save.js'
+import { buildPaperRecord, mergeRefreshedEvidence } from './save.js'
 import { paperIndicatesRetraction } from './retractions.js'
+
+// Moved to save.js so the plain save path can reuse it; re-exported to keep this module's
+// public surface (and its tests) stable.
+export { mergeRefreshedEvidence } from './save.js'
 
 export function needsDigestDetails(paper) {
   if (!paper?.pmid || paperIndicatesRetraction(paper)) return false
@@ -19,33 +23,6 @@ export function needsDigestDetails(paper) {
   const hasValues = Array.isArray(paper.quantities) && paper.quantities.length > 0
   const incompleteLegacyEvidence = extractionVersionStatus(paper) !== 'current' && !hasValues
   return !hasSummary || incompleteLegacyEvidence
-}
-
-// Only evidence-owned fields are replaced. Everything the clinician did after saving the paper
-// stays exactly as it was, including notes, tags, favorites, concept placement, memos, and savedAt.
-export function mergeRefreshedEvidence(existing, fresh, refreshedAt = new Date().toISOString()) {
-  return {
-    ...existing,
-    pmid: fresh.pmid || existing.pmid,
-    pmcid: fresh.pmcid || existing.pmcid || null,
-    title: fresh.title || existing.title,
-    citation: fresh.citation || existing.citation || null,
-    design: fresh.design ?? null,
-    extractionVersion: fresh.extractionVersion || null,
-    score: fresh.score ?? null,
-    tier: fresh.tier ?? null,
-    finding: fresh.finding || '',
-    designCaution: fresh.designCaution || '',
-    relevance: fresh.relevance || '',
-    check: fresh.check || { verdict: 'unchecked', reason: '' },
-    cautionCheck: fresh.cautionCheck || { verdict: 'unchecked', reason: '' },
-    quantities: Array.isArray(fresh.quantities) ? fresh.quantities : [],
-    fullText: fresh.fullText || '',
-    tables: fresh.tables || '',
-    pdfUrl: fresh.pdfUrl || existing.pdfUrl || null,
-    oaUrl: fresh.oaUrl || existing.oaUrl || null,
-    evidenceRefreshedAt: refreshedAt,
-  }
 }
 
 function candidateFromResult(res, id) {

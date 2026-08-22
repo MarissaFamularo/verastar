@@ -99,3 +99,30 @@ describe('Library paper digest disclosure', () => {
     expect(disabled).toContain('Set your API key in Settings')
   })
 })
+
+describe('PaperTrellis provenance', () => {
+  it('shows the source pill and links each PaperTrellis project using the paper', () => {
+    const html = renderToStaticMarkup(React.createElement(PaperRow, {
+      paper: paper({
+        saveSource: 'papertrellis',
+        trellisProjects: [
+          { id: 'proj-1', title: 'CLTI Outcomes', addedAt: '2026-08-22T05:00:00.000Z' },
+          { id: 'proj-2', title: 'Carotid Review', addedAt: '2026-08-22T05:00:00.000Z' },
+        ],
+      }),
+      ...handlers,
+    }))
+
+    expect(html).toContain('From PaperTrellis')
+    expect(html).toContain('Used in PaperTrellis:')
+    expect(html).toContain('CLTI Outcomes')
+    expect(html).toContain('Carotid Review')
+    expect(html).toContain('/projects/proj-1/literature')
+  })
+
+  it('renders nothing extra for papers without provenance', () => {
+    const html = renderToStaticMarkup(React.createElement(PaperRow, { paper: paper(), ...handlers }))
+    expect(html).not.toContain('Used in PaperTrellis:')
+    expect(html).not.toContain('From PaperTrellis')
+  })
+})

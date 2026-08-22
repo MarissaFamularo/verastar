@@ -56,3 +56,34 @@ describe('buildPaperRecord — design appraisal survives a manual or digest save
     expect(paper.score).toBe(58)
   })
 })
+
+describe('mergeRefreshedEvidence — a re-save or refresh never destroys curation', () => {
+  it('replaces the evidence channel while keeping user- and foreign-owned fields', async () => {
+    const { mergeRefreshedEvidence } = await import('./save.js')
+    const existing = {
+      id: '1', pmid: '1', title: 'Old title',
+      tags: ['aorta'], notes: 'my note', favorite: true, conceptId: 'c1',
+      domain: 'vascular', savedAt: '2026-08-01T00:00:00.000Z', saveSource: 'papertrellis',
+      vaultWrittenAt: '2026-08-02T00:00:00.000Z',
+      trellisProjects: [{ id: 'proj-1', title: 'CLTI Outcomes', addedAt: '2026-08-01T00:00:00.000Z' }],
+      finding: '', quantities: [],
+    }
+    const base = { paper: { id: '1', pmid: '1' }, citation: { title: 'New title' }, source: {}, sourceDoc: { text: 'body' }, rows: [] }
+    const fresh = buildPaperRecord(base, { finding: 'New finding', score: 70 }, { source: 'digest' })
+
+    const next = mergeRefreshedEvidence(existing, fresh, '2026-08-22T05:00:00.000Z')
+
+    expect(next.finding).toBe('New finding')
+    expect(next.score).toBe(70)
+    expect(next.evidenceRefreshedAt).toBe('2026-08-22T05:00:00.000Z')
+    // curation and provenance survive
+    expect(next.tags).toEqual(['aorta'])
+    expect(next.notes).toBe('my note')
+    expect(next.favorite).toBe(true)
+    expect(next.conceptId).toBe('c1')
+    expect(next.domain).toBe('vascular')
+    expect(next.savedAt).toBe('2026-08-01T00:00:00.000Z')
+    expect(next.saveSource).toBe('papertrellis')
+    expect(next.trellisProjects).toEqual(existing.trellisProjects)
+  })
+})
