@@ -58,6 +58,35 @@ export function buildPaperRecord(res, take, { title, source = 'unknown' } = {}) 
   }
 }
 
+// Only evidence-owned fields are replaced. Everything the clinician did after saving the paper
+// stays exactly as it was, including notes, tags, favorites, concept placement, memos, savedAt —
+// and fields written by other apps sharing the account (PaperTrellis provenance). Shared by the
+// re-extraction flow (refreshEvidence) and by savePaper when the paper already exists.
+export function mergeRefreshedEvidence(existing, fresh, refreshedAt = new Date().toISOString()) {
+  return {
+    ...existing,
+    pmid: fresh.pmid || existing.pmid,
+    pmcid: fresh.pmcid || existing.pmcid || null,
+    title: fresh.title || existing.title,
+    citation: fresh.citation || existing.citation || null,
+    design: fresh.design ?? null,
+    extractionVersion: fresh.extractionVersion || null,
+    score: fresh.score ?? null,
+    tier: fresh.tier ?? null,
+    finding: fresh.finding || '',
+    designCaution: fresh.designCaution || '',
+    relevance: fresh.relevance || '',
+    check: fresh.check || { verdict: 'unchecked', reason: '' },
+    cautionCheck: fresh.cautionCheck || { verdict: 'unchecked', reason: '' },
+    quantities: Array.isArray(fresh.quantities) ? fresh.quantities : [],
+    fullText: fresh.fullText || '',
+    tables: fresh.tables || '',
+    pdfUrl: fresh.pdfUrl || existing.pdfUrl || null,
+    oaUrl: fresh.oaUrl || existing.oaUrl || null,
+    evidenceRefreshedAt: refreshedAt,
+  }
+}
+
 // Persist the record, then run the background enrichment (concept filing → summary, OA PDF link,
 // on-disk write). Returns the persisted record immediately; the background work is fire-and-forget.
 export async function savePaper(res, take, { title, source = 'unknown' } = {}) {
@@ -65,12 +94,17 @@ export async function savePaper(res, take, { title, source = 'unknown' } = {}) {
     throw new Error('This article is marked as retracted in PubMed and was not saved.')
   }
   const record = buildPaperRecord(res, take, { title, source })
-  await store.put('papers', record.id, record)
+  // A save must never silently destroy curation. If the pmid is already in the Library —
+  // synced in from PaperTrellis, or saved from an older digest still on screen — treat this
+  // like a refresh: fresh evidence in, everything the record accrued stays.
+  const existing = await store.get('papers', record.id)
+  const persisted = existing ? mergeRefreshedEvidence(existing, record) : record
+  await store.put('papers', record.id, persisted)
   // Adoption telemetry on the ONE shared save path, so no entry point can forget it.
   // `source` says which doorway: the digest's checkbox/heart or the manual Add a paper.
-  logEvent('paper_saved', { pmid: record.pmid, source })
-  enrichInBackground(record)
-  return record
+  logEvent('paper_saved', { pmid: persisted.pmid, source })
+  enrichInBackground(persisted)
+  return persisted
 }
 
 // Backfill open-access links for already-saved papers that don't have one yet (DOI present,
