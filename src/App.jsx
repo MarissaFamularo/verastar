@@ -332,7 +332,7 @@ function AccountSection({ account }) {
           {sendState === 'sent' ? (
             <>
               <div style={{ padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 600 }}>Email sent to {email.trim()}</span> — enter the 6-digit code from it below. (The email's link also works, but only in the same browser — from the installed app, use the code.)
+                <span style={{ fontWeight: 600 }}>Email sent to {email.trim()}</span> — enter the code from the email below. (The email's link also works, but only in the same browser — from the installed app, use the code.)
               </div>
               <form onSubmit={verify} className="flex" style={{ gap: 9, marginTop: 10 }}>
                 <input
@@ -341,7 +341,7 @@ function AccountSection({ account }) {
                   autoComplete="one-time-code"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder="6-digit code"
+                  placeholder="Code from the email"
                   style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
                 />
                 <button type="submit" disabled={verifyState === 'verifying'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: verifyState === 'verifying' ? 0.6 : 1 }}>
@@ -442,7 +442,7 @@ function ExistingLibrarySyncGate({ onNotNow }) {
           <>
             <div style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55 }}>
               <span style={{ fontWeight: 600 }}>Email sent to {email.trim()}</span> — enter the
-              6-digit code here. If you use the installed app, use this code instead of opening
+              code from the email here. If you use the installed app, use this code instead of opening
               the email link in a separate browser.
             </div>
             <form onSubmit={verify} className="flex" style={{ gap: 10, marginTop: 14 }}>
@@ -452,7 +452,7 @@ function ExistingLibrarySyncGate({ onNotNow }) {
                 autoComplete="one-time-code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="6-digit code"
+                placeholder="Code from the email"
                 autoFocus
                 style={{ flex: 1, minWidth: 0, padding: '12px 15px', borderRadius: 11, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 15, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
               />
