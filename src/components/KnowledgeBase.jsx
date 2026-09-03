@@ -24,8 +24,9 @@ import { PAPERTRELLIS_URL } from '../lib/trellis.js'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 import { useIsMobile } from '../lib/useMobile.js'
 import { setPaperFavorite } from '../lib/favorites.js'
-import { fetchCitations } from '../pipeline/sources.js'
-import { paperIndicatesRetraction, refreshSavedRetractions, removePaperFromConcepts } from '../pipeline/retractions.js'
+import { paperIndicatesRetraction, removePaperFromConcepts } from '../pipeline/retractions.js'
+import { acknowledgeRetraction, checkSavedRetractions, noteRetractionRemoved } from '../lib/retractionWatch.js'
+import { useRetractionAlerts } from '../lib/useRetractionAlerts.js'
 import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
@@ -55,7 +56,15 @@ export default function KnowledgeBase() {
   const [refiling, setRefiling] = useState('') // '' | progress string
   const [confirmRefile, setConfirmRefile] = useState(false)
   const [reorg, setReorg] = useState('') // '' | 'running' | result/error message
-  const [retractionAlerts, setRetractionAlerts] = useState([])
+  // Unacknowledged retractions, read off the saved records by the shared watch — the same
+  // list the app-wide notice shows. A record the watch patches is swapped into `papers` in
+  // place so the row warning appears without a reload.
+  const retractionAlerts = useRetractionAlerts({
+    onPatched: (patched) => {
+      const byId = new Map(patched.map(({ id, record }) => [id, record]))
+      setPapers((prev) => prev.map((p) => byId.get(p.id) || p))
+    },
+  })
   const [confirmRetractionDelete, setConfirmRetractionDelete] = useState(null)
   // On the phone the two chip rows eat most of a screen before the first paper —
   // collapsed behind one toggle line there; desktop keeps them always open.
@@ -80,20 +89,10 @@ export default function KnowledgeBase() {
       backfillOaPdfs(all || [], (id, patch) =>
         setPapers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p))),
       )
-      // Retractions can happen years after a paper was saved. Refresh PubMed status on
-      // Library load and patch only newly retracted records; a network miss changes nothing.
-      refreshSavedRetractions(all || [], {
-        fetchCurrent: fetchCitations,
-        persist: (id, record) => store.put('papers', id, record),
-        onPatch: (id, patch) =>
-          setPapers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p))),
-      }).then((found) => {
-        if (!found.length) return
-        setRetractionAlerts(found.map(({ id, patch }) => {
-          const paper = (all || []).find((p) => p.id === id) || { id }
-          return { ...paper, ...patch }
-        }))
-      }).catch(() => {})
+      // Retractions can happen years after a paper was saved. The shared watch re-checks
+      // PubMed (throttled — boot or a digest scan may just have done it) and patches only
+      // newly retracted records; a network miss changes nothing.
+      checkSavedRetractions({ reason: 'library' }).catch(() => {})
     })()
   }, [])
 
@@ -155,6 +154,13 @@ export default function KnowledgeBase() {
     setConcepts((prev) => prev.filter((c) => c.id !== concept.id))
   }
 
+  // "Keep with warning" persists on the record: the alert stays dismissed on every device;
+  // the row warning is permanent.
+  async function keepRetracted(paper) {
+    const next = await acknowledgeRetraction(paper.id).catch(() => null)
+    if (next) setPapers((prev) => prev.map((p) => (p.id === next.id ? next : p)))
+  }
+
   async function deletePaper(paper) {
     const storedConcepts = await loadConcepts()
     const patched = removePaperFromConcepts(storedConcepts, paper)
@@ -165,8 +171,8 @@ export default function KnowledgeBase() {
       const byId = new Map(patched.map((node) => [node.id, node]))
       setConcepts((prev) => prev.map((node) => byId.get(node.id) || node))
     }
-    setRetractionAlerts((prev) => prev.filter((p) => p.id !== paper.id))
     setConfirmRetractionDelete(null)
+    noteRetractionRemoved()
     if (paperIndicatesRetraction(paper)) {
       logEvent('retracted_paper_deleted', { pmid: paper.pmid || paper.id })
     }
@@ -230,7 +236,7 @@ export default function KnowledgeBase() {
             </div>
           ) : (
             <div className="flex flex-wrap" style={{ marginTop: 10, gap: 8 }}>
-              <button onClick={() => setRetractionAlerts((prev) => prev.filter((p) => p.id !== paper.id))} className="cursor-pointer" style={{ borderRadius: 8, border: '1px solid rgba(255,255,255,.14)', background: 'transparent', color: 'var(--color-fg-soft)', padding: '6px 10px', fontSize: 12, fontFamily: 'inherit' }}>Keep with warning</button>
+              <button onClick={() => keepRetracted(paper)} className="cursor-pointer" style={{ borderRadius: 8, border: '1px solid rgba(255,255,255,.14)', background: 'transparent', color: 'var(--color-fg-soft)', padding: '6px 10px', fontSize: 12, fontFamily: 'inherit' }}>Keep with warning</button>
               <button onClick={() => setConfirmRetractionDelete(paper.id)} className="cursor-pointer" style={{ borderRadius: 8, border: 0, background: 'rgba(224,96,90,.18)', color: 'var(--color-domain-vascular)', padding: '6px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>Delete paper &amp; metadata</button>
             </div>
           )}

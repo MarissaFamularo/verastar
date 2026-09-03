@@ -19,6 +19,14 @@ describe('recordBasis', () => {
     expect(recordBasis(null)).toBe(null)
   })
 
+  it('a retraction found after the save makes the paper stale to the vault', () => {
+    expect(recordBasis({ savedAt: T1, retraction: { checkedAt: T2 } })).toBe(T2)
+    expect(recordBasis({ savedAt: T2, retraction: { checkedAt: T1 } })).toBe(T2)
+    expect(recordBasis({ retraction: { checkedAt: T2 } })).toBe(T2)
+    expect(needsVaultWrite({ savedAt: T1, vaultWrittenAt: T1, retraction: { checkedAt: T2 } })).toBe(true)
+    expect(needsVaultWrite(stampVaultWritten({ savedAt: T1, retraction: { checkedAt: T2 } }, T1))).toBe(false)
+  })
+
   it('lets updatedAt win over createdAt (a re-edited memo is stale again)', () => {
     expect(recordBasis({ createdAt: T1, updatedAt: T2 })).toBe(T2)
     expect(recordBasis({ updatedAt: T2 })).toBe(T2)

@@ -18,6 +18,8 @@ import { supabase, supabaseConfigured, currentUser, sendMagicLink, verifyEmailCo
 import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
+import { checkSavedRetractions, acknowledgeRetraction } from './lib/retractionWatch.js'
+import { useRetractionAlerts } from './lib/useRetractionAlerts.js'
 import { refreshTrellisProjects, getTrellisProjects, getTrellisExcluded, consideredProjects, PAPERTRELLIS_URL } from './lib/trellis.js'
 import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import { useIsMobile, isMobileNow } from './lib/useMobile.js'
@@ -32,6 +34,7 @@ import KnowledgeBase from './components/KnowledgeBase.jsx'
 import WeekendRead from './components/WeekendRead.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
 import Memos from './components/Memos.jsx'
+import RetractionNotice from './components/RetractionNotice.jsx'
 import { DEMO_DIGEST_COUNTS } from './demo/demoDigest.js'
 
 // ── Observatory shell ──────────────────────────────────────────────────────
@@ -942,6 +945,8 @@ export default function App() {
 
   const [bootError, setBootError] = useState('')
   const [account, setAccount] = useState(null) // { email } when signed in
+  // Saved papers PubMed now marks retracted that she has not yet kept or deleted.
+  const retractionAlerts = useRetractionAlerts()
   // Existing real libraries created before account-first onboarding are still in
   // IndexedDB. Prompt on each fresh visit until the user authenticates and migrates.
   const [existingLibrarySync, setExistingLibrarySync] = useState(false)
@@ -992,6 +997,10 @@ export default function App() {
       }
       setOnboarded(!!p?.onboarded)
       setProfile(p || null)
+      // Retractions can land years after a save. Re-check the saved Library on every
+      // app open (PubMed esummary only — no model call), in the background; the alert
+      // is persisted on the record, so it reaches whichever surface she opens.
+      if (p?.onboarded && !(p?.demo && !user)) checkSavedRetractions({ reason: 'boot' }).catch(() => {})
       // Cached PaperTrellis projects render immediately; the refresh fires in the
       // background (never awaited — a slow or failed sync must not hold up boot).
       loadTrellis()
@@ -1223,6 +1232,11 @@ export default function App() {
                   <span onClick={() => setSettingsOpen(true)} className="cursor-pointer" style={{ fontSize: 13, color: 'var(--color-accent)' }}>Tune profile</span>
                 </div>
               )}
+              {!demo && retractionAlerts.length > 0 && (
+                <div style={{ marginTop: 26 }}>
+                  <RetractionNotice alerts={retractionAlerts} onKeep={(p) => acknowledgeRetraction(p.id).catch(() => {})} onOpenLibrary={() => setView('library')} />
+                </div>
+              )}
               <div style={{ marginTop: 34 }}>
                 <SpineCheck key={`${saved ? 'keyed' : 'nokey'}-${demo ? 'demo' : 'live'}`} demo={demo} onDigestDate={setDigestSavedAt} />
               </div>
@@ -1234,6 +1248,12 @@ export default function App() {
 
       {view !== 'digest' && (
         <main style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
+          {/* The Library renders these itself, beside the delete action. */}
+          {view !== 'library' && !demo && retractionAlerts.length > 0 && (
+            <div className="vs-page-pad" style={{ maxWidth: 720, padding: '24px 56px 0' }}>
+              <RetractionNotice alerts={retractionAlerts} onKeep={(p) => acknowledgeRetraction(p.id).catch(() => {})} onOpenLibrary={() => setView('library')} />
+            </div>
+          )}
           {view === 'library' && <KnowledgeBase key="library" />}
           {view === 'starmap' && (isMobile ? <StarMapSmallSky key="starmap" /> : <ConstellationView key="starmap" />)}
           {view === 'connections' && <WeekendRead key="connections" />}

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 import { PaperRow, SavedDigestDetails } from './KnowledgeBase.jsx'
+import RetractionNotice from './RetractionNotice.jsx'
 
 const handlers = {
   onRemoveTag: () => {},
@@ -124,5 +125,20 @@ describe('PaperTrellis provenance', () => {
     const html = renderToStaticMarkup(React.createElement(PaperRow, { paper: paper(), ...handlers }))
     expect(html).not.toContain('Used in PaperTrellis:')
     expect(html).not.toContain('From PaperTrellis')
+  })
+})
+
+describe('RetractionNotice', () => {
+  it('renders nothing without alerts', () => {
+    expect(renderToStaticMarkup(React.createElement(RetractionNotice, { alerts: [] }))).toBe('')
+  })
+
+  it('names each retracted saved paper with keep and review actions', () => {
+    const html = renderToStaticMarkup(React.createElement(RetractionNotice, { alerts: [paper({ retracted: true })] }))
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('A saved paper')
+    expect(html).toContain('Keep with warning')
+    expect(html).toContain('Review in Library')
+    expect(html).toContain('https://pubmed.ncbi.nlm.nih.gov/42560069/')
   })
 })

@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { store, getProfile } from '../lib/store.js'
 import { hasApiKey } from '../lib/anthropic.js'
 import { synthesizeWeekendRead } from '../pipeline/weekend.js'
+import { excludeRetracted } from '../pipeline/retractions.js'
 import { appendConnectionsToLibrary } from '../lib/library.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { setPaperFavorite } from '../lib/favorites.js'
@@ -139,12 +140,15 @@ export default function WeekendRead() {
   // This week's saves are the subject; everything older (or legacy records without a savedAt)
   // is the shelf they connect back to. Nothing saved this week → the whole library is the
   // subject, same as the original behavior, so the page never goes dark.
+  // A retracted paper kept for audit history is excluded from BOTH sets: it must not become
+  // a thread, and it must not be shelf context a thread reaches back to.
   const { focus, shelf } = useMemo(() => {
+    const usable = excludeRetracted(papers)
     const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
-    const recent = papers.filter((p) => p.savedAt && Date.parse(p.savedAt) >= cutoff)
-    if (!recent.length) return { focus: papers, shelf: [] }
+    const recent = usable.filter((p) => p.savedAt && Date.parse(p.savedAt) >= cutoff)
+    if (!recent.length) return { focus: usable, shelf: [] }
     const recentIds = new Set(recent.map((p) => p.id))
-    return { focus: recent, shelf: papers.filter((p) => !recentIds.has(p.id)) }
+    return { focus: recent, shelf: usable.filter((p) => !recentIds.has(p.id)) }
   }, [papers])
 
   async function handleGenerate() {

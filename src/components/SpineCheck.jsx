@@ -19,6 +19,7 @@ import {
 } from '../lib/digestStore.js'
 import { digestProjects } from '../lib/trellis.js'
 import { wakeLock } from '../lib/wakeLock.js'
+import { checkSavedRetractions } from '../lib/retractionWatch.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import {
@@ -1045,6 +1046,10 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       let allTopicsSearched = false
       let scanContext = { counts: [], failed: [], days: searchDays }
       try {
+        // Every digest re-checks the saved Library against PubMed before the search: a few
+        // esummary calls, no model tokens, and it runs BEFORE the search so it never
+        // competes with the topic queries for PubMed's rate limit. A miss changes nothing.
+        if (!demo) await checkSavedRetractions({ reason: 'digest', maxAgeMs: 60 * 1000 }).catch(() => {})
         const profile = await getProfile()
         searchDays = override ?? profileSearchDays(profile)
         // Cross-day dedup now happens INSIDE the search, per topic, before the per-topic cap —

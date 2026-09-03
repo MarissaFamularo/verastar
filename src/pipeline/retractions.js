@@ -50,6 +50,33 @@ export function retractionPatch(citation, checkedAt = new Date().toISOString()) 
   }
 }
 
+// A retraction the clinician has not yet seen. The flag lives on the saved record, not in
+// component state, so an alert survives a closed tab, a phone-vs-desktop switch, and a
+// signed-in sync — until she explicitly keeps the paper (acknowledgedAt) or deletes it.
+export function isUnacknowledgedRetraction(paper) {
+  return paperIndicatesRetraction(paper) && !paper?.retraction?.acknowledgedAt
+}
+
+export function pendingRetractionAlerts(papers) {
+  return (papers || []).filter(isUnacknowledgedRetraction)
+}
+
+// "Keep with warning": the record stays retracted (the row warning is permanent); only the
+// alert is dismissed. Never clears `retracted`.
+export function acknowledgeRetractionPatch(paper, now = new Date().toISOString()) {
+  const current = paper?.retraction && typeof paper.retraction === 'object' ? paper.retraction : {}
+  return {
+    retracted: true,
+    retraction: { source: 'PubMed', ...current, retracted: true, acknowledgedAt: now },
+  }
+}
+
+// Every model-facing consumer of the saved Library (weekend read, concept synthesis) uses
+// this so a retracted paper the clinician kept for audit history never feeds a synthesis.
+export function excludeRetracted(papers) {
+  return (papers || []).filter((paper) => !paperIndicatesRetraction(paper))
+}
+
 // Removing a retracted Library record must also remove its PMID from concept membership.
 // The concept itself stays: it may have other papers, notes, and graph edges. Pure so the
 // destructive path can be tested before it touches storage.
