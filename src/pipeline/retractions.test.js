@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  acknowledgeRetractionPatch,
   citationIndicatesRetraction,
+  excludeRetracted,
   hasRetractedPublicationType,
   paperIndicatesRetraction,
+  pendingRetractionAlerts,
   removePaperFromConcepts,
   refreshSavedRetractions,
 } from './retractions.js'
@@ -77,5 +80,34 @@ describe('refreshSavedRetractions', () => {
     })
     expect(result).toEqual([])
     expect(persist).not.toHaveBeenCalled()
+  })
+})
+
+describe('persisted retraction alerts', () => {
+  const retracted = { id: '1', pmid: '1', retracted: true, retraction: { retracted: true, source: 'PubMed', checkedAt: '2026-08-05T12:00:00.000Z' } }
+  const kept = { id: '2', pmid: '2', retracted: true, retraction: { retracted: true, acknowledgedAt: '2026-08-06T12:00:00.000Z' } }
+  const current = { id: '3', pmid: '3', title: 'Current' }
+
+  it('pending alerts are the retracted records not yet kept or deleted', () => {
+    expect(pendingRetractionAlerts([retracted, kept, current]).map((p) => p.id)).toEqual(['1'])
+    expect(pendingRetractionAlerts(undefined)).toEqual([])
+  })
+
+  it('keeping a paper acknowledges the alert without clearing the retraction', () => {
+    const patch = acknowledgeRetractionPatch(retracted, '2026-08-07T00:00:00.000Z')
+    expect(patch).toEqual({
+      retracted: true,
+      retraction: { retracted: true, source: 'PubMed', checkedAt: '2026-08-05T12:00:00.000Z', acknowledgedAt: '2026-08-07T00:00:00.000Z' },
+    })
+    expect(pendingRetractionAlerts([{ ...retracted, ...patch }])).toEqual([])
+    expect(paperIndicatesRetraction({ ...retracted, ...patch })).toBe(true)
+    // A legacy record flagged only by citation still gets a complete retraction object.
+    expect(acknowledgeRetractionPatch({ citation: { pubtypes: ['Retracted Publication'] } }, 'T').retraction).toEqual({
+      source: 'PubMed', retracted: true, acknowledgedAt: 'T',
+    })
+  })
+
+  it('excludeRetracted drops kept and unkept retractions alike', () => {
+    expect(excludeRetracted([retracted, kept, current])).toEqual([current])
   })
 })

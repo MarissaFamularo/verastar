@@ -8,6 +8,7 @@
 // Design rule: never invent a field that isn't in the record. If a paper has no citation, we omit
 // the line rather than fabricate one — same honesty ethos as the verifier.
 
+import { paperIndicatesRetraction } from '../pipeline/retractions.js'
 import { domainLabel } from './domains.js'
 import { fmtNum } from './format.js'
 
@@ -103,9 +104,17 @@ export function sourceNoteMd(paper) {
     ['pdf', p.pdfUrl || ''],
     ['extraction_version', p.extractionVersion || 'legacy'],
     ['saved', p.savedAt || ''],
+    ['retracted', paperIndicatesRetraction(p) ? 'true' : 'false'],
   ])
 
   const parts = [fm, '', `# ${p.title || `PMID ${p.pmid ?? ''}`.trim()}`]
+
+  // Retraction leads the note — before relevance, before the finding — the same way the
+  // Library row leads with it. The rest of the note stays for audit history.
+  if (paperIndicatesRetraction(p)) {
+    const checked = p.retraction?.checkedAt ? ` (PubMed status checked ${p.retraction.checkedAt.slice(0, 10)})` : ''
+    parts.push('', `> ⚠︎ **Retracted** — PubMed classifies this article as a Retracted Publication${checked}. Do not rely on its findings.`)
+  }
 
   if (p.relevance) parts.push('', `_**Relevance** — ${p.relevance}_`)
   // A finding the prose gate refuted is withheld from disk too — the vault mirrors the digest:

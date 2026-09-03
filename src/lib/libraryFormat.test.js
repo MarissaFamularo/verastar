@@ -65,6 +65,16 @@ describe('sourceNoteMd', () => {
     expect(md).toContain('extraction_version: 2026-08-12.quantity-semantics-v2')
   })
 
+  it('leads a retracted paper with the warning and stamps the frontmatter', () => {
+    const md = sourceNoteMd(paper({ retracted: true, retraction: { retracted: true, source: 'PubMed', checkedAt: '2026-09-03T08:00:00.000Z' } }))
+    expect(md).toContain('retracted: true')
+    const warning = md.indexOf('**Retracted** — PubMed classifies this article as a Retracted Publication (PubMed status checked 2026-09-03)')
+    expect(warning).toBeGreaterThan(0)
+    expect(warning).toBeLessThan(md.indexOf('## Finding'))
+    expect(sourceNoteMd(paper())).toContain('retracted: false')
+    expect(sourceNoteMd(paper())).not.toContain('**Retracted**')
+  })
+
   it('marks an unversioned paper as legacy in the owned file', () => {
     expect(sourceNoteMd(paper({ extractionVersion: null }))).toContain('extraction_version: legacy')
   })

@@ -10,6 +10,7 @@ import { getProfile, store } from '../lib/store.js'
 import { listDomains, removeDomain, userDomainKeys } from '../lib/domains.js'
 import { analyzePaper, synthesizeConcept, proposeDomainMerges } from './concepts.js'
 import { resolveCategory, ensureOtherCategory, addSourceToNode } from './categorize.js'
+import { excludeRetracted } from './retractions.js'
 import {
   loadGraph,
   syncAnchors,
@@ -78,7 +79,7 @@ export async function filePaper(paper) {
 export async function synthesizeGroup(groupId) {
   const node = await store.get('graphNodes', groupId)
   if (!node) return
-  const all = (await store.all('papers')) || []
+  const all = excludeRetracted((await store.all('papers')) || [])
   const members = all.filter(
     (p) => p.conceptId === groupId || (node.sourcePmids || []).includes(String(p.pmid)),
   )

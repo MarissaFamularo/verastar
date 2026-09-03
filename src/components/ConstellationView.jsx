@@ -21,6 +21,7 @@ import {
   confirmAllEdges,
 } from '../pipeline/graph.js'
 import { proposeConnections } from '../pipeline/connect.js'
+import { paperIndicatesRetraction } from '../pipeline/retractions.js'
 import { listDomains, PROJECT_COLOR, domainColor, domainLabel } from '../lib/domains.js'
 import { topicIndex } from '../lib/kb.js'
 import { isSignedIn } from '../lib/supabase.js'
@@ -335,6 +336,11 @@ function NodePanel({
                 <li key={p.pmid} style={{ padding: '13px 15px', borderRadius: 11, background: 'var(--surface-1)' }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--color-fg-soft)', lineHeight: 1.4 }}>{p.title}</p>
                   {cite && <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>{cite}</p>}
+                  {paperIndicatesRetraction(p) && (
+                    <p role="alert" style={{ margin: '6px 0 0', borderLeft: '2px solid var(--color-domain-vascular)', paddingLeft: 8, fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: 'var(--color-domain-vascular)' }}>
+                      Retracted — PubMed classifies this article as a Retracted Publication.
+                    </p>
+                  )}
                   <div className="flex flex-wrap items-center" style={{ marginTop: 9, gap: 8 }}>
                     <HeartButton active={!!p.favorite} onClick={() => onToggleFavorite(p)} size={14} />
                     {p.finding && <button onClick={() => onTogglePaper(p.pmid)} style={pill}>{isOpen ? 'Hide summary' : 'Summary'}</button>}

@@ -32,7 +32,13 @@
   Not in PubMed at all ⇒ **CrossRef fallback**: `api.crossref.org/works/<doi>` for
   metadata + abstract → abstract-only tier. Worst case flags; never throws.
 - Retractions: PubMed `esummary` publication type `Retracted Publication` is checked before
-  digest selection and when the saved Library opens. Crossref `update-to` relations are not
+  digest selection (candidates), and the saved Library is re-checked on every app open, at
+  the start of every digest scan, and when the Library opens (`lib/retractionWatch.js`,
+  throttled; no model call — one esummary request per 100 saved PMIDs). A retraction is
+  persisted on the record (`retracted`, `retraction.checkedAt`) and stays an alert on every
+  surface until she keeps it (`retraction.acknowledgedAt`) or deletes it. Retracted saved
+  papers are excluded from the weekend read and concept synthesis, and the vault note is
+  re-written with the warning. Crossref `update-to` relations are not
   currently checked: the existing Crossref path is only a DOI metadata fallback for works with
   no PubMed record, so it cannot safely override PubMed status without a separate relation audit.
 - CT.gov v2: `clinicaltrials.gov/api/v2/studies/<NCT>?fields=hasResults,resultsSection.outcomeMeasuresModule`
@@ -70,7 +76,7 @@
   journal-only spans, shows the shortened rubric, and requires an explicit Apply action.
 - The editor displays rubric word count and warns above 250 words because the rubric is
   repeated in every scoring batch.
-- Saved PubMed retractions are monitored separately when the Library opens. Topic coverage
+- Saved PubMed retractions are monitored separately (app open, digest scan, Library). Topic coverage
   is allocated separately after paper scoring. Neither behavior is controlled by rubric text.
 - Saved paper records retain the post-read fit score, relevance explanation, design caution,
   save entry point, and only non-flagged verified quantities. Library cards expose those

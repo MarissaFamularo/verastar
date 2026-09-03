@@ -16,7 +16,12 @@
 // papers always carry savedAt (it wins before updatedAt could) and weekend records never
 // carry updatedAt — the middle slot belongs to memos alone.
 export function recordBasis(record) {
-  return record?.savedAt || record?.updatedAt || record?.createdAt || null
+  const own = record?.savedAt || record?.updatedAt || record?.createdAt || null
+  // A retraction found after the save must re-write the paper's note so the folder copy
+  // carries the warning. checkedAt is set once, when PubMed first reports the retraction.
+  const retraction = record?.retraction?.checkedAt || null
+  if (own && retraction) return retraction > own ? retraction : own
+  return own || retraction
 }
 
 // Does this record's note still need to be written (or re-written) to the vault?
