@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { savedWithoutWhy } from './pipeline/save.js'
 import {
   setApiKey,
   getApiKey,
@@ -852,7 +853,7 @@ function MigrationOffer({ account, paperCount, onDecline }) {
 
 // Right rail on the Digest surface: key status, weekly counts, active projects,
 // and the Weekend Read teaser. Counts derive from real saved papers.
-function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, demo }) {
+function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, onLibrary, demo }) {
   return (
     <aside className="vs-digest-rail" style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div
@@ -879,6 +880,14 @@ function DigestRail({ saved, onSettings, counts, projects, trellis, onConnection
           </div>
         ))}
       </div>
+      {/* Judgment capture: a save with no "why" is a paper the wiki cannot explain.
+          Quiet amber line, only when there is something to do; opens the Library
+          where the note field lives. */}
+      {!demo && counts.withoutWhy > 0 && (
+        <p onClick={onLibrary} className="cursor-pointer" style={{ margin: '-22px 0 34px', fontSize: 12.5, lineHeight: 1.5, color: 'var(--color-abstract)' }}>
+          {counts.withoutWhy} saved this week without a why · add one in the Library ↗
+        </p>
+      )}
 
       {(projects.length > 0 || trellis.length > 0) && (
         <>
@@ -938,7 +947,7 @@ export default function App() {
   // restore). Null = no digest, so the header falls back to today's date.
   const [digestSavedAt, setDigestSavedAt] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0 })
+  const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0, withoutWhy: 0 })
   // Synced PaperTrellis project rows (title + stage) for the rail and Settings —
   // display only; the prompt-line merge happens at the digest call sites.
   const [trellis, setTrellis] = useState([])
@@ -1033,6 +1042,7 @@ export default function App() {
         verified: papers.filter((p) => p?.verified || p?.tier).length,
         saved: papers.length,
         flagged: papers.filter((p) => p?.flagged).length,
+        withoutWhy: savedWithoutWhy(papers).length,
       })
     }).catch(() => {})
   }
@@ -1242,7 +1252,7 @@ export default function App() {
               </div>
             </div>
           </main>
-          <DigestRail saved={saved} counts={demo ? DEMO_DIGEST_COUNTS : counts} projects={projects} trellis={demo ? [] : trellis} demo={demo} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} />
+          <DigestRail saved={saved} counts={demo ? DEMO_DIGEST_COUNTS : counts} projects={projects} trellis={demo ? [] : trellis} demo={demo} onSettings={() => setSettingsOpen(true)} onConnections={() => setView('connections')} onLibrary={() => setView('library')} />
         </div>
       )}
 

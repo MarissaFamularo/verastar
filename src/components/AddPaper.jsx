@@ -13,7 +13,8 @@ import { getProfile, store } from '../lib/store.js'
 import { runPaper } from '../pipeline/pipeline.js'
 import { resolvePmid } from '../pipeline/sources.js'
 import { triage } from '../pipeline/triage.js'
-import { savePaper } from '../pipeline/save.js'
+import { savePaper, setPaperNote } from '../pipeline/save.js'
+import { WhyPrompt } from './SpineCheck.jsx'
 import { fmtNum } from '../lib/format.js'
 
 const STAGE_LABEL = {
@@ -29,6 +30,7 @@ export default function AddPaper({ onAdded }) {
   const [stage, setStage] = useState('') // '' | resolving | fetching | extracting | verifying | saving
   const [error, setError] = useState('')
   const [done, setDone] = useState('') // success summary line
+  const [whyFor, setWhyFor] = useState(null) // id of the paper just added, awaiting its "why"
   const keySet = hasApiKey()
   const busy = stage !== ''
 
@@ -115,6 +117,7 @@ export default function AddPaper({ onAdded }) {
     if (res.error) bits.push('citation saved (source unavailable)')
     if (!bits.length) bits.push('no numeric claims to verify')
     setDone(`Added “${record.title}” — ${bits.join(', ')}.`)
+    setWhyFor(record.id)
     setInput('')
     setStage('')
     onAdded?.()
@@ -153,6 +156,12 @@ export default function AddPaper({ onAdded }) {
       {busy && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-accent)' }}>{STAGE_LABEL[stage] || 'Working…'}</p>}
       {error && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-domain-vascular)' }}>{error}</p>}
       {done && <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 500, color: 'var(--color-verified-soft)' }}>{done}</p>}
+      {whyFor && (
+        <WhyPrompt
+          onSave={async (text) => { const id = whyFor; setWhyFor(null); try { await setPaperNote(id, text) } catch (err) { console.warn('Note not saved:', err.message) } }}
+          onSkip={() => setWhyFor(null)}
+        />
+      )}
     </div>
   )
 }

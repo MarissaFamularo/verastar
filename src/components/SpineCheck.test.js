@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import SpineCheck, {
   candidateDisplayScore,
+  WhyPrompt,
   DigestRunControls,
   failedDigestResults,
   retryBaseSnapshot,
@@ -110,5 +111,14 @@ describe('failed digest retry', () => {
     expect(html).toContain('Start a new scan')
     expect(html).toContain('new unseen-paper pool and replaces the digest on screen')
     expect(html).not.toContain("Run today&#x27;s digest")
+  })
+})
+
+describe('WhyPrompt', () => {
+  it('renders the skippable one-line why prompt', () => {
+    const html = renderToStaticMarkup(React.createElement(WhyPrompt, { onSave() {}, onSkip() {}, autoFocus: false }))
+    expect(html).toContain('Why this one?')
+    expect(html).toContain('Skip')
+    expect(html).toContain('maxLength="280"')
   })
 })

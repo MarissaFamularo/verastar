@@ -46,7 +46,7 @@ import {
   topicReportRows,
 } from '../pipeline/topics.js'
 import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
-import { savePaper } from '../pipeline/save.js'
+import { savePaper, setPaperNote } from '../pipeline/save.js'
 import { setPaperFavorite } from '../lib/favorites.js'
 import { logEvent } from '../lib/events.js'
 import HeartButton from './HeartButton.jsx'
@@ -446,6 +446,41 @@ function CandidatePool({
 
 // onDigestDate: reports the savedAt of the digest on screen (null = none) so the page
 // header can date the digest it is actually showing rather than the day it is read.
+// The skippable "why" that follows a save. One line, Enter saves, Esc (or leaving it
+// empty) skips. This is the only judgment the wiki keeps per paper, so it is asked at
+// the moment the reason is freshest — but it never blocks the one-tap save itself.
+export function WhyPrompt({ onSave, onSkip, autoFocus = true }) {
+  const [text, setText] = useState('')
+  const commit = () => (text.trim() ? onSave(text.trim()) : onSkip())
+  return (
+    <div className="flex items-center vs-why-prompt" style={{ gap: 8, margin: '10px 0 0' }}>
+      <input
+        autoFocus={autoFocus}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); commit() }
+          else if (e.key === 'Escape') { e.preventDefault(); onSkip() }
+        }}
+        onBlur={() => { if (!text.trim()) onSkip() }}
+        placeholder="Why this one? One line · Enter saves · Esc skips"
+        aria-label="Why did you save this paper?"
+        maxLength={280}
+        style={{ flex: 1, minWidth: 0, fontSize: 13.5, padding: '8px 11px', borderRadius: 9, border: '1px solid var(--hairline)', background: 'var(--surface-1)', color: 'var(--color-fg)', fontFamily: 'inherit' }}
+      />
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault() /* keep the input's blur from skipping first */}
+        onClick={commit}
+        className="cursor-pointer whitespace-nowrap"
+        style={{ border: 0, background: 'transparent', padding: '6px 4px', color: text.trim() ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)', fontSize: 12.5, fontFamily: 'inherit' }}
+      >
+        {text.trim() ? 'Save why' : 'Skip'}
+      </button>
+    </div>
+  )
+}
+
 export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const [running, setRunning] = useState(false)
   const [retrying, setRetrying] = useState(false)
@@ -484,6 +519,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const [expanded, setExpanded] = useState({}) // id -> bool: show verified values
   const [viewer, setViewer] = useState(null) // { title, corpusLabel, corpusText, quote, valueLabel }
   const [savedIds, setSavedIds] = useState(() => new Set()) // ids deposited to the Knowledge Base
+  const [whyFor, setWhyFor] = useState(null) // paper id whose "why" prompt is open (one at a time)
   const [favIds, setFavIds] = useState(() => new Set()) // saved papers hearted as favorites
   // Rehydrated from IndexedDB this mount: { note, incomplete } or null.
   const [restored, setRestored] = useState(null)
@@ -640,6 +676,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     const id = res.paper.id
     if (savedIds.has(id)) {
       await store.delete('papers', id)
+      if (whyFor === id) setWhyFor(null)
       setSavedIds((prev) => {
         const next = new Set(prev)
         next.delete(id)
@@ -660,8 +697,18 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     // "Add a paper" entry point in the Library uses the exact same path so they never drift.
     try {
       await savePaper(res, take, { title, source: 'digest' })
+      setWhyFor(id)
     } catch (err) {
       console.warn('Save failed:', err.message)
+    }
+  }
+
+  async function commitWhy(id, text) {
+    setWhyFor(null)
+    try {
+      await setPaperNote(id, text)
+    } catch (err) {
+      console.warn('Note not saved (paper is still saved):', err.message)
     }
   }
 
@@ -683,6 +730,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setSavedIds((prev) => new Set(prev).add(id))
       try {
         await savePaper(res, take, { title, source: 'digest' })
+        setWhyFor(id)
       } catch (err) {
         console.warn('Save failed:', err.message)
         return
@@ -1601,6 +1649,10 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                   )}
                 </div>
               </div>
+
+              {whyFor === paper.id && savedIds.has(paper.id) && (
+                <WhyPrompt onSave={(text) => commitWhy(paper.id, text)} onSkip={() => setWhyFor(null)} />
+              )}
 
               <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, lineHeight: 1.32, color: 'var(--color-fg)' }}>{title}</h3>
               <Citation citation={res.citation} oa={res.oa} pmcid={res.source?.pmcid} />

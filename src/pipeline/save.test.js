@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPaperRecord } from './save.js'
+import { buildPaperRecord, savedWithoutWhy } from './save.js'
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 
 describe('buildPaperRecord — design appraisal survives a manual or digest save', () => {
@@ -85,5 +85,37 @@ describe('mergeRefreshedEvidence — a re-save or refresh never destroys curatio
     expect(next.savedAt).toBe('2026-08-01T00:00:00.000Z')
     expect(next.saveSource).toBe('papertrellis')
     expect(next.trellisProjects).toEqual(existing.trellisProjects)
+  })
+})
+
+// ── the "why" capture (2026-09-05): notes passthrough + the Today rail's nudge count ──
+
+const res = { paper: { id: 'p1', pmid: '12345678', title: 'A trial' }, citation: { doi: '10.1/x' }, rows: [], source: {} }
+
+describe('buildPaperRecord notes', () => {
+  it('seeds notes empty when no why was given', () => {
+    expect(buildPaperRecord(res, {}, { title: 'A trial' }).notes).toBe('')
+  })
+  it('keeps the trimmed why when one was given', () => {
+    expect(buildPaperRecord(res, {}, { title: 'A trial', notes: '  fits the CLTI chapter  ' }).notes).toBe('fits the CLTI chapter')
+  })
+})
+
+describe('savedWithoutWhy', () => {
+  const now = Date.parse('2026-09-05T12:00:00Z')
+  const day = 86400000
+  it('counts recent saves with an empty note and ignores annotated or old ones', () => {
+    const papers = [
+      { id: 'a', savedAt: new Date(now - 1 * day).toISOString(), notes: '' },
+      { id: 'b', savedAt: new Date(now - 2 * day).toISOString(), notes: '   ' },
+      { id: 'c', savedAt: new Date(now - 3 * day).toISOString(), notes: 'because' },
+      { id: 'd', savedAt: new Date(now - 20 * day).toISOString(), notes: '' },
+      { id: 'e', notes: '' },
+    ]
+    expect(savedWithoutWhy(papers, { now }).map((p) => p.id)).toEqual(['a', 'b'])
+  })
+  it('is defensive on shape', () => {
+    expect(savedWithoutWhy(null)).toEqual([])
+    expect(savedWithoutWhy([undefined, {}])).toEqual([])
   })
 })
