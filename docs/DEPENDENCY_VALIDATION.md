@@ -55,7 +55,7 @@ effect; failed saves retain the draft.
 | Supabase JS | 2.110.8 | 2.110.8 |
 | React / React DOM | 19.2.7 | 19.2.7 |
 | Vitest | 4.1.11 | 4.1.11 |
-| Tests | Full configured suite | 830 passed / 50 files |
+| Tests | Full configured suite | 835 passed / 50 files |
 | Build | Vite production build | Passed |
 | Lint gate | Reviewed fingerprints | Passed; raw debt remains above |
 | npm audit | Final lockfile, 2026-09-11 | 0 affected packages |

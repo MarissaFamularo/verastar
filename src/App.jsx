@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { savedWithoutWhy } from './pipeline/save.js'
+import { hasValidatedPaperEvidence } from './lib/evidenceVersion.js'
 import {
   setApiKey,
   getApiKey,
@@ -851,9 +852,9 @@ function MigrationOffer({ account, paperCount, onDecline }) {
   )
 }
 
-// Right rail on the Digest surface: key status, weekly counts, active projects,
+// Right rail on the Digest surface: key status, library counts, active projects,
 // and the Weekend Read teaser. Counts derive from real saved papers.
-function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, onLibrary, demo }) {
+export function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, onLibrary, demo }) {
   return (
     <aside className="vs-digest-rail" style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div
@@ -871,9 +872,9 @@ function DigestRail({ saved, onSettings, counts, projects, trellis, onConnection
         </p>
       )}
 
-      <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>{demo ? 'In this sample' : 'This week'}</p>
+      <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>{demo ? 'In this sample' : 'Your library'}</p>
       <div className="flex" style={{ gap: 26, marginBottom: 34 }}>
-        {[[counts.verified, 'verified'], [counts.saved, 'saved'], [counts.flagged, 'flagged']].map(([n, label]) => (
+        {[[counts.verified, 'with validated evidence'], [counts.saved, 'saved'], [counts.flagged, 'flagged']].map(([n, label]) => (
           <div key={label}>
             <div style={{ fontFamily: 'var(--font-serif)', fontSize: 36, color: 'var(--color-fg)', lineHeight: 1 }}>{n}</div>
             <div style={{ fontSize: 12, color: 'var(--color-fg-muted)', marginTop: 4 }}>{label}</div>
@@ -1034,11 +1035,11 @@ export default function App() {
       .catch(() => {})
   }
 
-  // Derive weekly counts from real saved papers (defensive on shape).
+  // Derive library-wide counts from saved papers and the current evidence policy.
   function refreshCounts() {
     store.all('papers').then((papers = []) => {
       setCounts({
-        verified: papers.filter((p) => p?.verified || p?.tier).length,
+        verified: papers.filter(hasValidatedPaperEvidence).length,
         saved: papers.length,
         flagged: papers.filter((p) => p?.flagged).length,
         withoutWhy: savedWithoutWhy(papers).length,

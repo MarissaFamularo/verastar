@@ -75,10 +75,10 @@ const TIER_CHIP = {
   'abstract-only': { source: 'abstract', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
 }
 
-// A zero-spend proof for the screen shown before a key exists. These are the same locked
-// public reference values used by the live oracle; the live button re-fetches and
-// re-verifies them once a key is present.
-const KEYLESS_PROOF = (() => {
+// Precomputed examples for the screen shown before a key exists. These excerpts
+// illustrate the interface; they do not establish support in the complete paper.
+// With a key, the button fetches the trials and runs the current evidence checks.
+const KEYLESS_EXAMPLES = (() => {
   const specs = [
     { paper: DEMO_PAPERS[0], sourceTier: 'verified-full-text', name: 'Amputation-free survival', quantity: { value: 0.84, unit: 'HR', ci_low: 0.61, ci_high: 1.16, p_value: 0.22, source_quote: 'HR 0.84 (97.5% CI 0.61–1.16, P=0.22)', location_hint: 'Published reference result' } },
     { paper: DEMO_PAPERS[1], sourceTier: 'verified-registry', name: 'TcPO2 difference', quantity: { value: 11.2, unit: 'mmHg', ci_low: 8.0, ci_high: 14.5, p_value: 0.001, source_quote: 'TcPO2 diff 11.2 mmHg (95% CI 8.0–14.5, P<0.001)', location_hint: 'Published reference result' } },
@@ -99,7 +99,7 @@ const KEYLESS_PROOF = (() => {
   }
   return {
     results,
-    triaged: Object.fromEntries(results.map((r, i) => [r.paper.id, { score: 95 - i, tier: 1, finding: r.rows[0].quantity.source_quote, relevance: 'Public reference trial used to demonstrate deterministic verification.', check: { verdict: 'supported', reason: '' } }])),
+    triaged: Object.fromEntries(results.map((r, i) => [r.paper.id, { score: 95 - i, tier: 1, finding: r.rows[0].quantity.source_quote, relevance: 'Precomputed trial excerpt for exploring the evidence interface; inspect the original source before use.', check: { verdict: 'unchecked', reason: 'Illustrative example; no source support check was performed.' } }])),
   }
 })()
 
@@ -1364,8 +1364,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     })
   }
 
-  // Proof surface: the three reference trials, always demonstrating the hard guarantees
-  // (registry match, the corruption catch) deterministically.
+  // Source examples: precomputed excerpts when keyless, or a fresh run of
+  // the current evidence checks when a key is available.
   async function runShowcase() {
     setScanError('')
     setScanNote('')
@@ -1375,20 +1375,20 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     setEmptyWindow(null)
     setCandidates([])
     // The read-only sample profile is the first screen a keyless visitor sees. Keep its
-    // proof deterministic and zero-spend even if this browser happens to retain an old
+    // examples free of model calls even if this browser happens to retain an old
     // key from another profile/session.
     if (demo || !keySet) {
-      setResults(KEYLESS_PROOF.results)
-      setProcessedResults(KEYLESS_PROOF.results)
-      setTriaged(KEYLESS_PROOF.triaged)
+      setResults(KEYLESS_EXAMPLES.results)
+      setProcessedResults(KEYLESS_EXAMPLES.results)
+      setTriaged(KEYLESS_EXAMPLES.triaged)
       setScanNote(demo
-        ? 'Zero-spend verifier proof shown on three public reference trials.'
-        : 'Zero-spend sample proof shown. Add a key to re-fetch and re-verify these three public trials live.')
+        ? 'Precomputed examples from three public reference trials. Claim relationships have not been validated.'
+        : 'Precomputed examples shown. Add a key to fetch these trials and review their evidence checks.')
       return
     }
     wakeLock.start()
     try {
-      // Deliberately NOT recorded as seen: the three reference trials are a proof surface,
+      // Deliberately NOT recorded as seen: these three trials are interface examples,
       // not her morning, and burying them would break the demo on the second run.
       await runList(DEMO_PAPERS, { injectCorrupt: true })
     } finally {
@@ -1428,7 +1428,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
 
   return (
     <section>
-      {/* Run controls — the big centered primary action, with the deterministic proof
+      {/* Run controls — the big centered primary action, with the source examples
           surface as a small secondary beneath it. */}
       {demo && (
         <div style={{ padding: '15px 17px', borderRadius: 13, border: '1px solid rgba(143,189,230,.18)', background: 'rgba(143,189,230,.07)', color: 'var(--color-registry)', fontSize: 13.5, lineHeight: 1.55 }}>
@@ -1469,11 +1469,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         <button
           onClick={runShowcase}
           disabled={busy}
-          title="Three reference trials that demonstrate the verifier's guarantees"
+          title={demo || !keySet ? 'Precomputed trial examples; inspect the original source before use' : 'Fetch three reference trials and review their evidence checks'}
           className="cursor-pointer"
           style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', opacity: busy ? 0.5 : 1 }}
         >
-          Verifier proof
+          Source examples
         </button>
       </div>
 
@@ -1538,7 +1538,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       {showEmpty && (
         <p style={{ margin: '16px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)', lineHeight: 1.6, maxWidth: 620 }}>
           Hit <span style={{ color: 'var(--color-accent)' }}>Run today's digest</span> — Verastar searches recent literature, scores it against your rubric, and
-          verifies the top papers into a digest. Or hit “Verifier proof” to see the guarantees on three reference trials.
+          checks the evidence in the top papers for your digest. Or open “Source examples” to explore three reference trials.
         </p>
       )}
 

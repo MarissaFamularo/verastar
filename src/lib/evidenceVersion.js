@@ -22,6 +22,12 @@ export function isRelationshipValidated(verdict) {
   return evidenceVerdict(verdict).relationshipValidated === true && evidenceVerdict(verdict).flagged === false
 }
 
+// The library rail counts papers with at least one currently validated claim,
+// never a relevance tier, PubMed citation flag, or legacy paper-level boolean.
+export function hasValidatedPaperEvidence(paper) {
+  return Array.isArray(paper?.quantities) && paper.quantities.some((quantity) => isRelationshipValidated(quantity?.verdict))
+}
+
 // App-owned provenance for the extraction that created a paper's structured evidence.
 // Bump this whenever the extraction model, prompt, or schema changes in a way that could
 // alter saved quantities. A missing stamp is intentionally legacy, never assumed current.
