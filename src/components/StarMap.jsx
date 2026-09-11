@@ -507,7 +507,7 @@ export default function StarMap({ nodes, edges, selectedId = null, onSelectNode,
     const ids = new Set(nodes.map((n) => n.id))
     for (const id of [...sim.keys()]) if (!ids.has(id)) sim.delete(id)
     let added = false
-    nodes.forEach((n, i) => {
+    nodes.forEach((n) => {
       if (sim.has(n.id)) return
       // seed projects on a ring, concepts spread across the field; deterministic jitter from id.
       // The spread scales with library size — 130 concepts seeded inside r=190 start as a

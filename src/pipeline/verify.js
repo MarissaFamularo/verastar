@@ -1,18 +1,21 @@
 // pipeline/verify.js — THE SACRED CORE.
 //
 // Deterministic. No LLM runs in this file. The model proposes (value, source_quote,
-// location); this layer disposes by re-deriving truth from the fetched source text.
+// location); this layer locates source evidence and validates only explicit supported relationships.
 // A wrong `verified` badge is the one failure that invalidates the whole product, so
 // the bias is absolute: NEVER false-verify. A correct value that gets flagged is
 // annoying; a wrong value that gets a green badge is fatal.
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
+export const VERIFICATION_VERSION = '2026-09-11.relationships-v1'
+
 export const TIERS = {
   REGISTRY: 'verified-registry',
   FULL_TEXT: 'verified-full-text',
   ABSTRACT: 'abstract-only',
   FLAGGED: 'flagged',
+  LOCATED: 'source-located',
 }
 
 // --- 1. Normalization ---------------------------------------------------------
@@ -212,34 +215,78 @@ export function plausibilityWarnings(quantity, { verifiedAsPrinted = false } = {
 
 // --- Registry (CT.gov posted outcome) match -----------------------------------
 
-// Decision ②: the strongest badge (verified-registry) carries the strongest proof — the
-// extracted quantity must match a CT.gov POSTED outcome row, not merely sit in a trial
-// that has results. A row is { measure, value, ci_low, ci_high } (any field but value may
-// be null). opts.registry is an ARRAY of such rows (a single trial posts many analyses);
-// upgrade when the quantity triple-matches ANY row.
-//
-// The gate is value + CI, NEVER a name/abbreviation match on `measure` ("TcPO2" vs
-// "Peripheral Transcutaneous Oxygen Pressure" must not break a real case). The value+CI
-// triple is the strong evidence: it stops a "mean follow-up 11.2 months" row from stealing
-// the badge minted for an 11.2 mmHg TcPO2 outcome (8.0/14.5). When the registry row posts
-// CI bounds, the quantity must carry BOTH bounds and match them — a bare value that happens
-// to equal a CI-bearing posted value does NOT upgrade (falls back to full-text; a tolerable
-// false-flag, never a fatal false-verify). When the registry row posts value only, a value
-// match suffices. Returns the matched row (for the reason string) or null.
+// Numeric coincidence is not endpoint identity. Registry upgrades require explicit
+// exact endpoint, unit, timepoint and group identity from the source adapters. Missing
+// identity withholds the upgrade; abbreviations are not guessed. Existing adapters
+// commonly lack these fields and therefore intentionally cannot earn this tier.
 function registryMatch(quantity, rows) {
   if (!Array.isArray(rows) || quantity.value == null) return null
-  for (const row of rows) {
-    if (!row || row.value == null) continue
-    if (!numbersEqual(quantity.value, row.value)) continue
-    const rowHasCi = row.ci_low != null || row.ci_high != null
-    if (rowHasCi) {
-      if (quantity.ci_low == null || quantity.ci_high == null) continue
-      if (row.ci_low != null && !numbersEqual(quantity.ci_low, row.ci_low)) continue
-      if (row.ci_high != null && !numbersEqual(quantity.ci_high, row.ci_high)) continue
+  return rows.find((row) => {
+    if (!row || !quantity.name || !row.measure || normalize(row.measure) !== normalize(quantity.name)) return false
+    for (const key of ['unit', 'timepoint', 'population']) {
+      if (!quantity[key] || !row[key] || normalize(quantity[key]) !== normalize(row[key])) return false
     }
-    return row
-  }
-  return null
+    for (const key of ['value', 'ci_low', 'ci_high', 'p_value']) {
+      if (quantity[key] == null && row[key] == null) continue
+      if (!Number.isFinite(quantity[key]) || !Number.isFinite(row[key]) || !numbersEqual(quantity[key], row[key])) return false
+    }
+    return true
+  }) || null
+}
+
+// A small grammar, not a proximity heuristic or a general clinical truth checker.
+// It covers complete, unambiguous standalone sentences with exact endpoint/unit
+// identity. Tables, fuzzy/truncated quotes, repeated sentences, statistical tuples,
+// and any additional context fields require review. Source evidence remains available.
+function validateRelationship(quantity, matched, corpus, declaredType) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  const span = corpus.slice(matched.index, matched.index + matched.length)
+  if (corpus.indexOf(span, matched.index + 1) !== -1) return false
+  const before = corpus.slice(0, matched.index).trimEnd()
+  const after = corpus.slice(matched.index + matched.length).trimStart()
+  if (before && !/[.!?]$/.test(before)) return false
+  if (after && !/[.!?]$/.test(span) && !/^[.!?](?:\s|$)/.test(after)) return false
+  if (quantity.ci_low != null || quantity.ci_high != null || quantity.p_value != null) return false
+  // These fields are not currently produced by extraction. Never ignore future
+  // semantic qualifiers if a stored or external quantity includes them.
+  const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint', 'timepoint', 'population', 'direction', 'endpoint'])
+  if (Object.keys(quantity).some((key) => !supportedFields.has(key))) return false
+  const name = normalize(quantity.name)
+  const unit = normalize(quantity.unit)
+  if (!name || !unit || /[.!?;:=]/.test(name)) return false
+  const population = normalize(quantity.population)
+  const timepoint = normalize(quantity.timepoint)
+  const scopeSuffix = `${population ? ` in ${population}` : ''}${timepoint ? ` at ${timepoint}` : ''}`
+  if (scopeSuffix && !name.endsWith(scopeSuffix)) return false
+  if (quantity.endpoint != null && normalize(quantity.endpoint) !== name) return false
+  if (quantity.direction != null && declaredType !== 'change') return false
+  const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const number = '(-?(?:\\d+\\.\\d+|\\.\\d+|\\d+))'
+  const amount = number + '\\s*' + escape(unit)
+  let pattern
+  let values
+  if (declaredType === 'comparison') {
+    const first = normalize(quantity.first_label)
+    const second = normalize(quantity.second_label)
+    if (!first || !second || first === second || /[.!?;:=]/.test(first + second)) return false
+    pattern = `${escape(name)} was ${amount} in ${escape(first)} and ${amount} in ${escape(second)}`
+    values = [quantity.first_value, quantity.second_value]
+  } else if (declaredType === 'single') {
+    pattern = `${escape(name)} was ${amount}`
+    values = [quantity.value]
+  } else if (declaredType === 'range') {
+    pattern = `${escape(name)} ranged from ${amount} to ${amount}`
+    values = [quantity.range_low, quantity.range_high]
+    if (values[0] > values[1]) return false
+  } else if (declaredType === 'change') {
+    if (quantity.first_label || quantity.second_label) return false
+    const direction = normalize(quantity.direction)
+    if (quantity.direction != null && !['increased', 'decreased', 'changed'].includes(direction)) return false
+    pattern = `${escape(name)} ${direction ? escape(direction) : '(?:increased|decreased|changed)'} from ${amount} to ${amount}`
+    values = [quantity.first_value, quantity.second_value]
+  } else return false
+  const match = span.match(new RegExp(`^${pattern}[.!?]?$`))
+  return !!match && values.every((value, index) => Number.isFinite(value) && numbersEqual(value, Number(match[index + 1])))
 }
 
 // --- Locate the quote in the source ------------------------------------------
@@ -378,7 +425,9 @@ export function verify(quantity, source, opts = {}) {
   // 4. Assign tier. Registry is the strongest tier and outranks abstract-only, so it is
   // checked first — a registry-matched value posted by CT.gov is proven regardless of which
   // corpus located the quote.
-  const regRow = found && consistent ? registryMatch(quantity, opts.registry) : null
+  const matchedCorpus = matched?.corpus === 'tables' ? normTables : normProse
+  const relationshipValidated = consistent && validateRelationship(quantity, matched, matchedCorpus, declaredType)
+  const regRow = relationshipValidated ? registryMatch(quantity, opts.registry) : null
   let tier
   let reason
   if (!found) {
@@ -390,6 +439,9 @@ export function verify(quantity, source, opts = {}) {
   } else if (!consistent) {
     tier = TIERS.FLAGGED
     reason = `Quote located, but ${badNums.join(', ')} is not present in it — the value does not match the source.`
+  } else if (!relationshipValidated) {
+    tier = TIERS.LOCATED
+    reason = 'Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.'
   } else if (regRow) {
     tier = TIERS.REGISTRY
     const label = regRow.measure ? ` ("${regRow.measure}")` : ''
@@ -399,17 +451,23 @@ export function verify(quantity, source, opts = {}) {
       : `Value matches the ClinicalTrials.gov posted outcome${label}.`
   } else if (sourceTier === 'abstract_only') {
     tier = TIERS.ABSTRACT
-    reason = 'Verified against the abstract; full text not in the OA subset.'
+    reason = 'Explicit quantity relationship validated in an abstract sentence; broader clinical interpretation is unchecked.'
   } else {
     tier = TIERS.FULL_TEXT
-    reason = 'Verified against the full source text.'
+    reason = 'Explicit quantity relationship validated in a source sentence; broader clinical interpretation is unchecked.'
   }
 
-  const warnings = plausibilityWarnings(quantity, { verifiedAsPrinted: found && consistent })
+  const warnings = plausibilityWarnings(quantity, { verifiedAsPrinted: relationshipValidated })
 
   return {
     tier,
-    flagged: tier === TIERS.FLAGGED,
+    verificationVersion: VERIFICATION_VERSION,
+    flagged: !relationshipValidated,
+    sourceLocated: found,
+    numericCoverage: consistent,
+    relationshipValidated,
+    relationshipStatus: relationshipValidated ? 'validated' : 'unresolved',
+    sourceTier,
     found,
     consistent,
     matched,

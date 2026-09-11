@@ -4,6 +4,7 @@
 // store and, in the background, files it under a concept, resolves an open-access PDF link, and
 // writes it to the connected on-disk folder. The background work never blocks (or breaks) the save.
 
+import { evidenceVerdict } from '../lib/evidenceVersion.js'
 import { store } from '../lib/store.js'
 import { logEvent } from '../lib/events.js'
 import { filePaper, synthesizeGroup, consolidateDomains } from './deposit.js'
@@ -13,10 +14,10 @@ import { depositPaperToLibrary } from '../lib/library.js'
 import { citationIndicatesRetraction, retractionPatch } from './retractions.js'
 
 // Build the persisted paper record from a run result + its triage take. Pure. The verified numbers
-// are taken from the run's non-flagged rows (the app-owned channel); finding/relevance/tier come
+// retain every proposed row and its versioned verdict (including unresolved evidence); finding/relevance/tier come
 // from the triage take (the prose channel). Mirrors the record SpineCheck.toggleSave used to inline.
 export function buildPaperRecord(res, take, { title, source = 'unknown', notes = '' } = {}) {
-  const verifiedRows = res.error ? [] : res.rows.filter((r) => !r.verdict.flagged)
+  const evidenceRows = res.error ? [] : (res.rows || [])
   const retraction = retractionPatch(res.citation)
   return {
     id: res.paper.id,
@@ -39,7 +40,7 @@ export function buildPaperRecord(res, take, { title, source = 'unknown', notes =
     // digest withheld this sentence; stored so Library surfaces can honor it too.
     check: take?.check ?? { verdict: 'unchecked', reason: '' },
     cautionCheck: take?.cautionCheck ?? { verdict: 'unchecked', reason: '' },
-    quantities: verifiedRows.map((r) => ({ ...r.quantity, tier: r.verdict.tier })),
+    quantities: evidenceRows.map((r) => ({ ...r.quantity, tier: evidenceVerdict(r.verdict).tier, verdict: evidenceVerdict(r.verdict) })),
     fullText: res.sourceDoc?.text || '', // untruncated — the concept summarizer + library note use it
     tables: res.sourceDoc?.tables || '',
     // Open-access link via Unpaywall (bytes are CORS-dead, so a LINK): a direct PDF fills pdfUrl,
@@ -103,7 +104,7 @@ export async function savePaper(res, take, { title, source = 'unknown', notes = 
   // earlier "why"; a new note on an existing paper goes through setPaperNote).
   const existing = await store.get('papers', record.id)
   const persisted = existing ? mergeRefreshedEvidence(existing, record) : record
-  await store.put('papers', record.id, persisted)
+  await store.put('papers', record.id, persisted, { restoreDeleted: !existing })
   // Adoption telemetry on the ONE shared save path, so no entry point can forget it.
   // `source` says which doorway: the digest's checkbox/heart or the manual Add a paper.
   logEvent('paper_saved', { pmid: persisted.pmid, source })
@@ -113,10 +114,11 @@ export async function savePaper(res, take, { title, source = 'unknown', notes = 
 
 // Attach (or replace) the one-line "why" on an already-saved paper. Used by the prompt
 // that follows a save; the Library's note editor writes the same field. A paper that was
-// un-saved in the meantime is left alone (nothing to annotate), never re-created.
-export async function setPaperNote(id, notes) {
-  const cur = await store.get('papers', id)
-  if (!cur) return null
+// un-saved in the meantime rejects the edit, never re-created. Prompt callers
+// pass the snapshot from when drafting began so same-field conflicts stay visible.
+export async function setPaperNote(id, notes, baseline) {
+  const cur = baseline || await store.get('papers', id)
+  if (!cur) throw new Error('This paper was removed. The note was not saved.')
   const next = { ...cur, notes: String(notes || '').trim() }
   await store.put('papers', id, next)
   logEvent('paper_noted', { pmid: cur.pmid, surface: 'save-prompt' })

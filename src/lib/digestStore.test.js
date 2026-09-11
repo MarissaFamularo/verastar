@@ -1,3 +1,4 @@
+import { VERIFICATION_VERSION } from './evidenceVersion.js'
 // digestStore.test.js — the daily-digest persistence slot. Locks the record design:
 // key 'daily:latest' in 'digests', kind:'daily', selectedIds as array on disk / Set in the
 // app, and invisibility to WeekendRead's type==='weekend' scan of the same collection.
@@ -48,7 +49,7 @@ const snapshot = () => ({
       design: 'RCT',
       source: { tier: 'full_text', hasBody: true, pmcid: 'PMC1' },
       sourceDoc: { text: 'HR 0.84 in prose', tables: 'HR 0.84' },
-      rows: [{ quantity: { name: 'HR', value: 0.84 }, verdict: { found: true, tier: 'verified-full-text', flagged: false } }],
+      rows: [{ quantity: { name: 'HR', value: 0.84 }, verdict: { verificationVersion: VERIFICATION_VERSION, relationshipValidated: true, found: true, tier: 'verified-full-text', flagged: false } }],
     },
   ],
   processedResults: [
@@ -327,5 +328,17 @@ describe('digestDateLine', () => {
   it('falls back to today on an unparseable timestamp', () => {
     expect(digestDateLine('not a date', now).text).toBe('Wednesday, July 29, 2026')
     expect(digestDateLine('not a date', now).stale).toBe(false)
+  })
+})
+
+describe('legacy cached evidence policy', () => {
+  it('downgrades runtime views without rewriting the saved source or the original verdict', () => {
+    const oldVerdict = { tier: 'verified-full-text', flagged: false, found: true }
+    const record = { kind: 'daily', results: [{ paper: { id: 'p' }, sourceDoc: { text: 'Original source' }, rows: [{ quantity: { value: 20 }, verdict: oldVerdict }] }] }
+    const revived = reviveDigest(record)
+    expect(revived.results[0].rows[0].verdict.tier).toBe('legacy-unchecked')
+    expect(revived.results[0].sourceDoc.text).toBe('Original source')
+    expect(oldVerdict.flagged).toBe(false)
+    expect(record.results[0].rows[0].verdict.tier).toBe('verified-full-text')
   })
 })

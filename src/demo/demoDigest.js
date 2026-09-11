@@ -110,7 +110,7 @@ export const DEMO_DIGEST = Object.freeze({
 })
 
 export const DEMO_DIGEST_COUNTS = Object.freeze({
-  verified: papers.length,
+  verified: 0, // citation metadata is present; no claim relationships were validated
   saved: 0,
   flagged: 0,
 })

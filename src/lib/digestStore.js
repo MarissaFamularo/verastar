@@ -9,6 +9,7 @@
 // only records with type === 'weekend' && read — this record has neither field, so it is
 // invisible to that filter. Do not add a `type` field here.
 
+import { evidenceVerdict } from './evidenceVersion.js'
 import { store } from './store.js'
 
 const COLLECTION = 'digests'
@@ -31,13 +32,17 @@ export function serializeDigest({ results, processedResults, triaged, candidates
   }
 }
 
+function currentEvidenceView(results) {
+  return results.map((result) => ({ ...result, rows: result.rows?.map((row) => ({ ...row, verdict: evidenceVerdict(row.verdict) })) }))
+}
+
 // Record -> state. Returns null for anything that isn't a daily-digest record, so a
 // foreign record under the key can never masquerade as a digest.
 export function reviveDigest(record) {
   if (!record || record.kind !== 'daily') return null
   return {
-    results: record.results ?? [],
-    processedResults: record.processedResults ?? record.results ?? [],
+    results: currentEvidenceView(record.results ?? []),
+    processedResults: currentEvidenceView(record.processedResults ?? record.results ?? []),
     triaged: record.triaged ?? {},
     candidates: record.candidates ?? [],
     preCapCandidates: record.preCapCandidates ?? record.candidates ?? [],

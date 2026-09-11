@@ -19,17 +19,20 @@ function memoryStorage() {
   }
 }
 
-describe('SpineCheck verifier proof', () => {
+describe('SpineCheck source examples', () => {
   beforeEach(() => {
     globalThis.sessionStorage = memoryStorage()
     globalThis.localStorage = memoryStorage()
   })
 
-  it('keeps verifier proof reachable in the keyless sample profile', () => {
+  it('keeps clearly labeled source examples reachable in the keyless sample profile', () => {
     const html = renderToStaticMarkup(React.createElement(SpineCheck, { demo: true }))
 
     expect(html).toContain('Sample digest · read only.')
-    expect(html).toContain('Verifier proof')
+    expect(html).toContain('Source examples')
+    expect(html).toContain('Precomputed trial examples; inspect the original source before use')
+    expect(html).not.toContain('Verifier proof')
+    expect(html).not.toContain('guarantees')
     expect(html).not.toContain("Run today&#x27;s digest")
   })
 })

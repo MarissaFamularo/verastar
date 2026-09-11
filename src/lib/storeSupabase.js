@@ -1,10 +1,12 @@
+import { trackPaper, paperMutation, mutateCloudPaper } from './paperMutation.js'
+
 // lib/storeSupabase.js — the cloud storage impl behind the store.js interface.
 //
 // One generic `kv` table mirrors the collection/key/value shape of the IndexedDB
 // stores exactly, so this is a drop-in behind store.js: same five methods, same
 // return contracts (`get` resolves value-or-undefined, `all` resolves a values
-// array). Conflict policy is last-write-wins on updated_at — fine for one person
-// on two devices. RLS scopes every row to auth.uid(); the explicit user_id here
+// array). Papers use atomic field compare-and-set; other collections retain
+// their existing replacement contract. RLS scopes rows; the explicit user_id here
 // is required anyway to satisfy the primary key on upsert.
 
 // Build the kv row for an upsert. `updated_at` is stamped client-side because the
@@ -29,11 +31,23 @@ export function makeSupabaseStore({ client, userId }) {
         .maybeSingle()
         .then(({ data, error }) => {
           if (error) fail('read', error)
-          return data ? data.value : undefined
+          return data ? (collection === 'papers' ? trackPaper(data.value, userId, key) : data.value) : undefined
         })
     },
 
-    put(collection, key, value) {
+    async put(collection, key, value, { restoreDeleted = false } = {}) {
+      if (collection === 'papers') {
+        const mutation = paperMutation(value, userId, key)
+        // Only the explicit user Save action may restore a deleted record.
+        if (restoreDeleted && mutation.p_action === 'create') mutation.p_action = 'restore'
+        const result = await mutateCloudPaper(client, userId, key, mutation)
+        if (result?.value) {
+          for (const field of Object.keys(value)) delete value[field]
+          Object.assign(value, result.value)
+          trackPaper(value, userId, key)
+        }
+        return
+      }
       return client
         .from('kv')
         .upsert(kvRow(userId, collection, key, value))
@@ -52,18 +66,19 @@ export function makeSupabaseStore({ client, userId }) {
       for (let from = 0; ; from += PAGE) {
         const { data, error } = await client
           .from('kv')
-          .select('value')
+          .select(collection === 'papers' ? 'key,value' : 'value')
           .eq('user_id', userId)
           .eq('collection', collection)
           .order('key', { ascending: true })
           .range(from, from + PAGE - 1)
         if (error) fail('read', error)
-        for (const row of data || []) values.push(row.value)
+        for (const row of data || []) values.push(collection === 'papers' ? trackPaper(row.value, userId, row.key ?? row.value?.id) : row.value)
         if (!data || data.length < PAGE) return values
       }
     },
 
     delete(collection, key) {
+      if (collection === 'papers') return mutateCloudPaper(client, userId, key, { p_action: 'delete' }).then(() => undefined)
       return client
         .from('kv')
         .delete()
@@ -76,6 +91,7 @@ export function makeSupabaseStore({ client, userId }) {
     },
 
     clear(collection) {
+      if (collection === 'papers') return mutateCloudPaper(client, userId, '', { p_action: 'clear' }).then(() => undefined)
       return client
         .from('kv')
         .delete()

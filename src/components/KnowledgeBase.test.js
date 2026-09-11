@@ -1,3 +1,4 @@
+import { verify } from '../pipeline/verify.js'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -56,7 +57,7 @@ describe('Library paper digest disclosure', () => {
     expect(html).toContain('The intervention improved the primary outcome.')
     expect(html).toContain('Why it connects to your work:')
     expect(html).toContain('The observational design cannot establish causality.')
-    expect(html).toContain('VERIFIED VALUES')
+    expect(html).toContain('RELATIONSHIPS VALIDATED')
     expect(html).toContain('The primary outcome occurred in 5.5%.')
     expect(html).toContain('View article')
     expect(html).toContain('https://example.org/paper.pdf')
@@ -140,5 +141,24 @@ describe('RetractionNotice', () => {
     expect(html).toContain('Keep with warning')
     expect(html).toContain('Review in Library')
     expect(html).toContain('https://pubmed.ncbi.nlm.nih.gov/42560069/')
+  })
+})
+
+describe('saved quantity rendering policy', () => {
+  it('withholds an old swapped claim but keeps its exact saved source available', () => {
+    const quantity = { name: 'Mortality', quantity_type: 'comparison', first_label: 'Treatment A', first_value: 20, second_label: 'Treatment B', second_value: 10, unit: '%', source_quote: 'Mortality was 10% in Treatment A and 20% in Treatment B.', tier: 'verified-full-text' }
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper({ quantities: [quantity] }) }))
+    expect(html).toContain('Claim withheld')
+    expect(html).toContain('Mortality was 10% in Treatment A and 20% in Treatment B.')
+    expect(html).not.toContain('Treatment A: 20')
+    expect(html).toContain('0 RELATIONSHIPS VALIDATED')
+  })
+  it('renders a current correctly bound claim through the same saved surface', () => {
+    const quantity = { name: 'Mortality', value: 10, unit: '%', source_quote: 'Mortality was 10%.' }
+    quantity.verdict = verify(quantity, quantity.source_quote)
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper({ quantities: [quantity] }) }))
+    expect(html).toContain('1 RELATIONSHIPS VALIDATED')
+    expect(html).toContain('10 %')
+    expect(html).not.toContain('Claim withheld')
   })
 })

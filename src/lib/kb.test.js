@@ -127,7 +127,7 @@ describe('topics (the hub tier)', () => {
     { id: 'e2', source: 'concept:cea-cas', target: 'concept:carotid', origin: 'taxonomy' },
     { id: 'e3', source: 'concept:tcar', target: 'concept:orphan', origin: 'weekend' }, // non-taxonomy: ignored
   ]
-  const hubs = [hub, satTcar, satCeaCas, { ...hubPop, isHub: true }, orphan].map((c, i) =>
+  const hubs = [hub, satTcar, satCeaCas, { ...hubPop, isHub: true }, orphan].map((c) =>
     ['concept:carotid'].includes(c.id) ? { ...c, isHub: true } : c,
   )
   const allPapers = [

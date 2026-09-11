@@ -14,6 +14,7 @@ function makeFakeClient(response = { data: null, error: null }) {
   const client = {
     calls,
     response,
+    rpc: async (name, args) => { calls.push({ name, args }); return response },
     from(table) {
       const call = { table, ops: [] }
       calls.push(call)
@@ -73,7 +74,7 @@ describe('kvRow', () => {
 describe('get', () => {
   it('resolves the stored value when the row exists', async () => {
     const client = makeFakeClient({ data: { value: { title: 'BEST-CLI' } }, error: null })
-    await expect(cloudStore(client).get('papers', '99')).resolves.toEqual({ title: 'BEST-CLI' })
+    expect(JSON.parse(JSON.stringify(await cloudStore(client).get('papers', '99')))).toEqual({ title: 'BEST-CLI' })
     const call = client.calls[0]
     expect(call.table).toBe('kv')
     expect(eqs(call)).toEqual({ user_id: USER, collection: 'papers', key: '99' })
@@ -118,7 +119,7 @@ describe('put', () => {
 describe('all', () => {
   it('resolves values only, in an array', async () => {
     const client = makeFakeClient({ data: [{ value: { id: 'a' } }, { value: { id: 'b' } }], error: null })
-    await expect(cloudStore(client).all('papers')).resolves.toEqual([{ id: 'a' }, { id: 'b' }])
+    expect(JSON.parse(JSON.stringify(await cloudStore(client).all('papers')))).toEqual([{ id: 'a' }, { id: 'b' }])
     expect(eqs(client.calls[0])).toEqual({ user_id: USER, collection: 'papers' })
   })
 
@@ -133,8 +134,8 @@ describe('delete / clear', () => {
     const client = makeFakeClient({ data: null, error: null })
     await cloudStore(client).delete('papers', '42')
     const call = client.calls[0]
-    expect(opNames(call)).toContain('delete')
-    expect(eqs(call)).toEqual({ user_id: USER, collection: 'papers', key: '42' })
+    expect(call.name).toBe('mutate_library_paper')
+    expect(call.args).toEqual({ p_user_id: USER, p_key: '42', p_action: 'delete' })
   })
 
   it('clear scopes to the whole collection but never beyond the user', async () => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { savedWithoutWhy } from './pipeline/save.js'
+import { hasValidatedPaperEvidence } from './lib/evidenceVersion.js'
 import {
   setApiKey,
   getApiKey,
@@ -16,7 +17,7 @@ import {
 } from './lib/anthropic.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
 import { supabase, supabaseConfigured, currentUser, sendMagicLink, verifyEmailCode, signOut, isSignedIn } from './lib/supabase.js'
-import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
+import { shouldOfferMigration, migrateLocalToAccount, getMigrationProgress } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
 import { checkSavedRetractions, acknowledgeRetraction } from './lib/retractionWatch.js'
@@ -825,7 +826,7 @@ function MigrationOffer({ account, paperCount, onDecline }) {
         </h1>
         <p style={{ margin: '14px 0 0', fontSize: 15.5, lineHeight: 1.6, color: 'var(--color-fg-dim)' }}>
           This browser holds {paperCount === 1 ? 'a saved paper' : `${paperCount} saved papers`} plus your star map and profile.
-          Your account is empty — move the library in once, and it works on every device you sign in on.
+          Existing account records are preserved. An interrupted move can be resumed safely from this browser.
           Files already written to your disk folder stay where they are.
         </p>
         {state === 'error' && (
@@ -851,9 +852,9 @@ function MigrationOffer({ account, paperCount, onDecline }) {
   )
 }
 
-// Right rail on the Digest surface: key status, weekly counts, active projects,
+// Right rail on the Digest surface: key status, library counts, active projects,
 // and the Weekend Read teaser. Counts derive from real saved papers.
-function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, onLibrary, demo }) {
+export function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, onLibrary, demo }) {
   return (
     <aside className="vs-digest-rail" style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div
@@ -871,9 +872,9 @@ function DigestRail({ saved, onSettings, counts, projects, trellis, onConnection
         </p>
       )}
 
-      <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>{demo ? 'In this sample' : 'This week'}</p>
+      <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>{demo ? 'In this sample' : 'Your library'}</p>
       <div className="flex" style={{ gap: 26, marginBottom: 34 }}>
-        {[[counts.verified, 'verified'], [counts.saved, 'saved'], [counts.flagged, 'flagged']].map(([n, label]) => (
+        {[[counts.verified, 'with validated evidence'], [counts.saved, 'saved'], [counts.flagged, 'flagged']].map(([n, label]) => (
           <div key={label}>
             <div style={{ fontFamily: 'var(--font-serif)', fontSize: 36, color: 'var(--color-fg)', lineHeight: 1 }}>{n}</div>
             <div style={{ fontSize: 12, color: 'var(--color-fg-muted)', marginTop: 4 }}>{label}</div>
@@ -984,21 +985,20 @@ export default function App() {
         profile: p,
         preview: firstrunPreview,
       }))
-      if (user && !p?.onboarded) {
-        // Cloud has no profile yet — check whether this browser holds a library to
-        // carry in. Cloud wins when it has anything; local import is offered only
-        // into an empty account.
-        const [localProfile, localPapers, cloudPapers] = await Promise.all([
+      if (user) {
+        // Check the device manifest even when cloud onboarding or starter records
+        // exist. Only the manifest proves this local library finished moving.
+        const [localProfile, localPapers, progress] = await Promise.all([
           idbStore.get('profile', 'me'),
           idbStore.all('papers'),
-          store.all('papers'),
+          getMigrationProgress(user.id),
         ])
         if (
           shouldOfferMigration({
             localPapersCount: (localPapers || []).length,
             localProfile,
-            cloudProfile: p,
-            cloudPapersCount: (cloudPapers || []).length,
+            userId: user.id,
+            progress,
           })
         ) {
           setMigrationOffer({ paperCount: (localPapers || []).length })
@@ -1035,11 +1035,11 @@ export default function App() {
       .catch(() => {})
   }
 
-  // Derive weekly counts from real saved papers (defensive on shape).
+  // Derive library-wide counts from saved papers and the current evidence policy.
   function refreshCounts() {
     store.all('papers').then((papers = []) => {
       setCounts({
-        verified: papers.filter((p) => p?.verified || p?.tier).length,
+        verified: papers.filter(hasValidatedPaperEvidence).length,
         saved: papers.length,
         flagged: papers.filter((p) => p?.flagged).length,
         withoutWhy: savedWithoutWhy(papers).length,

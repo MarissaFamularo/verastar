@@ -1,3 +1,4 @@
+import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion.js'
 // components/SpineCheck.jsx — the spine-day test oracle, made demoable.
 //
 // Runs the REAL pipeline on the demo corpus live (fetch -> extract -> verify) and shows
@@ -20,6 +21,7 @@ import {
 import { digestProjects } from '../lib/trellis.js'
 import { wakeLock } from '../lib/wakeLock.js'
 import { checkSavedRetractions } from '../lib/retractionWatch.js'
+import { verify } from '../pipeline/verify.js'
 import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
 import {
@@ -73,10 +75,10 @@ const TIER_CHIP = {
   'abstract-only': { source: 'abstract', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
 }
 
-// A zero-spend proof for the screen shown before a key exists. These are the same locked
-// public reference values used by the live oracle; the live button re-fetches and
-// re-verifies them once a key is present.
-const KEYLESS_PROOF = (() => {
+// Precomputed examples for the screen shown before a key exists. These excerpts
+// illustrate the interface; they do not establish support in the complete paper.
+// With a key, the button fetches the trials and runs the current evidence checks.
+const KEYLESS_EXAMPLES = (() => {
   const specs = [
     { paper: DEMO_PAPERS[0], sourceTier: 'verified-full-text', name: 'Amputation-free survival', quantity: { value: 0.84, unit: 'HR', ci_low: 0.61, ci_high: 1.16, p_value: 0.22, source_quote: 'HR 0.84 (97.5% CI 0.61–1.16, P=0.22)', location_hint: 'Published reference result' } },
     { paper: DEMO_PAPERS[1], sourceTier: 'verified-registry', name: 'TcPO2 difference', quantity: { value: 11.2, unit: 'mmHg', ci_low: 8.0, ci_high: 14.5, p_value: 0.001, source_quote: 'TcPO2 diff 11.2 mmHg (95% CI 8.0–14.5, P<0.001)', location_hint: 'Published reference result' } },
@@ -88,16 +90,16 @@ const KEYLESS_PROOF = (() => {
     design: index === 0 ? 'RCT' : index === 1 ? 'RCT' : 'meta_analysis',
     source: { tier: sourceTier, hasBody: sourceTier === 'verified-full-text', pmcid: paper.pmcid },
     sourceDoc: { text: quantity.source_quote, tables: '' },
-    rows: [{ quantity: { name, ...quantity }, verdict: { found: true, flagged: false, tier: sourceTier, matched: { corpus: 'prose' }, warnings: [] } }],
+    rows: [{ quantity: { name, ...quantity }, verdict: verify({ name, ...quantity }, quantity.source_quote) }],
   }))
   results[0].corrupt = {
     original: 0.84,
     quantity: { ...results[0].rows[0].quantity, value: 0.94 },
-    verdict: { found: false, flagged: true, tier: 'flagged', reason: '0.94 is not present in the verified source quote.', warnings: [] },
+    verdict: verify({ ...results[0].rows[0].quantity, value: 0.94 }, results[0].sourceDoc),
   }
   return {
     results,
-    triaged: Object.fromEntries(results.map((r, i) => [r.paper.id, { score: 95 - i, tier: 1, finding: r.rows[0].quantity.source_quote, relevance: 'Public reference trial used to demonstrate deterministic verification.', check: { verdict: 'supported', reason: '' } }])),
+    triaged: Object.fromEntries(results.map((r, i) => [r.paper.id, { score: 95 - i, tier: 1, finding: r.rows[0].quantity.source_quote, relevance: 'Precomputed trial excerpt for exploring the evidence interface; inspect the original source before use.', check: { verdict: 'unchecked', reason: 'Illustrative example; no source support check was performed.' } }])),
   }
 })()
 
@@ -106,8 +108,8 @@ function VerificationChip({ count, sourceTier }) {
     ? (TIER_CHIP[sourceTier] || TIER_CHIP['abstract-only'])
     : { source: '', dot: 'var(--color-fg-muted)', text: 'var(--color-fg-muted)', bg: 'rgba(255,255,255,.05)' }
   const label = count > 0
-    ? `${count} value${count === 1 ? '' : 's'} verified${t.source ? ` · ${t.source}` : ''}`
-    : 'No values verified'
+    ? `${count} relationship${count === 1 ? '' : 's'} validated${t.source ? ` · ${t.source}` : ''}`
+    : 'No relationships validated'
   return (
     <span className="inline-flex items-center" style={{ gap: 6, padding: '4px 10px', borderRadius: 999, background: t.bg, color: t.text, fontSize: 11.5, fontWeight: 600 }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.dot, boxShadow: `0 0 6px ${t.dot}` }} />
@@ -151,7 +153,8 @@ function Citation({ citation, oa, pmcid }) {
   )
 }
 
-function Row({ quantity, verdict, onOpenSource, hero }) {
+function Row({ quantity, verdict: storedVerdict, onOpenSource, hero }) {
+  const verdict = evidenceVerdict(storedVerdict)
   const clickable = verdict.found && onOpenSource
   return (
     <div className="flex flex-col" style={{ gap: 4, borderTop: '1px solid var(--hairline)', padding: '12px 0' }}>
@@ -164,11 +167,11 @@ function Row({ quantity, verdict, onOpenSource, hero }) {
             className="cursor-pointer"
             style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--color-fg)', borderBottom: '1px dotted rgba(239,143,91,.55)', fontSize: hero ? 17 : 14 }}
           >
-            {fmtNum(quantity)}
+            {verdict.flagged ? 'Claim withheld — review source' : fmtNum(quantity)}
           </button>
         ) : (
           <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-fg-dim)', fontSize: hero ? 17 : 14, fontWeight: hero ? 600 : 400 }}>
-            {fmtNum(quantity)}
+            {verdict.flagged ? 'Claim withheld — review source' : fmtNum(quantity)}
           </span>
         )}
         <ProvenanceBadge tier={verdict.tier} />
@@ -451,18 +454,30 @@ function CandidatePool({
 // the moment the reason is freshest — but it never blocks the one-tap save itself.
 export function WhyPrompt({ onSave, onSkip, autoFocus = true }) {
   const [text, setText] = useState('')
-  const commit = () => (text.trim() ? onSave(text.trim()) : onSkip())
+  const [saveError, setSaveError] = useState('')
+  const [saving, setSaving] = useState(false)
+  async function commit() {
+    if (saving) return
+    if (!text.trim()) { onSkip(); return }
+    setSaveError('')
+    setSaving(true)
+    try { await onSave(text.trim()) }
+    catch (err) { setSaveError(err?.message || 'Note not saved. Your draft is still here.') }
+    finally { setSaving(false) }
+  }
   return (
-    <div className="flex items-center vs-why-prompt" style={{ gap: 8, margin: '10px 0 0' }}>
+    <div className="flex items-center vs-why-prompt" style={{ gap: 8, margin: '10px 0 0', flexWrap: 'wrap' }}>
       <input
         autoFocus={autoFocus}
         value={text}
+        disabled={saving}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
+          if (saving) { e.preventDefault(); return }
           if (e.key === 'Enter') { e.preventDefault(); commit() }
           else if (e.key === 'Escape') { e.preventDefault(); onSkip() }
         }}
-        onBlur={() => { if (!text.trim()) onSkip() }}
+        onBlur={() => { if (!saving && !text.trim()) onSkip() }}
         placeholder="Why this one? One line · Enter saves · Esc skips"
         aria-label="Why did you save this paper?"
         maxLength={280}
@@ -470,13 +485,15 @@ export function WhyPrompt({ onSave, onSkip, autoFocus = true }) {
       />
       <button
         type="button"
+        disabled={saving}
         onMouseDown={(e) => e.preventDefault() /* keep the input's blur from skipping first */}
         onClick={commit}
         className="cursor-pointer whitespace-nowrap"
         style={{ border: 0, background: 'transparent', padding: '6px 4px', color: text.trim() ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)', fontSize: 12.5, fontFamily: 'inherit' }}
       >
-        {text.trim() ? 'Save why' : 'Skip'}
+        {saving ? 'Saving…' : text.trim() ? 'Save why' : 'Skip'}
       </button>
+      {saveError && <p role="alert" style={{ width: '100%', margin: 0, fontSize: 12, color: 'var(--color-domain-vascular)' }}>{saveError}</p>}
     </div>
   )
 }
@@ -519,6 +536,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const [expanded, setExpanded] = useState({}) // id -> bool: show verified values
   const [viewer, setViewer] = useState(null) // { title, corpusLabel, corpusText, quote, valueLabel }
   const [savedIds, setSavedIds] = useState(() => new Set()) // ids deposited to the Knowledge Base
+  const whyBaseline = useRef(null)
   const [whyFor, setWhyFor] = useState(null) // paper id whose "why" prompt is open (one at a time)
   const [favIds, setFavIds] = useState(() => new Set()) // saved papers hearted as favorites
   // Rehydrated from IndexedDB this mount: { note, incomplete } or null.
@@ -696,7 +714,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     // concept, resolve an open-access PDF link, and write it to the connected on-disk folder. The
     // "Add a paper" entry point in the Library uses the exact same path so they never drift.
     try {
-      await savePaper(res, take, { title, source: 'digest' })
+      whyBaseline.current = await savePaper(res, take, { title, source: 'digest' })
       setWhyFor(id)
     } catch (err) {
       console.warn('Save failed:', err.message)
@@ -704,12 +722,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   }
 
   async function commitWhy(id, text) {
-    setWhyFor(null)
-    try {
-      await setPaperNote(id, text)
-    } catch (err) {
-      console.warn('Note not saved (paper is still saved):', err.message)
-    }
+    const baseline = whyBaseline.current
+    await setPaperNote(id, text, baseline)
+    if (whyBaseline.current === baseline) setWhyFor((current) => current === id ? null : current)
   }
 
   // Heart a paper straight from the digest. A favorite is a flag on the SAVED record,
@@ -729,7 +744,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     if (!savedIds.has(id)) {
       setSavedIds((prev) => new Set(prev).add(id))
       try {
-        await savePaper(res, take, { title, source: 'digest' })
+        whyBaseline.current = await savePaper(res, take, { title, source: 'digest' })
         setWhyFor(id)
       } catch (err) {
         console.warn('Save failed:', err.message)
@@ -864,7 +879,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             summary: r.sourceDoc?.text || '',
             // The finding is written only from values the app verified.
             verified: r.rows
-              .filter((row) => !row.verdict.flagged)
+              .filter((row) => isRelationshipValidated(row.verdict))
               .map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity) })),
           })),
         })
@@ -1003,7 +1018,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       floor: screeningFloor,
       count: profile?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT,
     })
-    const { picked, cleared, total, floor } = selection
+    const { picked, cleared, total } = selection
     const chosenIds = new Set(picked.map((c) => c.id))
     const coverageIds = new Set(picked.slice(0, selection.coveragePicked).map((c) => c.id))
     const ranked = scored.map((candidate) => ({
@@ -1349,8 +1364,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     })
   }
 
-  // Proof surface: the three reference trials, always demonstrating the hard guarantees
-  // (registry match, the corruption catch) deterministically.
+  // Source examples: precomputed excerpts when keyless, or a fresh run of
+  // the current evidence checks when a key is available.
   async function runShowcase() {
     setScanError('')
     setScanNote('')
@@ -1360,20 +1375,20 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     setEmptyWindow(null)
     setCandidates([])
     // The read-only sample profile is the first screen a keyless visitor sees. Keep its
-    // proof deterministic and zero-spend even if this browser happens to retain an old
+    // examples free of model calls even if this browser happens to retain an old
     // key from another profile/session.
     if (demo || !keySet) {
-      setResults(KEYLESS_PROOF.results)
-      setProcessedResults(KEYLESS_PROOF.results)
-      setTriaged(KEYLESS_PROOF.triaged)
+      setResults(KEYLESS_EXAMPLES.results)
+      setProcessedResults(KEYLESS_EXAMPLES.results)
+      setTriaged(KEYLESS_EXAMPLES.triaged)
       setScanNote(demo
-        ? 'Zero-spend verifier proof shown on three public reference trials.'
-        : 'Zero-spend sample proof shown. Add a key to re-fetch and re-verify these three public trials live.')
+        ? 'Precomputed examples from three public reference trials. Claim relationships have not been validated.'
+        : 'Precomputed examples shown. Add a key to fetch these trials and review their evidence checks.')
       return
     }
     wakeLock.start()
     try {
-      // Deliberately NOT recorded as seen: the three reference trials are a proof surface,
+      // Deliberately NOT recorded as seen: these three trials are interface examples,
       // not her morning, and burying them would break the demo on the second run.
       await runList(DEMO_PAPERS, { injectCorrupt: true })
     } finally {
@@ -1413,7 +1428,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
 
   return (
     <section>
-      {/* Run controls — the big centered primary action, with the deterministic proof
+      {/* Run controls — the big centered primary action, with the source examples
           surface as a small secondary beneath it. */}
       {demo && (
         <div style={{ padding: '15px 17px', borderRadius: 13, border: '1px solid rgba(143,189,230,.18)', background: 'rgba(143,189,230,.07)', color: 'var(--color-registry)', fontSize: 13.5, lineHeight: 1.55 }}>
@@ -1454,11 +1469,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         <button
           onClick={runShowcase}
           disabled={busy}
-          title="Three reference trials that demonstrate the verifier's guarantees"
+          title={demo || !keySet ? 'Precomputed trial examples; inspect the original source before use' : 'Fetch three reference trials and review their evidence checks'}
           className="cursor-pointer"
           style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', opacity: busy ? 0.5 : 1 }}
         >
-          Verifier proof
+          Source examples
         </button>
       </div>
 
@@ -1523,7 +1538,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       {showEmpty && (
         <p style={{ margin: '16px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)', lineHeight: 1.6, maxWidth: 620 }}>
           Hit <span style={{ color: 'var(--color-accent)' }}>Run today's digest</span> — Verastar searches recent literature, scores it against your rubric, and
-          verifies the top papers into a digest. Or hit “Verifier proof” to see the guarantees on three reference trials.
+          checks the evidence in the top papers for your digest. Or open “Source examples” to explore three reference trials.
         </p>
       )}
 
@@ -1598,7 +1613,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           const stage = stages[paper.id]
           const take = triaged[paper.id]
           const title = titleOf(res)
-          const verifiedRows = !res.error ? res.rows.filter((r) => !r.verdict.flagged) : []
+          const verifiedRows = !res.error ? res.rows.filter((r) => isRelationshipValidated(r.verdict)) : []
           const heroRow = verifiedRows[0] || null
           const rank = String(idx + 1).padStart(2, '0')
           return (
@@ -1719,7 +1734,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
               {res &&
                 !res.error &&
                 (() => {
-                  const flaggedRows = res.rows.filter((r) => r.verdict.flagged)
+                  const flaggedRows = res.rows.filter((r) => !isRelationshipValidated(r.verdict))
                   const isOpen = !!expanded[paper.id]
                   const total = verifiedRows.length
                   // No numeric results (review / methods piece) — the finding + citation carry the card.

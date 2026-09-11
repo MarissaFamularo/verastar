@@ -5,9 +5,11 @@
 // flagged muted grey.
 
 const STYLES = {
-  'verified-registry': { label: 'Verified · registry', dot: 'var(--color-registry)', text: 'var(--color-registry-soft)', bg: 'rgba(143,189,230,.15)' },
-  'verified-full-text': { label: 'Verified · full text', dot: 'var(--color-verified)', text: 'var(--color-verified-soft)', bg: 'rgba(127,191,154,.14)' },
-  'abstract-only': { label: 'Verified · abstract', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
+  'verified-registry': { label: 'Relationship validated · registry', dot: 'var(--color-registry)', text: 'var(--color-registry-soft)', bg: 'rgba(143,189,230,.15)' },
+  'verified-full-text': { label: 'Relationship validated · full text', dot: 'var(--color-verified)', text: 'var(--color-verified-soft)', bg: 'rgba(127,191,154,.14)' },
+  'abstract-only': { label: 'Relationship validated · abstract', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
+  'source-located': { label: 'Source located · relationship unresolved', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
+  'legacy-unchecked': { label: 'Earlier evidence · relationships unchecked', dot: 'var(--color-fg-muted)', text: 'var(--color-fg-muted)', bg: 'rgba(255,255,255,.05)' },
   flagged: { label: 'Flagged — not verified', dot: 'var(--color-fg-muted)', text: 'var(--color-fg-muted)', bg: 'rgba(255,255,255,.05)' },
 }
 

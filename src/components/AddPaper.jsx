@@ -30,7 +30,7 @@ export default function AddPaper({ onAdded }) {
   const [stage, setStage] = useState('') // '' | resolving | fetching | extracting | verifying | saving
   const [error, setError] = useState('')
   const [done, setDone] = useState('') // success summary line
-  const [whyFor, setWhyFor] = useState(null) // id of the paper just added, awaiting its "why"
+  const [whyFor, setWhyFor] = useState(null) // saved-paper snapshot awaiting its "why"
   const keySet = hasApiKey()
   const busy = stage !== ''
 
@@ -117,7 +117,7 @@ export default function AddPaper({ onAdded }) {
     if (res.error) bits.push('citation saved (source unavailable)')
     if (!bits.length) bits.push('no numeric claims to verify')
     setDone(`Added “${record.title}” — ${bits.join(', ')}.`)
-    setWhyFor(record.id)
+    setWhyFor(record)
     setInput('')
     setStage('')
     onAdded?.()
@@ -158,7 +158,8 @@ export default function AddPaper({ onAdded }) {
       {done && <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 500, color: 'var(--color-verified-soft)' }}>{done}</p>}
       {whyFor && (
         <WhyPrompt
-          onSave={async (text) => { const id = whyFor; setWhyFor(null); try { await setPaperNote(id, text) } catch (err) { console.warn('Note not saved:', err.message) } }}
+          key={whyFor.id}
+          onSave={async (text) => { await setPaperNote(whyFor.id, text, whyFor); setWhyFor((current) => current === whyFor ? null : current) }}
           onSkip={() => setWhyFor(null)}
         />
       )}
