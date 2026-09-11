@@ -101,13 +101,62 @@ describe('shouldOfferMigration', () => {
     expect(shouldOfferMigration({ ...base, localProfile: { onboarded: true } })).toBe(true)
   })
 
-  it('never offers into a non-empty cloud — cloud wins', () => {
-    expect(shouldOfferMigration({ ...base, localPapersCount: 12, cloudPapersCount: 40 })).toBe(false)
-    expect(shouldOfferMigration({ ...base, localPapersCount: 12, cloudProfile: { onboarded: true } })).toBe(false)
+  it('offers recovery despite an existing cloud or starter library', () => {
+    expect(shouldOfferMigration({ ...base, localPapersCount: 12, cloudPapersCount: 40 })).toBe(true)
+    expect(shouldOfferMigration({ ...base, localPapersCount: 12, cloudProfile: { onboarded: true } })).toBe(true)
   })
 
   it('never offers when this browser has nothing to move', () => {
     expect(shouldOfferMigration(base)).toBe(false)
     expect(shouldOfferMigration({ ...base, localProfile: { onboarded: false } })).toBe(false)
+  })
+})
+
+// Exercise the exported importer across real pause/resume boundaries.
+describe('resumable migration orchestration', () => {
+  function fixture() {
+    let progress
+    let signedIn = USER
+    let calls = 0
+    let failSecond = true
+    const cloud = new Map([['papers:0', { id:'0', notes:'cloud edit' }]])
+    const state = async (userId, patch) => {
+      if (patch) {
+        if(progress && progress.userId!==userId) throw new Error('other account')
+        progress = progress ? {...progress,...patch} : {...patch,userId}
+      }
+      return progress
+    }
+    const client={
+      auth:{getUser:async()=>({data:{user:{id:signedIn}}})},
+      rpc:async(name,{p_rows})=>{
+        calls++
+        if(calls===2 && failSecond) return {error:{message:'offline'}}
+        for(const r of p_rows) if(!cloud.has(`${r.collection}:${r.key}`)) cloud.set(`${r.collection}:${r.key}`,r.value)
+        return {data:p_rows.length}
+      },
+    }
+    return {client,state,cloud,entries:async(c)=>c==='papers'?Array.from({length:401},(_,i)=>[String(i),{id:String(i),notes:'local'}]):[], progress:()=>progress, resume:()=>{failSecond=false}, switch:()=>{signedIn='other'} }
+  }
+  it('batch-two failure remains offered, reload resumes, cloud edits survive, retries do not duplicate', async()=>{
+    const f=fixture()
+    const {migrateLocalToAccount}=await import('./migrate.js')
+    await expect(migrateLocalToAccount({...f,userId:USER})).rejects.toThrow(/paused/)
+    expect(f.progress().nextBatch).toBe(1)
+    expect(shouldOfferMigration({userId:USER,progress:f.progress(),cloudPapersCount:200})).toBe(true)
+    f.resume()
+    await migrateLocalToAccount({...f,userId:USER})
+    await migrateLocalToAccount({...f,userId:USER})
+    expect(f.cloud.size).toBe(401)
+    expect(f.cloud.get('papers:0').notes).toBe('cloud edit')
+    expect(f.progress().complete).toBe(true)
+  })
+  it('a different account cannot resume or import the claimed browser library', async()=>{
+    const f=fixture();const {migrateLocalToAccount}=await import('./migrate.js')
+    await expect(migrateLocalToAccount({...f,userId:USER})).rejects.toThrow(/paused/)
+    f.switch()
+    await expect(migrateLocalToAccount({...f,userId:USER})).rejects.toThrow(/Account changed/)
+    await expect(migrateLocalToAccount({...f,userId:'other'})).rejects.toThrow(/another account/)
+    expect(shouldOfferMigration({userId:'other',progress:f.progress(),localPapersCount:401})).toBe(false)
   })
 })

@@ -1,3 +1,5 @@
+import { VERIFICATION_VERSION } from './evidenceVersion.js'
+const currentVerdict = { verificationVersion: VERIFICATION_VERSION, relationshipValidated: true, flagged: false, tier: 'verified-full-text' }
 // libraryFormat.test.js — locks the flat-file vault's PURE formatters. These render the verified
 // facts out to markdown the clinician owns, so the trust-critical bits are: slugs are stable and
 // filesystem-safe, frontmatter is present, verified numbers ALWAYS carry their tier (the honest
@@ -25,7 +27,7 @@ const paper = (over = {}) => ({
   tier: 'verified-full-text',
   finding: 'Drug-coated devices reduced reintervention.',
   relevance: 'Feeds the Limb Care Program.',
-  quantities: [{ name: 'Amputation-free survival', value: 84, unit: '%', tier: 'verified-full-text' }],
+  quantities: [{ name: 'Amputation-free survival', value: 84, unit: '%', tier: 'verified-full-text', verdict: currentVerdict }],
   pdfUrl: null,
   domain: 'vascular',
   tags: ['clti', 'bypass'],
@@ -95,7 +97,7 @@ describe('sourceNoteMd', () => {
         range_high: 3.52,
         unit: 'HR',
         source_quote: 'adjusted Cox models HR 3.43–3.52',
-        tier: 'verified-full-text',
+        tier: 'verified-full-text', verdict: currentVerdict,
       }],
     }))
     expect(md).toContain('**Adjusted hazard ratios:** 3.43–3.52 HR')
@@ -105,7 +107,7 @@ describe('sourceNoteMd', () => {
     const md = sourceNoteMd(
       paper({
         quantities: [
-          { name: 'Effect', value: 0.84, p_value: 0.001, source_quote: 'HR 0.84 (P<0·001)', tier: 'verified-full-text' },
+          { name: 'Effect', value: 0.84, p_value: 0.001, source_quote: 'HR 0.84 (P<0·001)', tier: 'verified-full-text', verdict: currentVerdict },
         ],
       }),
     )

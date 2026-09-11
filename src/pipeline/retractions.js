@@ -14,7 +14,7 @@ export function hasRetractedPublicationType(pubtypes) {
 
 function titleIndicatesRetraction(title) {
   const text = String(title || '').trim()
-  return /^\[?retracted\]?\s*[:.\-]/i.test(text) || /\[retracted\]\s*\.?$/i.test(text)
+  return /^\[?retracted\]?\s*[:.-]/i.test(text) || /\[retracted\]\s*\.?$/i.test(text)
 }
 
 // Supports live PubMed citations and older saved records, including legacy citations

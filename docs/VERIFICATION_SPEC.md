@@ -1,5 +1,7 @@
 # Verification spec — the sacred core
 
+**Current interpretation (2026-09-11):** the [Evidence relationship contract](EVIDENCE_RELATIONSHIP_CONTRACT.md) supersedes the token-only badge claims and tier algorithm below. Numeric coverage is source-location evidence; only explicitly parsed relationships receive stronger badges. Historical rationale follows.
+
 *Authored 2026-07-07 for the Verastar build. Deterministic; no LLM runs in this layer.*
 
 ## The promise

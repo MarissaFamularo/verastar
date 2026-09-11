@@ -8,7 +8,7 @@
 // (lib/kb.js) does the pure search/filter. Styled to the observatory design (Verastar.dc.html);
 // the flat-file vault lives on its own Library surface now.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { store } from '../lib/store.js'
 import { logEvent } from '../lib/events.js'
 import { hasApiKey } from '../lib/anthropic.js'
@@ -32,7 +32,7 @@ import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
 import SharePaperButton from './SharePaperButton.jsx'
 import { fmtNum } from '../lib/format.js'
-import { extractionVersionStatus } from '../lib/evidenceVersion.js'
+import { evidenceVerdict, isRelationshipValidated, extractionVersionStatus } from '../lib/evidenceVersion.js'
 import { needsDigestDetails, refreshSavedPaperEvidence } from '../pipeline/refreshEvidence.js'
 
 const REFRESH_STAGE_LABEL = {
@@ -114,8 +114,8 @@ export default function KnowledgeBase() {
 
   // --- mutations (persist, then patch local state so edits feel instant) ---
 
-  async function savePaper(id, patch) {
-    const current = await store.get('papers', id)
+  async function savePaper(id, patch, baseline) {
+    const current = baseline || await store.get('papers', id)
     if (!current) return
     const next = { ...current, ...patch }
     await store.put('papers', id, next)
@@ -403,7 +403,7 @@ export default function KnowledgeBase() {
                 query={query}
                 onRemoveConceptTag={(t) => removeConceptTag(group, t)}
                 onRemovePaperTag={removePaperTag}
-                onSaveNote={(id, notes) => savePaper(id, { notes })}
+                onSaveNote={(id, notes, baseline) => savePaper(id, { notes }, baseline)}
                 onDeleteConcept={() => deleteConcept(group)}
                 onDeletePaper={deletePaper}
                 onToggleFavorite={toggleFavorite}
@@ -418,7 +418,7 @@ export default function KnowledgeBase() {
                 </p>
                 <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {unfiled.map((p) => (
-                    <PaperRow key={p.id} paper={p} onRemoveTag={(t) => removePaperTag(p, t)} onSaveNote={(notes) => savePaper(p.id, { notes })} onDelete={() => deletePaper(p)} onToggleFavorite={() => toggleFavorite(p)} onCreateDetails={(onStage) => createDigestDetails(p, onStage)} canCreateDetails={keySet} />
+                    <PaperRow key={p.id} paper={p} onRemoveTag={(t) => removePaperTag(p, t)} onSaveNote={(notes, baseline) => savePaper(p.id, { notes }, baseline)} onDelete={() => deletePaper(p)} onToggleFavorite={() => toggleFavorite(p)} onCreateDetails={(onStage) => createDigestDetails(p, onStage)} canCreateDetails={keySet} />
                   ))}
                 </ul>
               </div>
@@ -477,7 +477,7 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
         <ul style={{ margin: 0, padding: 0, listStyle: 'none', borderTop: '1px solid var(--hairline)' }}>
           {papers.map((p, i) => (
             <li key={p.id} style={{ padding: '16px 26px', borderTop: i === 0 ? 'none' : '1px solid var(--hairline-soft)' }}>
-              <PaperRow paper={p} onRemoveTag={(t) => onRemovePaperTag(p, t)} onSaveNote={(notes) => onSaveNote(p.id, notes)} onDelete={() => onDeletePaper(p)} onToggleFavorite={() => onToggleFavorite(p)} onCreateDetails={(onStage) => onCreateDetails(p, onStage)} canCreateDetails={canCreateDetails} />
+              <PaperRow paper={p} onRemoveTag={(t) => onRemovePaperTag(p, t)} onSaveNote={(notes, baseline) => onSaveNote(p.id, notes, baseline)} onDelete={() => onDeletePaper(p)} onToggleFavorite={() => onToggleFavorite(p)} onCreateDetails={(onStage) => onCreateDetails(p, onStage)} canCreateDetails={canCreateDetails} />
             </li>
           ))}
           {papers.length === 0 && (
@@ -495,7 +495,8 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
 // context so the summary, project connection, caution, verified values, and reading links do not
 // look like unrelated fragments. Exported for focused rendering tests.
 export function SavedDigestDetails({ paper }) {
-  const verifiedCount = Array.isArray(paper.quantities) ? paper.quantities.length : 0
+  const evidenceRows = Array.isArray(paper.quantities) ? paper.quantities : []
+  const verifiedCount = evidenceRows.filter((quantity) => isRelationshipValidated(quantity.verdict)).length
   const extractionStatus = extractionVersionStatus(paper)
   const articleUrl = paper.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`
   const fullTextUrl = paper.pdfUrl || paper.oaUrl || pmcUrl(paper.pmcid)
@@ -533,14 +534,15 @@ export function SavedDigestDetails({ paper }) {
         </p>
       )}
 
-      {verifiedCount > 0 ? (
+      {evidenceRows.length > 0 ? (
         <div style={{ marginTop: 10, borderRadius: 9, border: '1px solid rgba(127,191,154,.2)', background: 'rgba(127,191,154,.04)', padding: '8px 10px' }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>VERIFIED VALUES</p>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>EVIDENCE · {verifiedCount} RELATIONSHIPS VALIDATED</p>
           <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
             {paper.quantities.map((quantity, index) => (
               <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
                 <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{fmtNum(quantity)}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{isRelationshipValidated(quantity.verdict) ? fmtNum(quantity) : 'Claim withheld — review source'}</span>
+                {!isRelationshipValidated(quantity.verdict) && <span style={{ display: 'block', color: 'var(--color-abstract)' }}>{evidenceVerdict(quantity.verdict).reason}</span>}
                 {quantity.source_quote && <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--color-fg-faint)' }}>&ldquo;{quantity.source_quote}&rdquo;</span>}
               </li>
             ))}
@@ -579,7 +581,10 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
   const [showDigestDetails, setShowDigestDetails] = useState(false)
   const [refreshStage, setRefreshStage] = useState('')
   const [refreshError, setRefreshError] = useState('')
-  const [note, setNote] = useState(paper.notes || '')
+  const [noteDraft, setNoteDraft] = useState(null)
+  const note = noteDraft?.text ?? (paper.notes || '')
+  const [noteError, setNoteError] = useState('')
+  const [noteSaving, setNoteSaving] = useState(false)
   const dirty = note !== (paper.notes || '')
   const cite = [paper.citation?.author, paper.citation?.journal, paper.citation?.year].filter(Boolean).join(' · ')
   const retracted = paperIndicatesRetraction(paper)
@@ -588,18 +593,16 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
   const detailsId = `paper-details-${String(paper.id || paper.pmid).replace(/[^a-zA-Z0-9_-]/g, '-')}`
   const canRefresh = needsDigestDetails(paper)
 
-  const lastSaved = useRef(paper.notes || '')
-  useEffect(() => {
-    if ((paper.notes || '') !== lastSaved.current) {
-      lastSaved.current = paper.notes || ''
-      setNote(paper.notes || '')
-    }
-  }, [paper.notes])
-
-  function commit() {
-    if (!dirty) return
-    lastSaved.current = note
-    onSaveNote(note)
+  async function commit() {
+    if (!dirty || noteSaving) return
+    setNoteError('')
+    setNoteSaving(true)
+    try {
+      await onSaveNote(note, noteDraft?.baseline || paper)
+      setNoteDraft(null)
+    } catch (err) {
+      setNoteError(err?.message || 'Note not saved. Your draft is still here.')
+    } finally { setNoteSaving(false) }
   }
 
   async function createDetails() {
@@ -699,14 +702,16 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
       <div style={{ marginTop: 10 }}>
         <textarea
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          disabled={noteSaving}
+          onChange={(e) => { const text = e.target.value; setNoteDraft((draft) => ({ text, baseline: draft?.baseline || paper })) }}
           onBlur={commit}
           rows={note ? 2 : 1}
           placeholder="Add a note…"
           style={{ width: '100%', resize: 'vertical', borderRadius: 8, border: '1px solid var(--hairline)', background: 'var(--surface-input)', padding: '6px 9px', fontSize: 12, color: 'var(--color-fg-soft)', fontFamily: 'inherit', outline: 'none' }}
         />
+        {noteError && <p role="alert" style={{ fontSize: 12, color: 'var(--color-domain-vascular)' }}>{noteError}</p>}
         {dirty && (
-          <button onClick={commit} className="cursor-pointer" style={{ marginTop: 6, borderRadius: 7, background: 'var(--color-accent)', color: '#1c1206', padding: '3px 10px', fontSize: 11, fontWeight: 600, border: 0 }}>Save note</button>
+          <button disabled={noteSaving} onClick={commit} className="cursor-pointer" style={{ marginTop: 6, borderRadius: 7, background: 'var(--color-accent)', color: '#1c1206', padding: '3px 10px', fontSize: 11, fontWeight: 600, border: 0 }}>Save note</button>
         )}
       </div>
     </div>

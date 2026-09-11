@@ -1,3 +1,5 @@
+import { verify } from './verify.js'
+import { sourceNoteMd } from '../lib/libraryFormat.js'
 import { describe, expect, it } from 'vitest'
 import { buildPaperRecord, savedWithoutWhy } from './save.js'
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
@@ -41,7 +43,7 @@ describe('buildPaperRecord — design appraisal survives a manual or digest save
     expect(buildPaperRecord({ ...base, extractionVersion: '2026-07-01.v1' }, {}).extractionVersion).toBe('2026-07-01.v1')
   })
 
-  it('persists only verified rows for the expandable evidence list', () => {
+  it('preserves every evidence row while preventing legacy tier promotion', () => {
     const res = {
       paper: { id: '1', pmid: '1' }, citation: {}, source: {}, sourceDoc: {},
       rows: [
@@ -50,9 +52,10 @@ describe('buildPaperRecord — design appraisal survives a manual or digest save
       ],
     }
     const paper = buildPaperRecord(res, { score: 58 })
-    expect(paper.quantities).toEqual([{
-      name: 'Probability', range_low: 0.823, range_high: 0.855, tier: 'verified-abstract',
-    }])
+    expect(paper.quantities).toHaveLength(2)
+    expect(paper.quantities[0]).toMatchObject({ name: 'Probability', range_low: 0.823, range_high: 0.855, tier: 'legacy-unchecked' })
+    expect(paper.quantities[0].verdict).toMatchObject({ flagged: true, relationshipValidated: false, originalTier: 'verified-abstract' })
+    expect(paper.quantities[1].value).toBe(9)
     expect(paper.score).toBe(58)
   })
 })
@@ -117,5 +120,25 @@ describe('savedWithoutWhy', () => {
   it('is defensive on shape', () => {
     expect(savedWithoutWhy(null)).toEqual([])
     expect(savedWithoutWhy([undefined, {}])).toEqual([])
+  })
+})
+
+describe('evidence save and export contract', () => {
+  it('retains source and unresolved proposals, while asserting only the correctly bound control', () => {
+    const text = 'Mortality was 10% in Treatment A and 20% in Treatment B.'
+    const quantity = { name: 'Mortality', quantity_type: 'comparison', first_label: 'Treatment A', first_value: 10, second_label: 'Treatment B', second_value: 20, unit: '%', source_quote: text }
+    const swapped = { ...quantity, first_value: 20, second_value: 10 }
+    const result = { paper: { id: 'synthetic', pmid: '123' }, sourceDoc: { text }, rows: [quantity, swapped].map((q) => ({ quantity: q, verdict: verify(q, text) })) }
+    const paper = JSON.parse(JSON.stringify(buildPaperRecord(result, {}, { notes: 'Personal annotation' })))
+    expect(paper.quantities).toHaveLength(2)
+    expect(paper.quantities[0].verdict.relationshipValidated).toBe(true)
+    expect(paper.quantities[1].verdict.relationshipValidated).toBe(false)
+    expect(paper.fullText).toBe(text)
+    expect(paper.notes).toBe('Personal annotation')
+    const note = sourceNoteMd(paper)
+    expect(note).toContain('Treatment A: 10')
+    expect(note).not.toContain('Treatment A: 20')
+    expect(note).toContain('Source receipt: ' + text)
+    expect(note).toContain('source-located')
   })
 })

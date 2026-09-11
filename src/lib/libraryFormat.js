@@ -1,3 +1,4 @@
+import { evidenceVerdict, isRelationshipValidated } from './evidenceVersion.js'
 // lib/libraryFormat.js — PURE formatters that turn Verastar records into human-scannable markdown.
 //
 // This is the trust-preserving heart of the flat-file vault: the app writes the SAME verified
@@ -140,16 +141,19 @@ export function sourceNoteMd(paper) {
     ),
   )
   if (quantities.length) {
-    parts.push('', '## Verified evidence', '')
-    parts.push('_Each value below was re-verified against the source. The tier is what the app proved,')
-    parts.push('not what a model asserted._', '')
+    parts.push('', '## Evidence and source receipts', '')
+    parts.push('_Only current relationship-validated claims are asserted below. Unresolved or earlier claims retain their source receipts,')
+    parts.push('and require review before use._', '')
     for (const q of quantities) {
       const name = q.name || 'Value'
       // Shared fact-channel formatter (lib/format.js) — the vault note and the on-screen
       // digest render the same string, operator derived from the verified quote.
-      const val = fmtNum(q)
-      const tier = q.tier ? ` — tier: \`${q.tier}\`` : ''
+      const verdict = evidenceVerdict(q.verdict)
+      const val = isRelationshipValidated(verdict) ? fmtNum(q) : 'Claim withheld — relationship unchecked'
+      const tier = ` — tier: \`${verdict.tier}\``
       parts.push(`- **${name}:** ${val}${tier}`)
+      if (q.source_quote) parts.push(`  Source receipt: ${q.source_quote}`)
+      if (verdict.flagged) parts.push(`  ${verdict.reason}`)
     }
   }
 

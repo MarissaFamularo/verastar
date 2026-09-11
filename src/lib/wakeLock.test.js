@@ -4,7 +4,7 @@
 // foreground ONLY while a run is in flight, and degrades to a total no-op — never a throw
 // — whenever the API is missing or misbehaves.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createWakeLock } from './wakeLock.js'
 
 // A fake WakeLockSentinel: records release() calls and lets the test fire the 'release'

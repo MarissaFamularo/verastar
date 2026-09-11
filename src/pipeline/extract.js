@@ -65,6 +65,10 @@ export const EXTRACTION_SCHEMA = {
 const SYSTEM = `You extract headline quantitative results from a biomedical paper into a strict schema.
 
 Non-negotiable rules:
+- Copy a complete supporting sentence when available, retaining endpoint, units, groups,
+  timepoints and population. Keep the name faithful to the endpoint and qualifiers.
+  Never rewrite source text to fit a verification template. Matching numeric tokens is
+  source-location evidence, not proof of the claim relationship.
 - source_quote MUST be copied VERBATIM from the provided source text — an exact
   substring, character for character. Do NOT paraphrase, re-punctuate, or "clean up"
   numbers. If the paper writes 0·84 with a middle dot, copy 0·84.

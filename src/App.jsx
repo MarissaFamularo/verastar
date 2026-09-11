@@ -16,7 +16,7 @@ import {
 } from './lib/anthropic.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
 import { supabase, supabaseConfigured, currentUser, sendMagicLink, verifyEmailCode, signOut, isSignedIn } from './lib/supabase.js'
-import { shouldOfferMigration, migrateLocalToAccount } from './lib/migrate.js'
+import { shouldOfferMigration, migrateLocalToAccount, getMigrationProgress } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
 import { checkSavedRetractions, acknowledgeRetraction } from './lib/retractionWatch.js'
@@ -825,7 +825,7 @@ function MigrationOffer({ account, paperCount, onDecline }) {
         </h1>
         <p style={{ margin: '14px 0 0', fontSize: 15.5, lineHeight: 1.6, color: 'var(--color-fg-dim)' }}>
           This browser holds {paperCount === 1 ? 'a saved paper' : `${paperCount} saved papers`} plus your star map and profile.
-          Your account is empty — move the library in once, and it works on every device you sign in on.
+          Existing account records are preserved. An interrupted move can be resumed safely from this browser.
           Files already written to your disk folder stay where they are.
         </p>
         {state === 'error' && (
@@ -984,21 +984,20 @@ export default function App() {
         profile: p,
         preview: firstrunPreview,
       }))
-      if (user && !p?.onboarded) {
-        // Cloud has no profile yet — check whether this browser holds a library to
-        // carry in. Cloud wins when it has anything; local import is offered only
-        // into an empty account.
-        const [localProfile, localPapers, cloudPapers] = await Promise.all([
+      if (user) {
+        // Check the device manifest even when cloud onboarding or starter records
+        // exist. Only the manifest proves this local library finished moving.
+        const [localProfile, localPapers, progress] = await Promise.all([
           idbStore.get('profile', 'me'),
           idbStore.all('papers'),
-          store.all('papers'),
+          getMigrationProgress(user.id),
         ])
         if (
           shouldOfferMigration({
             localPapersCount: (localPapers || []).length,
             localProfile,
-            cloudProfile: p,
-            cloudPapersCount: (cloudPapers || []).length,
+            userId: user.id,
+            progress,
           })
         ) {
           setMigrationOffer({ paperCount: (localPapers || []).length })

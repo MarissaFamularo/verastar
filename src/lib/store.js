@@ -133,7 +133,7 @@ export function idbEntries(collection) {
 
 // Keys that must never reach the cloud backend. libraryHandle is a
 // FileSystemDirectoryHandle: structured-clone-only, meaningless off this device.
-const DEVICE_LOCAL_KEYS = new Set(['libraryHandle'])
+const DEVICE_LOCAL_KEYS = new Set(['libraryHandle', 'migrationState'])
 
 export function isDeviceLocal(collection, key) {
   return collection === 'profile' && DEVICE_LOCAL_KEYS.has(key)
@@ -163,8 +163,8 @@ export const store = {
   },
 
   // Write one record under key.
-  put(collection, key, value) {
-    return isDeviceLocal(collection, key) ? idbStore.put(collection, key, value) : backend().put(collection, key, value)
+  put(collection, key, value, options) {
+    return isDeviceLocal(collection, key) ? idbStore.put(collection, key, value) : backend().put(collection, key, value, options)
   },
 
   // Read every record in a collection as an array (values only). Signed in, this
@@ -179,12 +179,12 @@ export const store = {
     return isDeviceLocal(collection, key) ? idbStore.delete(collection, key) : backend().delete(collection, key)
   },
 
-  // Empty a collection. Signed in, clearing `profile` also clears the device-local
-  // slot so "erase everything" can't leave a stale folder handle behind — parity
-  // with what the signed-out clear has always done.
+  // Empty a collection. Signed in, remove the device folder handle only.
+  // The account-bound migration manifest must survive while legacy local papers
+  // remain; deleting it could let a different account claim that library.
   clear(collection) {
     if (_cloud && collection === 'profile') {
-      return Promise.all([_cloud.clear(collection), idbStore.clear(collection)]).then(() => undefined)
+      return Promise.all([_cloud.clear(collection), idbStore.delete('profile', 'libraryHandle')]).then(() => undefined)
     }
     return backend().clear(collection)
   },
@@ -200,4 +200,31 @@ export function getProfile() {
 
 export function saveProfile(profile) {
   return store.put('profile', PROFILE_KEY, profile)
+}
+
+// Durable, atomic claim for this browser's legacy library. A different account
+// cannot claim it on a later login, even after partial success or a reload.
+export async function migrationState(userId, update) {
+  const db = await openDb()
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('profile', 'readwrite')
+    const os = transaction.objectStore('profile')
+    const request = os.get('migrationState')
+    let result
+    request.onsuccess = () => {
+      const current = request.result
+      if (!update) { result = current; return }
+      if (current && current.userId !== userId) {
+        transaction.abort()
+        return
+      }
+      result = current
+        ? { ...current, nextBatch: Math.max(current.nextBatch || 0, update.nextBatch || 0), complete: current.complete || update.complete || false }
+        : { ...update, userId }
+      os.put(result, 'migrationState')
+    }
+    transaction.oncomplete = () => resolve(result)
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(new Error('This local library is assigned to another account. Sign in to that account to resume.'))
+  })
 }

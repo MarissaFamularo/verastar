@@ -1,3 +1,6 @@
+// Source-token regressions preserve normalization and coverage checks; these historical
+// fixtures omit endpoint identity or context and no longer prove relationships.
+// Supported relationship controls and adverse cases live in relationshipRegression.test.js.
 // Adversarial verify suite — EVAL source #1 (docs/EVAL.md).
 //
 // The metric is PRECISION, not accuracy: a false-verify (green badge on a wrong value)
@@ -67,9 +70,9 @@ describe('statistical plausibility warnings', () => {
   it('warns on a P value outside 0–1 without conflating source verification', () => {
     const source = 'The estimated effect was 2.0 (P=1.2).'
     const verified = verify(q({ value: 2, p_value: 1.2, source_quote: 'effect was 2.0 (P=1.2)' }), source)
-    expect(verified.tier).toBe(TIERS.FULL_TEXT)
+    expect(verified.tier).toBe(TIERS.LOCATED)
     expect(verified.warnings).toEqual([
-      expect.objectContaining({ kind: 'impossible-p-value', status: 'verified-as-printed' }),
+      expect.objectContaining({ kind: 'impossible-p-value', status: 'unverified' }),
     ])
 
     const unverified = verify(q({ value: 9, p_value: 1.2, source_quote: 'effect was 2.0 (P=1.2)' }), source)
@@ -133,11 +136,13 @@ describe('statistical plausibility warnings', () => {
 // ---------------------------------------------------------------------------
 
 describe('verify — EVAL adversarial triples', () => {
-  it('interpunct decimal: quote 0·84, claim 0.84 -> verified', () => {
+  it('interpunct decimal: quote 0·84, claim 0.84 -> source-located', () => {
     const source = 'The primary hazard ratio was 0·84 in the endovascular group.'
     const v = verify(q({ value: 0.84, source_quote: 'hazard ratio was 0·84' }), source)
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
-    expect(v.flagged).toBe(false)
+    expect(v.tier).toBe(TIERS.LOCATED)
+    expect(v.numericCoverage).toBe(true)
+    expect(v.relationshipValidated).toBe(false)
+    expect(v.flagged).toBe(true)
   })
 
   it('[false-verify guard] number-inside-a-number: claim 0.02, quote 0.028 -> flagged', () => {
@@ -148,35 +153,35 @@ describe('verify — EVAL adversarial triples', () => {
     expect(v.consistent).toBe(false) // but 0.02 is not a source number
   })
 
-  it('leading-zero variant: claim 0.9, quote .90 -> verified', () => {
+  it('leading-zero variant: claim 0.9, quote .90 -> source-located', () => {
     const source = 'Sensitivity reached .90 across the cohort.'
     const v = verify(q({ value: 0.9, source_quote: 'reached .90 across' }), source)
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 
-  it('trailing-zero: claim 8, quote 8.0 -> verified (float-equal)', () => {
+  it('trailing-zero: claim 8, quote 8.0 -> source-located (float-equal)', () => {
     const source = 'Mean lesion length was 8.0 cm.'
     const v = verify(q({ value: 8, source_quote: 'length was 8.0 cm' }), source)
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 
-  it('unicode dash in CI: en-dash range parses, claim CI -> verified', () => {
+  it('unicode dash in CI: en-dash range parses, claim CI -> source-located', () => {
     const source = 'HR 0.84 (95% CI 0.61–1.16).'
     const v = verify(
       q({ value: 0.84, ci_low: 0.61, ci_high: 1.16, source_quote: 'HR 0.84 (95% CI 0.61–1.16)' }),
       source,
     )
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
     expect(v.badNums).toEqual([])
   })
 
-  it('reported estimate range: both endpoints verify as the result rather than a CI', () => {
+  it('reported estimate range: both endpoint tokens are located as the result rather than a CI', () => {
     const source = 'The mean posterior probability ranged from 0.823–0.855 across models.'
     const v = verify(
       q({ value: null, range_low: 0.823, range_high: 0.855, source_quote: 'mean posterior probability ranged from 0.823–0.855' }),
       source,
     )
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
     expect(v.badNums).toEqual([])
   })
 
@@ -205,7 +210,7 @@ describe('verify — EVAL adversarial triples', () => {
     expect(partial.shapeError).toMatch(/exactly one declared shape/)
   })
 
-  it('verifies a directional change without misclassifying it as a range', () => {
+  it('locates a directional change without misclassifying it as a range', () => {
     const source = 'DCD HTx has increased from 2.4% to 9.5% during the study period.'
     const v = verify(q({
       quantity_type: 'change',
@@ -218,11 +223,11 @@ describe('verify — EVAL adversarial triples', () => {
       second_value: 9.5,
       source_quote: 'DCD HTx has increased from 2.4% to 9.5%',
     }), source)
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
     expect(v.badNums).toEqual([])
   })
 
-  it('verifies a comparison only when each value retains its source group label', () => {
+  it('locates a comparison only when each value retains its source group label', () => {
     const source = 'Period 2 had a shorter median waitlist than period 1 (24 versus 40 days).'
     const quantity = {
       quantity_type: 'comparison',
@@ -235,7 +240,7 @@ describe('verify — EVAL adversarial triples', () => {
       second_value: 40,
       source_quote: 'Period 2 had a shorter median waitlist than period 1 (24 versus 40 days)',
     }
-    expect(verify(q(quantity), source).tier).toBe(TIERS.FULL_TEXT)
+    expect(verify(q(quantity), source).tier).toBe(TIERS.LOCATED)
     expect(verify(q({ ...quantity, first_label: null }), source).tier).toBe(TIERS.FLAGGED)
     expect(verify(q({ ...quantity, first_label: 'Later cohort' }), source).tier).toBe(TIERS.FLAGGED)
   })
@@ -277,21 +282,21 @@ describe('verify — EVAL adversarial triples', () => {
     expect(v.found).toBe(false)
   })
 
-  it('table-cell value: location_hint names a table, value only in a table cell -> verified', () => {
+  it('table-cell value: location_hint names a table, value only in a table cell -> source-located', () => {
     const prose = 'Outcomes are summarized in Table 2.'
     const tables = 'Table 2 Primary outcome | Endovascular | 12.5 | Surgery | 14.1'
     const v = verify(
       q({ value: 12.5, source_quote: 'Endovascular | 12.5', location_hint: 'Table 2' }),
       { text: prose, tables },
     )
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
     expect(v.matched.corpus).toBe('tables')
   })
 
-  it('p-value form: claim 0.001, quote P<0·001 -> verified (magnitude match; operator not enforced)', () => {
+  it('p-value form: claim 0.001, quote P<0·001 -> source-located (magnitude match; operator not enforced)', () => {
     const source = 'The effect was highly significant (P<0·001).'
     const v = verify(q({ value: 0.001, source_quote: 'significant (P<0·001)' }), source)
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 })
 
@@ -300,7 +305,7 @@ describe('verify — EVAL adversarial triples', () => {
 // ---------------------------------------------------------------------------
 
 describe('verify — tier assignment', () => {
-  it('BASIL-3-like full match -> verified-full-text', () => {
+  it('BASIL-3-like full match -> source-located (relationship unresolved)', () => {
     const source =
       'For amputation-free survival the hazard ratio was 0.84 (97.5% CI 0.61 to 1.16, P=0.22).'
     const v = verify(
@@ -313,23 +318,25 @@ describe('verify — tier assignment', () => {
       }),
       source,
     )
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
-    expect(v.flagged).toBe(false)
+    expect(v.tier).toBe(TIERS.LOCATED)
+    expect(v.numericCoverage).toBe(true)
+    expect(v.relationshipValidated).toBe(false)
+    expect(v.flagged).toBe(true)
   })
 
-  it('registry triple-match (value + both CI bounds) -> verified-registry, reason names the measure', () => {
+  it('registry triple-match (value + both CI bounds) -> source-located without registry identity', () => {
     const source = 'The between-group difference in TcPO2 was 11.2 mmHg (95% CI 8.0–14.5).'
     const v = verify(
       q({ value: 11.2, ci_low: 8.0, ci_high: 14.5, source_quote: 'difference in TcPO2 was 11.2 mmHg (95% CI 8.0–14.5)' }),
       source,
       { registry: [{ measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: 8.0, ci_high: 14.5 }] },
     )
-    expect(v.tier).toBe(TIERS.REGISTRY)
-    expect(v.reason).toContain('Peripheral Transcutaneous Oxygen Pressure')
-    expect(v.reason).toContain('95% CI')
+    expect(v.tier).toBe(TIERS.LOCATED)
+    expect(v.reason).toContain('relationships remain unresolved')
+    expect(v.relationshipValidated).toBe(false)
   })
 
-  it('registry value-only posted (no CI) + value match -> verified-registry', () => {
+  it('registry value-only posted (no CI) + value match -> source-located without registry identity', () => {
     // When the registry row posts no CI, the value-only gate applies.
     const source = 'The between-group difference in TcPO2 was 11.2 mmHg.'
     const v = verify(
@@ -337,11 +344,11 @@ describe('verify — tier assignment', () => {
       source,
       { registry: [{ measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: null, ci_high: null }] },
     )
-    expect(v.tier).toBe(TIERS.REGISTRY)
-    expect(v.reason).toContain('Peripheral Transcutaneous Oxygen Pressure')
+    expect(v.tier).toBe(TIERS.LOCATED)
+    expect(v.reason).toContain('relationships remain unresolved')
   })
 
-  it('registry triple-match against ANY of several posted rows -> verified-registry', () => {
+  it('registry triple-match against ANY of several posted rows -> source-located without registry identity', () => {
     // A trial posts many analyses; the quantity need match only one of them.
     const source = 'The risk ratio for the primary end point was 1.91 (95% CI 1.26–2.90).'
     const v = verify(
@@ -354,10 +361,10 @@ describe('verify — tier assignment', () => {
         ],
       },
     )
-    expect(v.tier).toBe(TIERS.REGISTRY)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 
-  it('[false-verify guard] value matches a CI-bearing registry row but quantity has NO CI -> full-text, not registry', () => {
+  it('[false-verify guard] value matches a CI-bearing registry row but quantity has NO CI -> source-located, not registry', () => {
     // A "mean follow-up 11.2 months" row would numerically equal the TcPO2 outcome value.
     // The registry row posts a CI, so a bare value must NOT earn the strongest badge.
     const source = 'The mean follow-up was 11.2 months across the cohort.'
@@ -366,37 +373,37 @@ describe('verify — tier assignment', () => {
       source,
       { registry: [{ measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: 8.0, ci_high: 14.5 }] },
     )
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 
-  it('[false-verify guard] value matches but one CI bound differs -> full-text, not registry', () => {
+  it('[false-verify guard] value matches but one CI bound differs -> source-located, not registry', () => {
     const source = 'The between-group difference in TcPO2 was 11.2 mmHg (95% CI 8.0–14.9).'
     const v = verify(
       q({ value: 11.2, ci_low: 8.0, ci_high: 14.9, source_quote: 'difference in TcPO2 was 11.2 mmHg (95% CI 8.0–14.9)' }),
       source,
       { registry: [{ measure: 'Peripheral Transcutaneous Oxygen Pressure', value: 11.2, ci_low: 8.0, ci_high: 14.5 }] },
     )
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 
-  it('registry provided but value differs from every posted outcome -> falls back to full-text', () => {
+  it('registry provided but value differs from every posted outcome -> remains source-located', () => {
     const source = 'The between-group difference in TcPO2 was 11.2 mmHg.'
     const v = verify(
       q({ value: 11.2, source_quote: 'difference in TcPO2 was 11.2 mmHg' }),
       source,
       { registry: [{ measure: 'Some Other Outcome', value: 9.9, ci_low: null, ci_high: null }] },
     )
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 
-  it('found & consistent but abstract-only source -> abstract-only tier', () => {
+  it('found & consistent but abstract-only source -> source-located with abstract provenance', () => {
     const source = 'In this abstract, the hazard ratio was 0.84.'
     const v = verify(
       q({ value: 0.84, source_quote: 'hazard ratio was 0.84' }),
       source,
       { sourceTier: 'abstract_only' },
     )
-    expect(v.tier).toBe(TIERS.ABSTRACT)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 })
 
@@ -419,7 +426,7 @@ describe('verify — extra precision guards', () => {
     // Quote omits the comma the source has -> exact fails, fuzzy (len>6) succeeds.
     const v = verify(q({ value: 0.84, source_quote: 'HR was 0.84 overall' }), source)
     expect(v.found).toBe(true)
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 
   it('[false-verify guard] fuzzy match on a truncated value: source 0.842, quote 0.84 -> flagged', () => {
@@ -452,7 +459,7 @@ describe('verify — extra precision guards', () => {
       source,
     )
     expect(v.matched.fuzzy).toBe(true)
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
     expect(v.badNums).toEqual([])
   })
 
@@ -488,17 +495,19 @@ describe('verify — extra precision guards', () => {
     expect(v.tier).toBe(TIERS.FLAGGED)
   })
 
-  it('thousands separator: quote "502,157", claim 502157 -> verified (regression: live UK Biobank N)', () => {
+  it('thousands separator: quote "502,157", claim 502157 -> source-located (regression: live UK Biobank N)', () => {
     const source = 'We used data from 502,157 UKBB participants for the external validation in the primary analysis.'
     const v = verify(q({ value: 502157, source_quote: 'data from 502,157 UKBB participants' }), source)
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
-    expect(v.flagged).toBe(false)
+    expect(v.tier).toBe(TIERS.LOCATED)
+    expect(v.numericCoverage).toBe(true)
+    expect(v.relationshipValidated).toBe(false)
+    expect(v.flagged).toBe(true)
   })
 
-  it('multi-group thousands: quote "1,234,567", claim 1234567 -> verified', () => {
+  it('multi-group thousands: quote "1,234,567", claim 1234567 -> source-located', () => {
     const source = 'The database held 1,234,567 records at baseline.'
     const v = verify(q({ value: 1234567, source_quote: 'held 1,234,567 records' }), source)
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
   })
 
   it('[false-verify guard] thousands value off by one: claim 502158, source "502,157" -> flagged', () => {
@@ -515,7 +524,7 @@ describe('verify — extra precision guards', () => {
     expect(v.consistent).toBe(false)
   })
 
-  it('negative effect difference with negative CI bounds -> verified (regression: live STARDUST CRP)', () => {
+  it('negative effect difference with negative CI bounds -> source-located (regression: live STARDUST CRP)', () => {
     const source = 'a significant reduction in levels of CRP (difference, −0.4 mg/dL; 95% CI, −0.7 to −0.07 mg/dL; P = .02)'
     const v = verify(
       q({
@@ -527,7 +536,7 @@ describe('verify — extra precision guards', () => {
       }),
       source,
     )
-    expect(v.tier).toBe(TIERS.FULL_TEXT)
+    expect(v.tier).toBe(TIERS.LOCATED)
     expect(v.badNums).toEqual([])
   })
 
