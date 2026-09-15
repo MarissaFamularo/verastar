@@ -17,6 +17,8 @@ import {
   withOaLinks,
   digestGaps,
   restoreNote,
+  isDigestFromToday,
+  sameDayNote,
 } from '../lib/digestStore.js'
 import { digestProjects } from '../lib/trellis.js'
 import { wakeLock } from '../lib/wakeLock.js'
@@ -250,6 +252,11 @@ export function retryBaseSnapshot({ results = [], processedResults = [], triaged
 export function DigestRunControls({
   failedCount = 0,
   hasExistingScan = false,
+  // True while the digest on screen was made today. The plain new-scan button is withheld:
+  // a second run deletes today's digest and its papers are already in the seen ledger, so
+  // nothing brings them back. Replacing is still possible behind a two-step confirm.
+  lockedToday = false,
+  paperCount = 0,
   busy = false,
   retrying = false,
   keySet = false,
@@ -257,8 +264,38 @@ export function DigestRunControls({
   onRetry = () => {},
   onStartNew = () => {},
 }) {
+  const [confirmReplace, setConfirmReplace] = useState(false)
   const primaryStyle = { padding: '14px 34px', borderRadius: 13, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15.5, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -10px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }
   const secondaryStyle = { padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }
+  const dangerStyle = { padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(214,106,106,.45)', background: 'transparent', color: 'var(--color-domain-vascular)', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }
+
+  // The same-day replacement path, shared by both branches below. Never a single click:
+  // the first press only reveals the confirm, and the confirm names what is lost.
+  const replaceControl = confirmReplace ? (
+    <div className="flex flex-wrap items-center justify-center" style={{ gap: 8 }}>
+      <button
+        onClick={() => { setConfirmReplace(false); onStartNew({ force: true }) }}
+        disabled={!keySet || busy}
+        className="cursor-pointer"
+        style={dangerStyle}
+      >
+        Yes, discard {paperCount === 1 ? '1 paper' : `${paperCount} papers`} and run again
+      </button>
+      <button onClick={() => setConfirmReplace(false)} disabled={busy} className="cursor-pointer" style={secondaryStyle}>
+        Keep today's digest
+      </button>
+    </div>
+  ) : (
+    <button
+      onClick={() => setConfirmReplace(true)}
+      disabled={!keySet || busy}
+      className="cursor-pointer"
+      title="Deletes the digest on screen and its papers before searching again"
+      style={{ ...secondaryStyle, fontSize: 12 }}
+    >
+      Replace today's digest anyway…
+    </button>
+  )
 
   if (failedCount > 0) {
     return (
@@ -266,19 +303,41 @@ export function DigestRunControls({
         <button onClick={onRetry} disabled={!keySet || busy} className="cursor-pointer" style={primaryStyle}>
           {retrying ? `Retrying ${failedCount} failed paper${failedCount === 1 ? '' : 's'}…` : `Retry ${failedCount} failed paper${failedCount === 1 ? '' : 's'}`}
         </button>
-        <button onClick={onStartNew} disabled={!keySet || busy} className="cursor-pointer" style={secondaryStyle}>
-          Start a new scan
-        </button>
-        <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)', textAlign: 'center' }}>
-          A new scan uses a new unseen-paper pool and replaces the digest on screen.
+        {lockedToday ? (
+          <>
+            <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)', textAlign: 'center', maxWidth: 520 }}>
+              {sameDayNote(paperCount)}
+            </p>
+            {replaceControl}
+          </>
+        ) : (
+          <>
+            <button onClick={() => onStartNew()} disabled={!keySet || busy} className="cursor-pointer" style={secondaryStyle}>
+              Start a new scan
+            </button>
+            <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)', textAlign: 'center' }}>
+              A new scan uses a new unseen-paper pool and replaces the digest on screen.
+            </p>
+          </>
+        )}
+      </>
+    )
+  }
+
+  if (lockedToday) {
+    return (
+      <>
+        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: 'var(--color-fg-soft)', textAlign: 'center', maxWidth: 520 }}>
+          {sameDayNote(paperCount)}
         </p>
+        {replaceControl}
       </>
     )
   }
 
   return (
     <>
-      <button onClick={onStartNew} disabled={!keySet || busy} className="cursor-pointer" style={primaryStyle}>
+      <button onClick={() => onStartNew()} disabled={!keySet || busy} className="cursor-pointer" style={primaryStyle}>
         {busy ? busyLabel : hasExistingScan ? 'Start a new scan' : "Run today's digest"}
       </button>
       {hasExistingScan && (
@@ -541,6 +600,10 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const [favIds, setFavIds] = useState(() => new Set()) // saved papers hearted as favorites
   // Rehydrated from IndexedDB this mount: { note, incomplete } or null.
   const [restored, setRestored] = useState(null)
+  // savedAt of the digest on screen — the same-day guard reads it; App gets it via onDigestDate.
+  const [digestSavedAt, setDigestSavedAt] = useState(null)
+  // Today's digest is on screen: the plain scan path is withheld (see DigestRunControls).
+  const lockedToday = !demo && results.length > 0 && isDigestFromToday(digestSavedAt)
   // Her selection bar, so a card can say when its POST-read score came in under it. Read
   // from the profile on mount (not just set by a run) because a restored digest has to be
   // able to say it too. Null until loaded — the note stays off rather than guessing a bar.
@@ -575,7 +638,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   function persistDigest(overrides = {}) {
     if (demo) return
     saveDailyDigest({ ...digestRef.current, ...overrides }).catch(console.warn)
-    onDigestDate(new Date().toISOString())
+    const stamp = new Date().toISOString()
+    setDigestSavedAt(stamp)
+    onDigestDate(stamp)
   }
 
   // Best-effort like the seen ledger: failure means a redundant catch-up prompt later,
@@ -648,6 +713,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         // cheerful "restored" line is indistinguishable from a broken app.
         const gaps = digestGaps(saved)
         setRestored({ note: restoreNote(gaps), incomplete: !gaps.complete })
+        setDigestSavedAt(saved.savedAt ?? null)
         onDigestDate(saved.savedAt ?? null)
       })
       .catch(console.warn)
@@ -1078,7 +1144,14 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // `days` overrides the profile's saved window for THIS run only — it's how the empty
   // state's "look back 7 days" works. A one-off catch-up must never quietly become her new
   // default, so the override lives in the call and is never written back to the profile.
-  async function startScan({ days: override } = {}) {
+  // `force` is the confirmed same-day replacement. Without it, a scan while today's
+  // digest is on screen is refused here as well as in the controls, so no other entry
+  // point (coverage catch-up, look-back chips, a stale closure) can throw the day away.
+  async function startScan({ days: override, force = false } = {}) {
+    if (!force && lockedToday) {
+      setScanError(sameDayNote(results.length))
+      return
+    }
     // Acquire as the very first statement — this is the button's own onClick, the direct
     // user-gesture call stack the Wake Lock API wants, and the lock has to span the search
     // and scoring below, not just the paper loop runList wraps. finally releases it on
@@ -1101,6 +1174,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setSearchContext({ counts: [], failed: [], days: null })
       // Clear the persisted digest too — closing mid-scan must not resurrect stale results.
       clearDailyDigest().catch(console.warn)
+      setDigestSavedAt(null)
       onDigestDate(null) // yesterday's date must not sit over a scan that's running now
       setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
       setSearching(true)
@@ -1440,12 +1514,14 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           <DigestRunControls
             failedCount={failedResults.length}
             hasExistingScan={hasExistingScan}
+            lockedToday={lockedToday}
+            paperCount={results.length}
             busy={busy}
             retrying={retrying}
             keySet={keySet}
             busyLabel={primaryLabel}
             onRetry={retryFailedPapers}
-            onStartNew={() => startScan()}
+            onStartNew={(opts) => startScan(opts)}
           />
         )}
         {!demo && coveragePrompt && (

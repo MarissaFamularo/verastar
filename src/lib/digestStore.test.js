@@ -34,6 +34,8 @@ import {
   digestGaps,
   restoreNote,
   digestDateLine,
+  isDigestFromToday,
+  sameDayNote,
   saveSuccessfulScan,
   loadSuccessfulScan,
 } from './digestStore.js'
@@ -340,5 +342,36 @@ describe('legacy cached evidence policy', () => {
     expect(revived.results[0].sourceDoc.text).toBe('Original source')
     expect(oldVerdict.flagged).toBe(false)
     expect(record.results[0].rows[0].verdict.tier).toBe('verified-full-text')
+  })
+})
+
+// The same-day guard. A second run on the same day deletes `daily:latest` and the seen
+// ledger has already retired the first run's papers — one accidental click on 2026-09-15
+// threw the morning's digest away. The guard compares local calendar days, like
+// digestDateLine, so an early-morning digest stays locked until midnight, not 24 hours.
+describe('isDigestFromToday', () => {
+  const now = new Date(2026, 8, 15, 14, 0, 0)
+  it('is true for a digest saved earlier today, even at 00:01', () => {
+    expect(isDigestFromToday(new Date(2026, 8, 15, 0, 1).toISOString(), now)).toBe(true)
+    expect(isDigestFromToday(new Date(2026, 8, 15, 13, 59).toISOString(), now)).toBe(true)
+  })
+  it('is false for yesterday, even 15 hours ago', () => {
+    expect(isDigestFromToday(new Date(2026, 8, 14, 23, 0).toISOString(), now)).toBe(false)
+  })
+  it('treats a future stamp (fast phone clock) as today', () => {
+    expect(isDigestFromToday(new Date(2026, 8, 16, 1, 0).toISOString(), now)).toBe(true)
+  })
+  it('never locks on a missing or unparseable stamp', () => {
+    expect(isDigestFromToday(null, now)).toBe(false)
+    expect(isDigestFromToday(undefined, now)).toBe(false)
+    expect(isDigestFromToday('garbage', now)).toBe(false)
+  })
+})
+
+describe('sameDayNote', () => {
+  it('names what a rerun would discard and says when to run again', () => {
+    expect(sameDayNote(7)).toContain('discard these 7 papers')
+    expect(sameDayNote(1)).toContain('discard these 1 paper —')
+    expect(sameDayNote(7)).toMatch(/Run again tomorrow/)
   })
 })

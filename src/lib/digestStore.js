@@ -126,6 +126,24 @@ export function digestDateLine(savedAt, now = new Date()) {
   return { text: `${age} · ${when}`, stale: true, days }
 }
 
+// Is the digest on screen from today (local calendar day)? A second run on the same day
+// deletes `daily:latest` before it searches, and the seen ledger has already retired every
+// paper the first run surfaced — so the papers she was reading are gone and the new pool is
+// whatever was left over. One accidental click did exactly that on 2026-09-15. The run
+// controls use this to withhold the plain "start a new scan" path while today's digest
+// exists; a deliberate replace is still possible, but only behind an explicit confirm.
+export function isDigestFromToday(savedAt, now = new Date()) {
+  const parsed = savedAt ? new Date(savedAt) : null
+  if (!parsed || Number.isNaN(parsed.getTime())) return false
+  return localMidnight(now) - localMidnight(parsed) <= 0
+}
+
+// The line that replaces the run button while today's digest is on screen.
+export function sameDayNote(paperCount = 0) {
+  const papers = paperCount === 1 ? '1 paper' : `${paperCount} papers`
+  return `Today's digest is already here. Running another today would replace it and discard these ${papers} — they will not come back in a new scan. Run again tomorrow, or reopen the pool below to add more.`
+}
+
 // Overwrites the single daily-digest slot. Callers fire-and-forget.
 export function saveDailyDigest(state) {
   return store.put(COLLECTION, KEY, serializeDigest(state))

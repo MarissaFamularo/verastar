@@ -115,6 +115,36 @@ describe('failed digest retry', () => {
     expect(html).toContain('new unseen-paper pool and replaces the digest on screen')
     expect(html).not.toContain("Run today&#x27;s digest")
   })
+
+  it('withholds the new-scan button while today\'s digest is on screen', () => {
+    const html = renderToStaticMarkup(React.createElement(DigestRunControls, {
+      hasExistingScan: true,
+      lockedToday: true,
+      paperCount: 6,
+      keySet: true,
+    }))
+
+    expect(html).not.toContain('Start a new scan')
+    expect(html).not.toContain("Run today&#x27;s digest")
+    expect(html).toContain('discard these 6 papers')
+    // The replace path exists but is not the primary action and needs a second press.
+    expect(html).toContain('Replace today&#x27;s digest anyway')
+    expect(html).not.toContain('Yes, discard')
+  })
+
+  it('keeps retry primary but also withholds the plain new-scan path on the same day', () => {
+    const html = renderToStaticMarkup(React.createElement(DigestRunControls, {
+      failedCount: 2,
+      hasExistingScan: true,
+      lockedToday: true,
+      paperCount: 4,
+      keySet: true,
+    }))
+
+    expect(html).toContain('Retry 2 failed papers')
+    expect(html).not.toContain('Start a new scan')
+    expect(html).toContain('Replace today&#x27;s digest anyway')
+  })
 })
 
 describe('WhyPrompt', () => {
