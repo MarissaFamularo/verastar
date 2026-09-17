@@ -262,7 +262,7 @@ export async function ping(prompt = 'Reply with exactly the word: pong') {
     model: MODELS.fast,
     max_tokens: 16,
     messages: [{ role: 'user', content: prompt }],
-  }, { headers: { 'x-verastar-purpose': 'ping' } }))
+  }, requestOptions({ purpose: 'ping' })))
   recordUsage(MODELS.fast, res.usage)
   return res.content
     .filter((block) => block.type === 'text')
@@ -320,9 +320,6 @@ export function parseStructuredResponse(res) {
 // Both are headers, so a BYOK call (browser-direct to Anthropic) simply carries them unused.
 export async function extractStructured({ model = MODELS.extraction, system, content, schema, maxTokens = 4096, thinking, purpose, cacheKey }) {
   const client = getClient()
-  const headers = {}
-  if (purpose) headers['x-verastar-purpose'] = purpose
-  if (cacheKey) headers['x-verastar-cache'] = cacheKey
   const res = await guarded(() => client.messages.create({
     model,
     max_tokens: maxTokens,
@@ -330,7 +327,18 @@ export async function extractStructured({ model = MODELS.extraction, system, con
     ...(thinking ? { thinking } : {}),
     messages: [{ role: 'user', content }],
     output_config: { format: { type: 'json_schema', schema } },
-  }, Object.keys(headers).length ? { headers } : undefined))
+  }, requestOptions({ purpose, cacheKey })))
   recordUsage(model, res.usage)
   return parseStructuredResponse(res)
+}
+
+// Per-request headers for the proxy. Only on the sponsored lane: a BYOK call goes
+// browser-direct to Anthropic, whose CORS preflight would reject an unknown header and
+// take the whole call down with it. Exported for tests.
+export function requestOptions({ purpose, cacheKey } = {}, mode = accessMode()) {
+  if (mode !== 'sponsored') return undefined
+  const headers = {}
+  if (purpose) headers['x-verastar-purpose'] = purpose
+  if (cacheKey) headers['x-verastar-cache'] = cacheKey
+  return Object.keys(headers).length ? { headers } : undefined
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { sponsorshipActive, isSponsored, _setSponsoredForTests } from './sponsor.js'
-import { accessMode, hasModelAccess, setApiKey, clearApiKey, isCapReached, CapReachedError } from './anthropic.js'
+import { accessMode, hasModelAccess, setApiKey, clearApiKey, isCapReached, CapReachedError, requestOptions } from './anthropic.js'
 
 function memStorage() {
   const m = new Map()
@@ -48,5 +48,14 @@ describe('cap errors', () => {
     expect(isCapReached(new CapReachedError())).toBe(true)
     expect(isCapReached({ status: 429 })).toBe(false)
     expect(new CapReachedError().message).toMatch(/tomorrow morning/)
+  })
+})
+
+describe('proxy headers', () => {
+  it('never leave the sponsored lane (a BYOK preflight would reject them)', () => {
+    expect(requestOptions({ purpose: 'extraction', cacheKey: 'k' }, 'byok')).toBeUndefined()
+    expect(requestOptions({ purpose: 'extraction', cacheKey: 'k' }, 'none')).toBeUndefined()
+    expect(requestOptions({ purpose: 'extraction', cacheKey: 'k' }, 'sponsored')).toEqual({ headers: { 'x-verastar-purpose': 'extraction', 'x-verastar-cache': 'k' } })
+    expect(requestOptions({}, 'sponsored')).toBeUndefined()
   })
 })
