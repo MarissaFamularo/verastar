@@ -96,9 +96,9 @@ describe('Library paper digest disclosure', () => {
     }))
 
     expect(html).toContain('✦ Create digest details')
-    expect(html).toContain('Uses your Claude key')
+    expect(html).toContain('Re-reads and verifies this paper')
     expect(disabled).toContain('disabled=""')
-    expect(disabled).toContain('Set your API key in Settings')
+    expect(disabled).toContain('set your API key in Settings')
   })
 })
 
