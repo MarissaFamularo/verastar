@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { store } from '../lib/store.js'
 import { logEvent } from '../lib/events.js'
-import { hasApiKey } from '../lib/anthropic.js'
+import { hasModelAccess } from '../lib/anthropic.js'
 import { loadConcepts, setConceptTags, removeNode } from '../pipeline/graph.js'
 import { refileKB } from '../pipeline/deposit.js'
 import { categorizeLibrary } from '../pipeline/categorize.js'
@@ -70,7 +70,7 @@ export default function KnowledgeBase() {
   // collapsed behind one toggle line there; desktop keeps them always open.
   const isMobile = useIsMobile()
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const keySet = hasApiKey()
+  const keySet = hasModelAccess()
 
   async function refresh() {
     const [c, p, e] = await Promise.all([loadConcepts(), store.all('papers'), store.all('graphEdges')])
@@ -661,7 +661,7 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
             type="button"
             onClick={createDetails}
             disabled={!canCreateDetails || !!refreshStage}
-            title={!canCreateDetails ? 'Set your API key in Settings to create digest details with Claude' : 'Uses your Claude key to re-read and verify this paper'}
+            title={!canCreateDetails ? 'Sign in or set your API key in Settings to create digest details' : 'Re-reads and verifies this paper'}
             style={{ ...pill, background: 'rgba(230,184,119,.12)', color: 'var(--color-abstract)', fontWeight: 600, opacity: !canCreateDetails || refreshStage ? 0.55 : 1 }}
           >
             {refreshStage ? (REFRESH_STAGE_LABEL[refreshStage] || 'Working…') : '✦ Create digest details'}

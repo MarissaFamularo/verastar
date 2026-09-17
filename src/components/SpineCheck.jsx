@@ -6,7 +6,7 @@ import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion
 // flags. This is the "cool to watch" 45s of the demo video.
 
 import { useEffect, useRef, useState } from 'react'
-import { hasApiKey } from '../lib/anthropic.js'
+import { hasModelAccess } from '../lib/anthropic.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import {
   saveDailyDigest,
@@ -608,7 +608,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // from the profile on mount (not just set by a run) because a restored digest has to be
   // able to say it too. Null until loaded — the note stays off rather than guessing a bar.
   const [scoreFloor, setScoreFloor] = useState(null)
-  const keySet = hasApiKey()
+  const keySet = hasModelAccess()
 
   // Latest digest state, mirrored every render — async runs would otherwise persist stale
   // closed-over values. ranRef stops a slow restore from clobbering a run already started.
@@ -1564,7 +1564,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
 
       {/* Actionable state never goes inside the receipt: closing audit details must not hide
           live progress, a failure, or the one button that can recover paid work. */}
-      {!demo && !keySet && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Add your API key in Settings first.</p>}
+      {!demo && !keySet && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Sign in or add your API key in Settings first.</p>}
       {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed — one query per topic…</p>}
       {selecting && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is scoring every candidate against your rubric…</p>}
       {scanError && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{scanError}</p>}

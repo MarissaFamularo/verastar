@@ -8,7 +8,7 @@
 // refined afterward.
 
 import { useEffect, useState } from 'react'
-import { hasApiKey } from '../lib/anthropic.js'
+import { hasModelAccess } from '../lib/anthropic.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { getTrellisProjects, getTrellisExcluded, setTrellisExcluded, PAPERTRELLIS_URL } from '../lib/trellis.js'
@@ -155,14 +155,14 @@ export default function NorthStars() {
         <div className="flex flex-wrap items-center" style={{ marginTop: 14, gap: 12 }}>
           <button
             onClick={() => setInterviewing(true)}
-            disabled={!hasApiKey()}
+            disabled={!hasModelAccess()}
             className="cursor-pointer"
-            style={{ borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', border: '1px solid rgba(239,143,91,.35)', background: 'rgba(239,143,91,.09)', color: 'var(--color-accent)', opacity: hasApiKey() ? 1 : 0.5 }}
+            style={{ borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', border: '1px solid rgba(239,143,91,.35)', background: 'rgba(239,143,91,.09)', color: 'var(--color-accent)', opacity: hasModelAccess() ? 1 : 0.5 }}
           >
             ✶ Rebuild these with an interview
           </button>
           <span style={{ fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
-            {hasApiKey()
+            {hasModelAccess()
               ? 'A few questions, then a fresh draft you edit — nothing in your library changes.'
               : 'Add your Anthropic key in Settings to run the interview.'}
           </span>

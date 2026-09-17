@@ -10,7 +10,7 @@
 // day is meant to produce a short digest, not ten slots of filler.
 
 import { useState } from 'react'
-import { hasApiKey } from '../lib/anthropic.js'
+import { hasModelAccess } from '../lib/anthropic.js'
 import { normalizeScoreFloor } from '../pipeline/select.js'
 import { rubricScopeIssues } from '../pipeline/rubricScope.js'
 import {
@@ -131,10 +131,10 @@ export default function RubricEditor({
           <button
             type="button"
             onClick={reviewMigration}
-            disabled={!hasApiKey() || migrationState === 'loading'}
+            disabled={!hasModelAccess() || migrationState === 'loading'}
             className="cursor-pointer"
-            style={{ ...smallButton, opacity: !hasApiKey() || migrationState === 'loading' ? .5 : 1 }}
-            title={!hasApiKey() ? 'Connect Claude to review an existing rubric' : ''}
+            style={{ ...smallButton, opacity: !hasModelAccess() || migrationState === 'loading' ? .5 : 1 }}
+            title={!hasModelAccess() ? 'Connect Claude to review an existing rubric' : ''}
           >
             {migrationState === 'loading' ? 'Reviewing…' : 'Move journal lists out of rubric'}
           </button>

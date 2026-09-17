@@ -26,6 +26,7 @@ import { refreshTrellisProjects, getTrellisProjects, getTrellisExcluded, conside
 import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import { useIsMobile, isMobileNow } from './lib/useMobile.js'
 import { logEvent } from './lib/events.js'
+import { refreshSponsorship, isSponsored } from './lib/sponsor.js'
 import { digestDateLine } from './lib/digestStore.js'
 import { needsExistingLibrarySync } from './lib/accountGate.js'
 import DomainEditor from './components/DomainEditor.jsx'
@@ -724,14 +725,19 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
             </form>
           </div>
 
-          <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
+          {isSponsored() && !saved && (
+            <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(127,191,154,.25)', background: 'rgba(127,191,154,.07)', padding: '10px 13px' }}>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-verified-soft)' }}>Sponsored access is active on this account. No key needed.</p>
+            </div>
+          )}
+          {!(isSponsored() && !saved) && <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
             <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
               Estimated Claude spend on this device: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}>${usage.estimatedUsd < 0.01 ? usage.estimatedUsd.toFixed(4) : usage.estimatedUsd.toFixed(2)}</span>
             </p>
             <p style={{ margin: '3px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
               {usage.calls} paid response{usage.calls === 1 ? '' : 's'} · {Number(usage.inputTokens || 0).toLocaleString()} input tokens · {Number(usage.outputTokens || 0).toLocaleString()} output tokens. Includes responses from runs that later failed; estimated from current Anthropic list prices.
             </p>
-          </div>
+          </div>}
 
           <ApiKeyExplainer />
 
@@ -974,6 +980,9 @@ export default function App() {
     // color/label lookups are ready.
     initStore().then(async (user) => {
       setAccount(user ? { email: user.email } : null)
+      // Sponsored access is decided server-side per account; resolve it once auth is
+      // known so every hasModelAccess() gate below renders correctly on first paint.
+      await refreshSponsorship()
       // Adoption telemetry: one row per page load, AFTER auth resolves (logEvent is a
       // no-op signed out, so this counts consented sessions only). Retention = these
       // rows grouped by user and day; `mobile` splits phone vs desktop habits.

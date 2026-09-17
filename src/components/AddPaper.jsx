@@ -8,7 +8,7 @@
 // has nothing structured to verify against — that's the separate, deferred "manual PDF-drop" path.
 
 import { useState } from 'react'
-import { hasApiKey } from '../lib/anthropic.js'
+import { hasModelAccess } from '../lib/anthropic.js'
 import { getProfile, store } from '../lib/store.js'
 import { runPaper } from '../pipeline/pipeline.js'
 import { resolvePmid } from '../pipeline/sources.js'
@@ -31,7 +31,7 @@ export default function AddPaper({ onAdded }) {
   const [error, setError] = useState('')
   const [done, setDone] = useState('') // success summary line
   const [whyFor, setWhyFor] = useState(null) // saved-paper snapshot awaiting its "why"
-  const keySet = hasApiKey()
+  const keySet = hasModelAccess()
   const busy = stage !== ''
 
   async function handleAdd(e) {
@@ -151,7 +151,7 @@ export default function AddPaper({ onAdded }) {
       </form>
 
       {!keySet && (
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-abstract)' }}>Set your API key in Settings to add a paper — extraction runs on your key.</p>
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-abstract)' }}>Sign in or set your API key in Settings to add a paper.</p>
       )}
       {busy && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-accent)' }}>{STAGE_LABEL[stage] || 'Working…'}</p>}
       {error && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-domain-vascular)' }}>{error}</p>}

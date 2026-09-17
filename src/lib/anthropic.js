@@ -14,6 +14,8 @@
 //   - do NOT combine citations with output_config.format (400) -> separate calls
 
 import Anthropic from '@anthropic-ai/sdk'
+import { supabase, supabaseConfigured } from './supabase.js'
+import { isSponsored, CAP_MESSAGE } from './sponsor.js'
 
 const KEY_STORAGE = 'verastar.anthropic_key'
 const NCBI_KEY_STORAGE = 'verastar.ncbi_key'
@@ -52,6 +54,9 @@ function readUsage() {
 }
 
 export function recordUsage(model, usage, now = new Date()) {
+  // The ledger is "spend on your own key". A sponsored call (no key set) is not that,
+  // and a sponsored user never sees a dollar figure anyway.
+  if (accessMode() === 'sponsored') return readUsage()
   const input = Number(usage?.input_tokens || 0) + Number(usage?.cache_creation_input_tokens || 0)
   const cached = Number(usage?.cache_read_input_tokens || 0)
   const output = Number(usage?.output_tokens || 0)
@@ -108,6 +113,20 @@ export function getApiKey() {
 
 export function hasApiKey() {
   return getApiKey().length > 0
+}
+
+// Which lane a model call would take right now. A pasted key always wins: someone on
+// sponsored access who adds their own key has chosen to use it.
+export function accessMode() {
+  if (hasApiKey()) return 'byok'
+  if (isSponsored()) return 'sponsored'
+  return 'none'
+}
+
+// The gate every feature checks before offering a model-backed action. Replaces the old
+// hasApiKey() gate so sponsored accounts get the same UI as a key holder.
+export function hasModelAccess() {
+  return accessMode() !== 'none'
 }
 
 // True when the saved key persists across tab close (localStorage).
@@ -168,12 +187,15 @@ export function clearNcbiCredentials() {
 
 let _client = null
 let _clientKey = null
+let _sponsoredClient = null
 
-// Returns a memoized Anthropic client bound to the current sessionStorage key.
-// Rebuilds if the key changed. Throws if no key is set — callers should gate on
-// hasApiKey() and route the user to Setup.
+// Returns a memoized Anthropic client for the current lane. BYOK binds to the browser-held
+// key and talks to Anthropic directly. Sponsored points the same SDK at the `model` edge
+// function, which swaps the Supabase JWT for the sponsor key server-side, so every call
+// site stays identical. Throws when neither lane is open — callers gate on hasModelAccess().
 export function getClient() {
   const apiKey = getApiKey()
+  if (!apiKey && isSponsored()) return getSponsoredClient()
   if (!apiKey) {
     throw new Error('No Anthropic API key set. Add your key in Setup.')
   }
@@ -184,15 +206,63 @@ export function getClient() {
   return _client
 }
 
+function getSponsoredClient() {
+  if (_sponsoredClient) return _sponsoredClient
+  if (!supabaseConfigured) throw new Error('Sponsored access needs a configured backend.')
+  const base = String(import.meta.env.VITE_SUPABASE_URL).replace(/\/$/, '')
+  _sponsoredClient = new Anthropic({
+    apiKey: 'sponsored', // discarded by the proxy; the SDK insists on a value
+    baseURL: `${base}/functions/v1/model`,
+    dangerouslyAllowBrowser: true,
+    // Inject a fresh JWT per request: supabase-js refreshes tokens in the background,
+    // so reading the session at call time is the only way to never send a stale one.
+    fetch: async (url, init = {}) => {
+      const { data } = await supabase.auth.getSession()
+      const token = data?.session?.access_token
+      if (!token) throw new Error('Sign in again to continue.')
+      const headers = new Headers(init.headers || {})
+      headers.set('Authorization', `Bearer ${token}`)
+      headers.set('apikey', import.meta.env.VITE_SUPABASE_ANON_KEY)
+      return fetch(url, { ...init, headers })
+    },
+  })
+  return _sponsoredClient
+}
+
+// Thrown when the proxy declines a sponsored call because a spending cap was reached.
+// Carries the one user-facing sentence; nothing about amounts.
+export class CapReachedError extends Error {
+  constructor(message = CAP_MESSAGE) {
+    super(message)
+    this.name = 'CapReachedError'
+    this.capReached = true
+  }
+}
+
+export function isCapReached(err) {
+  return err?.capReached === true || err?.status === 402
+}
+
+// Every proxied call passes through here so a 402 becomes a CapReachedError whatever the
+// SDK wrapped it in. Other errors pass through untouched.
+async function guarded(fn) {
+  try {
+    return await fn()
+  } catch (err) {
+    if (err?.status === 402) throw new CapReachedError(err?.error?.error?.message || err?.message || CAP_MESSAGE)
+    throw err
+  }
+}
+
 // Day-0 smoke test: a minimal round-trip that proves the key + browser-direct wiring
 // works. Returns the model's text. Kept intentionally tiny.
 export async function ping(prompt = 'Reply with exactly the word: pong') {
   const client = getClient()
-  const res = await client.messages.create({
+  const res = await guarded(() => client.messages.create({
     model: MODELS.fast,
     max_tokens: 16,
     messages: [{ role: 'user', content: prompt }],
-  })
+  }, { headers: { 'x-verastar-purpose': 'ping' } }))
   recordUsage(MODELS.fast, res.usage)
   return res.content
     .filter((block) => block.type === 'text')
@@ -243,16 +313,24 @@ export function parseStructuredResponse(res) {
 // (additionalProperties:false + required on every object; nullable via anyOf; no
 // minimum/maximum/minLength/recursion). Returns the parsed object. NOTE: never pass
 // citations here — that is a separate call (combining them 400s).
-export async function extractStructured({ model = MODELS.extraction, system, content, schema, maxTokens = 4096, thinking }) {
+//
+// `purpose` labels the call in the sponsor's ledger. `cacheKey` (pipeline/evidenceCache.js)
+// names the exact source text an extraction came from; the proxy serves a cached extraction
+// for the same key instead of calling the model, and stores a fresh one for the next reader.
+// Both are headers, so a BYOK call (browser-direct to Anthropic) simply carries them unused.
+export async function extractStructured({ model = MODELS.extraction, system, content, schema, maxTokens = 4096, thinking, purpose, cacheKey }) {
   const client = getClient()
-  const res = await client.messages.create({
+  const headers = {}
+  if (purpose) headers['x-verastar-purpose'] = purpose
+  if (cacheKey) headers['x-verastar-cache'] = cacheKey
+  const res = await guarded(() => client.messages.create({
     model,
     max_tokens: maxTokens,
     ...(system ? { system } : {}),
     ...(thinking ? { thinking } : {}),
     messages: [{ role: 'user', content }],
     output_config: { format: { type: 'json_schema', schema } },
-  })
+  }, Object.keys(headers).length ? { headers } : undefined))
   recordUsage(model, res.usage)
   return parseStructuredResponse(res)
 }

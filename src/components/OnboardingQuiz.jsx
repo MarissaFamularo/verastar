@@ -19,7 +19,8 @@
 // animations instead of paid calls, so the flow can be walked end-to-end for free.
 
 import { useEffect, useState } from 'react'
-import { hasApiKey, setApiKey, setNcbiKey, setNcbiEmail } from '../lib/anthropic.js'
+import { hasApiKey, hasModelAccess, setApiKey, setNcbiKey, setNcbiEmail } from '../lib/anthropic.js'
+import { isSponsored, refreshSponsorship } from '../lib/sponsor.js'
 import { supabaseConfigured, sendMagicLink, verifyEmailCode } from '../lib/supabase.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { draftProfile, DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
@@ -147,6 +148,8 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   const [verifyState, setVerifyState] = useState('idle') // idle | verifying | error
   const [verifyError, setVerifyError] = useState('')
   const keySet = hasApiKey()
+  // A sponsored account needs no key; the connect step says so and lets them through.
+  const sponsored = isSponsored()
   const answered = QUESTIONS.some((q) => (answers[q.key] || '').trim())
 
   // Drafting runs as an effect so the animation frame mounts before the call starts.
@@ -183,7 +186,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
       if (keyInput.trim()) setApiKey(keyInput)
       if (emailInput.trim()) setNcbiEmail(emailInput)
       if (ncbiInput.trim()) setNcbiKey(ncbiInput)
-      if (!hasApiKey()) return // key required to interview; the demo path is on the welcome screen
+      if (!hasModelAccess()) return // key or sponsorship required to interview; the demo path is on the welcome screen
     }
     setError('')
     setStep('interview')
@@ -217,6 +220,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
     setVerifyError('')
     try {
       await verifyEmailCode(signinEmail.trim(), code)
+      await refreshSponsorship()
       window.location.reload()
     } catch (err) {
       setVerifyError(err?.message || String(err))
@@ -387,16 +391,17 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
     return (
       <div>
         <p style={stepMark}>01 / 03 · CONNECT</p>
-        <h2 className="vs-step-title" style={stepTitle}>Bring your own key.</h2>
+        <h2 className="vs-step-title" style={stepTitle}>{sponsored ? 'You are all set.' : 'Bring your own key.'}</h2>
         <p style={{ ...stepLede, maxWidth: 500 }}>
-          Verastar runs on your Anthropic key — you paste it in, and the app uses it to do the
-          work. No shared model bill, no lock-in.
+          {sponsored
+            ? 'This account has sponsored access: Verastar does the reading for you, no key needed. You can still add your own Anthropic key later in Settings.'
+            : 'Verastar runs on your Anthropic key — you paste it in, and the app uses it to do the work. No shared model bill, no lock-in.'}
         </p>
 
         <form onSubmit={connectContinue}>
           <div style={{ marginTop: 28 }}>
-            <label style={fieldLabel}>Anthropic API key</label>
-            {keySet && !keyInput ? (
+            {!sponsored && <label style={fieldLabel}>Anthropic API key</label>}
+            {sponsored && !keyInput ? null : keySet && !keyInput ? (
               <div className="flex items-center" style={{ marginTop: 8, gap: 10, padding: '11px 14px', borderRadius: 11, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-fg-soft)', fontSize: 13, letterSpacing: '.05em' }}>sk-ant-••••••••••••••••</span>
@@ -433,14 +438,14 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
               autoComplete="off"
               style={inputStyle}
             />
-            <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+            {!sponsored && <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
               Your key lives only in this browser tab — never sent to our servers, never written
               to disk, and cleared when you close the tab.
-            </p>
+            </p>}
           </div>
 
           <div className="flex items-center" style={{ marginTop: 30, gap: 18 }}>
-            <button type="submit" disabled={!preview && !keySet && !keyInput.trim()} className="cursor-pointer" style={{ ...primaryBtn, opacity: !preview && !keySet && !keyInput.trim() ? 0.5 : 1 }}>
+            <button type="submit" disabled={!preview && !sponsored && !keySet && !keyInput.trim()} className="cursor-pointer" style={{ ...primaryBtn, opacity: !preview && !sponsored && !keySet && !keyInput.trim() ? 0.5 : 1 }}>
               Continue →
             </button>
             <button type="button" onClick={() => setStep('welcome')} className="cursor-pointer" style={ghostLink}>
@@ -524,9 +529,9 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
         <div className="flex items-center" style={{ marginTop: 28, gap: 18 }}>
           <button
             onClick={() => { setError(''); setPath('intake'); setStep('drafting') }}
-            disabled={!answered || (!preview && !keySet)}
+            disabled={!answered || (!preview && !keySet && !sponsored)}
             className="cursor-pointer"
-            style={{ ...primaryBtn, opacity: !answered || (!preview && !keySet) ? 0.5 : 1 }}
+            style={{ ...primaryBtn, opacity: !answered || (!preview && !keySet && !sponsored) ? 0.5 : 1 }}
           >
             ✶ Draft my profile
           </button>

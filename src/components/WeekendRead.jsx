@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { store, getProfile } from '../lib/store.js'
-import { hasApiKey } from '../lib/anthropic.js'
+import { hasModelAccess } from '../lib/anthropic.js'
 import { synthesizeWeekendRead } from '../pipeline/weekend.js'
 import { excludeRetracted } from '../pipeline/retractions.js'
 import { appendConnectionsToLibrary } from '../lib/library.js'
@@ -86,7 +86,7 @@ export default function WeekendRead() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
-  const keySet = hasApiKey()
+  const keySet = hasModelAccess()
 
   useEffect(() => {
     ;(async () => {

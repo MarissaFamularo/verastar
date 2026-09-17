@@ -9,7 +9,7 @@
 // Styled to the observatory design (Verastar.dc.html): a full-bleed star field + right detail rail.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { hasApiKey } from '../lib/anthropic.js'
+import { hasModelAccess } from '../lib/anthropic.js'
 import { getProfile, store } from '../lib/store.js'
 import {
   loadGraph,
@@ -41,7 +41,7 @@ export default function ConstellationView() {
   const [busy, setBusy] = useState('') // '', 'loading', 'proposing'
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
-  const keySet = hasApiKey()
+  const keySet = hasModelAccess()
   const didInit = useRef(false)
 
   // Topic (hub) colors — one hue per constellation; satellites inherit their hub's color.
