@@ -44,7 +44,9 @@ export default function DigestSchedule() {
     setRunNote('')
     try {
       const out = await runScheduledDigestNow()
-      setRunNote(out?.ran ? (out.phase === 'done' ? 'Your digest is ready. Open the Digest tab.' : out.phase === 'reading' ? 'Reading in progress; it will finish in the background over the next few minutes.' : out.note || 'Nothing new to read.') : 'Nothing ran.')
+      setRunNote(out?.ran
+        ? (out.phase === 'done' ? 'Your digest is ready. Open the Digest tab.' : out.phase === 'reading' ? 'Reading in progress; it will finish in the background over the next few minutes.' : out.note || 'Nothing new to read.')
+        : out?.reason === "today's digest already exists" ? 'Today\u2019s digest is already here. The next run is tomorrow morning.' : 'Nothing ran.')
       setState('idle')
     } catch (err) {
       setError(err.message)

@@ -100,6 +100,12 @@ Deno.serve(async (req) => {
     const { data: kv } = await admin.from('kv').select('value').eq('user_id', row.user_id).eq('collection', 'digests').eq('key', 'daily:latest').maybeSingle()
     const record = kv?.value || null
     const midFlight = record?.runBy === 'scheduler' && record?.server?.phase && record.server.phase !== 'done'
+    // A digest from today, whoever ran it, is never replaced: the seen ledger already
+    // retired its papers, so a rerun would discard what the reader may be reading. The
+    // app enforces the same rule behind an explicit confirm; the server has no confirm.
+    const hasPapers = Array.isArray(record?.results) && record.results.length > 0
+    const savedToday = hasPapers && record?.savedAt && localClock(new Date(record.savedAt), row.timezone).day === day
+    if (savedToday && !midFlight) { reason = "today's digest already exists"; continue }
     if (!manual) {
       if (ranToday && !midFlight) continue
       if (!midFlight && hour !== Number(row.hour_local)) continue

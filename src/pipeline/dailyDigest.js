@@ -160,7 +160,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
       const results = res.retracted ? state.results : [...state.results, res]
       await persist({ processedResults: processed, results })
     }
-    await persist({ server: { ...state.server, phase: state.server.phase === 'fallback' ? 'rank' : 'rank' } })
+    await persist({ server: { ...state.server, phase: 'rank' } })
   }
 
   // Phase 3: rank, post-read floor, coverage fallback (one extra reading pass), final rank.
