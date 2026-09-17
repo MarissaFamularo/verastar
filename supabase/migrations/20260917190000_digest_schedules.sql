@@ -20,7 +20,9 @@ alter table public.digest_schedules enable row level security;
 revoke all on public.digest_schedules from public, anon, authenticated;
 grant select (user_id, enabled, hour_local, timezone, last_run_at, last_result) on public.digest_schedules to authenticated;
 grant insert (user_id, enabled, hour_local, timezone) on public.digest_schedules to authenticated;
-grant update (enabled, hour_local, timezone) on public.digest_schedules to authenticated;
+-- user_id is included because a client upsert's ON CONFLICT DO UPDATE sets every sent
+-- column; the own-row policy still forbids changing it to another account's id.
+grant update (user_id, enabled, hour_local, timezone) on public.digest_schedules to authenticated;
 create policy "digest_schedules_select_own" on public.digest_schedules
   for select to authenticated using (user_id = (select auth.uid()));
 create policy "digest_schedules_insert_own" on public.digest_schedules
