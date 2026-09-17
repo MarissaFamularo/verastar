@@ -6,7 +6,7 @@ import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion
 // flags. This is the "cool to watch" 45s of the demo video.
 
 import { useEffect, useRef, useState } from 'react'
-import { hasModelAccess } from '../lib/anthropic.js'
+import { hasModelAccess, isCapReached } from '../lib/anthropic.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import {
   saveDailyDigest,
@@ -160,16 +160,29 @@ function Citation({ citation, oa, pmcid }) {
   )
 }
 
-function Row({ quantity, verdict: storedVerdict, onOpenSource, hero }) {
+function Row({ quantity, verdict: storedVerdict, onOpenSource, hero, pmid }) {
   const verdict = evidenceVerdict(storedVerdict)
   const clickable = verdict.found && onOpenSource
+  // "This badge is wrong" is the field channel for the one failure the product cannot
+  // survive: a green badge on a wrong value. One click, one event row, adjudicated later.
+  const [reported, setReported] = useState(false)
+  const reportable = !verdict.flagged && pmid
+  function report() {
+    if (reported) return
+    setReported(true)
+    logEvent('badge_reported', { pmid, name: quantity.name, value: fmtNum(quantity), tier: verdict.tier, quote: String(quantity.source_quote || '').slice(0, 300) })
+  }
+  function open() {
+    logEvent('badge_clicked', { pmid: pmid || null, tier: verdict.tier, flagged: !!verdict.flagged })
+    onOpenSource()
+  }
   return (
     <div className="flex flex-col" style={{ gap: 4, borderTop: '1px solid var(--hairline)', padding: '12px 0' }}>
       <div className="flex flex-wrap items-center" style={{ columnGap: 12, rowGap: 4 }}>
         <span style={{ fontWeight: hero ? 600 : 500, color: 'var(--color-fg-soft)' }}>{quantity.name}</span>
         {clickable ? (
           <button
-            onClick={onOpenSource}
+            onClick={open}
             title="Show this value in the source"
             className="cursor-pointer"
             style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--color-fg)', borderBottom: '1px dotted rgba(239,143,91,.55)', fontSize: hero ? 17 : 14 }}
@@ -182,6 +195,17 @@ function Row({ quantity, verdict: storedVerdict, onOpenSource, hero }) {
           </span>
         )}
         <ProvenanceBadge tier={verdict.tier} />
+        {reportable && (
+          <button
+            type="button"
+            onClick={report}
+            title="Tell us this verified value does not match the paper"
+            className="cursor-pointer"
+            style={{ marginLeft: 'auto', fontSize: 11, color: reported ? 'var(--color-verified-soft)' : 'var(--color-fg-faint)', background: 'transparent', border: 0, fontFamily: 'inherit' }}
+          >
+            {reported ? 'Reported, thank you' : 'This badge is wrong?'}
+          </button>
+        )}
       </div>
       {quantity.source_quote && (
         <blockquote style={{ margin: 0, borderLeft: '2px solid var(--hairline)', paddingLeft: 12, fontSize: 13, color: 'var(--color-fg-muted)' }}>
@@ -598,6 +622,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const [triaged, setTriaged] = useState(() => demo ? DEMO_DIGEST.triaged : {}) // id -> { score, tier, finding, relevance }
   const [ranking, setRanking] = useState(false)
   const [expanded, setExpanded] = useState({}) // id -> bool: show verified values
+  // Sponsored access hit a spending cap mid-run. One sentence, no numbers; the run stops
+  // cleanly and what was already verified stays on screen.
+  const [capNotice, setCapNotice] = useState('')
   const [viewer, setViewer] = useState(null) // { title, corpusLabel, corpusText, quote, valueLabel }
   const [savedIds, setSavedIds] = useState(() => new Set()) // ids deposited to the Knowledge Base
   const whyBaseline = useRef(null)
@@ -891,8 +918,15 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     // the base papers doesn't restore looking blanker than it is.
     let triagedNow = append ? (baseSnapshot?.triaged ?? triaged) : {}
     let visible = append ? [...baseVisible] : collected
+    setCapNotice('')
     for (const paper of toRun) {
       const res = await runPaper(paper, { onStage })
+      if (res.error && isCapReached(res.errorObject)) {
+        logEvent('cap_reached', { surface: 'digest', remaining: toRun.length - processed.length })
+        setCapNotice(res.error)
+        setStages((prev) => ({ ...prev, [paper.id]: undefined }))
+        break
+      }
       processed.push(res)
       // Showcase only: prove the gate rejects a corrupted value on the first clean paper.
       if (injectCorrupt && !res.error && collected.every((r) => !r.corrupt)) {
@@ -1594,6 +1628,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           ))}
         </div>
       )}
+      {capNotice && (
+        <div style={{ margin: '12px 0 0', borderRadius: 10, border: '1px solid rgba(230,184,119,.35)', background: 'rgba(230,184,119,.08)', padding: '10px 13px' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--color-abstract)', lineHeight: 1.5 }}>{capNotice}</p>
+        </div>
+      )}
       {/* A restore that came back short says so, in amber — same treatment as a withheld
           summary, because it's the same kind of fact: the app is telling her what it does
           NOT have. A whole restore keeps the quiet muted line. */}
@@ -1823,7 +1862,10 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                   return (
                     <div style={{ marginTop: 15 }}>
                       <button
-                        onClick={() => setExpanded((p) => ({ ...p, [paper.id]: !isOpen }))}
+                        onClick={() => {
+                          if (!isOpen) logEvent('digest_item_opened', { pmid: paper.pmid, values: total })
+                          setExpanded((p) => ({ ...p, [paper.id]: !isOpen }))
+                        }}
                         className="cursor-pointer"
                         style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-fg-muted)' }}
                       >
@@ -1836,7 +1878,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                             Every value re-verified against the source — click any to see it
                           </p>
                           {verifiedRows.map((row, i) => (
-                            <Row key={i} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
+                            <Row key={i} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                           ))}
 
                           {flaggedRows.length > 0 && (
@@ -1845,7 +1887,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                                 {flaggedRows.length} value{flaggedRows.length === 1 ? '' : 's'} flagged — greyed, never charted
                               </p>
                               {flaggedRows.map((row, i) => (
-                                <Row key={i} quantity={row.quantity} verdict={row.verdict} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
+                                <Row key={i} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                               ))}
                             </div>
                           )}

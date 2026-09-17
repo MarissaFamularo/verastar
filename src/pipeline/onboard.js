@@ -44,12 +44,15 @@ export const DEMO_PROFILE = {
 
 // Strict-schema per the output_config contract: additionalProperties:false + required on
 // every object, no min/max/minLength. Arrays of plain strings for the chips.
+export const SPECIALTY_SLUGS = ['vascular-surgery', 'general-surgery', 'cardiology', 'general']
+
 export const PROFILE_DRAFT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['name', 'northStars', 'projects', 'journalPreferences', 'rubric', 'selectCount'],
+  required: ['name', 'specialty', 'northStars', 'projects', 'journalPreferences', 'rubric', 'selectCount'],
   properties: {
     name: { type: 'string' }, // how the digest greets them, e.g. "Dr. Reyes"
+    specialty: { type: 'string', enum: ['vascular-surgery', 'general-surgery', 'cardiology', 'general'] }, // reference shelf
     northStars: { type: 'array', items: { type: 'string' } },
     projects: { type: 'array', items: { type: 'string' } },
     journalPreferences: {
@@ -67,6 +70,7 @@ export const PROFILE_DRAFT_SCHEMA = {
 export const PROFILE_DRAFT_SYSTEM = `You are setting up a personalized morning literature digest for a busy clinician-researcher. From their short intake answers, draft a steering profile they will review and edit. Return:
 
 - name: how the digest should address them (e.g. "Dr. Morgan"). If they don't give a name, use "Doctor".
+- specialty: the closest of vascular-surgery, general-surgery, cardiology, or general. Use general when unsure.
 - northStars: 3–6 SHORT concept phrases (2–4 words each) naming the recurring topics they steer by. These are used verbatim as PubMed title/abstract search terms, so make them clean, searchable clinical concepts (e.g. "carotid revascularization", "CLTI outcomes", "AI in medicine") — NOT full sentences, NOT boolean queries.
 - projects: 1–4 short names of the concrete efforts they're driving (programs, studies, initiatives). If none are stated, return an empty array.
 - journalPreferences: put named journals in mustNotMiss when they should always reach the reader, or preferred when they are a positive signal. Use empty arrays when none were stated.
@@ -97,6 +101,7 @@ export async function draftProfile({ answers, model = MODELS.interview, maxToken
 
   return {
     name: (draft.name || 'Doctor').trim(),
+    specialty: SPECIALTY_SLUGS.includes(draft.specialty) ? draft.specialty : 'general',
     northStars: (draft.northStars || []).map((s) => s.trim()).filter(Boolean),
     projects: (draft.projects || []).map((s) => s.trim()).filter(Boolean),
     journalPreferences: normalizeJournalPreferences(draft.journalPreferences),

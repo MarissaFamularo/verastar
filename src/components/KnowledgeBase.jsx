@@ -635,6 +635,7 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
         <HeartButton active={!!paper.favorite} onClick={onToggleFavorite} />
         {hasScore && <span style={{ ...pill, cursor: 'default', fontFamily: 'var(--font-mono)', color: 'var(--color-accent-bright)' }}>Fit {Math.round(Number(paper.score))}</span>}
         {paper.saveSource === 'manual' && <span style={{ ...pill, cursor: 'default' }}>Added manually</span>}
+        {paper.saveSource === 'seed' && <span style={{ ...pill, cursor: 'default' }} title="Part of the starter collection for your specialty">Starter</span>}
         {paper.saveSource === 'papertrellis' && <span style={{ ...pill, cursor: 'default' }}>From PaperTrellis</span>}
         {extractionStatus !== 'current' && (
           <span

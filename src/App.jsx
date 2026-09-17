@@ -27,6 +27,7 @@ import { useWindowFocusRefresh } from './lib/focusRefresh.js'
 import { useIsMobile, isMobileNow } from './lib/useMobile.js'
 import { logEvent } from './lib/events.js'
 import { refreshSponsorship, isSponsored } from './lib/sponsor.js'
+import { seedLibraryIfDue } from './pipeline/seed.js'
 import { digestDateLine } from './lib/digestStore.js'
 import { needsExistingLibrarySync } from './lib/accountGate.js'
 import DomainEditor from './components/DomainEditor.jsx'
@@ -1015,6 +1016,9 @@ export default function App() {
       }
       setOnboarded(!!p?.onboarded)
       setProfile(p || null)
+      // A new account's library starts with the reference collection for its specialty,
+      // replayed from the shared cache and verified here. Runs once, never spends.
+      seedLibraryIfDue().then((r) => { if (r?.seeded) refreshCounts() }).catch(() => {})
       // Retractions can land years after a save. Re-check the saved Library on every
       // app open (PubMed esummary only — no model call), in the background; the alert
       // is persisted on the record, so it reaches whichever surface she opens.
@@ -1185,6 +1189,7 @@ export default function App() {
               setSaved(hasApiKey())
               setOnboarded(true)
               getProfile().then((p) => setProfile(p || null))
+              if (!firstrunPreview) seedLibraryIfDue().then((r) => { if (r?.seeded) refreshCounts() }).catch(() => {})
             }}
           />
         </div>
