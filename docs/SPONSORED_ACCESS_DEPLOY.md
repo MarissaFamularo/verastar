@@ -1,10 +1,11 @@
 # Sponsored access: deploy checklist
 
-*Companion to [SPONSORED_ACCESS_SPEC.md](SPONSORED_ACCESS_SPEC.md). Everything below is a
-one-time setup on the shared Verastar / PaperTrellis Supabase project. Nothing here was
-applied automatically; the migration was validated against a throwaway Postgres 16 with
-the two earlier migrations in place, and the app's suite covers the proxy's pure logic.
-The edge function itself has not yet run on Deno: step 4 is where that happens.*
+*Companion to [SPONSORED_ACCESS_SPEC.md](SPONSORED_ACCESS_SPEC.md). One-time setup on the
+shared Verastar / PaperTrellis Supabase project.*
+
+**Status 2026-09-17:** steps 1, 2, 4, 4b and the cron job were applied to the production
+project from this session. Still to do by hand: the two function secrets (step 3), the
+first smoke test, enrollment, and the reference collection.
 
 ## 1. Apply the migrations
 
@@ -47,9 +48,14 @@ row with `purpose = 'ping'`. A non-sponsored account must get a 403.
 supabase functions deploy digest-run --no-verify-jwt
 ```
 
-Both functions share `supabase/functions/deno.json` (the import map) and import the app's
-own modules from `src/` by relative path; the deploy bundles them. Then, in the SQL editor
-with the `pg_cron` and `pg_net` extensions enabled:
+All functions share `supabase/functions/deno.json` (the import map). `digest-run` needs the
+app's own pipeline modules; `npm run bundle:functions` bundles them into
+`public/server/app.bundle.js`, which Netlify serves with the frontend and the function
+imports by URL at cold start (`APP_BUNDLE_URL` overrides the default
+`https://verastar.netlify.app/server/app.bundle.js`). So a change to the pipeline reaches
+the scheduler by rebuilding the bundle and deploying main; the function itself only
+changes when its own `index.ts` does. Then, in the SQL editor with the `pg_cron` and
+`pg_net` extensions enabled:
 
 ```sql
 select cron.schedule(

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "node scripts/lint-baseline.mjs",
-    "lint:raw": "eslint ."
+    "lint:raw": "eslint .",
+    "bundle:functions": "node scripts/bundle-functions.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.110.0",

@@ -20,12 +20,18 @@
 import { createClient } from '@supabase/supabase-js'
 import { DOMParser } from 'linkedom'
 import { accountActive, capReached, effectiveCaps, costUsd, windows } from '../model/logic.js'
-import { configureServerClient } from '../../../src/lib/anthropic.js'
-import { configureServerStore } from '../../../src/lib/store.js'
-import { makeSupabaseStore } from '../../../src/lib/storeSupabase.js'
-import { configureEvidenceCacheServer } from '../../../src/pipeline/evidenceCache.js'
-import { schedulerMayRun } from '../../../src/lib/digestStore.js'
-import { runDailyDigest } from '../../../src/pipeline/dailyDigest.js'
+// The app's own modules, bundled by `npm run bundle:functions` into public/server/ and
+// served by Netlify with the frontend. Imported by URL at cold start, so deploying main
+// deploys the server's copy of the pipeline too. Override with APP_BUNDLE_URL.
+const APP_BUNDLE_URL = Deno.env.get('APP_BUNDLE_URL') || 'https://verastar.netlify.app/server/app.bundle.js'
+const {
+  configureServerClient,
+  configureServerStore,
+  makeSupabaseStore,
+  configureEvidenceCacheServer,
+  schedulerMayRun,
+  runDailyDigest,
+} = await import(APP_BUNDLE_URL)
 
 // sources.js parses PMC and PubMed XML with the browser's DOMParser; linkedom provides the
 // same surface (querySelector, cloneNode, textContent, getAttribute) on Deno.
