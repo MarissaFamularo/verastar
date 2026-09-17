@@ -1,7 +1,8 @@
 # Sponsored access, shared evidence cache, and user-supplied text
 
 *Authored 2026-09-17. Engineering spec only. Budgets, cap values, and pilot design are
-not in this repository.*
+not in this repository. Built the same day; the "as built" notes below record where the
+implementation refined the plan. Deploy steps: [SPONSORED_ACCESS_DEPLOY.md](SPONSORED_ACCESS_DEPLOY.md).*
 
 Verastar today is bring-your-own-key and browser-direct: every model call leaves the
 user's browser with the user's key, and every extraction lands only in that user's
@@ -15,13 +16,17 @@ BYOK remains fully supported and is unchanged.
 - `lib/anthropic.js` stays the single call site. It gains a transport switch: BYOK sends
   browser-direct as today; a sponsored account sends the same request body to the edge
   function, which forwards it and returns the response unchanged, including `usage`.
-- The function authenticates the caller with the Supabase JWT, checks the account's
-  `sponsored` flag, checks spend against per-day, per-month, and global ceilings, and
-  records the call's cost to `events` (`type = 'model_call'`, payload: model, tokens,
-  cached tokens, estimated USD, purpose).
+- The function authenticates the caller with the Supabase JWT, requires an active row in
+  `sponsored_accounts`, checks spend against per-day, per-month, and global ceilings, and
+  records the call's cost to `model_spend` (model, tokens, cached tokens, USD, purpose,
+  cache hit). **As built:** the ledger is its own service-role-only table, not `events`,
+  because users hold an update policy on their own `events` rows and could edit a ledger
+  there downward. The client never reads or writes `model_spend`.
 - Cap values, the global ceiling, and the sponsored allowlist are read from Supabase
   secrets or a config table. They are never committed.
-- On a cap: the function returns a typed `cap_reached` response. The client degrades
+- On a cap: the function returns HTTP 402 with Anthropic's error envelope and type
+  `cap_reached`; the SDK does not retry 402 and nothing else returns it, so the client
+  maps it to one `CapReachedError`. The client degrades
   rather than blocks. Anything served from the shared cache still works, the digest
   still lists candidates, and new extraction waits until the window resets. The user
   message talks about reading, not money, and shows no numbers. A cap hit is logged
@@ -34,36 +39,48 @@ Extraction is not personalized. It reads source text and emits typed quantities 
 verbatim quotes, so its output is the same for every user. It is safe to share. The
 relevance prose ("why this matters") is personalized to north stars and stays per user.
 
-- New table `evidence_cache`, keyed by `(pmid, extraction_version)`, with optional
-  `source_hash` for user-supplied text. Columns: `citation` (jsonb), `source_tier`,
-  `quantities` (jsonb: the extraction schema output with full verdicts, quotes, and
-  offsets), `verification_version`, `created_at`.
+- New table `evidence_cache`, keyed by `(pmid, extraction_version, source_hash)`, where
+  `source_hash` is the sha256 of the exact text the model read. Columns: `source_tier`,
+  `citation` (jsonb), `extraction` (jsonb: the model's structured output, unmodified),
+  `model`, `created_by`, `created_at`. **As built:** the cache stores the model's
+  *proposal*, not verdicts. Every reader re-runs the deterministic verifier on the replayed
+  proposal against the source text in their own session, so a hit skips the model call and
+  never the proof. Hashing the text, not just the PMID, means PMC XML, an abstract, and a
+  user-supplied PDF of the same paper are three keys and a proposal is only ever replayed
+  against the text it came from.
 - Holds only what a citation holds: metadata, quantities, short verbatim source quotes,
   character offsets, verdicts. Never full text.
 - Readable by all authenticated users. Writable only by the edge function under the
   service role. Clients cannot insert or update; a client-writable cache would let one
   user poison every other user's badges.
-- Read path: before extracting, the pipeline asks the cache for `(pmid, current
-  extraction_version)`. A hit skips the model call and runs the deterministic verifier
-  locally against whatever source text is available, so the badge is still proven in
-  the user's session. A miss extracts, and a sponsored session's edge function writes
-  the result back.
+- Read path: `runPaper` hashes the source text, asks the cache directly (any signed-in
+  user, BYOK or sponsored), and on a miss sends the key on the extraction call as
+  `x-verastar-cache: <pmid>|<version>|<sha256>|<tier>`. The sponsored proxy serves a hit
+  from that header without a model call and stores a clean `end_turn` response after a
+  miss. A BYOK call goes browser-direct to Anthropic and the header is simply unused.
+  A `cacheOnly` mode returns an error instead of calling the model; seeding uses it.
 - A version bump of the extraction schema or the relationship contract invalidates by
   key, not by deleting rows. Old rows stay for audit.
 
 ## 3. Seed collection on signup
 
 - A curated `reference_papers` table: `(specialty, pmid, rank, note)`. Maintained by
-  hand, populated only with papers already in `evidence_cache`.
-- On first sign-in after onboarding, papers for the user's chosen specialty are copied
-  into their library through `mutate_library_paper`, with provenance marking them as
-  seeded so they can be filtered or bulk-removed. The user's private record holds no
-  full text for seeded papers unless the paper is OA and the pipeline fetched it.
+  hand, populated only with papers already in `evidence_cache`. Specialty slugs:
+  `vascular-surgery`, `general-surgery`, `cardiology`, `general`. The onboarding drafter
+  records `profile.specialty` from the intake answers.
+- On the first boot of a signed-in, onboarded account with an empty library, up to 20
+  rows (own shelf by rank, then `general`) run through `runPaper` in `cacheOnly` mode and
+  save with `saveSource: 'seed'` (the Library shows a "Starter" pill). Source text is
+  fetched from PMC or PubMed as for any paper; the cached proposal is verified locally.
+  Nothing is spent; a paper not yet in the cache is skipped. `profile.seededAt` makes it
+  run once.
 
 ## 4. User-supplied text
 
-- `AddPaper` gains a file input for PDF. Text extraction runs in the browser (pdf.js).
-  The client computes a SHA-256 of the file and stores it with the record.
+- `AddPaper` gains an optional "Attach the PDF you have" input next to the identifier
+  field. Text extraction runs in the browser (`pipeline/pdfText.js`, pdf.js loaded lazily).
+  The client computes a sha256 of the file and stores it with the record
+  (`userFileHash`, `userFileName`, `userSupplied`, `sourceTier`, `sourceHash`).
 - The full text of a user-supplied PDF is stored only in that user's own `kv` record,
   exactly as OA full text is today. It is never written to `evidence_cache` and never
   reaches another user.
@@ -72,25 +89,37 @@ relevance prose ("why this matters") is personalized to north stars and stays pe
   file; the app cannot prove the file is the paper, and the label says so. All other
   verifier rules, including numeric coverage and the relationship contract, apply
   unchanged.
-- Quantities extracted from user-supplied text may be cached under
-  `(pmid, extraction_version, source_hash)` so a second upload of the identical file
-  by any user skips extraction. The quotes cached are the short verbatim receipts the
-  verifier already retains, nothing more.
+- A proposal extracted from user-supplied text is cached under
+  `(pmid, extraction_version, sha256 of the text)` like any other, so a second upload of
+  the identical file by any user skips extraction. What is cached is the proposal: typed
+  quantities with their short verbatim quotes, nothing more.
 - Expect a higher flag rate on PDF input than on PMC XML because of table and column
   mangling. Evaluation stratifies by source tier.
 
 ## 5. Events for the study instrument
 
-Append-only `events` rows, per user, RLS as today. Types: `session_start`,
-`digest_opened`, `badge_clicked`, `quote_expanded`, `paper_saved`, `pdf_uploaded`,
-`connections_opened`, `model_call`, `cap_reached`. Payloads carry ids and tiers, never
-source text.
+Append-only `events` rows, per user, RLS as today. Existing types already cover
+`app_opened` (session start), `view_opened` (Connections and other tabs), `digest_run`,
+`paper_saved`, `paper_noted`, `paper_favorited`, `paper_shared`. Added:
+
+- `digest_item_opened` — a card's evidence panel expanded (`pmid`, `values`). "Surfaced"
+  in the study means this, not merely listed.
+- `badge_clicked` — a value's click-to-source (`pmid`, `tier`, `flagged`).
+- `badge_reported` — "This badge is wrong?" on a validated value (`pmid`, `name`,
+  `value`, `tier`, `quote` ≤300 chars). The field channel for false verifies.
+- `pdf_uploaded` — (`pmid`, `pages`, `bytes`).
+- `cap_reached` — client-side (`surface`, `remaining`) and server-side (`scope`, `purpose`).
+- `library_seeded` — (`specialty`, `seeded`, `skipped`).
+
+Payloads carry ids, tiers and a short quote at most, never source text.
 
 ## 6. Library-wide synthesis cooldown
 
-Per-paper connection proposals stay instant. Library-wide calls (category proposals,
-concept synthesis) run only when the library has changed since the last run and not
-more often than a configured minimum interval.
+Per-paper connection proposals and concept filing stay instant. Library-wide calls
+(`consolidateDomains`, `maybeReorganize`) are gated by `pipeline/synthesisCooldown.js`:
+they run only when the library fingerprint (count plus newest save) changed since the last
+run and at least five days have passed. The stamp lives in the profile collection under
+`synthesisRuns`. The explicit "Reorganize" button in the Library is not gated.
 
 ## Out of scope here
 
