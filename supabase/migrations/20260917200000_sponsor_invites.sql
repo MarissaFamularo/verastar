@@ -42,5 +42,6 @@ begin
 end;
 $$;
 revoke all on function public.redeem_sponsor_invite(text, uuid) from public, anon, authenticated;
+grant execute on function public.redeem_sponsor_invite(text, uuid) to service_role;
 
 commit;
