@@ -121,6 +121,31 @@ they run only when the library fingerprint (count plus newest save) changed sinc
 run and at least five days have passed. The stamp lives in the profile collection under
 `synthesisRuns`. The explicit "Reorganize" button in the Library is not gated.
 
+## 7. Scheduled morning digests (sponsored only)
+
+A bring-your-own-key user's key never reaches the server, so scheduling is a sponsored
+feature. Two pieces:
+
+- `pipeline/dailyDigest.js` is the daily digest as a headless run: the same search →
+  score → read → rank → persist → seen-ledger loop SpineCheck drives interactively, writing
+  the same `daily:latest` record. It is **resumable** (a `server.phase` marker on the record;
+  every paper persisted as it finishes) and **budgeted** (`budgetMs` bounds the reading loop),
+  because an edge function's wall clock is shorter than a full run.
+- `functions/digest-run` is invoked by pg_cron every five minutes and picks at most one due
+  account per tick: schedule enabled, sponsored and active, local hour matches (or a run is
+  mid-flight), not already run today in the account's timezone, no fresh claim by another
+  tick, today's spend under the daily cap, and **the last digest was opened**. A finished
+  digest nobody opened is never replaced by another one nobody will open
+  (`schedulerMayRun` in `lib/digestStore.js`). The app stamps `openedAt` the first time it
+  shows a digest and logs `digest_opened`.
+- The function binds the app's own modules to the account under the service role
+  (`configureServerClient`, `configureServerStore`, `configureEvidenceCacheServer`) and
+  polyfills `DOMParser` with linkedom for the PMC and PubMed XML parsing in `sources.js`.
+  Spend lands in `model_spend` with purpose `scheduled-digest`; cache writes happen inline.
+- `digest_schedules` holds enabled, local hour and timezone per account (own-row RLS for
+  those columns; claim and result columns are server-owned). Settings shows the block only
+  to sponsored accounts, with a "Run now" that calls the same function on the user's JWT.
+
 ## Out of scope here
 
 Budget, cap values, pilot cohort size, recruitment, survey instruments, and the

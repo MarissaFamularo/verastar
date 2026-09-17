@@ -19,6 +19,7 @@ import {
   restoreNote,
   isDigestFromToday,
   sameDayNote,
+  markDigestOpened,
 } from '../lib/digestStore.js'
 import { digestProjects } from '../lib/trellis.js'
 import { wakeLock } from '../lib/wakeLock.js'
@@ -744,9 +745,17 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         // failed, or an older build wrote one mid-run — and a page of blank cards under a
         // cheerful "restored" line is indistinguishable from a broken app.
         const gaps = digestGaps(saved)
-        setRestored({ note: restoreNote(gaps), incomplete: !gaps.complete })
+        // A scheduled run leaves the digest here for the morning; a scheduler mid-run is
+        // still being written on the server and reads as incomplete until it finishes.
+        const scheduledPending = saved.runBy === 'scheduler' && saved.server?.phase && saved.server.phase !== 'done'
+        setRestored({
+          note: scheduledPending ? 'Your morning digest is still being prepared. Check back in a few minutes.' : saved.runBy === 'scheduler' ? 'Your morning digest, prepared while you slept.' : restoreNote(gaps),
+          incomplete: !gaps.complete && !scheduledPending,
+        })
         setDigestSavedAt(saved.savedAt ?? null)
         onDigestDate(saved.savedAt ?? null)
+        // The one signal the scheduler waits for: this digest has been seen.
+        if (saved.results.length && !saved.openedAt) markDigestOpened().then((did) => { if (did) logEvent('digest_opened', { runBy: saved.runBy || 'user', papers: saved.results.length }) })
       })
       .catch(console.warn)
   }, [demo])

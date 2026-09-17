@@ -6,11 +6,12 @@ applied automatically; the migration was validated against a throwaway Postgres 
 the two earlier migrations in place, and the app's suite covers the proxy's pure logic.
 The edge function itself has not yet run on Deno: step 4 is where that happens.*
 
-## 1. Apply the migration
+## 1. Apply the migrations
 
-`supabase/migrations/20260917180000_sponsored_access.sql`, once, from the SQL editor or
-`supabase db push`. Creates `sponsored_accounts`, `sponsor_config`, `evidence_cache`,
-`reference_papers`, `model_spend`. Then run the Supabase security advisors: every new table
+`supabase/migrations/20260917180000_sponsored_access.sql` and
+`20260917190000_digest_schedules.sql`, once, from the SQL editor or `supabase db push`.
+Creates `sponsored_accounts`, `sponsor_config`, `evidence_cache`, `reference_papers`,
+`model_spend`, `digest_schedules`. Then run the Supabase security advisors: every new table
 has RLS on, and only `sponsored_accounts` (own row, three columns), `evidence_cache` and
 `reference_papers` grant anything to `authenticated`.
 
@@ -25,7 +26,8 @@ Values come from the private plan. Change later with `update sponsor_config set 
 
 ## 3. Secrets
 
-In the project's Edge Function secrets: `ANTHROPIC_API_KEY` = the sponsor key. `SUPABASE_URL`,
+In the project's Edge Function secrets: `ANTHROPIC_API_KEY` = the sponsor key, and
+`DIGEST_CRON_SECRET` = a long random string that only pg_cron knows. `SUPABASE_URL`,
 `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the platform.
 
 ## 4. Deploy the function
@@ -38,6 +40,38 @@ supabase functions deploy model --no-verify-jwt
 be able to answer the SDK's CORS preflight. Smoke test with a signed-in sponsored account:
 the Settings "Test connection" ping should return `pong`, and `model_spend` should gain a
 row with `purpose = 'ping'`. A non-sponsored account must get a 403.
+
+## 4b. Deploy the scheduler and its cron job
+
+```bash
+supabase functions deploy digest-run --no-verify-jwt
+```
+
+Both functions share `supabase/functions/deno.json` (the import map) and import the app's
+own modules from `src/` by relative path; the deploy bundles them. Then, in the SQL editor
+with the `pg_cron` and `pg_net` extensions enabled:
+
+```sql
+select cron.schedule(
+  'verastar-digest-run',
+  '*/5 * * * *',
+  $$
+  select net.http_post(
+    url := '<PROJECT_URL>/functions/v1/digest-run',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', '<DIGEST_CRON_SECRET>'),
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+
+Each tick runs at most one account for up to about 100 seconds of reading and hands the
+rest to the next tick, so a digest of eight papers completes within two or three ticks and
+a cohort of fifty spreads across the morning. Smoke test: enroll your own account (step 5),
+set a schedule in Settings, press "Run now", and check `digest_schedules.last_result` and
+`events where type = 'digest_scheduled_run'`. The first real run is the untested surface:
+the parsing path runs on linkedom instead of the browser's DOMParser, validated on JATS
+and PubMed XML shapes in Node, not yet against a live NCBI response on Deno.
 
 ## 5. Enroll accounts
 
@@ -67,3 +101,5 @@ in the cache are skipped, so populate the cache first.
   and `cache_hit` rate.
 - `events where type = 'cap_reached'`: who is hitting caps, and whether the daily value is too low.
 - `events where type = 'badge_reported'`: every one is a potential false verify; adjudicate each.
+- `digest_schedules.last_result` and `events where type = 'digest_scheduled_run'`: whether
+  mornings are landing, and `skipped: cap reached` or `last digest unopened` patterns.

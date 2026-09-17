@@ -45,6 +45,7 @@ export function modelRates(model, now = new Date()) {
 
 function readUsage() {
   try {
+    if (!hasStorage()) return { calls: 0, inputTokens: 0, outputTokens: 0, estimatedUsd: 0 }
     const raw = localStorage.getItem(USAGE_STORAGE)
     const parsed = raw ? JSON.parse(raw) : null
     return parsed && typeof parsed === 'object' ? parsed : { calls: 0, inputTokens: 0, outputTokens: 0, estimatedUsd: 0 }
@@ -54,9 +55,11 @@ function readUsage() {
 }
 
 export function recordUsage(model, usage, now = new Date()) {
+  if (_serverUsage) { try { _serverUsage(model, usage) } catch { /* never breaks a call */ } }
   // The ledger is "spend on your own key". A sponsored call (no key set) is not that,
-  // and a sponsored user never sees a dollar figure anyway.
-  if (accessMode() === 'sponsored') return readUsage()
+  // and a sponsored user never sees a dollar figure anyway. A server run has no ledger.
+  const mode = accessMode()
+  if (mode === 'sponsored' || mode === 'server') return readUsage()
   const input = Number(usage?.input_tokens || 0) + Number(usage?.cache_creation_input_tokens || 0)
   const cached = Number(usage?.cache_read_input_tokens || 0)
   const output = Number(usage?.output_tokens || 0)
@@ -80,7 +83,12 @@ export function getUsageSummary() {
 
 // --- credential management (session-backed by default, localStorage when remembered) ---
 
+// Browser storage is absent on the server runtime; every credential read/write treats
+// that as "no credential" rather than a crash.
+const hasStorage = () => typeof sessionStorage !== 'undefined' && typeof localStorage !== 'undefined'
+
 function setCredential(storageKey, value, remember) {
+  if (!hasStorage()) return
   const trimmed = String(value || '').trim()
   if (!trimmed) {
     sessionStorage.removeItem(storageKey)
@@ -97,6 +105,7 @@ function setCredential(storageKey, value, remember) {
 }
 
 function getCredential(storageKey) {
+  if (!hasStorage()) return ''
   return sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey) || ''
 }
 
@@ -118,6 +127,7 @@ export function hasApiKey() {
 // Which lane a model call would take right now. A pasted key always wins: someone on
 // sponsored access who adds their own key has chosen to use it.
 export function accessMode() {
+  if (_serverClient) return 'server'
   if (hasApiKey()) return 'byok'
   if (isSponsored()) return 'sponsored'
   return 'none'
@@ -131,10 +141,11 @@ export function hasModelAccess() {
 
 // True when the saved key persists across tab close (localStorage).
 export function isKeyRemembered() {
-  return !!localStorage.getItem(KEY_STORAGE)
+  return hasStorage() && !!localStorage.getItem(KEY_STORAGE)
 }
 
 export function clearApiKey() {
+  if (!hasStorage()) return
   sessionStorage.removeItem(KEY_STORAGE)
   localStorage.removeItem(KEY_STORAGE)
 }
@@ -173,8 +184,8 @@ export function getNcbiCredentialStatus() {
   return {
     keyActive: !!getNcbiKey(),
     emailActive: !!getNcbiEmail(),
-    keyRemembered: !!localStorage.getItem(NCBI_KEY_STORAGE),
-    emailRemembered: !!localStorage.getItem(NCBI_EMAIL_STORAGE),
+    keyRemembered: hasStorage() && !!localStorage.getItem(NCBI_KEY_STORAGE),
+    emailRemembered: hasStorage() && !!localStorage.getItem(NCBI_EMAIL_STORAGE),
   }
 }
 
@@ -188,12 +199,23 @@ export function clearNcbiCredentials() {
 let _client = null
 let _clientKey = null
 let _sponsoredClient = null
+let _serverClient = null
+
+// Server runtime only (the digest edge function): bind the sponsor key directly. There is
+// no browser, no storage, and no proxy hop; caps are enforced by the caller before it
+// starts a run, and spend is recorded by the caller from the usage this module reports.
+export function configureServerClient({ apiKey, onUsage } = {}) {
+  _serverClient = apiKey ? new Anthropic({ apiKey }) : null
+  _serverUsage = typeof onUsage === 'function' ? onUsage : null
+}
+let _serverUsage = null
 
 // Returns a memoized Anthropic client for the current lane. BYOK binds to the browser-held
 // key and talks to Anthropic directly. Sponsored points the same SDK at the `model` edge
 // function, which swaps the Supabase JWT for the sponsor key server-side, so every call
 // site stays identical. Throws when neither lane is open — callers gate on hasModelAccess().
 export function getClient() {
+  if (_serverClient) return _serverClient
   const apiKey = getApiKey()
   if (!apiKey && isSponsored()) return getSponsoredClient()
   if (!apiKey) {

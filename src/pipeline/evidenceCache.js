@@ -18,6 +18,21 @@
 import { supabase, supabaseConfigured, isSignedIn } from '../lib/supabase.js'
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 
+// Server runtime only: a service-role client that may also WRITE the cache, and the user
+// the run is for. In the browser these stay null and writes never happen client-side.
+let _serverClient = null
+let _serverUserId = null
+export function configureEvidenceCacheServer({ client, userId } = {}) {
+  _serverClient = client || null
+  _serverUserId = userId || null
+}
+
+function readClient() {
+  if (_serverClient) return _serverClient
+  if (supabaseConfigured && isSignedIn()) return supabase
+  return null
+}
+
 export const SOURCE_TIERS = ['full_text', 'abstract_only', 'user_text']
 
 // sha256 hex of a string. Web Crypto exists in every browser and in Node 20+.
@@ -36,9 +51,10 @@ export function cacheKeyHeader({ pmid, hash, tier, version = CURRENT_EXTRACTION_
 // Look for a cached extraction of exactly this source text. Resolves the stored
 // extraction object or null. Never throws: a cache failure is a cache miss.
 export async function lookupCachedExtraction({ pmid, hash, version = CURRENT_EXTRACTION_VERSION }) {
-  if (!supabaseConfigured || !isSignedIn() || !pmid || !hash) return null
+  const client = readClient()
+  if (!client || !pmid || !hash) return null
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('evidence_cache')
       .select('extraction, model, source_tier')
       .eq('pmid', String(pmid))
@@ -49,5 +65,26 @@ export async function lookupCachedExtraction({ pmid, hash, version = CURRENT_EXT
     return data
   } catch {
     return null
+  }
+}
+
+// Store a fresh extraction. Server runtime only: the browser never holds a client that may
+// write here (the sponsored proxy does it after a miss). No-op elsewhere; never throws.
+export async function storeCachedExtraction({ pmid, hash, tier, extraction, model, citation = null, version = CURRENT_EXTRACTION_VERSION }) {
+  if (!_serverClient || !pmid || !hash || !extraction) return false
+  try {
+    const { error } = await _serverClient.from('evidence_cache').upsert({
+      pmid: String(pmid),
+      extraction_version: version,
+      source_hash: String(hash).toLowerCase(),
+      source_tier: tier,
+      citation,
+      extraction,
+      model: model || 'unknown',
+      created_by: _serverUserId,
+    }, { onConflict: 'pmid,extraction_version,source_hash', ignoreDuplicates: true })
+    return !error
+  } catch {
+    return false
   }
 }

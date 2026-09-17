@@ -21,7 +21,8 @@ import {
   searchPaceMs,
 } from './sources.js'
 import { extractQuantities } from './extract.js'
-import { sha256Hex, cacheKeyHeader, lookupCachedExtraction } from './evidenceCache.js'
+import { MODELS } from '../lib/anthropic.js'
+import { sha256Hex, cacheKeyHeader, lookupCachedExtraction, storeCachedExtraction } from './evidenceCache.js'
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 import { citationIndicatesRetraction } from './retractions.js'
 import { verify, normalize, extractNumbers, numbersEqual } from './verify.js'
@@ -249,6 +250,8 @@ export async function runPaper(paper, { onStage, userText = null, cacheOnly = fa
     } else {
       extracted = await extractQuantities({ studyId: paper.id, sourceText, cacheKey })
       cache = 'miss'
+      // Browser: a no-op (the sponsored proxy stored it). Server: write it for the next reader.
+      await storeCachedExtraction({ pmid: paper.pmid, hash: sourceHash, tier: source.tier, extraction: extracted, model: MODELS.extraction, citation })
     }
 
     notify('verifying')

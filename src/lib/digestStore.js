@@ -18,10 +18,15 @@ const LAST_SCAN_KEY = 'daily:last-successful-scan'
 
 // State -> storable record. selectedIds is a Set in the UI; persisted as an array so the
 // record stays plain data.
-export function serializeDigest({ results, processedResults, triaged, candidates, preCapCandidates, searchContext, selectedIds } = {}) {
+export function serializeDigest({ results, processedResults, triaged, candidates, preCapCandidates, searchContext, selectedIds, openedAt = null, runBy = 'user', server = null } = {}) {
   return {
     kind: 'daily',
     savedAt: new Date().toISOString(),
+    // Stamped by the app the first time this digest is shown. A scheduled run checks it:
+    // a digest nobody opened is never replaced by another one nobody will open.
+    openedAt: openedAt ?? null,
+    runBy, // 'user' | 'scheduler'
+    server, // scheduler bookkeeping ({ phase, ... }) or null
     results: results ?? [],
     processedResults: processedResults ?? results ?? [],
     triaged: triaged ?? {},
@@ -49,6 +54,9 @@ export function reviveDigest(record) {
     searchContext: record.searchContext ?? { counts: [], failed: [], days: null },
     selectedIds: new Set(record.selectedIds ?? []),
     savedAt: record.savedAt ?? null,
+    openedAt: record.openedAt ?? null,
+    runBy: record.runBy ?? 'user',
+    server: record.server ?? null,
   }
 }
 
@@ -147,6 +155,31 @@ export function sameDayNote(paperCount = 0) {
 // Overwrites the single daily-digest slot. Callers fire-and-forget.
 export function saveDailyDigest(state) {
   return store.put(COLLECTION, KEY, serializeDigest(state))
+}
+
+// Stamp the digest on screen as opened, once. Idempotent and best-effort: the stamp is
+// the scheduler's signal, never something the reader can see or lose the digest over.
+export async function markDigestOpened(now = new Date().toISOString()) {
+  try {
+    const record = await store.get(COLLECTION, KEY)
+    if (!record || record.kind !== 'daily' || record.openedAt) return false
+    await store.put(COLLECTION, KEY, { ...record, openedAt: now })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Pure: should a scheduled run replace this record? Yes when there is no digest, or the
+// last one was opened, or it is empty (nothing to read), or it is a scheduler run that never
+// finished (resume instead). No when a finished digest sits unopened.
+export function schedulerMayRun(record) {
+  if (!record || record.kind !== 'daily') return true
+  if (record.openedAt) return true
+  const hasPapers = Array.isArray(record.results) && record.results.length > 0
+  if (!hasPapers) return true
+  if (record.runBy === 'scheduler' && record.server?.phase && record.server.phase !== 'done') return true
+  return false
 }
 
 // Resolves to revived state, or null when nothing (valid) is saved.

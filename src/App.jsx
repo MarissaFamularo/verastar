@@ -39,6 +39,7 @@ import WeekendRead from './components/WeekendRead.jsx'
 import ConstellationView from './components/ConstellationView.jsx'
 import Memos from './components/Memos.jsx'
 import RetractionNotice from './components/RetractionNotice.jsx'
+import DigestSchedule from './components/DigestSchedule.jsx'
 import { DEMO_DIGEST_COUNTS } from './demo/demoDigest.js'
 
 // ── Observatory shell ──────────────────────────────────────────────────────
@@ -739,6 +740,8 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
               {usage.calls} paid response{usage.calls === 1 ? '' : 's'} · {Number(usage.inputTokens || 0).toLocaleString()} input tokens · {Number(usage.outputTokens || 0).toLocaleString()} output tokens. Includes responses from runs that later failed; estimated from current Anthropic list prices.
             </p>
           </div>}
+
+          <DigestSchedule />
 
           <ApiKeyExplainer />
 

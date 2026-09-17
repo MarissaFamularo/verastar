@@ -11,8 +11,11 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-const url = import.meta.env.VITE_SUPABASE_URL
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// `import.meta.env` is Vite's; on a server runtime (the digest edge function imports this
+// module too) it is undefined, and the server binds its own client instead (lib/server.js).
+const env = import.meta.env || {}
+const url = env.VITE_SUPABASE_URL
+const anonKey = env.VITE_SUPABASE_ANON_KEY
 
 export const supabaseConfigured = Boolean(url && anonKey)
 export const supabase = supabaseConfigured ? createClient(url, anonKey) : null

@@ -152,19 +152,28 @@ export async function initStore() {
   return user
 }
 
+// Server runtime only: bind the facade to one account's cloud rows under the service
+// role. No IndexedDB exists there, so device-local keys resolve to undefined.
+let _server = null
+export function configureServerStore(impl) {
+  _server = impl || null
+}
+
 function backend() {
-  return _cloud || idbStore
+  return _server || _cloud || idbStore
 }
 
 export const store = {
   // Read one record by key. Resolves to the value or undefined.
   get(collection, key) {
-    return isDeviceLocal(collection, key) ? idbStore.get(collection, key) : backend().get(collection, key)
+    if (isDeviceLocal(collection, key)) return _server ? Promise.resolve(undefined) : idbStore.get(collection, key)
+    return backend().get(collection, key)
   },
 
   // Write one record under key.
   put(collection, key, value, options) {
-    return isDeviceLocal(collection, key) ? idbStore.put(collection, key, value) : backend().put(collection, key, value, options)
+    if (isDeviceLocal(collection, key)) return _server ? Promise.resolve() : idbStore.put(collection, key, value)
+    return backend().put(collection, key, value, options)
   },
 
   // Read every record in a collection as an array (values only). Signed in, this
@@ -176,7 +185,8 @@ export const store = {
 
   // Delete one record by key.
   delete(collection, key) {
-    return isDeviceLocal(collection, key) ? idbStore.delete(collection, key) : backend().delete(collection, key)
+    if (isDeviceLocal(collection, key)) return _server ? Promise.resolve() : idbStore.delete(collection, key)
+    return backend().delete(collection, key)
   },
 
   // Empty a collection. Signed in, remove the device folder handle only.
