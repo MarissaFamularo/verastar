@@ -41,8 +41,15 @@ import {
 const BUDGET_MS = 100_000 // reading budget per tick; the rest resumes next tick
 const CLAIM_STALE_MS = 15 * 60 * 1000
 
+// The browser's "Run now" calls this cross-origin; cron does not care, the browser does.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-cron-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 }
 
 // Local wall-clock hour and calendar day for a timezone. Intl is available on Deno.
@@ -59,6 +66,7 @@ export function localClock(now: Date, timezone: string) {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json(405, { error: 'POST only' })
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
