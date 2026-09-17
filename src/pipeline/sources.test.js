@@ -8,7 +8,7 @@
 // below are trimmed from her real 2026-07-29 digest.
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { cleanAbstractText, fetchCitation, fetchCitations, NCBI_BATCH_SIZE } from './sources.js'
+import { cleanAbstractText, elinkFirstId, fetchCitation, fetchCitations, NCBI_BATCH_SIZE } from './sources.js'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -245,5 +245,14 @@ describe('PubMed citation retraction metadata', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(citations.map((citation) => citation.pmid)).toEqual(ids)
+  })
+})
+
+describe('elinkFirstId', () => {
+  it('reads the first id under the named link, or null when there is none', () => {
+    const answer = { linksets: [{ linksetdbs: [{ linkname: 'pubmed_pmc_refs', links: ['1'] }, { linkname: 'pubmed_pmc', links: ['10991271'] }] }] }
+    expect(elinkFirstId(answer, 'pubmed_pmc')).toBe('10991271')
+    expect(elinkFirstId(answer, 'pmc_pubmed')).toBeNull()
+    expect(elinkFirstId({ linksets: [{ ids: ['1'] }] }, 'pubmed_pmc')).toBeNull()
   })
 })

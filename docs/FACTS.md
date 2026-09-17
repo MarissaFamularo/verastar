@@ -27,7 +27,9 @@
 - Abstracts: `…/efetch.fcgi?db=pubmed&id=<pmids>&rettype=abstract`
 - PMC full text (OA): `…/efetch.fcgi?db=pmc&id=<numeric PMCID>&rettype=xml` → parse
   `<body>`, strip tags. **No `<body>` ⇒ not in OA subset ⇒ abstract-only tier.**
-- PMID → PMCID: `pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/?ids=<pmid>&format=json`
+- PMID → PMCID: `…/elink.fcgi?dbfrom=pubmed&db=pmc&linkname=pubmed_pmc&retmode=json&id=<pmid>` →
+  `PMC` + first `links` id under `pubmed_pmc` (reverse: `dbfrom=pmc&db=pubmed&linkname=pmc_pubmed`).
+  Not idconv: it stopped sending the CORS header when it moved to pmc.ncbi.nlm.nih.gov (2026-09).
 - **DOI → PMID** (live swing): `esearch.fcgi?db=pubmed&term=<doi>[AID]&retmode=json`.
   Not in PubMed at all ⇒ **CrossRef fallback**: `api.crossref.org/works/<doi>` for
   metadata + abstract → abstract-only tier. Worst case flags; never throws.

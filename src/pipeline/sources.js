@@ -9,7 +9,6 @@ import { getNcbiKey, getNcbiEmail } from '../lib/anthropic.js'
 import { hasRetractedPublicationType } from './retractions.js'
 
 const EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
-const IDCONV = 'https://www.ncbi.nlm.nih.gov/pmc/tools/idconv/api/v1/articles'
 const CROSSREF = 'https://api.crossref.org/works'
 const CTGOV = 'https://clinicaltrials.gov/api/v2/studies'
 
@@ -280,12 +279,26 @@ export async function fetchCitations(pmids) {
     .filter(Boolean)
 }
 
-// PMID -> PMCID via idconv. Returns e.g. "PMC11848676" or null (not in OA).
+// PMID <-> PMCID via eutils elink. NCBI's idconv service no longer answers browser requests
+// (no CORS header since its move to pmc.ncbi.nlm.nih.gov); elink does. Pure: the first id
+// under the named link in an elink answer, or null when there is none.
+export function elinkFirstId(data, linkname) {
+  const links = (data?.linksets?.[0]?.linksetdbs || []).find((entry) => entry.linkname === linkname)?.links
+  return links?.[0] ? String(links[0]) : null
+}
+
+// PMID -> PMCID. Returns e.g. "PMC11848676" or null (not in PMC).
 export async function pmidToPmcid(pmid) {
-  const url = `${IDCONV}/?ids=${encodeURIComponent(pmid)}&format=json`
-  const data = await getJson(url)
-  const rec = data?.records?.[0]
-  return rec?.pmcid ?? null
+  const url = withKey(`${EUTILS}/elink.fcgi?dbfrom=pubmed&db=pmc&linkname=pubmed_pmc&retmode=json&id=${encodeURIComponent(pmid)}`)
+  const id = elinkFirstId(await getJson(url), 'pubmed_pmc')
+  return id ? `PMC${id}` : null
+}
+
+// PMCID -> PMID. Accepts "PMC11848676" or the bare number; null when PMC has no PubMed link.
+export async function pmcidToPmid(pmcid) {
+  const numeric = String(pmcid).replace(/^PMC/i, '')
+  const url = withKey(`${EUTILS}/elink.fcgi?dbfrom=pmc&db=pubmed&linkname=pmc_pubmed&retmode=json&id=${encodeURIComponent(numeric)}`)
+  return elinkFirstId(await getJson(url), 'pmc_pubmed')
 }
 
 // --- PMC full text -----------------------------------------------------------
@@ -365,12 +378,11 @@ export async function resolvePmid(input) {
   // A PubMed URL → /<digits>.
   const pubmed = raw.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/i)
   if (pubmed) return pubmed[1]
-  // A PMCID or PMC URL → convert via idconv (records carry both ids).
+  // A PMCID or PMC URL → convert via elink.
   const pmc = raw.match(/PMC\d+/i)
   if (pmc) {
     try {
-      const data = await getJson(`${IDCONV}/?ids=${encodeURIComponent(pmc[0].toUpperCase())}&format=json`)
-      return data?.records?.[0]?.pmid ?? null
+      return await pmcidToPmid(pmc[0])
     } catch {
       return null
     }
