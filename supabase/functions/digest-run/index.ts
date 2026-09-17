@@ -21,17 +21,18 @@ import { createClient } from '@supabase/supabase-js'
 import { DOMParser } from 'linkedom'
 import { accountActive, capReached, effectiveCaps, costUsd, windows } from '../model/logic.js'
 // The app's own modules, bundled by `npm run bundle:functions` into public/server/ and
-// served by Netlify with the frontend. Imported by URL at cold start, so deploying main
-// deploys the server's copy of the pipeline too. Override with APP_BUNDLE_URL.
-const APP_BUNDLE_URL = Deno.env.get('APP_BUNDLE_URL') || 'https://verastar.netlify.app/server/app.bundle.js'
-const {
+// served by Netlify with the frontend. The edge runtime resolves remote modules when the
+// function is deployed (a runtime dynamic import is "Module not found"), so this is a
+// static import: a pipeline change reaches the scheduler by rebuilding the bundle,
+// deploying main, and then redeploying this function.
+import {
   configureServerClient,
   configureServerStore,
   makeSupabaseStore,
   configureEvidenceCacheServer,
   schedulerMayRun,
   runDailyDigest,
-} = await import(APP_BUNDLE_URL)
+} from 'https://verastar.netlify.app/server/app.bundle.js'
 
 // sources.js parses PMC and PubMed XML with the browser's DOMParser; linkedom provides the
 // same surface (querySelector, cloneNode, textContent, getAttribute) on Deno.

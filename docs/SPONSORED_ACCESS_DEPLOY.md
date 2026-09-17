@@ -51,10 +51,10 @@ supabase functions deploy digest-run --no-verify-jwt
 All functions share `supabase/functions/deno.json` (the import map). `digest-run` needs the
 app's own pipeline modules; `npm run bundle:functions` bundles them into
 `public/server/app.bundle.js`, which Netlify serves with the frontend and the function
-imports by URL at cold start (`APP_BUNDLE_URL` overrides the default
-`https://verastar.netlify.app/server/app.bundle.js`). So a change to the pipeline reaches
-the scheduler by rebuilding the bundle and deploying main; the function itself only
-changes when its own `index.ts` does. Then, in the SQL editor with the `pg_cron` and
+imports statically by URL (`https://verastar.netlify.app/server/app.bundle.js`). The edge
+runtime resolves that import when the function is deployed, so a change to the pipeline
+reaches the scheduler by rebuilding the bundle, deploying main, and then redeploying
+`digest-run`. Then, in the SQL editor with the `pg_cron` and
 `pg_net` extensions enabled:
 
 ```sql
