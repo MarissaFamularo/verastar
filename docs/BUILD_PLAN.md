@@ -66,7 +66,7 @@ src/
   lib/anthropic.js   // BYOK client factory (sessionStorage key)
   lib/store.js       // ONE storage interface; IndexedDB impl first
   pipeline/
-    sources.js       // eUtils / PMC OA / CT.gov / idconv / DOI+CrossRef fetchers
+    sources.js       // eUtils / PMC OA / CT.gov / elink / DOI+CrossRef fetchers
     triage.js        // one-call ranked triage vs rubric + north stars + projects
     extract.js       // Opus 4.8 structured extraction → quantities[]
     verify.js        // ← SACRED CORE
