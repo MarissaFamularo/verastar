@@ -21,6 +21,7 @@
 import { useEffect, useState } from 'react'
 import { hasApiKey, hasModelAccess, setApiKey, setNcbiKey, setNcbiEmail } from '../lib/anthropic.js'
 import { isSponsored, refreshSponsorship } from '../lib/sponsor.js'
+import InviteCode from './InviteCode.jsx'
 import { supabaseConfigured, sendMagicLink, verifyEmailCode } from '../lib/supabase.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { draftProfile, DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
@@ -149,6 +150,8 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   const [verifyError, setVerifyError] = useState('')
   const keySet = hasApiKey()
   // A sponsored account needs no key; the connect step says so and lets them through.
+  const [sponsorVersion, setSponsorVersion] = useState(0)
+  void sponsorVersion // re-render after an invite code enrolls mid-onboarding
   const sponsored = isSponsored()
   const answered = QUESTIONS.some((q) => (answers[q.key] || '').trim())
 
@@ -442,6 +445,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
               Your key lives only in this browser tab — never sent to our servers, never written
               to disk, and cleared when you close the tab.
             </p>}
+            {!sponsored && !preview && account && <InviteCode onEnrolled={() => setSponsorVersion((v) => v + 1)} />}
           </div>
 
           <div className="flex items-center" style={{ marginTop: 30, gap: 18 }}>

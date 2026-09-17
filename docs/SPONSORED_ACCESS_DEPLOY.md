@@ -8,8 +8,8 @@ The edge function itself has not yet run on Deno: step 4 is where that happens.*
 
 ## 1. Apply the migrations
 
-`supabase/migrations/20260917180000_sponsored_access.sql` and
-`20260917190000_digest_schedules.sql`, once, from the SQL editor or `supabase db push`.
+`supabase/migrations/20260917180000_sponsored_access.sql`,
+`20260917190000_digest_schedules.sql` and `20260917200000_sponsor_invites.sql`, once, from the SQL editor or `supabase db push`.
 Creates `sponsored_accounts`, `sponsor_config`, `evidence_cache`, `reference_papers`,
 `model_spend`, `digest_schedules`. Then run the Supabase security advisors: every new table
 has RLS on, and only `sponsored_accounts` (own row, three columns), `evidence_cache` and
@@ -74,6 +74,20 @@ the parsing path runs on linkedom instead of the browser's DOMParser, validated 
 and PubMed XML shapes in Node, not yet against a live NCBI response on Deno.
 
 ## 5. Enroll accounts
+
+Preferred: an invite code per cohort. Deploy `redeem-invite` alongside the others
+(`supabase functions deploy redeem-invite --no-verify-jwt`), then:
+
+```sql
+insert into sponsor_invites (code, cohort, max_uses, expires_at, ends_at, note)
+values ('<code from the consent confirmation page>', 'pilot-1', 50, '<enrollment close>', '<study end>', 'cohort one');
+```
+
+A participant signs in, enters the code under Settings → "Have an access code?" (or on the
+onboarding connect step), and their `sponsored_accounts` row is created with the cohort and
+end date. Five attempts per user per hour; the code is checked only server-side.
+
+Fallback, one account by hand:
 
 ```sql
 insert into sponsored_accounts (user_id, cohort, ends_at, note)

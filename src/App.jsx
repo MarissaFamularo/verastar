@@ -40,6 +40,7 @@ import ConstellationView from './components/ConstellationView.jsx'
 import Memos from './components/Memos.jsx'
 import RetractionNotice from './components/RetractionNotice.jsx'
 import DigestSchedule from './components/DigestSchedule.jsx'
+import InviteCode from './components/InviteCode.jsx'
 import { DEMO_DIGEST_COUNTS } from './demo/demoDigest.js'
 
 // ── Observatory shell ──────────────────────────────────────────────────────
@@ -579,6 +580,8 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
   // Start over is two-step: the button reveals a confirm block with the erase choice.
   const [confirmReset, setConfirmReset] = useState(false)
   const [eraseAll, setEraseAll] = useState(false)
+  const [settingsVersion, setSettingsVersion] = useState(0)
+  void settingsVersion // bumps after an invite code enrolls so sponsored blocks appear without a reload
   const usage = getUsageSummary()
   const ncbi = getNcbiCredentialStatus()
   void ncbiVersion // state revision makes direct browser-storage writes re-render this block
@@ -740,6 +743,8 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
               {usage.calls} paid response{usage.calls === 1 ? '' : 's'} · {Number(usage.inputTokens || 0).toLocaleString()} input tokens · {Number(usage.outputTokens || 0).toLocaleString()} output tokens. Includes responses from runs that later failed; estimated from current Anthropic list prices.
             </p>
           </div>}
+
+          <InviteCode onEnrolled={() => setSettingsVersion((v) => v + 1)} />
 
           <DigestSchedule />
 
