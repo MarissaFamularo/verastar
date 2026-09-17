@@ -75,7 +75,12 @@ const TIER_CHIP = {
   'verified-full-text': { source: 'full text', dot: 'var(--color-verified)', text: 'var(--color-verified-soft)', bg: 'rgba(127,191,154,.14)' },
   'verified-registry': { source: 'registry', dot: 'var(--color-registry)', text: 'var(--color-registry-soft)', bg: 'rgba(143,189,230,.15)' },
   'abstract-only': { source: 'abstract', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
+  'verified-user-text': { source: 'your file', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
 }
+// A live run reports the SOURCE tier (what was fetched); map it onto the chip vocabulary.
+TIER_CHIP.full_text = TIER_CHIP['verified-full-text']
+TIER_CHIP.abstract_only = TIER_CHIP['abstract-only']
+TIER_CHIP.user_text = TIER_CHIP['verified-user-text']
 
 // Precomputed examples for the screen shown before a key exists. These excerpts
 // illustrate the interface; they do not establish support in the complete paper.

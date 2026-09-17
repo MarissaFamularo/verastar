@@ -21,6 +21,7 @@ import {
   searchPaceMs,
 } from './sources.js'
 import { extractQuantities } from './extract.js'
+import { sha256Hex, cacheKeyHeader, lookupCachedExtraction } from './evidenceCache.js'
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 import { citationIndicatesRetraction } from './retractions.js'
 import { verify, normalize, extractNumbers, numbersEqual } from './verify.js'
@@ -176,7 +177,14 @@ export async function searchCandidates({
 
 // Run the full pipeline on one paper. Returns:
 //   { paper, design, source: {tier, hasBody}, rows: [{ quantity, verdict }], error? }
-export async function runPaper(paper, { onStage } = {}) {
+//
+// Options:
+//   onStage    progress callback (id, stage)
+//   userText   { text, hash, fileName } — the reader supplied the source (an uploaded PDF).
+//              Replaces the PMC/abstract fetch; verdicts land on the user-text tier.
+//   cacheOnly  never call the model: use a cached extraction or return an error result.
+//              Used by library seeding so a new account costs nothing to populate.
+export async function runPaper(paper, { onStage, userText = null, cacheOnly = false } = {}) {
   const notify = (stage) => onStage?.(paper.id, stage)
   // Fetch citation independently of the source so a failed source fetch still leaves us
   // the citation (title, link) to show — a graceful degrade, not a bare error.
@@ -203,7 +211,9 @@ export async function runPaper(paper, { onStage } = {}) {
 
   try {
     notify('fetching')
-    const source = await fetchSource(paper)
+    const source = userText?.text
+      ? { hasBody: true, text: userText.text, tables: '', tier: 'user_text', pmcid: null }
+      : await fetchSource(paper)
 
     // Registry outcomes (drive verified-registry). Parse the LIVE CT.gov posted analyses
     // into value+CI rows; fall back to the locked map only when parsing yields nothing
@@ -224,7 +234,22 @@ export async function runPaper(paper, { onStage } = {}) {
     notify('extracting')
     // The model sees prose + flattened tables so it can cite table values.
     const sourceText = source.tables ? `${source.text}\n\nTABLES:\n${source.tables}` : source.text
-    const extracted = await extractQuantities({ studyId: paper.id, sourceText })
+    // The cache is keyed by the exact text the model would read. A hit replays that
+    // proposal; verification below runs on it regardless, in this session.
+    const sourceHash = await sha256Hex(sourceText)
+    const cacheKey = cacheKeyHeader({ pmid: paper.pmid, hash: sourceHash, tier: source.tier })
+    let extracted = null
+    let cache = 'none'
+    const cached = await lookupCachedExtraction({ pmid: paper.pmid, hash: sourceHash })
+    if (cached?.extraction) {
+      extracted = { ...cached.extraction, study_id: cached.extraction.study_id || paper.id }
+      cache = 'hit'
+    } else if (cacheOnly) {
+      throw new Error('Not in the shared evidence cache yet.')
+    } else {
+      extracted = await extractQuantities({ studyId: paper.id, sourceText, cacheKey })
+      cache = 'miss'
+    }
 
     notify('verifying')
     const rows = extracted.quantities.map((quantity) => ({
@@ -241,13 +266,20 @@ export async function runPaper(paper, { onStage } = {}) {
       citation,
       design: extracted.design,
       extractionVersion: CURRENT_EXTRACTION_VERSION,
-      source: { tier: source.tier, hasBody: source.hasBody, pmcid: source.pmcid || null },
+      source: {
+        tier: source.tier,
+        hasBody: source.hasBody,
+        pmcid: source.pmcid || null,
+        hash: sourceHash,
+        ...(userText ? { userSupplied: true, fileName: userText.fileName || null, fileHash: userText.hash || null } : {}),
+      },
       sourceDoc: { text: source.text, tables: source.tables }, // kept for corrupt-reverify
       rows,
+      cache,
     }
   } catch (err) {
     notify('error')
-    return { paper, citation, design: null, source: null, rows: [], error: err.message }
+    return { paper, citation, design: null, source: null, rows: [], error: err.message, errorObject: err }
   }
 }
 

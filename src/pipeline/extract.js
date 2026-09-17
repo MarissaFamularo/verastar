@@ -113,7 +113,7 @@ flag anything it cannot prove. Precision beats recall.`
 // Extract quantities from source text. Returns the parsed object matching
 // EXTRACTION_SCHEMA. Callers pass the result straight into verify.js — nothing here is
 // trusted.
-export async function extractQuantities({ studyId, sourceText, model = MODELS.extraction, maxTokens = EXTRACTION_MAX_TOKENS }) {
+export async function extractQuantities({ studyId, sourceText, model = MODELS.extraction, maxTokens = EXTRACTION_MAX_TOKENS, cacheKey = null }) {
   const content = `study_id: ${studyId}\n\nSOURCE TEXT:\n${sourceText}`
   let result
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -125,6 +125,8 @@ export async function extractQuantities({ studyId, sourceText, model = MODELS.ex
         schema: EXTRACTION_SCHEMA,
         maxTokens: attempt === 1 ? maxTokens : Math.max(maxTokens, EXTRACTION_RETRY_MAX_TOKENS),
         thinking: { type: 'disabled' },
+        purpose: 'extraction',
+        cacheKey,
       })
       break
     } catch (err) {

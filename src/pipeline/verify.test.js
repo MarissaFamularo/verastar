@@ -547,3 +547,19 @@ describe('verify — extra precision guards', () => {
     expect(v.badNums).toContain(0.4)
   })
 })
+
+describe('user-supplied text tier', () => {
+  it('a validated relationship in user text earns the user-text tier, never full-text', () => {
+    const q = { name: 'Mortality', quantity_type: 'single', value: 10, unit: '%', source_quote: 'Mortality was 10%.' }
+    const v = verify(q, 'Mortality was 10%.', { sourceTier: 'user_text' })
+    expect(v.relationshipValidated).toBe(true)
+    expect(v.tier).toBe(TIERS.USER_TEXT)
+    expect(v.tier).toBe('verified-user-text')
+    expect(v.reason).toMatch(/you supplied/)
+  })
+  it('a wrong value in user text is still flagged', () => {
+    const q = { name: 'Mortality', quantity_type: 'single', value: 12, unit: '%', source_quote: 'Mortality was 10%.' }
+    const v = verify(q, 'Mortality was 10%.', { sourceTier: 'user_text' })
+    expect(v.tier).toBe('flagged')
+  })
+})

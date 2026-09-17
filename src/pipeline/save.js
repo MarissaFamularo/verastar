@@ -23,6 +23,14 @@ export function buildPaperRecord(res, take, { title, source = 'unknown', notes =
     id: res.paper.id,
     pmid: res.paper.pmid,
     pmcid: res.source?.pmcid || null, // proven-free PMC copy — the Library's full-text fallback
+    // Where the verified text came from: full_text | abstract_only | user_text, the sha256 of
+    // that text, and for an upload the file name and file hash. A badge can only be read
+    // honestly next to the text it was proven against.
+    sourceTier: res.source?.tier || null,
+    sourceHash: res.source?.hash || null,
+    userSupplied: res.source?.userSupplied === true,
+    userFileName: res.source?.fileName || null,
+    userFileHash: res.source?.fileHash || null,
     title: title || res.paper.title || res.citation?.title || `PMID ${res.paper.pmid}`,
     citation: res.citation || null,
     design: res.design || null,
@@ -71,6 +79,11 @@ export function mergeRefreshedEvidence(existing, fresh, refreshedAt = new Date()
     ...existing,
     pmid: fresh.pmid || existing.pmid,
     pmcid: fresh.pmcid || existing.pmcid || null,
+    sourceTier: fresh.sourceTier || null,
+    sourceHash: fresh.sourceHash || null,
+    userSupplied: fresh.userSupplied === true,
+    userFileName: fresh.userFileName || null,
+    userFileHash: fresh.userFileHash || null,
     title: fresh.title || existing.title,
     citation: fresh.citation || existing.citation || null,
     design: fresh.design ?? null,

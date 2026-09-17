@@ -4,21 +4,27 @@
 // → file under a concept → save to the Library (and to disk if a folder is connected). Same trust
 // gate, just pointed at a paper you chose — never a shortcut around the verifier.
 //
-// Scope: anything with a PubMed record (PMID / DOI / PubMed or PMC URL). A non-indexed PDF/preprint
-// has nothing structured to verify against — that's the separate, deferred "manual PDF-drop" path.
+// Scope: anything with a PubMed record (PMID / DOI / PubMed or PMC URL). Optionally the reader
+// attaches the PDF they have: its text replaces the PMC/abstract fetch and the verdicts land on
+// the user-text tier, "verified against user-supplied text", because the app can prove a quote
+// is in that file but not that the file is the paper. The file never leaves this browser; only
+// its text goes to the model, and only the reader's own library keeps it.
 
-import { useState } from 'react'
-import { hasModelAccess } from '../lib/anthropic.js'
+import { useRef, useState } from 'react'
+import { hasModelAccess, isCapReached } from '../lib/anthropic.js'
 import { getProfile, store } from '../lib/store.js'
+import { logEvent } from '../lib/events.js'
 import { runPaper } from '../pipeline/pipeline.js'
 import { resolvePmid } from '../pipeline/sources.js'
 import { triage } from '../pipeline/triage.js'
 import { savePaper, setPaperNote } from '../pipeline/save.js'
+import { extractPdfText } from '../pipeline/pdfText.js'
 import { WhyPrompt } from './SpineCheck.jsx'
 import { fmtNum } from '../lib/format.js'
 
 const STAGE_LABEL = {
   resolving: 'Finding the paper…',
+  reading: 'Reading your PDF…',
   fetching: 'Fetching source…',
   extracting: 'Extracting (Claude)…',
   verifying: 'Verifying…',
@@ -31,6 +37,8 @@ export default function AddPaper({ onAdded }) {
   const [error, setError] = useState('')
   const [done, setDone] = useState('') // success summary line
   const [whyFor, setWhyFor] = useState(null) // saved-paper snapshot awaiting its "why"
+  const [pdf, setPdf] = useState(null) // File the reader attached, or null
+  const fileRef = useRef(null)
   const keySet = hasModelAccess()
   const busy = stage !== ''
 
@@ -62,11 +70,32 @@ export default function AddPaper({ onAdded }) {
       return
     }
 
+    // The reader's own copy, if attached. Read locally; on failure say why and stop before
+    // anything is spent.
+    let userText = null
+    if (pdf) {
+      setStage('reading')
+      try {
+        userText = await extractPdfText(pdf)
+      } catch (err) {
+        setStage('')
+        setError(err.message)
+        return
+      }
+      logEvent('pdf_uploaded', { pmid, pages: userText.pages, bytes: pdf.size })
+    }
+
     // Same pipeline as a digest paper: fetch → extract → verify.
     const paper = { id: pmid, pmid, pmcid: null, nct: null, title: null }
     const res = await runPaper(paper, {
+      userText,
       onStage: (_id, s) => setStage(s === 'done' || s === 'error' ? 'saving' : s),
     })
+    if (res.error && isCapReached(res.errorObject)) {
+      setStage('')
+      setError(res.error)
+      return
+    }
 
     // Prose channel: one cheap triage call writes the tier + finding + relevance for this one paper.
     // Never blocks the save — a triage failure just means an empty take (still verified numbers).
@@ -116,9 +145,12 @@ export default function AddPaper({ onAdded }) {
     if (flagged) bits.push(`${flagged} flagged`)
     if (res.error) bits.push('citation saved (source unavailable)')
     if (!bits.length) bits.push('no numeric claims to verify')
+    if (userText) bits.push('checked against your PDF')
     setDone(`Added “${record.title}” — ${bits.join(', ')}.`)
     setWhyFor(record)
     setInput('')
+    setPdf(null)
+    if (fileRef.current) fileRef.current.value = ''
     setStage('')
     onAdded?.()
   }
@@ -128,7 +160,8 @@ export default function AddPaper({ onAdded }) {
       <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>Add a paper</h3>
       <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--color-fg-muted)', lineHeight: 1.5 }}>
         Reading something outside the digest? Paste a PMID, DOI, or PubMed / PMC link — it runs through
-        the same verifier and lands in your Library.
+        the same verifier and lands in your Library. Have the PDF? Attach it and the numbers are checked
+        against your copy instead of the abstract.
       </p>
 
       <form onSubmit={handleAdd} className="flex" style={{ marginTop: 12, gap: 8 }}>
@@ -149,6 +182,30 @@ export default function AddPaper({ onAdded }) {
           {busy ? 'Adding…' : 'Add'}
         </button>
       </form>
+
+      <div className="flex items-center flex-wrap" style={{ marginTop: 8, gap: 10 }}>
+        <label className="cursor-pointer" style={{ fontSize: 12, color: 'var(--color-fg-soft)', borderRadius: 8, border: '1px dashed rgba(255,255,255,.18)', padding: '5px 10px', opacity: !keySet || busy ? 0.5 : 1 }}>
+          {pdf ? `PDF: ${pdf.name}` : 'Attach the PDF you have (optional)'}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            disabled={!keySet || busy}
+            onChange={(e) => setPdf(e.target.files?.[0] || null)}
+            style={{ display: 'none' }}
+          />
+        </label>
+        {pdf && !busy && (
+          <button type="button" onClick={() => { setPdf(null); if (fileRef.current) fileRef.current.value = '' }} className="cursor-pointer" style={{ fontSize: 11.5, color: 'var(--color-fg-faint)', background: 'transparent', border: 0 }}>
+            remove
+          </button>
+        )}
+        {pdf && (
+          <span style={{ fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
+            Stays in this browser. Badges will read “verified against user-supplied text.” Upload only what you have the right to use.
+          </span>
+        )}
+      </div>
 
       {!keySet && (
         <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-abstract)' }}>Sign in or set your API key in Settings to add a paper.</p>

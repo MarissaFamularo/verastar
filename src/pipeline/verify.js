@@ -14,6 +14,9 @@ export const TIERS = {
   REGISTRY: 'verified-registry',
   FULL_TEXT: 'verified-full-text',
   ABSTRACT: 'abstract-only',
+  // The reader supplied the text (a PDF they uploaded). The app proved the quote is in
+  // that text; it cannot prove the text is the paper, and the label says so.
+  USER_TEXT: 'verified-user-text',
   FLAGGED: 'flagged',
   LOCATED: 'source-located',
 }
@@ -337,7 +340,7 @@ function locate(normQuote, normCorpus) {
 //                first_value?, second_label?, second_value?, ci_low?, ci_high?, p_value?,
 //                source_quote, location_hint? }
 //   source   : string  OR  { text?: string, tables?: string }
-//   opts     : { sourceTier?: 'full_text' | 'abstract_only',  // default 'full_text'
+//   opts     : { sourceTier?: 'full_text' | 'abstract_only' | 'user_text',  // default 'full_text'
 //                registry?: Array<{ measure, value, ci_low, ci_high }> } // CT.gov posted rows
 //
 // Returns a verdict including `warnings`, a separate statistical-plausibility channel.
@@ -452,6 +455,9 @@ export function verify(quantity, source, opts = {}) {
   } else if (sourceTier === 'abstract_only') {
     tier = TIERS.ABSTRACT
     reason = 'Explicit quantity relationship validated in an abstract sentence; broader clinical interpretation is unchecked.'
+  } else if (sourceTier === 'user_text') {
+    tier = TIERS.USER_TEXT
+    reason = 'Explicit quantity relationship validated in text you supplied. The app verified the quote against that file, not against the publisher copy.'
   } else {
     tier = TIERS.FULL_TEXT
     reason = 'Explicit quantity relationship validated in a source sentence; broader clinical interpretation is unchecked.'
