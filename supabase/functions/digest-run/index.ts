@@ -21,10 +21,10 @@ import { createClient } from '@supabase/supabase-js'
 import { DOMParser } from 'linkedom'
 import { accountActive, capReached, effectiveCaps, costUsd, windows } from '../model/logic.js'
 // The app's own modules, bundled by `npm run bundle:functions` into public/server/ and
-// served by Netlify with the frontend. The edge runtime resolves remote modules when the
-// function is deployed (a runtime dynamic import is "Module not found"), so this is a
-// static import: a pipeline change reaches the scheduler by rebuilding the bundle,
-// deploying main, and then redeploying this function.
+// committed. The edge runtime resolves remote modules when the function is deployed and
+// only from an allowlist of hosts (Netlify is not one; jsDelivr is), so the import is the
+// committed bundle on jsDelivr, pinned to a commit. A pipeline change reaches the
+// scheduler by rebuilding the bundle, committing, updating this pin, and redeploying.
 import {
   configureServerClient,
   configureServerStore,
@@ -32,7 +32,7 @@ import {
   configureEvidenceCacheServer,
   schedulerMayRun,
   runDailyDigest,
-} from 'https://verastar.netlify.app/server/app.bundle.js'
+} from 'https://cdn.jsdelivr.net/gh/MarissaFamularo/verastar@56a2dee3e653a981ce74c2e0e395028b34984f93/public/server/app.bundle.js'
 
 // sources.js parses PMC and PubMed XML with the browser's DOMParser; linkedom provides the
 // same surface (querySelector, cloneNode, textContent, getAttribute) on Deno.
