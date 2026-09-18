@@ -38,8 +38,12 @@ import {
 // same surface (querySelector, cloneNode, textContent, getAttribute) on Deno.
 ;(globalThis as any).DOMParser = DOMParser
 
-const BUDGET_MS = 100_000 // reading budget per tick; the rest resumes next tick
-const CLAIM_STALE_MS = 15 * 60 * 1000
+// Reading budget per tick. The edge runtime's wall clock is about 150 s; reading stops here
+// so persistence and the handoff still fit, and ranking gets its own tick.
+const BUDGET_MS = 75_000
+// A claim only guards a tick that is still running. Ticks are five minutes apart and a
+// tick cannot outlive the wall clock, so a claim older than this is a dead tick's.
+const CLAIM_STALE_MS = 4 * 60 * 1000
 
 // The browser's "Run now" calls this cross-origin; cron does not care, the browser does.
 const CORS = {
@@ -181,7 +185,8 @@ Deno.serve(async (req) => {
 
   const finished = result.phase === 'done' || result.phase === 'empty'
   await admin.from('digest_schedules').update({
-    claimed_at: finished || result.phase === 'error' ? null : now.toISOString(),
+    // The tick is over, whatever phase it reached; the next tick may resume at once.
+    claimed_at: null,
     last_run_at: finished ? now.toISOString() : picked.row.last_run_at,
     last_result: `${result.phase}: ${result.papers ?? 0} papers, read ${result.read ?? 0}${result.note ? `; ${result.note}` : ''}`.slice(0, 200),
     updated_at: now.toISOString(),

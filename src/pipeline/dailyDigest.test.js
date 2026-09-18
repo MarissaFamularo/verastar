@@ -45,7 +45,7 @@ vi.mock('./triage.js', () => ({
 vi.mock('../lib/trellis.js', () => ({ digestProjects: vi.fn(async () => []) }))
 
 import { configureServerStore } from '../lib/store.js'
-import { runDailyDigest, remainingToRead, takesById } from './dailyDigest.js'
+import { runDailyDigest, remainingToRead, takesById, RANK_HANDOFF_FRACTION } from './dailyDigest.js'
 import { schedulerMayRun, reviveDigest } from '../lib/digestStore.js'
 import { runPaper } from './pipeline.js'
 
@@ -112,11 +112,36 @@ describe('runDailyDigest', () => {
 
     t = 0
     const second = await runDailyDigest({ budgetMs: 70_000, now })
-    expect(second.phase).toBe('done')
+    expect(second.phase).toBe('rank') // read the last paper (40s of 70s), so ranking waits for a fresh tick
     expect(second.read).toBe(1)
     expect(vi.mocked(runPaper)).toHaveBeenCalledTimes(3)
+    t = 0
+    const third = await runDailyDigest({ budgetMs: 70_000, now })
+    expect(third.phase).toBe('done')
+    expect(third.read).toBe(0)
+    expect(vi.mocked(runPaper)).toHaveBeenCalledTimes(3) // nothing re-read
     expect(mem.get('digests/daily:latest').results).toHaveLength(3)
     expect(mem.get('seen/pmids')).toBeTruthy()
+  })
+
+  it('hands ranking to the next tick when reading used most of the budget', async () => {
+    let t = 0
+    const now = () => t
+    vi.mocked(runPaper).mockImplementation(async (paper) => {
+      t += 20_000 // three papers = 60s of a 100s budget, past the handoff fraction
+      return { paper, citation: { pmid: paper.pmid }, design: 'RCT', source: { tier: 'full_text', hasBody: true }, sourceDoc: { text: '', tables: '' }, rows: [] }
+    })
+    expect(RANK_HANDOFF_FRACTION).toBeLessThan(0.6)
+    const first = await runDailyDigest({ budgetMs: 100_000, now })
+    expect(first.phase).toBe('rank')
+    expect(first.read).toBe(3)
+    expect(mem.get('digests/daily:latest').server.phase).toBe('rank')
+    expect(mem.get('digests/daily:latest').triaged).toEqual({})
+    t = 0
+    const second = await runDailyDigest({ budgetMs: 100_000, now })
+    expect(second.phase).toBe('done')
+    expect(second.read).toBe(0)
+    expect(Object.keys(mem.get('digests/daily:latest').triaged)).toHaveLength(3)
   })
 
   it('does nothing for a profile that has not onboarded', async () => {

@@ -37,6 +37,9 @@ import { isRelationshipValidated } from '../lib/evidenceVersion.js'
 import { fmtNum } from '../lib/format.js'
 import { isCapReached } from '../lib/anthropic.js'
 
+// Past this share of the budget, a tick that read papers hands ranking to the next tick.
+export const RANK_HANDOFF_FRACTION = 0.35
+
 const titleOf = (res) => res.paper.title || res.citation?.title || `PMID ${res.paper.pmid}`
 
 // --- pure helpers -------------------------------------------------------------------------
@@ -69,7 +72,7 @@ export function takesById(rankings) {
 
 // Run (or continue) the daily digest for the account the store is bound to.
 // Options: budgetMs (reading budget for this tick), now, log (fn), days (window override).
-// Resolves { phase: 'done' | 'reading' | 'empty' | 'capped', papers, read, note }.
+// Resolves { phase: 'done' | 'reading' | 'rank' | 'empty' | 'capped', papers, read, note }.
 export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(), log = () => {}, days } = {}) {
   const startedAt = now()
   const profile = await getProfile()
@@ -161,6 +164,14 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
       await persist({ processedResults: processed, results })
     }
     await persist({ server: { ...state.server, phase: 'rank' } })
+    // Ranking is one large model call over every paper read (full text each), routinely
+    // a minute or more. A tick that has already spent much of its budget reading must not
+    // start it: the edge runtime's wall clock would kill the tick mid-call, wasting the
+    // call. Hand the rank phase to the next tick, which starts with a full budget.
+    if (read > 0 && now() - startedAt > budgetMs * RANK_HANDOFF_FRACTION) {
+      log('handoff: ranking deferred to the next tick')
+      return { phase: 'rank', papers: state.results.length, read, note: 'Read done; ranking next tick.' }
+    }
   }
 
   // Phase 3: rank, post-read floor, coverage fallback (one extra reading pass), final rank.
