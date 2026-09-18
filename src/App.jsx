@@ -870,15 +870,20 @@ function MigrationOffer({ account, paperCount, onDecline }) {
 // Right rail on the Digest surface: key status, library counts, active projects,
 // and the Weekend Read teaser. Counts derive from real saved papers.
 export function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, onLibrary, demo }) {
+  // Access is "ready" with a saved key OR with sponsored access. A sponsored clinician was
+  // just told "no key needed", so the rail must never ask them for one.
+  const sponsoredOnly = !saved && isSponsored()
+  const ready = saved || sponsoredOnly
+  const accessLabel = saved ? 'API key active' : sponsoredOnly ? 'Sponsored access active' : 'Add your API key'
   return (
     <aside className="vs-digest-rail" style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div
         onClick={onSettings}
         className="flex items-center cursor-pointer"
-        style={{ gap: 9, padding: '10px 13px', borderRadius: 11, marginBottom: demo ? 12 : 34, background: saved ? 'rgba(127,191,154,.08)' : 'rgba(230,184,119,.10)' }}
+        style={{ gap: 9, padding: '10px 13px', borderRadius: 11, marginBottom: demo ? 12 : 34, background: ready ? 'rgba(127,191,154,.08)' : 'rgba(230,184,119,.10)' }}
       >
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: saved ? 'var(--color-verified)' : 'var(--color-abstract)', boxShadow: `0 0 7px ${saved ? 'var(--color-verified)' : 'var(--color-abstract)'}` }} />
-        <span style={{ fontSize: 12.5, color: saved ? 'var(--color-verified-soft)' : 'var(--color-abstract)', fontWeight: 500 }}>{saved ? 'API key active' : 'Add your API key'}</span>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: ready ? 'var(--color-verified)' : 'var(--color-abstract)', boxShadow: `0 0 7px ${ready ? 'var(--color-verified)' : 'var(--color-abstract)'}` }} />
+        <span style={{ fontSize: 12.5, color: ready ? 'var(--color-verified-soft)' : 'var(--color-abstract)', fontWeight: 500 }}>{accessLabel}</span>
         <span style={{ marginLeft: 'auto', color: 'var(--color-fg-faint)', fontSize: 13 }}>⚙</span>
       </div>
       {demo && (
