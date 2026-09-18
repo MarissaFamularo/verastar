@@ -18,11 +18,11 @@ import {
   draftProfileFromInterview,
   normalizeInterviewDraft,
   fallbackQuestion,
-  canDraft,
   outOfTurns,
   answeredTurns,
-  MAX_TURNS,
   OPENING_QUESTION,
+  SCRIPTED_QUESTIONS,
+  questionMeta,
 } from '../pipeline/interview.js'
 import { DEMO_PROFILE } from '../pipeline/onboard.js'
 
@@ -108,7 +108,9 @@ export default function ProfileInterview({
   }, [])
 
   const asked = transcript.length + (question ? 1 : 0)
-  const ready = canDraft(transcript) || canDraft([...transcript, { question, answer }])
+  // Scripted questions carry a hint and an example answer; a model follow-up has neither
+  // and is labelled as a follow-up instead of being numbered against the fixed four.
+  const meta = questionMeta(question)
 
   // Drafting is the one paid call in this step. On failure the transcript stays on screen —
   // retyping six answers because a call timed out would be the worst possible failure here.
@@ -139,17 +141,10 @@ export default function ProfileInterview({
       })
   }
 
-  // Stop early. Her prompt caps the interview at ~6 turns; nothing says she has to use them,
-  // and a clinician who has already said the useful part should not have to sit through
-  // question five to get out. The answer in the box still counts.
-  function finishNow() {
-    const rows = answer.trim() ? [...transcript, { question, answer: answer.trim() }] : transcript
-    setTranscript(rows)
-    setAnswer('')
-    draftFrom(rows)
-  }
-
   // Advance the interview: record this answer, then either ask the next question or draft.
+  // Every question needs an answer. There is deliberately no "skip" and no "that's enough"
+  // (removed 2026-09-18): a digest drafted from half an interview is a bad first digest, and
+  // a bad first digest is the one a new clinician judges the product by.
   function advance(text) {
     const rows = [...transcript, { question, answer: (text || '').trim() }]
     setTranscript(rows)
@@ -215,7 +210,9 @@ export default function ProfileInterview({
       )}
 
       <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '.12em', color: 'var(--color-fg-faint)' }}>
-        QUESTION {Math.min(asked, MAX_TURNS)} OF {MAX_TURNS}
+        {meta.scripted
+          ? `QUESTION ${Math.min(asked, SCRIPTED_QUESTIONS.length)} OF ${SCRIPTED_QUESTIONS.length}`
+          : 'ONE QUICK FOLLOW-UP'}
       </p>
 
       {ack && (
@@ -231,7 +228,11 @@ export default function ProfileInterview({
           <p style={{ margin: '10px 0 0', fontFamily: 'var(--font-serif)', fontSize: 22, lineHeight: 1.45, color: 'var(--color-fg)', maxWidth: 560 }}>
             {question}
           </p>
+          {meta.hint && (
+            <p style={{ margin: '8px 0 0', fontSize: 14.5, lineHeight: 1.6, color: 'var(--color-fg-dim)', maxWidth: 560 }}>{meta.hint}</p>
+          )}
           <textarea
+            key={question}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             onKeyDown={(e) => {
@@ -241,8 +242,8 @@ export default function ProfileInterview({
                 advance(answer)
               }
             }}
-            rows={3}
-            placeholder="Answer in your own words — a sentence or two is plenty."
+            rows={meta.short ? 1 : 3}
+            placeholder={meta.placeholder || 'Answer in your own words — a sentence or two is plenty.'}
             autoFocus
             style={answerBox}
           />
@@ -272,25 +273,6 @@ export default function ProfileInterview({
         >
           Send →
         </button>
-        <button
-          onClick={() => advance('')}
-          disabled={phase !== 'asking'}
-          className="cursor-pointer"
-          style={{ ...ghostLink, opacity: phase !== 'asking' ? 0.5 : 1 }}
-        >
-          Skip this one
-        </button>
-        {ready && (
-          <button
-            onClick={finishNow}
-            disabled={phase !== 'asking'}
-            className="cursor-pointer"
-            style={{ ...ghostLink, color: 'var(--color-accent)' }}
-            title="Stop asking and draft from what I've told you"
-          >
-            That&rsquo;s enough — draft my profile
-          </button>
-        )}
         {onCancel && (
           <button onClick={onCancel} disabled={phase === 'thinking'} className="cursor-pointer" style={ghostLink}>
             {cancelLabel}

@@ -1,59 +1,34 @@
 // components/OnboardingQuiz.jsx — the first-run flow: "watch it build my profile in 60 seconds."
 //
 // Faithful port of design/Onboarding.dc.html onto the real pipeline:
-// welcome → account (configured production only) → connect (BYOK — the only place
+// welcome → account (configured production only) → connect (access code first, or BYOK — the only place
 // a brand-new user can enter a key) →
 // INTERVIEW (a real conversation, one question at a time — ProfileInterview.jsx) →
-// review (edit the drafted topics, stars and rubric, then enter).
+// review (confirm the greeting and the topic labels, then enter — no machinery shown).
 // A demo path on the welcome screen seeds DEMO_PROFILE so the app demos keyless.
 //
-// The old three-question intake survives as a labelled QUICK START off the interview
-// screen. It is kept because it is genuinely faster and because it works when the
-// interview's per-turn calls can't run — but it is no longer the default, for one
-// reason: it never produced PubMed queries. It drafted north-star phrases, the scan
-// searched those phrases, and "AI in medicine" as a search term is how neurointervention
-// papers reached a vascular-surgery digest. The interview's whole job is the search plan.
+// The interview is the ONLY path. Four fixed plain-language questions (pipeline/interview.js)
+// plus at most two model follow-ups. The old three-box "quick start" intake was removed on
+// 2026-09-18: it offered a fork on the first question, never produced PubMed queries, and its
+// one advantage (working without per-turn model calls) is now true of the script itself.
 //
 // `preview` mode (App mounts this at ?firstrun=1): nothing persists — no key
-// writes, no saveProfile, no profile READ — and both drafting paths are timed
-// animations instead of paid calls, so the flow can be walked end-to-end for free.
+// writes, no saveProfile, no profile READ — and drafting is a timed
+// animation instead of paid calls, so the flow can be walked end-to-end for free.
 
-import { useEffect, useState } from 'react'
-import { hasApiKey, hasModelAccess, setApiKey, setNcbiKey, setNcbiEmail } from '../lib/anthropic.js'
+import { useState } from 'react'
+import { hasApiKey, hasModelAccess, setApiKey } from '../lib/anthropic.js'
 import { isSponsored, refreshSponsorship } from '../lib/sponsor.js'
 import InviteCode from './InviteCode.jsx'
 import { supabaseConfigured, sendMagicLink, verifyEmailCode } from '../lib/supabase.js'
 import { getProfile, saveProfile } from '../lib/store.js'
-import { draftProfile, DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
+import { DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { mergeInterviewProfile } from '../pipeline/interview.js'
 import { normalizeScoreFloor } from '../pipeline/select.js'
 import { normalizeTopics, normalizeSearchDays, normalizeTopicCap } from '../pipeline/topics.js'
-import ChipGroup from './ChipGroup.jsx'
 import ProfileInterview from './ProfileInterview.jsx'
-import QueryFlags from './QueryFlags.jsx'
-import RubricEditor from './RubricEditor.jsx'
 import { normalizeJournalPreferences } from '../pipeline/journals.js'
-import TopicsEditor from './TopicsEditor.jsx'
-import ProfileStorageDisclosure from './ProfileStorageDisclosure.jsx'
 import { setupStartStep } from '../lib/accountGate.js'
-
-const QUESTIONS = [
-  {
-    key: 'focus',
-    label: 'Your specialty, and how the digest should address you',
-    placeholder: "e.g. I'm a vascular surgeon — call me Dr. Morgan.",
-  },
-  {
-    key: 'projects',
-    label: "What you're actively working on",
-    placeholder: 'e.g. Running a limb-preservation program; a utilization study on CLTI admissions.',
-  },
-  {
-    key: 'priorities',
-    label: 'What makes a paper worth your morning — and what to skip',
-    placeholder: 'e.g. Practice-changing trials with hard endpoints. Skip preclinical work and editorials.',
-  },
-]
 
 // Shared observatory styles for this flow.
 const stepMark = { margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '.14em', color: '#6d7484' }
@@ -93,54 +68,10 @@ function ChartStar({ size = 44 }) {
   )
 }
 
-// The drafting constellation — pulsing stars linked by faint lines, straight from the mockup.
-function DraftingConstellation() {
-  const stars = [
-    { left: 110, top: 40, size: 16, color: 'var(--color-accent-bright)', glow: 'rgba(239,143,91,.7)', delay: 0 },
-    { left: 40, top: 90, size: 11, color: 'var(--color-gold)', glow: 'rgba(233,196,106,.6)', delay: 0.3 },
-    { left: 180, top: 80, size: 10, color: 'var(--color-registry)', glow: 'rgba(143,189,230,.6)', delay: 0.6 },
-    { left: 150, top: 24, size: 8, color: 'var(--color-verified)', glow: 'rgba(127,191,154,.6)', delay: 0.9 },
-    { left: 90, top: 112, size: 7, color: 'var(--color-fg-soft)', glow: 'transparent', delay: 1.2 },
-  ]
-  return (
-    <div className="relative" style={{ height: 130, margin: '0 auto', width: 220 }}>
-      <svg viewBox="0 0 220 130" className="absolute" style={{ inset: 0, width: '100%', height: '100%' }}>
-        <line x1="40" y1="90" x2="110" y2="40" stroke="rgba(239,143,91,.4)" strokeWidth="1" />
-        <line x1="110" y1="40" x2="180" y2="80" stroke="rgba(239,143,91,.4)" strokeWidth="1" />
-        <line x1="110" y1="40" x2="150" y2="24" stroke="rgba(233,196,106,.35)" strokeWidth="1" />
-        <line x1="40" y1="90" x2="90" y2="112" stroke="rgba(255,255,255,.15)" strokeWidth="1" />
-      </svg>
-      {stars.map((s) => (
-        <span
-          key={`${s.left}-${s.top}`}
-          className="absolute"
-          style={{
-            left: s.left,
-            top: s.top,
-            transform: 'translate(-50%,-50%)',
-            width: s.size,
-            height: s.size,
-            borderRadius: '50%',
-            background: s.color,
-            boxShadow: s.glow === 'transparent' ? 'none' : `0 0 ${s.size + 2}px 3px ${s.glow}`,
-            animation: `vs-pulse 1.8s ease-in-out ${s.delay}s infinite`,
-          }}
-        />
-      ))}
-    </div>
-  )
-}
-
 export default function OnboardingQuiz({ onDone, preview = false, account = null }) {
-  const [step, setStep] = useState('welcome') // welcome | signin | connect | interview | intake | drafting | review
+  const [step, setStep] = useState('welcome') // welcome | signin | connect | interview | review
   const [keyInput, setKeyInput] = useState('')
-  const [ncbiInput, setNcbiInput] = useState('')
-  const [emailInput, setEmailInput] = useState('')
-  const [answers, setAnswers] = useState({})
   const [draft, setDraft] = useState(null) // { name, northStars, projects, topics, search, rubric:{criteria,selectCount,scoreFloor} }
-  // Which path produced the draft, so "back" from review returns where she came from.
-  const [path, setPath] = useState('interview') // interview | intake
-  const [error, setError] = useState('')
   // Account creation/sign-in from the welcome screen (accounts configured only).
   const [signinEmail, setSigninEmail] = useState('')
   const [signinState, setSigninState] = useState('idle') // idle | sending | sent | error
@@ -153,45 +84,13 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   const [sponsorVersion, setSponsorVersion] = useState(0)
   void sponsorVersion // re-render after an invite code enrolls mid-onboarding
   const sponsored = isSponsored()
-  const answered = QUESTIONS.some((q) => (answers[q.key] || '').trim())
-
-  // Drafting runs as an effect so the animation frame mounts before the call starts.
-  useEffect(() => {
-    if (step !== 'drafting') return
-    let alive = true
-    if (preview) {
-      // Preview: the animation without the spend — land on review with the demo draft.
-      const t = setTimeout(() => {
-        if (!alive) return
-        setDraft({ ...DEMO_PROFILE, rubric: { ...DEMO_PROFILE.rubric } })
-        setStep('review')
-      }, 2600)
-      return () => { alive = false; clearTimeout(t) }
-    }
-    const labeled = Object.fromEntries(QUESTIONS.map((q) => [q.label, answers[q.key] || '']))
-    draftProfile({ answers: labeled })
-      .then((profile) => {
-        if (!alive) return
-        setDraft({ name: profile.name, ...profile })
-        setStep('review')
-      })
-      .catch((err) => {
-        if (!alive) return
-        setError(err?.message || String(err))
-        setStep('intake')
-      })
-    return () => { alive = false }
-  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function connectContinue(e) {
     e.preventDefault()
     if (!preview) {
       if (keyInput.trim()) setApiKey(keyInput)
-      if (emailInput.trim()) setNcbiEmail(emailInput)
-      if (ncbiInput.trim()) setNcbiKey(ncbiInput)
       if (!hasModelAccess()) return // key or sponsorship required to interview; the demo path is on the welcome screen
     }
-    setError('')
     setStep('interview')
   }
 
@@ -275,8 +174,6 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
 
   // Draft edit helpers.
   const setField = (patch) => setDraft((d) => ({ ...d, ...patch }))
-  const addTo = (field) => (v) => setDraft((d) => ((d[field] || []).includes(v) ? d : { ...d, [field]: [...(d[field] || []), v] }))
-  const removeFrom = (field) => (v) => setDraft((d) => ({ ...d, [field]: (d[field] || []).filter((x) => x !== v) }))
 
   // ===== WELCOME =====
   if (step === 'welcome') {
@@ -390,66 +287,70 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   }
 
   // ===== CONNECT =====
+  // The access code leads: it is the easy path, and most invited clinicians have one.
+  // Bringing a key is the fallback, with plain-language help one click away. NCBI
+  // credentials are optional tuning and live in Settings only.
   if (step === 'connect') {
+    const canUseCode = !sponsored && (preview || account)
+    const blocked = !preview && !sponsored && !keySet && !keyInput.trim()
     return (
       <div>
         <p style={stepMark}>01 / 03 · CONNECT</p>
-        <h2 className="vs-step-title" style={stepTitle}>{sponsored ? 'You are all set.' : 'Bring your own key.'}</h2>
+        <h2 className="vs-step-title" style={stepTitle}>{sponsored ? 'You are all set.' : 'Connect Verastar.'}</h2>
         <p style={{ ...stepLede, maxWidth: 500 }}>
           {sponsored
             ? 'This account has sponsored access: Verastar does the reading for you, no key needed. You can still add your own Anthropic key later in Settings.'
-            : 'Verastar runs on your Anthropic key — you paste it in, and the app uses it to do the work. No shared model bill, no lock-in.'}
+            : canUseCode
+              ? 'Verastar uses Claude, an AI model, to read and score papers for you. Enter an access code if you have one, or use your own Anthropic key.'
+              : 'Verastar uses Claude, an AI model, to read and score papers for you. It runs on your own Anthropic key.'}
         </p>
 
-        <form onSubmit={connectContinue}>
+        {canUseCode && (
           <div style={{ marginTop: 28 }}>
-            {!sponsored && <label style={fieldLabel}>Anthropic API key</label>}
-            {sponsored && !keyInput ? null : keySet && !keyInput ? (
-              <div className="flex items-center" style={{ marginTop: 8, gap: 10, padding: '11px 14px', borderRadius: 11, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-fg-soft)', fontSize: 13, letterSpacing: '.05em' }}>sk-ant-••••••••••••••••</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-verified-soft)', fontWeight: 600 }}>Active</span>
-              </div>
-            ) : (
-              <input
-                type="password"
-                value={keyInput}
-                onChange={(e) => setKeyInput(e.target.value)}
-                placeholder="sk-ant-…"
-                autoComplete="off"
-                style={inputStyle}
-              />
-            )}
-            <label style={{ ...fieldLabel, marginTop: 18 }}>
-              NCBI email <span style={{ color: 'var(--color-fg-faint)', fontWeight: 400 }}>· optional</span>
-            </label>
-            <input
-              type="email"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              placeholder="you@institution.edu — polite identification to NCBI"
-              autoComplete="off"
-              style={inputStyle}
-            />
-            <label style={{ ...fieldLabel, marginTop: 14 }}>
-              NCBI API key <span style={{ color: 'var(--color-fg-faint)', fontWeight: 400 }}>· optional</span>
-            </label>
-            <input
-              value={ncbiInput}
-              onChange={(e) => setNcbiInput(e.target.value)}
-              placeholder="Raises PubMed rate limit 3 → 10 req/s"
-              autoComplete="off"
-              style={inputStyle}
-            />
-            {!sponsored && <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
-              Your key lives only in this browser tab — never sent to our servers, never written
-              to disk, and cleared when you close the tab.
-            </p>}
-            {!sponsored && !preview && account && <InviteCode onEnrolled={() => setSponsorVersion((v) => v + 1)} />}
+            <InviteCode lead preview={preview} onEnrolled={() => setSponsorVersion((v) => v + 1)} />
           </div>
+        )}
+
+        <form onSubmit={connectContinue}>
+          {!sponsored && (
+            <div style={{ marginTop: canUseCode ? 26 : 28 }}>
+              {canUseCode && (
+                <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--color-fg-muted)' }}>No code? Use your own Anthropic key.</p>
+              )}
+              <label style={fieldLabel}>Anthropic API key</label>
+              {keySet && !keyInput ? (
+                <div className="flex items-center" style={{ marginTop: 8, gap: 10, padding: '11px 14px', borderRadius: 11, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-fg-soft)', fontSize: 13, letterSpacing: '.05em' }}>sk-ant-••••••••••••••••</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-verified-soft)', fontWeight: 600 }}>Active</span>
+                </div>
+              ) : (
+                <input
+                  type="password"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  placeholder="sk-ant-…"
+                  autoComplete="off"
+                  style={inputStyle}
+                />
+              )}
+              <div className="flex flex-wrap" style={{ marginTop: 10, gap: '6px 20px', fontSize: 13.5 }}>
+                <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>
+                  Get an API key ↗
+                </a>
+                <a href="/api-key-guide.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-fg-soft)' }}>
+                  What&rsquo;s an API key? Cost, safety, and setup ↗
+                </a>
+              </div>
+              <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+                Your key stays in this browser tab. It is never sent to our servers and is cleared
+                when you close the tab.
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center" style={{ marginTop: 30, gap: 18 }}>
-            <button type="submit" disabled={!preview && !sponsored && !keySet && !keyInput.trim()} className="cursor-pointer" style={{ ...primaryBtn, opacity: !preview && !sponsored && !keySet && !keyInput.trim() ? 0.5 : 1 }}>
+            <button type="submit" disabled={blocked} className="cursor-pointer" style={{ ...primaryBtn, opacity: blocked ? 0.5 : 1 }}>
               Continue →
             </button>
             <button type="button" onClick={() => setStep('welcome')} className="cursor-pointer" style={ghostLink}>
@@ -461,179 +362,91 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
     )
   }
 
-  // ===== INTERVIEW (the default path) =====
+  // ===== INTERVIEW =====
+  // One path, one line of intro. The mechanics (searches, rubric) and the storage note are
+  // deliberately absent here: a new clinician needs the question, not the machinery.
   if (step === 'interview') {
     return (
       <div>
         <p style={stepMark}>02 / 03 · INTERVIEW</p>
         <h2 className="vs-step-title" style={stepTitle}>Let&rsquo;s talk.</h2>
-        <p style={stepLede}>
-          A few questions, one at a time — what you watch, which journals you can&rsquo;t miss,
-          and what should never reach your morning. From that Claude writes your PubMed
-          searches, your north stars, and your ranking rubric. You edit all of it before
-          anything is saved.
-        </p>
-        <ProfileStorageDisclosure style={{ maxWidth: 560 }} />
+        <p style={stepLede}>A few quick questions so I know what to watch for you.</p>
         <div style={{ marginTop: 26 }}>
           <ProfileInterview
             preview={preview}
             onDraft={(drafted) => {
               setDraft(drafted)
-              setPath('interview')
               setStep('review')
             }}
             onCancel={() => setStep('connect')}
           />
         </div>
-        <p style={{ margin: '22px 0 0', fontSize: 13, color: 'var(--color-fg-faint)' }}>
-          In a hurry?{' '}
-          <button onClick={() => { setError(''); setStep('intake') }} className="cursor-pointer" style={{ ...ghostLink, color: 'var(--color-accent)' }}>
-            Quick start — three questions instead
-          </button>
-        </p>
-      </div>
-    )
-  }
-
-  // ===== QUICK START (the original three-box intake) =====
-  if (step === 'intake') {
-    return (
-      <div>
-        <p style={stepMark}>02 / 03 · QUICK START</p>
-        <h2 className="vs-step-title" style={stepTitle}>Three questions.</h2>
-        <p style={stepLede}>
-          The fast path: answer in your own words and Claude drafts your north stars,
-          projects, and ranking rubric. It does <em>not</em> write your PubMed queries — your
-          scan falls back to searching your north-star phrases, which is broader and noisier.
-          The interview writes real queries; you can also add them yourself on the next screen.
-        </p>
-        <ProfileStorageDisclosure style={{ maxWidth: 560 }} />
-
-        <div className="flex flex-col" style={{ marginTop: 26, gap: 20 }}>
-          {QUESTIONS.map((q) => (
-            <div key={q.key}>
-              <label style={{ display: 'block', fontSize: 14, color: 'var(--color-fg-soft)', fontWeight: 500 }}>{q.label}</label>
-              <textarea
-                value={answers[q.key] || ''}
-                onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))}
-                rows={2}
-                placeholder={q.placeholder}
-                style={{ ...inputStyle, resize: 'vertical', padding: '11px 14px', fontSize: 14.5, lineHeight: 1.55 }}
-              />
-            </div>
-          ))}
-        </div>
-
-        {error && (
-          <div style={{ marginTop: 18, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-            <span style={{ fontWeight: 600 }}>Drafting failed:</span> {error}
-          </div>
-        )}
-
-        <div className="flex items-center" style={{ marginTop: 28, gap: 18 }}>
-          <button
-            onClick={() => { setError(''); setPath('intake'); setStep('drafting') }}
-            disabled={!answered || (!preview && !keySet && !sponsored)}
-            className="cursor-pointer"
-            style={{ ...primaryBtn, opacity: !answered || (!preview && !keySet && !sponsored) ? 0.5 : 1 }}
-          >
-            ✶ Draft my profile
-          </button>
-          <button onClick={() => setStep('interview')} className="cursor-pointer" style={ghostLink}>
-            ← Interview me instead
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // ===== DRAFTING =====
-  if (step === 'drafting') {
-    return (
-      <div style={{ textAlign: 'center', padding: '40px 0' }}>
-        <DraftingConstellation />
-        <p style={{ margin: '24px 0 0', fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 22, color: 'var(--color-fg)' }}>
-          Charting your north stars…
-        </p>
-        <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)' }}>
-          Reading your answers and drafting concepts, projects, and a ranking rubric.
-        </p>
       </div>
     )
   }
 
   // ===== REVIEW =====
+  // A confirmation, not a settings page. A new clinician sees who the digest is for and what
+  // it will watch, in plain labels, and can drop a topic that is wrong. The machinery — the
+  // PubMed queries, the search window and caps, north stars, the rubric, journal lists — is
+  // drafted and saved exactly as before but NOT shown here; it is all editable later from the
+  // profile panel in the app (NorthStars.jsx), which is where someone who wants it will look.
+  const topics = draft?.topics || []
   return (
     <div>
       <p style={stepMark}>03 / 03 · REVIEW</p>
-      <h2 className="vs-step-title" style={stepTitle}>Your steering profile.</h2>
+      <h2 className="vs-step-title" style={stepTitle}>Here&rsquo;s what I&rsquo;ll watch for you.</h2>
       <p style={stepLede}>
-        Drafted from your answers — edit anything, then enter. The search topics are the part
-        worth two minutes: each one is a real PubMed query that runs every morning. You can
-        always tune all of it later from Settings.
+        Each morning I&rsquo;ll look for new papers in these areas and bring you the best few.
+        Remove anything that doesn&rsquo;t belong. You can fine-tune everything later in the app.
       </p>
-      <ProfileStorageDisclosure style={{ maxWidth: 620 }} />
 
-      <div className="flex flex-col" style={{ marginTop: 24, gap: 22 }}>
-        <div>
-          <label style={fieldLabel}>Digest greeting</label>
-          <input
-            value={draft?.name || ''}
-            onChange={(e) => setField({ name: e.target.value })}
-            style={{ ...inputStyle, padding: '11px 14px' }}
-          />
-        </div>
-
-        <div>
-          <TopicsEditor
-            topics={draft?.topics || []}
-            days={draft?.search?.days}
-            perTopic={draft?.search?.perTopic}
-            northStars={draft?.northStars || []}
-            onNorthStarsChange={(northStars) => setField({ northStars })}
-            onChange={({ topics, days, perTopic }) => setField({ topics, search: { days, perTopic } })}
-          />
-          <QueryFlags topics={draft?.topics || []} />
-        </div>
-
-        <ChipGroup
-          label="North stars"
-          hint="Concepts you steer by (rubric relevance, not the search)"
-          items={draft?.northStars || []}
-          onAdd={addTo('northStars')}
-          onRemove={removeFrom('northStars')}
-          placeholder="e.g. CLTI outcomes"
-          accent="sky"
-        />
-        <ChipGroup
-          label="Active Work"
-          hint="What the relevance line speaks to"
-          items={draft?.projects || []}
-          onAdd={addTo('projects')}
-          onRemove={removeFrom('projects')}
-          placeholder="e.g. Limb Care Program"
-        />
-
-        <RubricEditor
-          criteria={draft?.rubric?.criteria ?? DEFAULT_RUBRIC}
-          selectCount={draft?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT}
-          scoreFloor={normalizeScoreFloor(draft?.rubric?.scoreFloor)}
-          journalPreferences={normalizeJournalPreferences(draft?.journalPreferences)}
-          onJournalPreferencesChange={(journalPreferences) => setField({ journalPreferences })}
-          onChange={(rubric) => setField({ rubric })}
+      <div style={{ marginTop: 26 }}>
+        <label style={fieldLabel}>I&rsquo;ll call you</label>
+        <input
+          value={draft?.name || ''}
+          onChange={(e) => setField({ name: e.target.value })}
+          placeholder="Dr. Lastname"
+          style={{ ...inputStyle, padding: '11px 14px', maxWidth: 320 }}
         />
       </div>
 
-      <div className="flex items-center" style={{ marginTop: 28, gap: 18 }}>
+      <div style={{ marginTop: 24 }}>
+        <p style={{ ...fieldLabel, margin: 0 }}>Your topics</p>
+        {topics.length ? (
+          <ul className="flex flex-wrap" style={{ margin: '10px 0 0', padding: 0, listStyle: 'none', gap: 8 }}>
+            {topics.map((t) => (
+              <li key={t.label} className="flex items-center" style={{ gap: 8, padding: '8px 10px 8px 14px', borderRadius: 999, border: '1px solid rgba(255,255,255,.12)', background: 'var(--surface-1)', fontSize: 14.5, color: 'var(--color-fg)' }}>
+                {t.label}
+                <button
+                  onClick={() => setField({ topics: topics.filter((x) => x !== t) })}
+                  aria-label={`Remove ${t.label}`}
+                  className="cursor-pointer"
+                  style={{ border: 0, background: 'transparent', padding: '0 4px', fontSize: 15, lineHeight: 1, color: 'var(--color-fg-muted)', fontFamily: 'inherit' }}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--color-fg-dim)', maxWidth: 520 }}>
+            No topics yet. Start the interview over and tell me a bit more about what you see and do.
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center" style={{ marginTop: 32, gap: 18 }}>
         <button
           onClick={save}
+          disabled={!topics.length}
           className="cursor-pointer"
-          style={{ ...primaryBtn, padding: '13px 26px', borderRadius: 12, boxShadow: '0 10px 34px -12px rgba(239,143,91,.7)' }}
+          style={{ ...primaryBtn, padding: '13px 26px', borderRadius: 12, boxShadow: '0 10px 34px -12px rgba(239,143,91,.7)', opacity: topics.length ? 1 : 0.5 }}
         >
           Enter Verastar →
         </button>
-        <button onClick={() => setStep(path)} className="cursor-pointer" style={ghostLink}>
-          {path === 'interview' ? 'Start the interview over' : 'Back to questions'}
+        <button onClick={() => setStep('interview')} className="cursor-pointer" style={ghostLink}>
+          Start the interview over
         </button>
       </div>
     </div>

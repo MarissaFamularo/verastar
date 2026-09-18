@@ -28,65 +28,86 @@ import { DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT, DEFAULT_SCORE_FLOOR } from './onb
 import { normalizeJournalPreferences } from './journals.js'
 
 // Her cap, kept as her cap. Six exchanges is roughly two minutes of typing, and past that
-// the marginal answer stops improving the queries and starts costing her the setup.
+// the marginal answer stops improving the queries and starts costing her the setup. Four of
+// the six are the fixed script below; the remaining two are follow-ups the model may spend
+// ONLY when the topics answer is too thin to build a search plan from.
 export const MAX_TURNS = 6
 
-// Below this the transcript is too thin to draft a ten-topic search plan from — one line
-// about a specialty produces generic queries, which is the failure this whole file exists to
-// prevent. It is a floor on the BUTTON, not a wall: she can always skip a question.
-export const MIN_ANSWERED = 2
+// Below this the transcript is too thin to draft a ten-topic search plan from — a name and a
+// specialty produce generic queries, which is the failure this whole file exists to prevent.
+// Three means the early-exit link can only appear once the topics question has been on
+// screen. It is a floor on the BUTTON, not a wall: she can always skip a question.
+export const MIN_ANSWERED = 3
 
 // The topic-count band, straight from her prompt: "Aim for 6–12 queries, each narrow enough
 // to be useful … Not 'vascular surgery' alone — too noisy."
 export const MIN_TOPICS = 6
 export const MAX_TOPICS = 12
 
-// Turn one is asked WITHOUT a model call. It's the same question every time, so paying for
-// it would be paying to regenerate a constant — and it means the interview opens instantly
-// even on a cold key.
-export const OPENING_QUESTION =
-  "What's your specialty or sub-specialty, and how should the digest address you?"
-
-// The script for the free paths: ?firstrun=1 preview (no key, no spend) and any turn where
-// the model call fails. A failed turn must not dead-end the only route into the app, and
-// falling back to a fixed question is strictly better than an error screen — these six ARE
-// the interview her prompt specifies, just without the adaptation.
-export const FALLBACK_QUESTIONS = [
-  OPENING_QUESTION,
-  'Which areas should I search every morning? Name the sub-areas you would notice missing — each one becomes its own PubMed search, so "aortic disease" and "carotid" are separate, not one "vascular surgery".',
-  'Which journals are must-not-miss for you — the ones where a paper should reach you even if the topic is marginal?',
-  "Which study designs do you weight up, and what's your “I'd discuss this at conference” bar? An example of a paper that cleared it helps more than a rule.",
-  'Should LLM / genAI-in-medicine papers be in scope? If yes, what clears the bar — most of that literature is noise.',
-  'What should never reach your morning? Case reports, narrative reviews, letters and editorials outside the top journals, single-centre retrospectives with no new method, "we asked ChatGPT" papers — tell me which of those you would actually want kept.',
+// THE SCRIPT (2026-09-18, her wording). New clinicians — not clinician-researchers — are the
+// audience, so the fixed questions are plain and few: no study-design weighting, no
+// "conference bar", no LLM-scope question, no list of paper types to adjudicate. Those get
+// defaults in the draft (DRAFT_SYSTEM) and stay editable in Settings.
+//
+// All four are asked WITHOUT a model call: they are the same every time, so paying to
+// regenerate a constant would be waste, the interview opens and advances instantly even on
+// a cold key, and the wording on screen is exactly the wording she approved. `placeholder`
+// and `hint` are presentation only — they never enter the transcript.
+export const SCRIPTED_QUESTIONS = [
+  {
+    question: 'How should I address you?',
+    // Nudges toward the professional form; a first name is accepted as typed.
+    placeholder: 'Dr. Lastname',
+    short: true,
+  },
+  {
+    question: 'What is your specialty?',
+    placeholder: 'e.g. Vascular surgery',
+    short: true,
+  },
+  {
+    question: 'What topics are you most interested in?',
+    hint: 'Think about the patients you regularly see in clinic, the procedures you do, and any research you are working on. Name as many as you like.',
+    placeholder: 'e.g. Limb salvage and diabetic foot, carotid disease, aortic aneurysm repair, dialysis access…',
+  },
+  {
+    question: 'Any favorite journals?',
+    placeholder: 'e.g. NEJM, JAMA Surgery, Journal of Vascular Surgery',
+  },
 ]
 
-// What the interview has to come away with. Order is the order to ask in; the model may
-// merge or reorder as the conversation warrants, which is the whole point of adapting.
-const CHECKLIST = `1. Specialty / sub-specialty and research focus, and how to address them.
-2. The 6–12 areas to search daily, each narrow enough to be useful. "Vascular surgery" alone is too noisy. This is the most important answer in the interview — if they name only two or three, ask what else they would notice missing.
-3. Tier-1 / must-not-miss journals.
-4. Study designs they weight up.
-5. Their "would discuss this at conference / would change my practice" bar, ideally with an example.
-6. Whether LLM / genAI-in-medicine papers are in scope, and at what quality bar.
-7. Hard exclusions — what should never reach their morning.`
+export const OPENING_QUESTION = SCRIPTED_QUESTIONS[0].question
 
-export const INTERVIEW_SYSTEM = `You are interviewing a busy clinician-researcher to set up their personalized morning literature digest. You will ask ONE question at a time.
+// The scripted questions as plain strings: the free path for ?firstrun=1 preview and the
+// order nextQuestion walks before any model call.
+export const FALLBACK_QUESTIONS = SCRIPTED_QUESTIONS.map((q) => q.question)
 
-Everything you need to learn, in rough priority order:
+// Presentation extras for a question on screen. Model-written follow-ups have none.
+export function questionMeta(question) {
+  const hit = SCRIPTED_QUESTIONS.find((q) => q.question === str(question))
+  return { hint: hit?.hint || '', placeholder: hit?.placeholder || '', short: Boolean(hit?.short), scripted: Boolean(hit) }
+}
+
+// What a follow-up may still go after. Deliberately short: anything not here gets a default.
+const CHECKLIST = `1. The areas to search daily — enough distinct, narrow areas to build ${MIN_TOPICS}–${MAX_TOPICS} searches. "Vascular surgery" alone is too noisy. This is the only gap worth a follow-up in most interviews.
+2. Anything in their answers too ambiguous to act on (an abbreviation with two meanings, a specialty with very different sub-fields).`
+
+export const INTERVIEW_SYSTEM = `You are finishing a short setup interview with a busy clinician for their personalized morning literature digest. Four fixed questions have already been asked: how to address them, their specialty, the topics they care about, and the journals they trust. You may ask at most two follow-up questions, ONE at a time, and most interviews need none.
+
+The only things worth a follow-up:
 ${CHECKLIST}
 
-How to interview:
-- ONE focused question per turn. Never a numbered list of questions, never a form.
-- Start broad, then adapt to what they actually said. Follow the thread that matters — if their answer to the topics question is thin, dig there rather than moving on.
-- If they are vague, propose 2–3 CONCRETE options they can pick from or correct. "What do you read?" is a bad question; "Should I treat aortic and carotid as separate searches, or one vascular search?" is a good one.
-- Cover several checklist items in one question when they clearly go together (designs + the conference bar; LLM scope + exclusions). You have at most ${MAX_TURNS} turns, so budget them.
-- Speak in plain sentences, second person, no bullet lists, no markdown, at most ~45 words. One short acknowledgement of what they just told you, then the question.
-- Do NOT ask them to write PubMed queries or boolean search strings. Writing those is your job afterwards — ask about the CONCEPTS.
-- Do NOT ask how many papers a day they want, and do not ask about scheduling, file paths, or anything about how the app works.
+How to decide:
+- If their topics answer already names several distinct areas, set done=true. Do not ask a follow-up just because you can.
+- If the topics answer is thin (one or two broad areas, or skipped), ask ONE follow-up that proposes 2–3 CONCRETE sub-areas from their specialty that they can pick from or correct. "What else do you read?" is a bad question; "Within vascular surgery, should I also watch aortic disease, carotid disease and dialysis access?" is a good one.
+- Plain clinical language, second person, no bullet lists, no markdown, at most ~40 words. One short acknowledgement of what they told you, then the question.
+- Do NOT ask about study designs, evidence quality bars, what to exclude, or whether AI papers are in scope. Those have sensible defaults.
+- Do NOT ask them to write PubMed queries or search strings, and do not mention searches, rubrics, or how the app works. Ask about the CONCEPTS.
+- Do NOT ask how many papers a day they want, or about scheduling.
 
-Set done=true when you have enough to draft a real search plan and rubric, or when the remaining gaps are not worth another turn. When done=true the question field is ignored, so leave it empty.
+Set done=true when you have enough to draft a search plan, or when the remaining gaps are not worth another turn. When done=true the question field is ignored, so leave it empty.
 
-Return: ack (one short sentence reacting to their last answer, or empty on the first turn), question (the single next question, no ack repeated inside it), done (boolean).`
+Return: ack (one short sentence reacting to their last answer), question (the single next question, no ack repeated inside it), done (boolean).`
 
 // Strict-schema per the output_config contract: additionalProperties:false + required on
 // every object, no min/max/minLength.
@@ -146,7 +167,7 @@ export const DRAFT_SYSTEM = `You are turning an interview with a clinician-resea
 - projects: 1–4 short names of the concrete efforts they are driving (programs, studies, initiatives). Empty array if none were mentioned.
 - journalPreferences: named journals belong here only. Put tier-1 / must-not-miss journals in mustNotMiss and softer preferences in preferred. Empty arrays if none were named.
 - topics: ${MIN_TOPICS}–${MAX_TOPICS} rows, each { label, query, northStars }. This is the search plan and it is the most important field. One row per area they want watched — a busy area and a quiet one must never share a row, because each row gets its own PubMed search and its own cap. The topic's northStars array must contain one or more EXACT strings from the top-level northStars array. Every topic must map to at least one north star; if a requested area has no suitable steering concept, add a concise north star for it rather than leaving the topic unmapped.
-- rubric: 3–6 sentences of first-person steering prose ("Prioritize…", "Rank lower…", "Skip…") drawn from what they told you about study designs, their conference bar, whether LLM papers are in scope, and their hard exclusions. Do not repeat journal names or lists here; those belong only in journalPreferences. The rubric scores ONE current paper at a time: do not include requests to inspect the saved library or prior runs, compare or allocate across candidates, monitor future events, schedule alerts, or control output formatting. No numbers-handling instructions and no invented preferences.
+- rubric: 3–6 sentences of first-person steering prose ("Prioritize…", "Rank lower…", "Skip…") drawn from their specialty, their topics, and anything they volunteered about what they do or do not want. The interview does not ask about study designs or exclusions, so where they said nothing use this default stance, adapted to their specialty: prioritize clinically actionable human evidence — randomized trials, strong comparative studies, high-quality systematic reviews and guidelines; rank descriptive and single-centre retrospective work lower; skip case reports, letters, editorials, narrative reviews, and preclinical work. Include AI-in-medicine papers only if they brought the subject up. Do not repeat journal names or lists here; those belong only in journalPreferences. The rubric scores ONE current paper at a time: do not include requests to inspect the saved library or prior runs, compare or allocate across candidates, monitor future events, schedule alerts, or control output formatting. No numbers-handling instructions, and beyond that default stance no invented preferences.
 
 How to write the query field — these rules come from the user's own working system, and breaking them returns zero papers:
 - Use simple OR-based queries. Complex AND chains expand to zero results due to MeSH expansion.
@@ -208,6 +229,10 @@ export function fallbackQuestion(transcript) {
 export async function nextQuestion({ transcript = [], model = MODELS.triage, maxTokens = 512 } = {}) {
   if (!transcript.length) return { ack: '', question: OPENING_QUESTION, done: false }
   if (outOfTurns(transcript)) return { ack: '', question: '', done: true }
+  // The fixed script comes first and costs nothing. Only once all four have been asked does
+  // the model get a say, and then only about whether a follow-up is worth it.
+  const scripted = fallbackQuestion(transcript)
+  if (scripted) return { ack: '', question: scripted, done: false }
   const content = `The interview so far (${transcript.length} of ${MAX_TURNS} turns used):\n\n${transcriptText(transcript)}`
   let turn
   try {
@@ -222,8 +247,9 @@ export async function nextQuestion({ transcript = [], model = MODELS.triage, max
       thinking: { type: 'disabled' },
     })
   } catch {
-    const question = fallbackQuestion(transcript)
-    return { ack: '', question, done: !question, fallback: true }
+    // The script is already spent by the time a model call can fail, so a failure just
+    // means no follow-up: go draft from the four answers.
+    return { ack: '', question: '', done: true, fallback: true }
   }
   const question = str(turn?.question)
   const done = turn?.done === true || !question

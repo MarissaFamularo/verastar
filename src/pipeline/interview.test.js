@@ -29,6 +29,9 @@ import {
   MAX_TOPICS,
   OPENING_QUESTION,
   FALLBACK_QUESTIONS,
+  SCRIPTED_QUESTIONS,
+  questionMeta,
+  INTERVIEW_SYSTEM,
   INTERVIEW_FIELDS,
   PROFILE_INTERVIEW_SCHEMA,
   DRAFT_SYSTEM,
@@ -383,7 +386,9 @@ describe('transcript — turn accounting and the free paths', () => {
   it('counts only answered turns toward being ready to draft', () => {
     expect(answeredTurns([{ question: 'a', answer: '' }, { question: 'b', answer: 'yes' }])).toBe(1)
     expect(canDraft([{ question: 'a', answer: 'yes' }])).toBe(false)
-    expect(canDraft([{ question: 'a', answer: 'yes' }, { question: 'b', answer: 'yes' }])).toBe(true)
+    // A name and a specialty are not enough: the topics question must have had its turn.
+    expect(canDraft([{ question: 'a', answer: 'yes' }, { question: 'b', answer: 'yes' }])).toBe(false)
+    expect(canDraft([{ question: 'a', answer: 'yes' }, { question: 'b', answer: 'yes' }, { question: 'c', answer: 'yes' }])).toBe(true)
   })
 
   it(`runs out of turns at ${MAX_TURNS} questions asked, answered or not`, () => {
@@ -406,14 +411,39 @@ describe('transcript — turn accounting and the free paths', () => {
     expect(fallbackQuestion(all)).toBe('')
   })
 
-  it('the scripted interview covers the checklist its prompt specifies', () => {
-    expect(FALLBACK_QUESTIONS).toHaveLength(MAX_TURNS)
-    const script = FALLBACK_QUESTIONS.join(' ').toLowerCase()
-    for (const term of ['specialty', 'search', 'journal', 'design', 'llm', 'case report']) {
-      expect(script).toContain(term)
+  it('the script is four plain questions, in her order, inside the turn budget', () => {
+    expect(FALLBACK_QUESTIONS).toEqual([
+      'How should I address you?',
+      'What is your specialty?',
+      'What topics are you most interested in?',
+      'Any favorite journals?',
+    ])
+    expect(FALLBACK_QUESTIONS.length).toBeLessThan(MAX_TURNS) // room for follow-ups
+    // Never a form: exactly one question mark per question.
+    for (const q of FALLBACK_QUESTIONS) expect((q.match(/\?/g) || []).length).toBe(1)
+  })
+
+  it('keeps under-the-hood language out of what a new clinician reads', () => {
+    const onScreen = SCRIPTED_QUESTIONS.map((q) => `${q.question} ${q.hint || ''} ${q.placeholder || ''}`).join(' ').toLowerCase()
+    // Whole words only: "research" is welcome, "search" is not.
+    for (const term of ['pubmed', 'search', 'searches', 'rubric', 'north star', 'llm', 'study design', 'query']) {
+      expect(onScreen).not.toMatch(new RegExp(`\\b${term}\\b`))
     }
-    // Never a form: one question mark per question.
-    for (const q of FALLBACK_QUESTIONS) expect((q.match(/\?/g) || []).length).toBeLessThanOrEqual(2)
+    // The follow-up prompt is told not to reopen the questions that were cut.
+    expect(INTERVIEW_SYSTEM).toMatch(/Do NOT ask about study designs/)
+  })
+
+  it('nudges the greeting toward Dr. Lastname and prompts topics from clinic and research', () => {
+    expect(questionMeta('How should I address you?')).toMatchObject({ placeholder: 'Dr. Lastname', short: true, scripted: true })
+    expect(questionMeta('What topics are you most interested in?').hint).toMatch(/patients you regularly see in clinic/)
+    expect(questionMeta('What topics are you most interested in?').hint).toMatch(/research/)
+    expect(questionMeta('a model follow-up?')).toEqual({ hint: '', placeholder: '', short: false, scripted: false })
+  })
+
+  it('drafts a default evidence stance since the interview no longer asks for one', () => {
+    expect(DRAFT_SYSTEM).toMatch(/default stance/)
+    expect(DRAFT_SYSTEM).toMatch(/skip case reports/)
+    expect(DRAFT_SYSTEM).toMatch(/AI-in-medicine papers only if they brought the subject up/)
   })
 
   it('turn one asks the opening question with no model call at all', async () => {
@@ -429,11 +459,21 @@ describe('transcript — turn accounting and the free paths', () => {
     await expect(nextQuestion({ transcript: t(MAX_TURNS) })).resolves.toEqual({ ack: '', question: '', done: true })
   })
 
-  it('a failed model call degrades to the scripted question instead of dead-ending', async () => {
-    // getClient() throws without a key — the same shape as a rate limit or a bad key.
-    const turn = await nextQuestion({ transcript: [{ question: OPENING_QUESTION, answer: 'vascular surgery' }] })
-    expect(turn.question).toBe(FALLBACK_QUESTIONS[1])
-    expect(turn.done).toBe(false)
-    expect(turn.fallback).toBe(true)
+  it('walks the whole script with no model call', async () => {
+    // No API key is set in this environment; a model call here would surface as fallback:true.
+    const rows = []
+    for (const expected of FALLBACK_QUESTIONS) {
+      const turn = await nextQuestion({ transcript: rows })
+      expect(turn).toEqual({ ack: '', question: expected, done: false })
+      rows.push({ question: expected, answer: 'x' })
+    }
+  })
+
+  it('a failed follow-up call ends the interview instead of dead-ending', async () => {
+    // getClient() throws without a key — the same shape as a rate limit or a bad key. The
+    // script is already spent, so the right degradation is "draft from the four answers".
+    const rows = FALLBACK_QUESTIONS.map((question) => ({ question, answer: 'x' }))
+    const turn = await nextQuestion({ transcript: rows })
+    expect(turn).toEqual({ ack: '', question: '', done: true, fallback: true })
   })
 })

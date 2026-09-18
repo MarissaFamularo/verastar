@@ -37,8 +37,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((cache) => cache.put('/', copy)).catch(() => {})
+          // Only the app shell re-primes the '/' fallback — a static page such as
+          // /api-key-guide.html must never overwrite it.
+          if (url.pathname === '/') {
+            const copy = res.clone()
+            caches.open(CACHE).then((cache) => cache.put('/', copy)).catch(() => {})
+          }
           return res
         })
         .catch(() => caches.match('/')),

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>API keys, explained — Verastar</title>
+    <meta name="description" content="What an Anthropic API key is, how to get one, what it costs, and how Verastar keeps it safe." />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --fg: #f4f5f9; --fg-soft: #cbd0da; --fg-dim: #9aa1af; --fg-muted: #7a8291;
+        --accent: #ef8f5b; --accent-bright: #f4a679; --gold: #e9c46a; --verified: #7fbf9a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; color: var(--fg);
+        font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: radial-gradient(120% 80% at 50% -10%, #1a2138, #0b0e18 55%, #08090d) fixed;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 640px; margin: 0 auto; padding: 64px 24px 96px; }
+      .mark { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .14em; color: #6d7484; margin: 0; }
+      h1 { font-family: "Spectral", Georgia, serif; font-weight: 500; font-size: 38px; letter-spacing: -.01em; margin: 12px 0 0; }
+      .lede { font-size: 16.5px; line-height: 1.65; color: var(--fg-soft); margin: 16px 0 0; }
+      h2 { font-family: "Spectral", Georgia, serif; font-weight: 500; font-size: 24px; margin: 44px 0 0; }
+      p, li { font-size: 15.5px; line-height: 1.7; color: var(--fg-dim); }
+      p { margin: 12px 0 0; }
+      ol { margin: 14px 0 0; padding-left: 22px; }
+      li { margin-top: 10px; padding-left: 4px; }
+      li::marker { color: var(--gold); font-family: "IBM Plex Mono", monospace; font-size: 13px; }
+      strong { color: var(--fg-soft); font-weight: 600; }
+      a { color: var(--accent); }
+      a:hover { color: var(--accent-bright); }
+      code { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; color: var(--fg-soft); }
+      .cta {
+        display: inline-block; margin-top: 22px; padding: 13px 24px; border-radius: 11px;
+        background: var(--accent); color: #1c1206; font-weight: 600; font-size: 15px; text-decoration: none;
+      }
+      .cta:hover { background: var(--accent-bright); color: #1c1206; }
+      .note {
+        margin-top: 18px; padding: 13px 16px; border-radius: 11px; font-size: 14.5px; line-height: 1.6;
+        background: rgba(127,191,154,.08); border: 1px solid rgba(127,191,154,.18); color: var(--fg-soft);
+      }
+      .close { margin-top: 52px; font-size: 14px; color: var(--fg-muted); }
+      @media (max-width: 480px) { main { padding: 40px 16px 72px; } h1 { font-size: 31px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="mark">VERASTAR · GUIDE</p>
+      <h1>API keys, explained.</h1>
+      <p class="lede">
+        Verastar uses Claude, an AI model made by Anthropic, to read and score new papers for you.
+        An API key is how Claude knows the work is for your account. Setting one up takes about
+        five minutes, and you only do it once.
+      </p>
+
+      <h2>What it is</h2>
+      <p>
+        An API key is a personal passcode that lets software use Claude on your behalf. It looks like
+        a long string of letters starting with <code>sk-ant-</code>. You load prepaid credit on your
+        Anthropic account, and each digest draws a little of it down. There is no subscription and no
+        markup, and spending can never exceed the credit you have loaded.
+      </p>
+      <p>
+        This is separate from a Claude.ai chat subscription. If you already pay for Claude to chat,
+        you still need an API key for Verastar.
+      </p>
+
+      <h2>How to get one</h2>
+      <ol>
+        <li>Create a free account at <a href="https://platform.claude.com" target="_blank" rel="noopener noreferrer">platform.claude.com</a>, the Anthropic developer console.</li>
+        <li>Add credit under <strong>Set up billing</strong>. New accounts start at $0, and $5 is plenty to start.</li>
+        <li>Open <strong>API keys</strong> in the sidebar, click <strong>Create key</strong>, and copy it. The key is shown only once.</li>
+        <li>Return to Verastar and paste the key into the box.</li>
+      </ol>
+      <p>
+        Save the key somewhere safe, such as a password manager, if you plan to use Verastar on both
+        your phone and your computer. You will paste it on each. If you lose it, just create another.
+      </p>
+      <a class="cta" href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">Get my API key →</a>
+
+      <h2>What it costs</h2>
+      <p>
+        You pay per use, in fractions of a cent per page of text. A full daily digest, which triages
+        roughly 30 to 50 new abstracts and deep-reads the best few papers, runs about
+        <strong>$0.10 to $0.30</strong>. Saving and verifying a single paper is a few cents. Daily use
+        adds up to <strong>under $10 a month</strong>. Because credit is prepaid, Verastar simply stops
+        when it runs out. There are no surprise bills.
+      </p>
+
+      <h2>Is it safe?</h2>
+      <p>
+        Treat your key like a password. Anyone who has it can spend your credit, so do not share it
+        or email it.
+      </p>
+      <div class="note">
+        Your browser talks directly to Anthropic using your key. The key is never sent to Verastar's
+        servers. By default it lives only in the browser tab and is cleared when you close it.
+      </div>
+      <p>
+        If you ever think a key has leaked, delete it in the Anthropic console and create a new one.
+        The old key stops working immediately. Verastar handles published literature only. Never
+        enter patient information anywhere in it.
+      </p>
+
+      <p class="close">You can close this tab and return to Verastar when you are ready.</p>
+    </main>
+  </body>
+</html>
