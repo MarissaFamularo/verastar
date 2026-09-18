@@ -96,7 +96,6 @@ export default function ProfileInterview({
   const [answer, setAnswer] = useState('')
   const [phase, setPhase] = useState('asking') // asking | thinking | drafting
   const [error, setError] = useState('')
-  const [degraded, setDegraded] = useState(false)
   // Guards the async turns against a late setState after unmount. The flag is re-armed in
   // the effect BODY, not just cleared in the cleanup: StrictMode mounts, unmounts and
   // remounts in dev, and a ref initialized once stays false forever after that first
@@ -137,7 +136,10 @@ export default function ProfileInterview({
       .catch((err) => {
         if (!alive.current) return
         setError(err?.message || String(err))
-        setPhase('asking')
+        // Every answer is already in the transcript, so there is nothing left to ask: the
+        // only useful control is "try again". Returning to 'asking' here left an empty box
+        // with a disabled Send and no way forward.
+        setPhase('failed')
       })
   }
 
@@ -168,7 +170,6 @@ export default function ProfileInterview({
     nextQuestion({ transcript: rows })
       .then((turn) => {
         if (!alive.current) return
-        if (turn.fallback) setDegraded(true)
         if (turn.done || !turn.question) { draftFrom(rows); return }
         setAck(turn.ack || '')
         setQuestion(turn.question)
@@ -178,7 +179,6 @@ export default function ProfileInterview({
         if (!alive.current) return
         // nextQuestion already degrades internally; this is the belt-and-braces path.
         const next = fallbackQuestion(rows)
-        setDegraded(true)
         if (!next) { draftFrom(rows); return }
         setQuestion(next)
         setPhase('asking')
@@ -209,7 +209,7 @@ export default function ProfileInterview({
         </ul>
       )}
 
-      <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '.12em', color: 'var(--color-fg-faint)' }}>
+      <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '.12em', color: 'var(--color-fg-faint)', display: phase === 'failed' ? 'none' : undefined }}>
         {meta.scripted
           ? `QUESTION ${Math.min(asked, SCRIPTED_QUESTIONS.length)} OF ${SCRIPTED_QUESTIONS.length}`
           : 'ONE QUICK FOLLOW-UP'}
@@ -219,7 +219,11 @@ export default function ProfileInterview({
         <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>{ack}</p>
       )}
 
-      {phase === 'thinking' ? (
+      {phase === 'failed' ? (
+        <p style={{ margin: '10px 0 0', fontFamily: 'var(--font-serif)', fontSize: 20, lineHeight: 1.45, color: 'var(--color-fg)', maxWidth: 560 }}>
+          I have your answers. I just couldn&rsquo;t finish setting things up.
+        </p>
+      ) : phase === 'thinking' ? (
         <p style={{ margin: '12px 0 0', fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 19, color: 'var(--color-fg-soft)' }}>
           Thinking about what to ask next…
         </p>
@@ -250,29 +254,28 @@ export default function ProfileInterview({
         </>
       )}
 
-      {degraded && (
-        <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
-          Couldn't reach Claude for the next question, so we're on the standard question list
-          — your answers are all still here.
-        </p>
-      )}
-
       {error && (
         <div style={{ marginTop: 14, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-          <span style={{ fontWeight: 600 }}>Drafting failed:</span> {error} — your answers are
-          still here, try again.
+          <span style={{ fontWeight: 600 }}>Something went wrong:</span> {error} Your answers are
+          saved on this screen.
         </div>
       )}
 
       <div className="flex flex-wrap items-center" style={{ marginTop: 22, gap: 18 }}>
-        <button
-          onClick={() => advance(answer)}
-          disabled={phase !== 'asking' || !answer.trim()}
-          className="cursor-pointer"
-          style={{ ...primaryBtn, opacity: phase !== 'asking' || !answer.trim() ? 0.5 : 1 }}
-        >
-          Send →
-        </button>
+        {phase === 'failed' ? (
+          <button onClick={() => draftFrom(transcript)} className="cursor-pointer" style={primaryBtn}>
+            Try again →
+          </button>
+        ) : (
+          <button
+            onClick={() => advance(answer)}
+            disabled={phase !== 'asking' || !answer.trim()}
+            className="cursor-pointer"
+            style={{ ...primaryBtn, opacity: phase !== 'asking' || !answer.trim() ? 0.5 : 1 }}
+          >
+            Send →
+          </button>
+        )}
         {onCancel && (
           <button onClick={onCancel} disabled={phase === 'thinking'} className="cursor-pointer" style={ghostLink}>
             {cancelLabel}

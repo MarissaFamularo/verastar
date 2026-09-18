@@ -243,6 +243,13 @@ function getSponsoredClient() {
       const token = data?.session?.access_token
       if (!token) throw new Error('Sign in again to continue.')
       const headers = new Headers(init.headers || {})
+      // The SDK stamps X-Stainless-* telemetry headers on every request. The proxy's CORS
+      // preflight allows a fixed header list that does not include them, so the browser
+      // blocks the call before it leaves ("Connection error."). The proxy has no use for
+      // them; dropping them here keeps the allow-list tight instead of widening it.
+      for (const name of [...headers.keys()]) {
+        if (name.toLowerCase().startsWith('x-stainless-')) headers.delete(name)
+      }
       headers.set('Authorization', `Bearer ${token}`)
       headers.set('apikey', import.meta.env.VITE_SUPABASE_ANON_KEY)
       return fetch(url, { ...init, headers })
