@@ -6,7 +6,7 @@
 // renders the same box without an account and never calls the server.
 
 import { useState } from 'react'
-import { canRedeem, redeemInviteCode, INVITE_MESSAGES } from '../lib/inviteCode.js'
+import { canRedeem, redeemInviteCode, normalizeInviteCode, INVITE_MESSAGES } from '../lib/inviteCode.js'
 import { isSponsored } from '../lib/sponsor.js'
 
 export default function InviteCode({ onEnrolled, lead = false, preview = false }) {
@@ -47,7 +47,8 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false }
       <div className="flex" style={{ gap: big ? 10 : 8 }}>
         <input
           value={code}
-          onChange={(e) => setCode(e.target.value)}
+          // Show the code the way it was issued, as it is typed, so what they see is what is sent.
+          onChange={(e) => setCode(normalizeInviteCode(e.target.value))}
           placeholder="Access code"
           aria-label="Access code"
           autoComplete="off"

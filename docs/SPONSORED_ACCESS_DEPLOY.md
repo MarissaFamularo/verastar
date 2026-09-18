@@ -90,6 +90,9 @@ insert into sponsor_invites (code, cohort, max_uses, expires_at, ends_at, note)
 values ('<code from the consent confirmation page>', 'pilot-1', 50, '<enrollment close>', '<study end>', 'cohort one');
 ```
 
+Store every code in CAPITALS (e.g. `FRIENDS-1`). The app upper-cases whatever is typed before
+sending it, and the server match is exact, so a lower-case code in this table can never be redeemed.
+
 A participant signs in, enters the code under Settings → "Have an access code?" (or on the
 onboarding connect step), and their `sponsored_accounts` row is created with the cohort and
 end date. Five attempts per user per hour; the code is checked only server-side.

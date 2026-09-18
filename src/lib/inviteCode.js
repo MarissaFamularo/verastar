@@ -13,6 +13,17 @@ export const INVITE_MESSAGES = {
   error: 'Something went wrong. Try again in a moment.',
 }
 
+// Codes are issued in capitals (FRIENDS-1) and the server matches them exactly, so a friend
+// typing "friends-1" on a laptop was rejected as unrecognized. Normalize what was typed to the
+// issued form: trimmed, inner spaces removed, long dashes folded to a hyphen, upper-cased.
+// Convention that follows from this: every code in sponsor_invites must be stored upper-case.
+export function normalizeInviteCode(code) {
+  return String(code ?? '')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/\s+/g, '')
+    .toUpperCase()
+}
+
 export function canRedeem() {
   return supabaseConfigured && isSignedIn()
 }
@@ -28,7 +39,7 @@ export async function redeemInviteCode(code) {
   const res = await fetch(`${base}/functions/v1/redeem-invite`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: String(code || '').trim() }),
+    body: JSON.stringify({ code: normalizeInviteCode(code) }),
   })
   let out = null
   try { out = await res.json() } catch { out = null }
