@@ -32,7 +32,7 @@ import {
   configureEvidenceCacheServer,
   schedulerMayRun,
   runDailyDigest,
-} from 'https://cdn.jsdelivr.net/gh/MarissaFamularo/verastar@56a2dee3e653a981ce74c2e0e395028b34984f93/public/server/app.bundle.js'
+} from 'https://cdn.jsdelivr.net/gh/MarissaFamularo/verastar@28a87396c6c5eb836ced8975b7a429263956aa4b/public/server/app.bundle.js'
 
 // sources.js parses PMC and PubMed XML with the browser's DOMParser; linkedom provides the
 // same surface (querySelector, cloneNode, textContent, getAttribute) on Deno.
