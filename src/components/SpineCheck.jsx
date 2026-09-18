@@ -111,13 +111,18 @@ const KEYLESS_EXAMPLES = (() => {
   }
 })()
 
+// Plain and honest: Verastar checks NUMBERS against the source text; it does not vouch for
+// the paper. So the chip counts "numbers checked", never "findings verified". With nothing
+// to report it renders nothing — a grey "none" badge on a new clinician's first paper reads
+// as a failure when it is only a paper without checkable numbers.
 function VerificationChip({ count, sourceTier }) {
+  if (!(count > 0)) return null
   const t = count > 0
     ? (TIER_CHIP[sourceTier] || TIER_CHIP['abstract-only'])
     : { source: '', dot: 'var(--color-fg-muted)', text: 'var(--color-fg-muted)', bg: 'rgba(255,255,255,.05)' }
   const label = count > 0
-    ? `${count} relationship${count === 1 ? '' : 's'} validated${t.source ? ` · ${t.source}` : ''}`
-    : 'No relationships validated'
+    ? `${count} number${count === 1 ? '' : 's'} checked against the source${t.source ? ` · ${t.source}` : ''}`
+    : ''
   return (
     <span className="inline-flex items-center" style={{ gap: 6, padding: '4px 10px', borderRadius: 999, background: t.bg, color: t.text, fontSize: 11.5, fontWeight: 600 }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.dot, boxShadow: `0 0 6px ${t.dot}` }} />
@@ -253,9 +258,9 @@ export function ScanDetails({ candidates = 0, digest = 0, open = false, onToggle
         <span style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontStyle: 'italic', color: 'var(--color-fg-dim)' }}>Today’s scan</span>
         <span style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
         <span style={{ fontSize: 12, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>
-          {candidates} candidates{digest ? ` · ${digest} in digest` : ''}
+          {digest ? `Picked ${digest} of ${candidates} new papers` : `${candidates} new papers`}
         </span>
-        <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>{open ? 'Hide details' : 'View details'}</span>
+        <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>{open ? 'Hide' : `See all ${candidates}`}</span>
       </summary>
       <div style={{ paddingBottom: 2 }}>{children}</div>
     </details>
@@ -282,11 +287,10 @@ export function retryBaseSnapshot({ results = [], processedResults = [], triaged
 export function DigestRunControls({
   failedCount = 0,
   hasExistingScan = false,
-  // True while the digest on screen was made today. The plain new-scan button is withheld:
-  // a second run deletes today's digest and its papers are already in the seen ledger, so
-  // nothing brings them back. Replacing is still possible behind a two-step confirm.
+  // True while the digest on screen was made today. No run control is shown at all: a
+  // second run would delete today's digest, and its papers are already in the seen ledger,
+  // so nothing brings them back. (Retrying failed papers is still allowed.)
   lockedToday = false,
-  paperCount = 0,
   busy = false,
   retrying = false,
   keySet = false,
@@ -294,38 +298,8 @@ export function DigestRunControls({
   onRetry = () => {},
   onStartNew = () => {},
 }) {
-  const [confirmReplace, setConfirmReplace] = useState(false)
   const primaryStyle = { padding: '14px 34px', borderRadius: 13, border: 0, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15.5, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 10px 34px -10px rgba(239,143,91,.7)', opacity: !keySet || busy ? 0.6 : 1 }
   const secondaryStyle = { padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }
-  const dangerStyle = { padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(214,106,106,.45)', background: 'transparent', color: 'var(--color-domain-vascular)', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }
-
-  // The same-day replacement path, shared by both branches below. Never a single click:
-  // the first press only reveals the confirm, and the confirm names what is lost.
-  const replaceControl = confirmReplace ? (
-    <div className="flex flex-wrap items-center justify-center" style={{ gap: 8 }}>
-      <button
-        onClick={() => { setConfirmReplace(false); onStartNew({ force: true }) }}
-        disabled={!keySet || busy}
-        className="cursor-pointer"
-        style={dangerStyle}
-      >
-        Yes, discard {paperCount === 1 ? '1 paper' : `${paperCount} papers`} and run again
-      </button>
-      <button onClick={() => setConfirmReplace(false)} disabled={busy} className="cursor-pointer" style={secondaryStyle}>
-        Keep today's digest
-      </button>
-    </div>
-  ) : (
-    <button
-      onClick={() => setConfirmReplace(true)}
-      disabled={!keySet || busy}
-      className="cursor-pointer"
-      title="Deletes the digest on screen and its papers before searching again"
-      style={{ ...secondaryStyle, fontSize: 12 }}
-    >
-      Replace today's digest anyway…
-    </button>
-  )
 
   if (failedCount > 0) {
     return (
@@ -333,14 +307,7 @@ export function DigestRunControls({
         <button onClick={onRetry} disabled={!keySet || busy} className="cursor-pointer" style={primaryStyle}>
           {retrying ? `Retrying ${failedCount} failed paper${failedCount === 1 ? '' : 's'}…` : `Retry ${failedCount} failed paper${failedCount === 1 ? '' : 's'}`}
         </button>
-        {lockedToday ? (
-          <>
-            <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)', textAlign: 'center', maxWidth: 520 }}>
-              {sameDayNote(paperCount)}
-            </p>
-            {replaceControl}
-          </>
-        ) : (
+        {lockedToday ? null : (
           <>
             <button onClick={() => onStartNew()} disabled={!keySet || busy} className="cursor-pointer" style={secondaryStyle}>
               Start a new scan
@@ -354,16 +321,10 @@ export function DigestRunControls({
     )
   }
 
-  if (lockedToday) {
-    return (
-      <>
-        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: 'var(--color-fg-soft)', textAlign: 'center', maxWidth: 520 }}>
-          {sameDayNote(paperCount)}
-        </p>
-        {replaceControl}
-      </>
-    )
-  }
+  // One digest a day, full stop (2026-09-18). With today's digest on screen there is no run
+  // control and no explanation of one: the digest is the page. The replace-anyway path was
+  // removed — it discarded papers that never come back, behind a button nobody needs.
+  if (lockedToday) return null
 
   return (
     <>
@@ -1192,12 +1153,12 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // `days` overrides the profile's saved window for THIS run only — it's how the empty
   // state's "look back 7 days" works. A one-off catch-up must never quietly become her new
   // default, so the override lives in the call and is never written back to the profile.
-  // `force` is the confirmed same-day replacement. Without it, a scan while today's
-  // digest is on screen is refused here as well as in the controls, so no other entry
-  // point (coverage catch-up, look-back chips, a stale closure) can throw the day away.
-  async function startScan({ days: override, force = false } = {}) {
-    if (!force && lockedToday) {
-      setScanError(sameDayNote(results.length))
+  // One digest a day. A scan while today's digest is on screen is refused here as well as
+  // in the controls, so no other entry point (coverage catch-up, look-back chips, a stale
+  // closure) can throw the day away.
+  async function startScan({ days: override } = {}) {
+    if (lockedToday) {
+      setScanError(sameDayNote())
       return
     }
     // Acquire as the very first statement — this is the button's own onClick, the direct
@@ -1563,7 +1524,6 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             failedCount={failedResults.length}
             hasExistingScan={hasExistingScan}
             lockedToday={lockedToday}
-            paperCount={results.length}
             busy={busy}
             retrying={retrying}
             keySet={keySet}
@@ -1590,7 +1550,10 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             </button>
           </div>
         )}
-        <button
+        {/* Reference trials are a demo of the evidence checks. They belong to the sample
+            digest and to someone with no access yet (it is the one thing they can do). For
+            a clinician with a working digest they are a distraction above their own papers. */}
+        {(demo || !keySet) && <button
           onClick={runShowcase}
           disabled={busy}
           title={demo || !keySet ? 'Precomputed trial examples; inspect the original source before use' : 'Fetch three reference trials and review their evidence checks'}
@@ -1598,7 +1561,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', opacity: busy ? 0.5 : 1 }}
         >
           Source examples
-        </button>
+        </button>}
       </div>
 
       {/* Before a scan there is only a quiet section rule. Once a receipt exists, the same
@@ -1878,7 +1841,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                         className="cursor-pointer"
                         style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-fg-muted)' }}
                       >
-                        {isOpen ? '▾ Hide verified evidence' : `▸ Show verified evidence (${total} value${total === 1 ? '' : 's'})`}
+                        {isOpen
+                          ? '▾ Hide the checked numbers'
+                          : total > 0
+                            ? `▸ See the checked numbers (${total})`
+                            : '▸ See what was checked'}
                       </button>
 
                       {isOpen && (

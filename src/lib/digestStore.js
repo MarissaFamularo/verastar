@@ -146,10 +146,10 @@ export function isDigestFromToday(savedAt, now = new Date()) {
   return localMidnight(now) - localMidnight(parsed) <= 0
 }
 
-// The line that replaces the run button while today's digest is on screen.
-export function sameDayNote(paperCount = 0) {
-  const papers = paperCount === 1 ? '1 paper' : `${paperCount} papers`
-  return `Today's digest is already here. Running another today would replace it and discard these ${papers} — they will not come back in a new scan. Run again tomorrow, or reopen the pool below to add more.`
+// Shown only if some other entry point tries to scan while today's digest is on screen.
+// There is no same-day rerun, so this says so plainly and promises nothing else.
+export function sameDayNote() {
+  return "Today's digest is already here. A new one will be ready tomorrow."
 }
 
 // Overwrites the single daily-digest slot. Callers fire-and-forget.

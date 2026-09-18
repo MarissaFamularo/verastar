@@ -66,8 +66,8 @@ describe('completed scan disclosure', () => {
     expect(html).toContain('<details')
     expect(html).not.toContain('<details open=""')
     expect(html).toContain('Today’s scan')
-    expect(html).toContain('70 candidates · 8 in digest')
-    expect(html).toContain('View details')
+    expect(html).toContain('Picked 8 of 70 new papers')
+    expect(html).toContain('See all 70')
     expect(html).toContain('Searched 9 topics over the last 3 days.')
   })
 
@@ -77,7 +77,7 @@ describe('completed scan disclosure', () => {
     )
 
     expect(html).toContain('<details open=""')
-    expect(html).toContain('Hide details')
+    expect(html).toContain('>Hide<')
   })
 })
 
@@ -124,12 +124,8 @@ describe('failed digest retry', () => {
       keySet: true,
     }))
 
-    expect(html).not.toContain('Start a new scan')
-    expect(html).not.toContain("Run today&#x27;s digest")
-    expect(html).toContain('discard these 6 papers')
-    // The replace path exists but is not the primary action and needs a second press.
-    expect(html).toContain('Replace today&#x27;s digest anyway')
-    expect(html).not.toContain('Yes, discard')
+    // One digest a day: with today's digest on screen there is no run control at all.
+    expect(html).toBe('')
   })
 
   it('keeps retry primary but also withholds the plain new-scan path on the same day', () => {
@@ -143,7 +139,7 @@ describe('failed digest retry', () => {
 
     expect(html).toContain('Retry 2 failed papers')
     expect(html).not.toContain('Start a new scan')
-    expect(html).toContain('Replace today&#x27;s digest anyway')
+    expect(html).not.toContain('Replace today')
   })
 })
 

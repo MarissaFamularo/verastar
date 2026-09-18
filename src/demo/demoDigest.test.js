@@ -28,8 +28,8 @@ describe('read-only demo digest', () => {
 it('renders zero validated-evidence papers in the sample rail without a verification claim', () => {
   const html = renderToStaticMarkup(React.createElement(DigestRail, { counts: DEMO_DIGEST_COUNTS, projects: [], trellis: [], demo: true }))
   expect(html).toContain('In this sample')
-  expect(html).toContain('with validated evidence')
-  expect(html).toMatch(/>0<\/div>.*?with validated evidence/)
+  expect(html).toContain('with checked numbers')
+  expect(html).toMatch(/>0<\/div>.*?with checked numbers/)
   expect(html).not.toContain('>verified<')
 })
 
@@ -37,5 +37,5 @@ it('labels the real all-time counts as the library rather than this week', () =>
   const html = renderToStaticMarkup(React.createElement(DigestRail, { counts: { verified: 1, saved: 4, flagged: 0 }, projects: [], trellis: [], demo: false }))
   expect(html).toContain('Your library')
   expect(html).not.toContain('This week')
-  expect(html).toContain('with validated evidence')
+  expect(html).toContain('with checked numbers')
 })

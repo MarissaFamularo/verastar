@@ -369,9 +369,9 @@ describe('isDigestFromToday', () => {
 })
 
 describe('sameDayNote', () => {
-  it('names what a rerun would discard and says when to run again', () => {
-    expect(sameDayNote(7)).toContain('discard these 7 papers')
-    expect(sameDayNote(1)).toContain('discard these 1 paper —')
-    expect(sameDayNote(7)).toMatch(/Run again tomorrow/)
+  it('says the digest is here and offers no same-day rerun', () => {
+    expect(sameDayNote()).toMatch(/already here/)
+    expect(sameDayNote()).toMatch(/tomorrow/)
+    expect(sameDayNote()).not.toMatch(/replace|discard|run again/i)
   })
 })

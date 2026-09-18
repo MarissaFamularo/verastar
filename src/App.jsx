@@ -894,7 +894,7 @@ export function DigestRail({ saved, onSettings, counts, projects, trellis, onCon
 
       <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>{demo ? 'In this sample' : 'Your library'}</p>
       <div className="flex" style={{ gap: 26, marginBottom: 34 }}>
-        {[[counts.verified, 'with validated evidence'], [counts.saved, 'saved'], [counts.flagged, 'flagged']].map(([n, label]) => (
+        {[[counts.verified, 'with checked numbers'], [counts.saved, 'saved'], [counts.flagged, 'flagged']].map(([n, label]) => (
           <div key={label}>
             <div style={{ fontFamily: 'var(--font-serif)', fontSize: 36, color: 'var(--color-fg)', lineHeight: 1 }}>{n}</div>
             <div style={{ fontSize: 12, color: 'var(--color-fg-muted)', marginTop: 4 }}>{label}</div>

@@ -480,7 +480,7 @@ const asScore = (v) => {
 // reading".
 export function readFitLabel({ score } = {}) {
   const n = asScore(score)
-  return n === null ? '' : `fit ${n} after reading`
+  return n === null ? '' : `${n}% match`
 }
 
 // Stated, muted, on a card whose post-read score came in under her bar — the pre-read
