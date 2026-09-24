@@ -536,13 +536,13 @@ export function SavedDigestDetails({ paper }) {
 
       {evidenceRows.length > 0 ? (
         <div style={{ marginTop: 10, borderRadius: 9, border: '1px solid rgba(127,191,154,.2)', background: 'rgba(127,191,154,.04)', padding: '8px 10px' }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>EVIDENCE · {verifiedCount} RELATIONSHIPS VALIDATED</p>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>EVIDENCE · {verifiedCount} {verifiedCount === 1 ? 'VALUE' : 'VALUES'} VERIFIED</p>
           <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
             {paper.quantities.map((quantity, index) => (
               <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
                 <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{isRelationshipValidated(quantity.verdict) ? fmtNum(quantity) : 'Claim withheld — review source'}</span>
-                {!isRelationshipValidated(quantity.verdict) && <span style={{ display: 'block', color: 'var(--color-abstract)' }}>{evidenceVerdict(quantity.verdict).reason}</span>}
+                {(!isRelationshipValidated(quantity.verdict) || evidenceVerdict(quantity.verdict).relationshipStatus === 'estimate-validated') && <span style={{ display: 'block', color: 'var(--color-abstract)' }}>{evidenceVerdict(quantity.verdict).reason}</span>}
                 {quantity.source_quote && <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--color-fg-faint)' }}>&ldquo;{quantity.source_quote}&rdquo;</span>}
               </li>
             ))}

@@ -153,7 +153,7 @@ export function sourceNoteMd(paper) {
       const tier = ` — tier: \`${verdict.tier}\``
       parts.push(`- **${name}:** ${val}${tier}`)
       if (q.source_quote) parts.push(`  Source receipt: ${q.source_quote}`)
-      if (verdict.flagged) parts.push(`  ${verdict.reason}`)
+      if (verdict.flagged || verdict.relationshipStatus === 'estimate-validated') parts.push(`  ${verdict.reason}`)
     }
   }
 

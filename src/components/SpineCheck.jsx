@@ -200,7 +200,7 @@ function Row({ quantity, verdict: storedVerdict, onOpenSource, hero, pmid }) {
             {verdict.flagged ? 'Claim withheld — review source' : fmtNum(quantity)}
           </span>
         )}
-        <ProvenanceBadge tier={verdict.tier} />
+        <ProvenanceBadge tier={verdict.tier} sourceTier={verdict.sourceTier} />
         {reportable && (
           <button
             type="button"
@@ -1850,9 +1850,15 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
 
                       {isOpen && (
                         <div style={{ marginTop: 10, borderRadius: 10, border: '1px solid var(--hairline)', background: 'rgba(255,255,255,.015)', padding: '0 14px 8px' }}>
-                          <p style={{ paddingTop: 12, margin: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--color-verified-soft)' }}>
-                            Every value re-verified against the source — click any to see it
-                          </p>
+                          {total > 0 ? (
+                            <p style={{ paddingTop: 12, margin: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--color-verified-soft)' }}>
+                              Every value below re-verified against the source — click any to see it
+                            </p>
+                          ) : (
+                            <p style={{ paddingTop: 12, margin: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--color-fg-muted)' }}>
+                              No value could be verified — the source quotes are below
+                            </p>
+                          )}
                           {verifiedRows.map((row, i) => (
                             <Row key={i} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                           ))}

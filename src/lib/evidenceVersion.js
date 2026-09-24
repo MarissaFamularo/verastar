@@ -1,10 +1,10 @@
-import { VERIFICATION_VERSION } from '../pipeline/verify.js'
+import { VERIFICATION_VERSION, COMPATIBLE_VERIFICATION_VERSIONS } from '../pipeline/verify.js'
 export { VERIFICATION_VERSION }
 
 // Read-time policy only: old persisted source, annotations and provenance remain intact.
 // Missing/older verdict stamps never inherit the new relationship guarantee.
 export function evidenceVerdict(verdict) {
-  if (verdict?.verificationVersion === VERIFICATION_VERSION) return verdict
+  if (verdict?.verificationVersion === VERIFICATION_VERSION || COMPATIBLE_VERIFICATION_VERSIONS.includes(verdict?.verificationVersion)) return verdict
   return {
     ...verdict,
     originalTier: verdict?.originalTier || verdict?.tier || null,

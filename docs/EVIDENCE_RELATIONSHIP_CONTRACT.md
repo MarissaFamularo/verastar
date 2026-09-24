@@ -1,5 +1,25 @@
 # Evidence relationship contract — 2026-09-11
 
+## Amendment 2026-09-24 — printed ratio estimates (Verastar `2026-09-24.estimates-v1`)
+
+Real Results sections print effects as `(HR, 0.44; 95% CI, 0.34-0.55; P < .001)`, so the
+sentence grammar below withheld essentially every trial result. A new tier,
+`verified-estimate` ("Estimate verified as printed · endpoint unchecked"), validates a
+narrower claim: exactly one printed **ratio** tuple (HR/aHR/sHR, OR/aOR, RR/relative risk,
+IRR/rate ratio) in an exact, unique prose span, whose value, CI bounds and (if claimed) P
+equal the extraction in their stated roles. The span must contain exactly one CI clause.
+A unit, if given, must name the same ratio family. Qualifier fields (population,
+timepoint, endpoint, direction, unknown keys) withhold. Differences, tables, fuzzy quotes
+and repeated spans stay unresolved.
+
+What it does **not** prove: which endpoint, comparison, population or timepoint the tuple
+belongs to. The verdict carries `relationshipValidated: true` (the value may be shown),
+`endpointValidated: false`, `relationshipStatus: 'estimate-validated'`, and a reason naming
+the source tier. Verdicts stamped `2026-09-11.relationships-v1` are still read as stamped
+(their guarantees are a subset). PaperTrellis still pins `2026-09-11.relationships-v1`, so
+it reads new Verastar verdicts as legacy-unchecked until it adopts this amendment — the safe
+direction. Tests: `src/pipeline/estimateVerify.test.js` (8 controls, 22 false-verify guards).
+
 This revision supersedes earlier descriptions that equated numeric-token coverage with
 verified claim meaning. The version is `2026-09-11.relationships-v1` in both apps.
 

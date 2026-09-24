@@ -8,7 +8,11 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-09-11.relationships-v1'
+export const VERIFICATION_VERSION = '2026-09-24.estimates-v1'
+// Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
+// stamped with one of these is still honest to display as-is (it can only be MORE
+// conservative); anything else is downgraded at read time.
+export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1']
 
 export const TIERS = {
   REGISTRY: 'verified-registry',
@@ -19,6 +23,9 @@ export const TIERS = {
   USER_TEXT: 'verified-user-text',
   FLAGGED: 'flagged',
   LOCATED: 'source-located',
+  // A printed ratio tuple (value, CI, P) validated in its stated roles; the endpoint it
+  // belongs to is NOT validated, and the badge says so.
+  ESTIMATE: 'verified-estimate',
 }
 
 // --- 1. Normalization ---------------------------------------------------------
@@ -292,6 +299,61 @@ function validateRelationship(quantity, matched, corpus, declaredType) {
   return !!match && values.every((value, index) => Number.isFinite(value) && numbersEqual(value, Number(match[index + 1])))
 }
 
+// --- Printed ratio estimate (2026-09-24) --------------------------------------
+//
+// Results sections report effects as "(HR, 0.44; 95% CI, 0.34-0.55; P < .001)", which the
+// sentence grammar above never admits. This validates a narrower thing: that one printed
+// ratio tuple binds the value, CI bounds and P in their stated roles. It does NOT bind the
+// tuple to an endpoint, comparison, population or timepoint — the verdict says so
+// (endpointValidated: false) and the badge reads "endpoint unchecked".
+//
+// Ratio measures only: they are unsigned and unitless, so the dash between CI bounds can
+// never be a minus sign and no unit binding is needed. Differences stay unresolved.
+const RATIO_GROUPS = [
+  ['hr', 'ahr', 'shr', 'adjusted hr', 'hazard ratio', 'adjusted hazard ratio', 'subdistribution hazard ratio'],
+  ['or', 'aor', 'adjusted or', 'odds ratio', 'adjusted odds ratio'],
+  ['rr', 'risk ratio', 'relative risk', 'adjusted risk ratio', 'adjusted relative risk'],
+  ['irr', 'incidence rate ratio', 'rate ratio'],
+]
+const RATIO_NAMES = RATIO_GROUPS.flat().sort((a, b) => b.length - a.length)
+const UNSIGNED = '(?<![\\d.])((?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d))'
+// "or" is an English word ("10% or 0.10 (95% CI ...)"), so a bare abbreviation must open a
+// bracket or follow "adjusted"; spelled-out names and the other abbreviations may stand
+// after any word boundary.
+const MEASURE = `(?:(?<=[(\\[])or|(?<![a-z])(?:${RATIO_NAMES.filter((n) => n !== 'or').map((n) => n.replace(/ /g, '\\s')).join('|')}))`
+const ESTIMATE_TUPLE = new RegExp(
+  `(${MEASURE})(?![a-z])\\s*(?:[,:=]|\\s(?:was|of|is))?\\s*${UNSIGNED}` +
+  `\\s*[(\\[,;]?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval)\\s*[,:]?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
+  `(?:\\s*[,;]\\s*p\\s*(?:-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${UNSIGNED})?`,
+  'g',
+)
+const CI_CLAUSE = /\d\s*%\s*(?:ci|confidence interval)\b/g
+
+function validateEstimate(quantity, matched, corpus, declaredType) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (declaredType !== 'single') return false
+  const span = corpus.slice(matched.index, matched.index + matched.length)
+  if (corpus.indexOf(span, matched.index + 1) !== -1) return false
+  // Exactly one CI in the span and exactly one full tuple: two estimates side by side
+  // could trade values, and a second CI in another grammar could be the real one.
+  if ((span.match(CI_CLAUSE) || []).length !== 1) return false
+  const tuples = [...span.matchAll(ESTIMATE_TUPLE)]
+  if (tuples.length !== 1) return false
+  const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
+  if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
+  if (!normalize(quantity.name)) return false
+  const [, measure, value, , ciLow, ciHigh, p] = tuples[0]
+  const unit = normalize(quantity.unit)
+  if (unit) {
+    const group = RATIO_GROUPS.find((names) => names.includes(normalize(measure).replace(/\s+/g, ' ')))
+    if (!group || !group.includes(unit)) return false
+  }
+  const fields = [[quantity.value, value], [quantity.ci_low, ciLow], [quantity.ci_high, ciHigh]]
+  if (!fields.every(([mine, printed]) => Number.isFinite(mine) && numbersEqual(mine, Number(printed)))) return false
+  if (quantity.p_value != null && !(p != null && Number.isFinite(quantity.p_value) && numbersEqual(quantity.p_value, Number(p)))) return false
+  return true
+}
+
 // --- Locate the quote in the source ------------------------------------------
 
 // Returns { found, index, length } into the chosen normalized corpus, or found:false.
@@ -430,6 +492,7 @@ export function verify(quantity, source, opts = {}) {
   // corpus located the quote.
   const matchedCorpus = matched?.corpus === 'tables' ? normTables : normProse
   const relationshipValidated = consistent && validateRelationship(quantity, matched, matchedCorpus, declaredType)
+  const estimateValidated = consistent && !relationshipValidated && validateEstimate(quantity, matched, matchedCorpus, declaredType)
   const regRow = relationshipValidated ? registryMatch(quantity, opts.registry) : null
   let tier
   let reason
@@ -442,6 +505,10 @@ export function verify(quantity, source, opts = {}) {
   } else if (!consistent) {
     tier = TIERS.FLAGGED
     reason = `Quote located, but ${badNums.join(', ')} is not present in it — the value does not match the source.`
+  } else if (estimateValidated) {
+    tier = TIERS.ESTIMATE
+    const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'
+    reason = `Estimate, confidence interval and P value verified as printed together in ${where}. Which endpoint and comparison they belong to is not checked — read the quote.`
   } else if (!relationshipValidated) {
     tier = TIERS.LOCATED
     reason = 'Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.'
@@ -463,16 +530,20 @@ export function verify(quantity, source, opts = {}) {
     reason = 'Explicit quantity relationship validated in a source sentence; broader clinical interpretation is unchecked.'
   }
 
-  const warnings = plausibilityWarnings(quantity, { verifiedAsPrinted: relationshipValidated })
+  const valueValidated = relationshipValidated || estimateValidated
+  const warnings = plausibilityWarnings(quantity, { verifiedAsPrinted: valueValidated })
 
   return {
     tier,
     verificationVersion: VERIFICATION_VERSION,
-    flagged: !relationshipValidated,
+    flagged: !valueValidated,
     sourceLocated: found,
     numericCoverage: consistent,
-    relationshipValidated,
-    relationshipStatus: relationshipValidated ? 'validated' : 'unresolved',
+    // True for an estimate tuple too: the value may be shown. endpointValidated tells the
+    // two apart — only the sentence grammar binds a value to its endpoint.
+    relationshipValidated: valueValidated,
+    endpointValidated: relationshipValidated,
+    relationshipStatus: relationshipValidated ? 'validated' : estimateValidated ? 'estimate-validated' : 'unresolved',
     sourceTier,
     found,
     consistent,
