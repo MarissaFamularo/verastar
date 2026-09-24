@@ -16,9 +16,8 @@ What it does **not** prove: which endpoint, comparison, population or timepoint 
 belongs to. The verdict carries `relationshipValidated: true` (the value may be shown),
 `endpointValidated: false`, `relationshipStatus: 'estimate-validated'`, and a reason naming
 the source tier. Verdicts stamped `2026-09-11.relationships-v1` are still read as stamped
-(their guarantees are a subset). PaperTrellis still pins `2026-09-11.relationships-v1`, so
-it reads new Verastar verdicts as legacy-unchecked until it adopts this amendment — the safe
-direction. Tests: `src/pipeline/estimateVerify.test.js` (8 controls, 22 false-verify guards).
+(their guarantees are a subset). PaperTrellis adopts the same amendment and stamp
+(Publish_or_Perish `feat/estimate-tier`). Tests: `src/pipeline/estimateVerify.test.js` (8 controls, 22 false-verify guards).
 
 This revision supersedes earlier descriptions that equated numeric-token coverage with
 verified claim meaning. The version is `2026-09-11.relationships-v1` in both apps.
