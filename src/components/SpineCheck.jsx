@@ -599,6 +599,10 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // When the digest on screen was scanned; carried through every re-save so a heart or a
   // late open-access link never re-dates yesterday's digest as today's.
   const ranAtRef = useRef(null)
+  // Carried through every re-save too: digestRef holds only the digest's content, so without
+  // this each write reset openedAt to null — and the scheduler never replaces a digest it
+  // believes nobody opened.
+  const openedAtRef = useRef(null)
   // Today's digest is on screen: the plain scan path is withheld (see DigestRunControls).
   const lockedToday = !demo && results.length > 0 && isDigestFromToday(digestSavedAt)
   // Her selection bar, so a card can say when its POST-read score came in under it. Read
@@ -636,7 +640,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     if (demo) return
     if (!ranAtRef.current) ranAtRef.current = new Date().toISOString()
     const stamp = ranAtRef.current
-    saveDailyDigest({ ...digestRef.current, ...overrides, ranAt: stamp }).catch(console.warn)
+    // Anything this screen writes is on screen, so it has been opened.
+    if (!openedAtRef.current) openedAtRef.current = new Date().toISOString()
+    saveDailyDigest({ ...digestRef.current, ...overrides, ranAt: stamp, openedAt: openedAtRef.current }).catch(console.warn)
     setDigestSavedAt(stamp)
     onDigestDate(stamp)
   }
@@ -718,6 +724,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           incomplete: !gaps.complete && !scheduledPending,
         })
         ranAtRef.current = saved.ranAt ?? null
+        openedAtRef.current = saved.openedAt ?? (saved.results.length ? new Date().toISOString() : null)
         setDigestSavedAt(saved.ranAt ?? null)
         onDigestDate(saved.ranAt ?? null)
         // The one signal the scheduler waits for: this digest has been seen.
@@ -1189,6 +1196,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       // Clear the persisted digest too — closing mid-scan must not resurrect stale results.
       clearDailyDigest().catch(console.warn)
       ranAtRef.current = null // the next write is a new scan and dates it now
+      openedAtRef.current = null
       setDigestSavedAt(null)
       onDigestDate(null) // yesterday's date must not sit over a scan that's running now
       setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
