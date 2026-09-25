@@ -32,7 +32,7 @@ import {
   configureEvidenceCacheServer,
   schedulerMayRun,
   runDailyDigest,
-} from 'https://cdn.jsdelivr.net/gh/MarissaFamularo/verastar@28a87396c6c5eb836ced8975b7a429263956aa4b/public/server/app.bundle.js'
+} from 'https://cdn.jsdelivr.net/gh/MarissaFamularo/verastar@12b83d1845d34ef936d9e180f5aa31ba393d58ff/public/server/app.bundle.js'
 
 // sources.js parses PMC and PubMed XML with the browser's DOMParser; linkedom provides the
 // same surface (querySelector, cloneNode, textContent, getAttribute) on Deno.
@@ -123,7 +123,9 @@ Deno.serve(async (req) => {
     // retired its papers, so a rerun would discard what the reader may be reading. The
     // app enforces the same rule behind an explicit confirm; the server has no confirm.
     const hasPapers = Array.isArray(record?.results) && record.results.length > 0
-    const savedToday = hasPapers && record?.savedAt && localClock(new Date(record.savedAt), row.timezone).day === day
+    // ranAt, not savedAt: savedAt moves whenever the reader hearts or saves a paper.
+    const ranAt = record?.ranAt ?? record?.savedAt
+    const savedToday = hasPapers && ranAt && localClock(new Date(ranAt), row.timezone).day === day
     if (savedToday && !midFlight) { reason = "today's digest already exists"; continue }
     if (!manual) {
       if (ranToday && !midFlight) continue
