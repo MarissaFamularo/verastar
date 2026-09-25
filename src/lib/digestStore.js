@@ -9,7 +9,8 @@
 // only records with type === 'weekend' && read — this record has neither field, so it is
 // invisible to that filter. Do not add a `type` field here.
 
-import { evidenceVerdict } from './evidenceVersion.js'
+import { evidenceVerdict, VERIFICATION_VERSION } from './evidenceVersion.js'
+import { verify } from '../pipeline/verify.js'
 import { store } from './store.js'
 
 const COLLECTION = 'digests'
@@ -18,10 +19,16 @@ const LAST_SCAN_KEY = 'daily:last-successful-scan'
 
 // State -> storable record. selectedIds is a Set in the UI; persisted as an array so the
 // record stays plain data.
-export function serializeDigest({ results, processedResults, triaged, candidates, preCapCandidates, searchContext, selectedIds, openedAt = null, runBy = 'user', server = null } = {}) {
+export function serializeDigest({ results, processedResults, triaged, candidates, preCapCandidates, searchContext, selectedIds, openedAt = null, runBy = 'user', server = null, ranAt = null } = {}) {
+  const savedAt = new Date().toISOString()
   return {
     kind: 'daily',
-    savedAt: new Date().toISOString(),
+    savedAt,
+    // When the scan that produced this digest ran. savedAt moves on every write (a heart,
+    // a library save, an open-access link landing); ranAt does not. Every "is this today's
+    // digest" question reads ranAt — reading savedAt re-dated yesterday's digest as today's
+    // the moment it was opened, which locked out the next scan (2026-09-25).
+    ranAt: ranAt ?? savedAt,
     // Stamped by the app the first time this digest is shown. A scheduled run checks it:
     // a digest nobody opened is never replaced by another one nobody will open.
     openedAt: openedAt ?? null,
@@ -37,8 +44,28 @@ export function serializeDigest({ results, processedResults, triaged, candidates
   }
 }
 
+// A verdict stamped by an older verifier is re-derived from the source text the digest
+// saved alongside it — the exact corpus the original verdict was computed against — so a
+// verifier fix reaches digests already on screen without a paid re-run. Registry rows are
+// not saved, so a re-derived verdict can lose a registry upgrade but never gain one.
+// Without saved source text, the read-time version policy applies as before.
+function currentVerdict(result, row) {
+  if (row.verdict?.verificationVersion === VERIFICATION_VERSION) return row.verdict
+  const doc = result.sourceDoc
+  if (row.quantity && doc && (doc.text || doc.tables)) {
+    return verify(row.quantity, doc, { sourceTier: result.source?.tier || row.verdict?.sourceTier || 'abstract_only' })
+  }
+  return evidenceVerdict(row.verdict)
+}
+
 function currentEvidenceView(results) {
-  return results.map((result) => ({ ...result, rows: result.rows?.map((row) => ({ ...row, verdict: evidenceVerdict(row.verdict) })) }))
+  return results.map((result) => ({ ...result, rows: result.rows?.map((row) => ({ ...row, verdict: currentVerdict(result, row) })) }))
+}
+
+// The date that says which day a digest belongs to. Records written before ranAt existed
+// fall back to savedAt.
+export function digestRanAt(record) {
+  return record?.ranAt ?? record?.savedAt ?? null
 }
 
 // Record -> state. Returns null for anything that isn't a daily-digest record, so a
@@ -54,6 +81,7 @@ export function reviveDigest(record) {
     searchContext: record.searchContext ?? { counts: [], failed: [], days: null },
     selectedIds: new Set(record.selectedIds ?? []),
     savedAt: record.savedAt ?? null,
+    ranAt: digestRanAt(record),
     openedAt: record.openedAt ?? null,
     runBy: record.runBy ?? 'user',
     server: record.server ?? null,

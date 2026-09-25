@@ -338,10 +338,58 @@ describe('legacy cached evidence policy', () => {
     const oldVerdict = { tier: 'verified-full-text', flagged: false, found: true }
     const record = { kind: 'daily', results: [{ paper: { id: 'p' }, sourceDoc: { text: 'Original source' }, rows: [{ quantity: { value: 20 }, verdict: oldVerdict }] }] }
     const revived = reviveDigest(record)
-    expect(revived.results[0].rows[0].verdict.tier).toBe('legacy-unchecked')
+    // Re-derived from the saved source: the quantity has no receipt there, so it is flagged.
+    expect(revived.results[0].rows[0].verdict.flagged).toBe(true)
     expect(revived.results[0].sourceDoc.text).toBe('Original source')
     expect(oldVerdict.flagged).toBe(false)
     expect(record.results[0].rows[0].verdict.tier).toBe('verified-full-text')
+  })
+})
+
+describe('restored digests use the current verifier', () => {
+  const text = 'Short-term DAPT was associated with a reduction in the risk of bleeding (HR, 0.44; 95% CI, 0.34-0.55; P < .001).'
+  const quantity = { name: 'Bleeding', quantity_type: 'single', value: 0.44, unit: 'HR', ci_low: 0.34, ci_high: 0.55, p_value: null, range_low: null, range_high: null, first_label: null, first_value: null, second_label: null, second_value: null, source_quote: 'reduction in the risk of bleeding (HR, 0.44; 95% CI, 0.34-0.55; P < .001)', location_hint: 'Results' }
+  const saved = (verdict, sourceDoc = { text, tables: '' }) => ({ kind: 'daily', results: [{ paper: { id: 'p' }, source: { tier: 'abstract_only' }, sourceDoc, rows: [{ quantity, verdict }] }] })
+  it('re-derives an older-version verdict from the saved source text', () => {
+    const old = { verificationVersion: '2026-09-11.relationships-v1', tier: 'source-located', flagged: true, relationshipValidated: false }
+    const verdict = reviveDigest(saved(old)).results[0].rows[0].verdict
+    expect(verdict.tier).toBe('verified-estimate')
+    expect(verdict.verificationVersion).toBe(VERIFICATION_VERSION)
+    expect(verdict.sourceTier).toBe('abstract_only')
+    expect(old.tier).toBe('source-located') // the saved record is never rewritten here
+  })
+  it('re-derives a wrong value as flagged, never trusting the old stamp', () => {
+    const old = { verificationVersion: '2026-09-11.relationships-v1', tier: 'verified-full-text', flagged: false, relationshipValidated: true }
+    const record = saved(old)
+    record.results[0].rows[0].quantity = { ...quantity, value: 0.45 }
+    expect(reviveDigest(record).results[0].rows[0].verdict.flagged).toBe(true)
+  })
+  it('keeps a current-version verdict exactly as saved', () => {
+    const current = { verificationVersion: VERIFICATION_VERSION, tier: 'flagged', flagged: true, relationshipValidated: false }
+    expect(reviveDigest(saved(current)).results[0].rows[0].verdict).toBe(current)
+  })
+  it('falls back to the read-time policy without saved source text', () => {
+    const old = { verificationVersion: '2026-09-11.relationships-v1', tier: 'source-located', flagged: true }
+    expect(reviveDigest(saved(old, null)).results[0].rows[0].verdict.tier).toBe('source-located')
+  })
+})
+
+// A digest's day is the day its scan ran. savedAt moves on every write — on 2026-09-25 an
+// open-access link landing on yesterday's restored digest re-dated it as today's, which
+// put today's date over yesterday's papers and locked out the new scan.
+describe('ranAt', () => {
+  it('defaults to the write time for a fresh scan', () => {
+    const r = serializeDigest({ results: [] })
+    expect(r.ranAt).toBe(r.savedAt)
+  })
+  it('survives a later re-save', () => {
+    const r = serializeDigest({ results: [], ranAt: '2026-09-24T12:00:00.000Z' })
+    expect(r.ranAt).toBe('2026-09-24T12:00:00.000Z')
+    expect(r.savedAt).not.toBe(r.ranAt)
+    expect(isDigestFromToday(reviveDigest(r).ranAt, new Date(2026, 8, 25, 18, 0))).toBe(false)
+  })
+  it('falls back to savedAt for records written before ranAt existed', () => {
+    expect(reviveDigest({ kind: 'daily', savedAt: '2026-09-20T09:00:00.000Z' }).ranAt).toBe('2026-09-20T09:00:00.000Z')
   })
 })
 

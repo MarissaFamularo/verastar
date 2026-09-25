@@ -83,7 +83,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
   const resuming = existing?.runBy === 'scheduler' && existing.server?.phase && existing.server.phase !== 'done'
   let state = resuming
     ? { ...existing, selectedIds: new Set(existing.selectedIds) }
-    : { results: [], processedResults: [], triaged: {}, candidates: [], preCapCandidates: [], searchContext: { counts: [], failed: [], days: null }, selectedIds: new Set(), openedAt: null, runBy: 'scheduler', server: { phase: 'search', startedAt: new Date(startedAt).toISOString() } }
+    : { results: [], processedResults: [], triaged: {}, candidates: [], preCapCandidates: [], searchContext: { counts: [], failed: [], days: null }, selectedIds: new Set(), openedAt: null, runBy: 'scheduler', ranAt: new Date(startedAt).toISOString(), server: { phase: 'search', startedAt: new Date(startedAt).toISOString() } }
 
   const persist = async (patch = {}) => {
     state = { ...state, ...patch }

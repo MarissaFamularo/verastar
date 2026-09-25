@@ -596,6 +596,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const [restored, setRestored] = useState(null)
   // savedAt of the digest on screen — the same-day guard reads it; App gets it via onDigestDate.
   const [digestSavedAt, setDigestSavedAt] = useState(null)
+  // When the digest on screen was scanned; carried through every re-save so a heart or a
+  // late open-access link never re-dates yesterday's digest as today's.
+  const ranAtRef = useRef(null)
   // Today's digest is on screen: the plain scan path is withheld (see DigestRunControls).
   const lockedToday = !demo && results.length > 0 && isDigestFromToday(digestSavedAt)
   // Her selection bar, so a card can say when its POST-read score came in under it. Read
@@ -631,8 +634,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // same instant so a just-finished run dates as today without a re-read.
   function persistDigest(overrides = {}) {
     if (demo) return
-    saveDailyDigest({ ...digestRef.current, ...overrides }).catch(console.warn)
-    const stamp = new Date().toISOString()
+    if (!ranAtRef.current) ranAtRef.current = new Date().toISOString()
+    const stamp = ranAtRef.current
+    saveDailyDigest({ ...digestRef.current, ...overrides, ranAt: stamp }).catch(console.warn)
     setDigestSavedAt(stamp)
     onDigestDate(stamp)
   }
@@ -713,8 +717,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           note: scheduledPending ? 'Your morning digest is still being prepared. Check back in a few minutes.' : saved.runBy === 'scheduler' ? 'Your morning digest, prepared while you slept.' : restoreNote(gaps),
           incomplete: !gaps.complete && !scheduledPending,
         })
-        setDigestSavedAt(saved.savedAt ?? null)
-        onDigestDate(saved.savedAt ?? null)
+        ranAtRef.current = saved.ranAt ?? null
+        setDigestSavedAt(saved.ranAt ?? null)
+        onDigestDate(saved.ranAt ?? null)
         // The one signal the scheduler waits for: this digest has been seen.
         if (saved.results.length && !saved.openedAt) markDigestOpened().then((did) => { if (did) logEvent('digest_opened', { runBy: saved.runBy || 'user', papers: saved.results.length }) })
       })
@@ -1183,6 +1188,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setSearchContext({ counts: [], failed: [], days: null })
       // Clear the persisted digest too — closing mid-scan must not resurrect stale results.
       clearDailyDigest().catch(console.warn)
+      ranAtRef.current = null // the next write is a new scan and dates it now
       setDigestSavedAt(null)
       onDigestDate(null) // yesterday's date must not sit over a scan that's running now
       setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
