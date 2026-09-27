@@ -47,7 +47,9 @@ vi.mock('../lib/trellis.js', () => ({ digestProjects: vi.fn(async () => []) }))
 import { configureServerStore } from '../lib/store.js'
 import { runDailyDigest, remainingToRead, takesById, RANK_HANDOFF_FRACTION } from './dailyDigest.js'
 import { schedulerMayRun, reviveDigest } from '../lib/digestStore.js'
-import { runPaper } from './pipeline.js'
+import { runPaper, searchCandidates } from './pipeline.js'
+import { triage } from './triage.js'
+import { selectCandidates, planCoverageFallbacks } from './select.js'
 
 beforeEach(() => {
   mem.clear()
@@ -148,5 +150,30 @@ describe('runDailyDigest', () => {
     mem.set('profile/me', { onboarded: false })
     expect((await runDailyDigest()).phase).toBe('empty')
     expect(mem.get('digests/daily:latest')).toBeUndefined()
+  })
+
+  it('keeps coverage-fallback reads out of the digest when their ranking fails', async () => {
+    mem.set('profile/me', { onboarded: true, northStars: ['CLTI'], rubric: { criteria: 'x', selectCount: 3, scoreFloor: 60 } })
+    vi.mocked(searchCandidates).mockImplementationOnce(async () => ({
+      candidates: ['101', '102', '103', '104'].map((pmid) => ({ id: pmid, pmid, title: `Paper ${pmid}`, topics: ['CLTI'] })),
+      counts: [{ label: 'CLTI', found: 4, kept: 4 }],
+      failed: [],
+      skipped: 0,
+      days: 3,
+    }))
+    vi.mocked(selectCandidates).mockImplementationOnce(async ({ candidates }) =>
+      candidates.map((c) => ({ ...c, score: c.id === '104' ? 45 : 90, reason: 'fits' })))
+    vi.mocked(planCoverageFallbacks).mockImplementationOnce(({ candidates }) => ({
+      candidates: candidates.filter((c) => c.id === '104'),
+      rescuedTopics: ['CLTI'],
+    }))
+    vi.mocked(triage)
+      .mockImplementationOnce(async ({ candidates }) => candidates.map((c) => ({ id: c.id, score: 30, tier: 2, finding: 'f', relevance: 'r' })))
+      .mockRejectedValueOnce(new Error('Claude structured output was incomplete.'))
+
+    await expect(runDailyDigest({ now: () => 0 })).rejects.toThrow(/incomplete/)
+    const saved = mem.get('digests/daily:latest')
+    expect(saved.processedResults.map((r) => r.paper.id)).toContain('104')
+    expect(saved.results.map((r) => r.paper.id)).not.toContain('104')
   })
 })

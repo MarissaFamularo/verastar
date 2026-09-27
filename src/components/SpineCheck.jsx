@@ -920,9 +920,14 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       if (res.retracted) continue
       collected.push(res)
       setProcessedResults([...collected])
-      // During an append, do not temporarily re-show every cached paper that previously
-      // missed the final bar. Show only the existing digest plus genuinely new work.
-      visible = append ? [...visible, res] : [...collected]
+      // During an append (the coverage fallback, or adding more) the new papers stay out of
+      // the digest until the combined re-rank below scores them against her bar. They are
+      // the weaker candidates by construction; if the summary call fails they must not
+      // land at the bottom of the digest unsummarized. They are kept in processedResults,
+      // so "Finish this digest" can still rank them without reading them again. A paper
+      // that failed to read needs no ranking and shows its error card right away.
+      if (!append) visible = [...collected]
+      else if (res.error) visible = [...visible, res]
       setResults([...visible])
       // Persist after EVERY paper, not just at the end of the whole run. Each extraction is
       // a paid Claude call, and a run is minutes long — if the screen sleeps mid-loop (the
@@ -1012,8 +1017,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       } catch (err) {
         console.warn('Triage failed (facts unaffected):', err.message)
         setScanError(
-          `The papers were read and verified, but Claude could not finish their summaries: ${err.message}. ` +
-          'Your completed reading was saved; use “Finish this digest” to retry the summaries without reading the papers again.',
+          append
+            ? `The ${toRun.length} added paper${toRun.length === 1 ? ' was' : 's were'} read but Claude could not score and summarize ${toRun.length === 1 ? 'it' : 'them'}: ${err.message}. ` +
+              'They were left out of the digest rather than shown unsummarized; use “Finish this digest” to retry without reading them again.'
+            : `The papers were read and verified, but Claude could not finish their summaries: ${err.message}. ` +
+              'Your completed reading was saved; use “Finish this digest” to retry the summaries without reading the papers again.',
         )
       }
       setRanking(false)
@@ -1507,6 +1515,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // the digest while the first run was writing summaries, producing an apparently silent
   // failure and a stale snapshot race.
   const busy = running || searching || selecting || ranking || retrying
+  // Read-but-unranked papers in THIS session (a failed ranking call), not only on restore.
+  const liveGaps = digestGaps({ results, processedResults, triaged })
   const primaryLabel = searching
     ? 'Searching…'
     : selecting
@@ -1622,11 +1632,13 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       {/* A restore that came back short says so, in amber — same treatment as a withheld
           summary, because it's the same kind of fact: the app is telling her what it does
           NOT have. A whole restore keeps the quiet muted line. */}
-      {restored?.incomplete && (
+      {(restored?.incomplete || (!busy && liveGaps.missing > 0)) && (
         <div style={{ margin: '12px 0 0' }}>
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-abstract)' }}>
-            {restored.note}
-          </p>
+          {restored?.incomplete && (
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-abstract)' }}>
+              {restored.note}
+            </p>
+          )}
           {/* Finish rather than restart: the papers already verified are in `results` and
               runAndRank (via resumeDigest) skips re-extracting them — only what never ran
               gets fetched, then the whole set is (re-)ranked. */}

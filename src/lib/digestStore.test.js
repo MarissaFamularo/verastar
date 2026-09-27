@@ -192,6 +192,20 @@ describe('digestGaps', () => {
     expect(gaps).toEqual({ total: 2, missing: 2, complete: false })
   })
 
+  it('counts a read-but-unranked paper held out of results (failed ranking after an append)', () => {
+    const gaps = digestGaps({
+      results: [res('1')],
+      processedResults: [res('1'), res('2'), res('3', { error: 'fetch failed' }), res('4', { retracted: true })],
+      triaged: { 1: { score: 9 } },
+    })
+    expect(gaps).toEqual({ total: 1, missing: 1, complete: false })
+  })
+
+  it('does not count a read paper the ranking scored below the bar', () => {
+    const gaps = digestGaps({ results: [res('1')], processedResults: [res('1'), res('2')], triaged: { 1: { score: 9 }, 2: { score: 20 } } })
+    expect(gaps.complete).toBe(true)
+  })
+
   it('does not count papers that errored — they never reach triage', () => {
     const gaps = digestGaps({ results: [res('1'), res('2', { error: 'fetch failed' })], triaged: { 1: { score: 9 } } })
     expect(gaps).toEqual({ total: 2, missing: 0, complete: true })

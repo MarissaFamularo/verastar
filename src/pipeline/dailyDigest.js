@@ -160,7 +160,9 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
       }
       read++
       const processed = [...state.processedResults, res]
-      const results = res.retracted ? state.results : [...state.results, res]
+      // Coverage-fallback reads stay out of the visible digest until ranking scores them:
+      // if the rank call fails they must not sit at the bottom of the digest unsummarized.
+      const results = res.retracted || state.server.fallbackDone ? state.results : [...state.results, res]
       await persist({ processedResults: processed, results })
     }
     await persist({ server: { ...state.server, phase: 'rank' } })

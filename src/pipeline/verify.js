@@ -8,11 +8,11 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-09-24.estimates-v1'
+export const VERIFICATION_VERSION = '2026-09-27.estimates-v2'
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
-export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1']
+export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1', '2026-09-24.estimates-v1']
 
 export const TIERS = {
   REGISTRY: 'verified-registry',
@@ -321,9 +321,12 @@ const UNSIGNED = '(?<![\\d.])((?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d))'
 // bracket or follow "adjusted"; spelled-out names and the other abbreviations may stand
 // after any word boundary.
 const MEASURE = `(?:(?<=[(\\[])or|(?<![a-z])(?:${RATIO_NAMES.filter((n) => n !== 'or').map((n) => n.replace(/ /g, '\\s')).join('|')}))`
+// A spelled-out name may carry its bracketed abbreviation — "hazard ratio [HR] 1.77,
+// 95% confidence interval [CI] 1.03 - 3.02" — which is a label, not a second value.
+const ABBREV = `(?:\\s*[(\\[](${RATIO_NAMES.filter((n) => !n.includes(' ')).join('|')})[)\\]])?`
 const ESTIMATE_TUPLE = new RegExp(
-  `(${MEASURE})(?![a-z])\\s*(?:[,:=]|\\s(?:was|of|is))?\\s*${UNSIGNED}` +
-  `\\s*[(\\[,;]?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval)\\s*[,:]?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
+  `(${MEASURE})(?![a-z])${ABBREV}\\s*(?:[,:=]|\\s(?:was|of|is))?\\s*${UNSIGNED}` +
+  `\\s*[(\\[,;]?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval(?:\\s*[(\\[]ci[)\\]])?)\\s*[,:]?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
   `(?:\\s*[,;]\\s*p\\s*(?:-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${UNSIGNED})?`,
   'g',
 )
@@ -342,7 +345,10 @@ function validateEstimate(quantity, matched, corpus, declaredType) {
   const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
   if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
   if (!normalize(quantity.name)) return false
-  const [, measure, value, , ciLow, ciHigh, p] = tuples[0]
+  const [, measure, abbrev, value, , ciLow, ciHigh, p] = tuples[0]
+  const familyOf = (name) => RATIO_GROUPS.find((names) => names.includes(normalize(name).replace(/\s+/g, ' ')))
+  // "hazard ratio [OR] 1.2" names two measures; the tuple's role is then ambiguous.
+  if (abbrev && familyOf(abbrev) !== familyOf(measure)) return false
   const unit = normalize(quantity.unit)
   if (unit) {
     const group = RATIO_GROUPS.find((names) => names.includes(normalize(measure).replace(/\s+/g, ' ')))
@@ -352,6 +358,27 @@ function validateEstimate(quantity, matched, corpus, declaredType) {
   if (!fields.every(([mine, printed]) => Number.isFinite(mine) && numbersEqual(mine, Number(printed)))) return false
   if (quantity.p_value != null && !(p != null && Number.isFinite(quantity.p_value) && numbersEqual(quantity.p_value, Number(p)))) return false
   return true
+}
+
+// --- Spelled-out numbers (source-located only) ---------------------------------
+//
+// Prose writes small counts as words ("eight achieved external validation", "Seventy-nine
+// percent"). A digit extraction of such a quote is not a mismatch, but it is not a printed
+// numeral either, so it never verifies: it only moves the verdict from the red "does not
+// match" to the amber source-located tier. Integers 0–99 only.
+const UNITS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen']
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety']
+const NUMBER_WORD_RE = new RegExp(
+  `(?<![a-z])(?:(${TENS.filter(Boolean).join('|')})(?:[- ](${UNITS.slice(1, 10).join('|')}))?|(${UNITS.join('|')}))(?![a-z])`,
+  'g',
+)
+
+export function numberWords(span) {
+  const out = []
+  for (const m of String(span || '').matchAll(NUMBER_WORD_RE)) {
+    out.push(m[3] != null ? UNITS.indexOf(m[3]) : TENS.indexOf(m[1]) * 10 + (m[2] ? UNITS.indexOf(m[2]) : 0))
+  }
+  return out
 }
 
 // --- Locate the quote in the source ------------------------------------------
@@ -486,6 +513,12 @@ export function verify(quantity, source, opts = {}) {
     : 'Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison.'
   // If the quote wasn't located, consistency is moot — it's flagged regardless.
   const consistent = found && validEstimateShape && badNums.length === 0
+  // Every missing value is a number word in the located span: amber, never green.
+  const spelledOut = found && validEstimateShape && badNums.length > 0 && (() => {
+    const corpusText = matched.corpus === 'tables' ? normTables : normProse
+    const words = numberWords(corpusText.slice(matched.index, matched.index + matched.length))
+    return badNums.every((n) => someEqual(words, n))
+  })()
 
   // 4. Assign tier. Registry is the strongest tier and outranks abstract-only, so it is
   // checked first — a registry-matched value posted by CT.gov is proven regardless of which
@@ -502,6 +535,9 @@ export function verify(quantity, source, opts = {}) {
   } else if (!validEstimateShape) {
     tier = TIERS.FLAGGED
     reason = shapeError
+  } else if (!consistent && spelledOut) {
+    tier = TIERS.LOCATED
+    reason = `Quote located; ${badNums.join(', ')} is written out in words there, not printed as a numeral, so it is not verified. Check the source before using this claim.`
   } else if (!consistent) {
     tier = TIERS.FLAGGED
     reason = `Quote located, but ${badNums.join(', ')} is not present in it — the value does not match the source.`

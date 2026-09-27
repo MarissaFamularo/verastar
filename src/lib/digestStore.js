@@ -110,11 +110,17 @@ export function withOaLinks(results, resolved) {
 // a gap; entries with no id are ignored rather than guessed at.
 export function digestGaps(digest) {
   const results = Array.isArray(digest?.results) ? digest.results : []
+  const processed = Array.isArray(digest?.processedResults) ? digest.processedResults : []
   const triaged = digest?.triaged && typeof digest.triaged === 'object' ? digest.triaged : {}
   let missing = 0
-  for (const r of results) {
+  const counted = new Set()
+  // A paper that was read but never ranked is a gap whether or not it is on screen: an
+  // appended read (coverage fallback, add-more) stays out of `results` until ranking
+  // scores it, so a failed ranking leaves it only in processedResults.
+  for (const r of [...results, ...processed]) {
     const id = r?.paper?.id
-    if (id == null || r?.error) continue
+    if (id == null || r?.error || r?.retracted || counted.has(String(id))) continue
+    counted.add(String(id))
     if (!Object.prototype.hasOwnProperty.call(triaged, id)) missing += 1
   }
   return { total: results.length, missing, complete: missing === 0 }

@@ -1,5 +1,20 @@
 # Evidence relationship contract — 2026-09-11
 
+## Amendment 2026-09-27 — bracketed abbreviations, spelled-out numbers (`2026-09-27.estimates-v2`)
+
+Two parser gaps found on a real digest, no change in what the estimate tier claims:
+
+- A spelled-out ratio name may carry its bracketed abbreviation, and "confidence interval"
+  may carry `[CI]`/`(CI)`: `hazard ratio [HR] 1.77, 95% confidence interval [CI] 1.03 - 3.02`.
+  The abbreviation must belong to the same ratio family as the name (`hazard ratio [OR]` withholds).
+- A value the source writes as a word (`eight achieved…`, `Seventy-nine percent`, integers
+  0–99) moves from red `flagged` ("does not match the source") to amber `source-located`.
+  It is never verified: a word is not a printed numeral.
+
+`2026-09-24.estimates-v1` verdicts remain readable as stamped (a subset). PaperTrellis
+mirrors both changes and the stamp. On the 26 Sep digest (63 extracted rows): verified
+9 → 10, red flags 6 → 2, source-located 48 → 51.
+
 ## Amendment 2026-09-24 — printed ratio estimates (Verastar `2026-09-24.estimates-v1`)
 
 Real Results sections print effects as `(HR, 0.44; 95% CI, 0.34-0.55; P < .001)`, so the
