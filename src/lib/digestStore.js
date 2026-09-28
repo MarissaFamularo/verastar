@@ -185,6 +185,25 @@ export function saveDailyDigest(state) {
   return store.put(COLLECTION, KEY, serializeDigest(state))
 }
 
+// Pure: may a write of the digest dated `incomingRanAt` replace `existing`? Not when the
+// stored digest is a newer scan: the server can start today's digest while yesterday's is
+// still on screen, and a heart or an open-access link landing there would otherwise write
+// yesterday back over it. Records from before ranAt existed carry no scan date to compare,
+// so they never block.
+export function mayOverwriteDigest(existing, incomingRanAt) {
+  if (!existing || existing.kind !== 'daily' || !existing.ranAt || !incomingRanAt) return true
+  return new Date(existing.ranAt).getTime() <= new Date(incomingRanAt).getTime()
+}
+
+// The digest screen's save: skips (resolves false) when a newer digest has replaced the one
+// on screen. Callers fire-and-forget.
+export async function saveDailyDigestIfCurrent(state) {
+  const existing = await store.get(COLLECTION, KEY)
+  if (!mayOverwriteDigest(existing, state?.ranAt)) return false
+  await saveDailyDigest(state)
+  return true
+}
+
 // Stamp the digest on screen as opened, once. Idempotent and best-effort: the stamp is
 // the scheduler's signal, never something the reader can see or lose the digest over.
 export async function markDigestOpened(now = new Date().toISOString()) {

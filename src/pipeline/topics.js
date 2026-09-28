@@ -389,6 +389,20 @@ export function topicReportRows(counts = [], failed = []) {
 // with no names leaves her unable to tell which area she's flying blind in this morning.
 // Complete retained counts live in topicReportRows(); keeping them out of this sentence
 // prevents a partial “Per topic” list from masquerading as a complete one.
+// The line for a scan that found nothing BECAUSE searches failed. Zero candidates with a
+// failed topic is not a quiet day and must never read as one: on 2026-09-28 every topic
+// search failed on her phone and the page said nothing had been published, while PubMed
+// held ~200 unseen papers in her topics. Null when every topic searched (a true empty).
+export function searchFailedNote({ counts = [], failed = [] } = {}) {
+  const n = failed?.length || 0
+  if (!n) return null
+  const total = (counts?.length || 0) + n
+  const head = n === total
+    ? `PubMed didn't answer any of your ${total} topic search${total === 1 ? '' : 'es'}, so this is a connection problem, not a quiet day.`
+    : `${n} of your ${total} topic searches failed and the rest found nothing new, so today's scan is incomplete.`
+  return `${head} Nothing was replaced. Try again in a minute, with Verastar open on screen until it finishes.`
+}
+
 export function searchSummary({ days, counts = [], failed = [], found = null, prescored = null } = {}) {
   const windowDays = normalizeSearchDays(days)
   const topics = (counts?.length || 0) + (failed?.length || 0)

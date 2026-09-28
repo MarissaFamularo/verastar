@@ -40,8 +40,10 @@ export async function setDigestSchedule({ enabled = true, hour = DEFAULT_HOUR, t
   return row
 }
 
-// "Run mine now": the same server path the schedule takes, ignoring the hour.
-export async function runScheduledDigestNow() {
+// "Run mine now": the same server path the schedule takes, ignoring the hour. One call is
+// one server tick (about a minute of reading); a run that needs more resumes on the next
+// call or the next cron tick. `days` widens a fresh run's search window, this run only.
+export async function runScheduledDigestNow({ days } = {}) {
   if (!canSchedule()) return null
   const { data } = await supabase.auth.getSession()
   const token = data?.session?.access_token
@@ -50,7 +52,7 @@ export async function runScheduledDigestNow() {
   const res = await fetch(`${base}/functions/v1/digest-run`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-    body: '{}',
+    body: JSON.stringify(days ? { days } : {}),
   })
   if (!res.ok) throw new Error(`Digest run failed (${res.status}).`)
   return res.json()

@@ -7,9 +7,11 @@ import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion
 
 import { useEffect, useRef, useState } from 'react'
 import { hasModelAccess, isCapReached } from '../lib/anthropic.js'
+import { CAP_MESSAGE } from '../lib/sponsor.js'
+import { canSchedule, runScheduledDigestNow } from '../lib/digestSchedule.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import {
-  saveDailyDigest,
+  saveDailyDigestIfCurrent,
   loadDailyDigest,
   clearDailyDigest,
   saveSuccessfulScan,
@@ -48,6 +50,7 @@ import {
   lookbackOptions,
   lookbackGap,
   searchSummary,
+  searchFailedNote,
   topicReportRows,
 } from '../pipeline/topics.js'
 import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
@@ -603,6 +606,13 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // this each write reset openedAt to null — and the scheduler never replaces a digest it
   // believes nobody opened.
   const openedAtRef = useRef(null)
+  // Who wrote the digest on screen, carried through re-saves so a server digest stays one.
+  // A server run still in progress is never written from here at all: the screen holds a
+  // partial copy, and writing it back would erase the server's progress marker.
+  const originRef = useRef({ runBy: 'user', server: null })
+  // A server run started from this screen (sponsored accounts; see startServerRun).
+  const [serverRunning, setServerRunning] = useState(false)
+  const serverRunRef = useRef(false)
   // Today's digest is on screen: the plain scan path is withheld (see DigestRunControls).
   const lockedToday = !demo && results.length > 0 && isDigestFromToday(digestSavedAt)
   // Her selection bar, so a card can say when its POST-read score came in under it. Read
@@ -638,11 +648,13 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // same instant so a just-finished run dates as today without a re-read.
   function persistDigest(overrides = {}) {
     if (demo) return
+    const origin = originRef.current
+    if (origin.runBy === 'scheduler' && origin.server?.phase && origin.server.phase !== 'done') return
     if (!ranAtRef.current) ranAtRef.current = new Date().toISOString()
     const stamp = ranAtRef.current
     // Anything this screen writes is on screen, so it has been opened.
     if (!openedAtRef.current) openedAtRef.current = new Date().toISOString()
-    saveDailyDigest({ ...digestRef.current, ...overrides, ranAt: stamp, openedAt: openedAtRef.current }).catch(console.warn)
+    saveDailyDigestIfCurrent({ ...digestRef.current, ...origin, ...overrides, ranAt: stamp, openedAt: openedAtRef.current }).catch(console.warn)
     setDigestSavedAt(stamp)
     onDigestDate(stamp)
   }
@@ -697,40 +709,75 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // Rehydrate the last digest — App unmounts this component on every tab switch, and
   // re-running would re-pay the extraction calls. Stages stay empty: labels only render
   // while a stage is in flight.
+  function showSaved(saved) {
+    if (!saved) return
+    if (!saved.results.length && !saved.candidates.length) return
+    setResults(saved.results)
+    setProcessedResults(saved.processedResults)
+    setTriaged(saved.triaged)
+    setCandidates(saved.candidates)
+    setPreCapCandidates(saved.preCapCandidates)
+    setSearchContext(saved.searchContext)
+    setTopicReport(topicReportRows(saved.searchContext?.counts, saved.searchContext?.failed))
+    setSelectedIds(saved.selectedIds)
+    setScanDetailsOpen(false)
+    // Say what actually came back. A snapshot can be missing summaries — the ranking call
+    // failed, or an older build wrote one mid-run — and a page of blank cards under a
+    // cheerful "restored" line is indistinguishable from a broken app.
+    const gaps = digestGaps(saved)
+    // A scheduled run leaves the digest here for the morning; a scheduler mid-run is
+    // still being written on the server and reads as incomplete until it finishes.
+    const scheduledPending = saved.runBy === 'scheduler' && saved.server?.phase && saved.server.phase !== 'done'
+    setRestored({
+      note: scheduledPending
+        ? 'Your digest is still being prepared on the server. It keeps going if you close the app; check back in a few minutes.'
+        : saved.runBy === 'scheduler'
+          ? (saved.ranAt && new Date(saved.ranAt).getHours() < 8 ? 'Your morning digest, prepared while you slept.' : 'Your digest, prepared on the server.')
+          : restoreNote(gaps),
+      incomplete: !gaps.complete && !scheduledPending,
+    })
+    ranAtRef.current = saved.ranAt ?? null
+    openedAtRef.current = saved.openedAt ?? (saved.results.length ? new Date().toISOString() : null)
+    setDigestSavedAt(saved.ranAt ?? null)
+    onDigestDate(saved.ranAt ?? null)
+    originRef.current = { runBy: saved.runBy || 'user', server: saved.server ?? null }
+    // The one signal the scheduler waits for: this digest has been seen.
+    if (saved.results.length && !saved.openedAt) markDigestOpened().then((did) => { if (did) logEvent('digest_opened', { runBy: saved.runBy || 'user', papers: saved.results.length }) })
+  }
+
+  // The async handlers below outlive the render that created them; they call through this
+  // so they always reach the current showSaved / startServerRun and the current busy flag.
+  const latest = useRef({})
+  useEffect(() => {
+    latest.current = { showSaved, startServerRun, busy }
+  })
+
   useEffect(() => {
     if (demo) return
     loadDailyDigest()
       .then((saved) => {
-        if (!saved || ranRef.current) return
-        if (!saved.results.length && !saved.candidates.length) return
-        setResults(saved.results)
-        setProcessedResults(saved.processedResults)
-        setTriaged(saved.triaged)
-        setCandidates(saved.candidates)
-        setPreCapCandidates(saved.preCapCandidates)
-        setSearchContext(saved.searchContext)
-        setTopicReport(topicReportRows(saved.searchContext?.counts, saved.searchContext?.failed))
-        setSelectedIds(saved.selectedIds)
-        setScanDetailsOpen(false)
-        // Say what actually came back. A snapshot can be missing summaries — the ranking call
-        // failed, or an older build wrote one mid-run — and a page of blank cards under a
-        // cheerful "restored" line is indistinguishable from a broken app.
-        const gaps = digestGaps(saved)
-        // A scheduled run leaves the digest here for the morning; a scheduler mid-run is
-        // still being written on the server and reads as incomplete until it finishes.
-        const scheduledPending = saved.runBy === 'scheduler' && saved.server?.phase && saved.server.phase !== 'done'
-        setRestored({
-          note: scheduledPending ? 'Your morning digest is still being prepared. Check back in a few minutes.' : saved.runBy === 'scheduler' ? 'Your morning digest, prepared while you slept.' : restoreNote(gaps),
-          incomplete: !gaps.complete && !scheduledPending,
-        })
-        ranAtRef.current = saved.ranAt ?? null
-        openedAtRef.current = saved.openedAt ?? (saved.results.length ? new Date().toISOString() : null)
-        setDigestSavedAt(saved.ranAt ?? null)
-        onDigestDate(saved.ranAt ?? null)
-        // The one signal the scheduler waits for: this digest has been seen.
-        if (saved.results.length && !saved.openedAt) markDigestOpened().then((did) => { if (did) logEvent('digest_opened', { runBy: saved.runBy || 'user', papers: saved.results.length }) })
+        if (!ranRef.current) latest.current.showSaved(saved)
       })
       .catch(console.warn)
+  }, [demo])
+
+  // Coming back to the app: pick up a digest the server wrote (or is still writing) while
+  // the phone was away, and keep an unfinished server run moving while she watches.
+  useEffect(() => {
+    if (demo || !canSchedule()) return
+    const onVisible = () => {
+      if (document.hidden || latest.current.busy) return
+      loadDailyDigest()
+        .then((saved) => {
+          if (!saved) return
+          const pending = saved.runBy === 'scheduler' && saved.server?.phase && saved.server.phase !== 'done'
+          if (pending || (saved.ranAt && saved.ranAt !== ranAtRef.current)) latest.current.showSaved(saved)
+          if (pending) latest.current.startServerRun({ continuing: true })
+        })
+        .catch(console.warn)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [demo])
 
   // Resolve free-full-text links for the digest cards — the workflow is read-the-paper-first,
@@ -1157,6 +1204,88 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     }
   }
 
+  // Put the stored digest back on screen after a scan that failed before replacing it.
+  async function restorePrevious() {
+    const previous = await loadDailyDigest().catch(() => null)
+    if (previous) showSaved(previous)
+  }
+
+  // Sponsored accounts run the digest on the server, the same path the morning schedule
+  // takes, so it keeps going when the phone locks or she switches apps (a browser tab
+  // is paused in the background; on 2026-09-28 that emptied a run). One call is one server
+  // tick; while she stays on this screen the next tick is requested at once, and if she
+  // leaves, the 5-minute cron ticks finish it. `continuing` resumes a run already underway
+  // (from the visibility handler), which the same-day lock must not block.
+  async function startServerRun({ days, continuing = false } = {}) {
+    if (serverRunRef.current) return
+    if (lockedToday && !continuing) {
+      setScanError(sameDayNote())
+      return
+    }
+    serverRunRef.current = true
+    setServerRunning(true)
+    setScanError('')
+    setScanNote('')
+    setEmptyWindow(null)
+    ranRef.current = true
+    try {
+      for (let tick = 0; tick < 30; tick++) {
+        let out
+        try {
+          out = await runScheduledDigestNow(tick === 0 && days ? { days } : {})
+        } catch {
+          // The phone dropped the request (locked, backgrounded, offline). The server-side
+          // run is unaffected and the cron ticks carry it on.
+          setScanNote('Your digest is being prepared on the server. You can close the app; it will be here when you come back.')
+          break
+        }
+        const saved = await loadDailyDigest().catch(() => null)
+        showSaved(saved)
+        if (!out?.ran) {
+          if (out?.reason === 'already running') {
+            if (document.hidden) break
+            await new Promise((resolve) => setTimeout(resolve, 20_000))
+            continue
+          }
+          if (out?.reason === 'cap reached') setScanError(CAP_MESSAGE)
+          else if (out?.reason !== "today's digest already exists") setScanError('The digest server did not start a run. Try again in a minute.')
+          break
+        }
+        if (out.phase === 'done') break
+        if (out.phase === 'capped') {
+          setScanError(CAP_MESSAGE)
+          break
+        }
+        if (out.phase === 'error') {
+          setScanError(`The digest stopped on the server (${out.note || 'unknown error'}). It will try again on its own within a few minutes.`)
+          break
+        }
+        if (out.phase === 'empty') {
+          const windowDays = saved?.searchContext?.days
+          if (out.note === 'Nothing cleared the bar.') {
+            setScanNote('Nothing new cleared your selection bar today. The scored papers are in the list below.')
+          } else {
+            setScanNote(`Nothing new in your topics${windowDays ? ` over the last ${windowDays} day${windowDays === 1 ? '' : 's'}` : ''}.`)
+            if (windowDays) setEmptyWindow(windowDays)
+          }
+          break
+        }
+        // reading / rank: more to do. Keep going while she's here; otherwise cron finishes it.
+        if (document.hidden) break
+      }
+    } finally {
+      serverRunRef.current = false
+      setServerRunning(false)
+    }
+  }
+
+  // Every run entry point (the main button, look-back chips, the catch-up prompt) goes
+  // through here, so a sponsored account never lands on the in-browser path by accident.
+  const serverLane = !demo && canSchedule()
+  function startDigestRun(opts = {}) {
+    return serverLane ? startServerRun(opts) : startScan(opts)
+  }
+
   // The product loop, in ONE click: search PubMed WIDE → score every candidate against the
   // rubric (title, abstract, journal, and publication type) → run the digest immediately on the rubric's top picks. The
   // selection funnel stays collapsed underneath the digest — open it to adjust the picks,
@@ -1193,10 +1322,12 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setCandidates([])
       setPreCapCandidates([])
       setSearchContext({ counts: [], failed: [], days: null })
-      // Clear the persisted digest too — closing mid-scan must not resurrect stale results.
-      clearDailyDigest().catch(console.warn)
+      // The persisted digest is NOT cleared yet: a search that fails (a dropped connection,
+      // the phone backgrounding the tab) must leave the last digest in place — on 2026-09-28
+      // one did, and Sunday's digest was gone. It is cleared once papers are about to be read.
       ranAtRef.current = null // the next write is a new scan and dates it now
       openedAtRef.current = null
+      originRef.current = { runBy: 'user', server: null }
       setDigestSavedAt(null)
       onDigestDate(null) // yesterday's date must not sit over a scan that's running now
       setPoolOpen(false) // digest is the centerpiece; the funnel is a disclosure underneath
@@ -1234,6 +1365,18 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         // hole in today's coverage, and a topic the cap bit has more waiting — neither is
         // visible in a digest that just looks short.
         setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: fresh.length }))
+        if (!fresh.length && !allTopicsSearched) {
+          // Zero because searches failed is not a quiet day: say so, and put the last digest
+          // back on screen (it was never cleared). No "look back further" — the window
+          // wasn't the problem.
+          await restorePrevious()
+          setSearchNote(searchSummary({ days: searchDays, counts: search.counts, failed: search.failed, found: 0 }))
+          setTopicReport(topicReportRows(search.counts, search.failed))
+          setScanDetailsOpen(true)
+          setSearching(false)
+          setScanError(searchFailedNote({ counts: search.counts, failed: search.failed }))
+          return
+        }
         if (!fresh.length) {
           setTopicReport(topicReportRows(search.counts, search.failed))
           setScanDetailsOpen(true)
@@ -1254,7 +1397,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           return
         }
       } catch (err) {
-        setScanError(`PubMed search failed: ${err.message}`)
+        await restorePrevious()
+        setScanError(`PubMed search failed: ${err.message}. Nothing was replaced; try again in a minute.`)
         setSearching(false)
         return
       }
@@ -1268,7 +1412,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           days: searchDays,
         }))
       } catch (err) {
-        setScanError(`Selection failed: ${err.message}`)
+        await restorePrevious()
+        setScanError(`Selection failed: ${err.message}. Nothing was replaced; try again in a minute.`)
         setSelecting(false)
         return
       }
@@ -1292,6 +1437,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         setScanDetailsOpen(true)
         return
       }
+      // Papers are about to be read and written as today's digest: now the old snapshot
+      // goes, so closing mid-read can't resurrect it over this run's partial results.
+      await clearDailyDigest().catch(console.warn)
       const { outcomes } = await runWithCoverageFallback(chosen, scored, scoredCounts)
       setScanDetailsOpen(false)
       const completed = outcomes.filter((outcome) => !outcome.error).length
@@ -1506,18 +1654,20 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // Ranking is still part of the run. Re-enabling the button here let a second click clear
   // the digest while the first run was writing summaries, producing an apparently silent
   // failure and a stale snapshot race.
-  const busy = running || searching || selecting || ranking || retrying
-  const primaryLabel = searching
-    ? 'Searching…'
-    : selecting
-      ? 'Scoring…'
-      : running
-        ? 'Building digest…'
-        : ranking
-          ? 'Writing summaries…'
-          : "Run today's digest"
+  const busy = running || searching || selecting || ranking || retrying || serverRunning
+  const primaryLabel = serverRunning
+    ? 'Preparing your digest…'
+    : searching
+      ? 'Searching…'
+      : selecting
+        ? 'Scoring…'
+        : running
+          ? 'Building digest…'
+          : ranking
+            ? 'Writing summaries…'
+            : "Run today's digest"
   const showEmpty =
-    !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote
+    !serverRunning && !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote
   const hasExistingScan = !!(results.length || candidates.length || searchNote || scanNote)
   const hasScanDetails = !demo && !!(
     searchNote || topicReport.length || scanNote || candidates.length || (restored && !restored.incomplete)
@@ -1543,8 +1693,13 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             keySet={keySet}
             busyLabel={primaryLabel}
             onRetry={retryFailedPapers}
-            onStartNew={(opts) => startScan(opts)}
+            onStartNew={(opts) => startDigestRun(opts)}
           />
+        )}
+        {serverRunning && (
+          <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)', textAlign: 'center', maxWidth: 420 }}>
+            This runs on Verastar's server. You can close the app; the digest will be here when you come back.
+          </p>
         )}
         {!demo && coveragePrompt && (
           <div style={{ maxWidth: 620, borderRadius: 12, border: `1px solid ${coveragePrompt.truncated ? 'rgba(230,184,119,.35)' : 'rgba(143,189,230,.24)'}`, background: coveragePrompt.truncated ? 'rgba(230,184,119,.08)' : 'rgba(143,189,230,.07)', padding: '10px 13px', textAlign: 'center' }}>
@@ -1554,7 +1709,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                 : `Last successful scan was ${coveragePrompt.elapsedDays} days ago — search ${coveragePrompt.suggestedDays} days once to avoid a coverage gap?`}
             </p>
             <button
-              onClick={() => startScan({ days: coveragePrompt.suggestedDays })}
+              onClick={() => startDigestRun({ days: coveragePrompt.suggestedDays })}
               disabled={!keySet || busy}
               className="cursor-pointer"
               title={`Search the last ${coveragePrompt.suggestedDays} days once; your saved ${coveragePrompt.savedDays}-day window will not change`}
@@ -1603,7 +1758,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           {lookbackOptions(emptyWindow).map((d) => (
             <button
               key={d}
-              onClick={() => startScan({ days: d })}
+              onClick={() => startDigestRun({ days: d })}
               disabled={!keySet || busy}
               title={`Search the last ${d} days — this run only; your saved window stays at ${emptyWindow}`}
               className="cursor-pointer"

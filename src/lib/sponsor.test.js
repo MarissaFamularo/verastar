@@ -35,9 +35,14 @@ describe('access lanes', () => {
     expect(accessMode()).toBe('sponsored')
     expect(hasModelAccess()).toBe(true)
   })
-  it('a pasted key always wins over sponsorship', () => {
+  it('active sponsorship wins over a saved key', () => {
     _setSponsoredForTests(true)
     setApiKey('sk-ant-test')
+    expect(accessMode()).toBe('sponsored')
+  })
+  it('a saved key takes over when the sponsorship ends', () => {
+    setApiKey('sk-ant-test')
+    _setSponsoredForTests(false)
     expect(accessMode()).toBe('byok')
   })
 })

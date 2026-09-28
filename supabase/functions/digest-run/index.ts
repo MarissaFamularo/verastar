@@ -6,20 +6,24 @@
 // service role. The runner persists after every paper and carries a phase marker, so a
 // tick that runs out of budget hands the rest to the next tick.
 //
-// Due means: schedule enabled, the account is sponsored and active, the local hour matches
-// (or a scheduler run is mid-flight), no run has completed today in the account's timezone,
+// Due means: schedule enabled, the account is sponsored and active, the local hour is at or
+// past the chosen hour (or a scheduler run is mid-flight), no run has completed today in the
+// account's timezone,
 // no other tick holds a fresh claim, the last digest was opened (docs: "a digest nobody
 // opened is never replaced by another one nobody will open"), and today's spend is under
 // the daily cap.
 //
+// The rule itself is digestGate in ../model/logic.js, where it is unit-tested.
+//
 // Callable two ways: from cron with `x-cron-secret`, or by a signed-in sponsored user
-// ("run mine now"), which ignores the hour and the opened gate but keeps the cap check.
+// ("run mine now"), which ignores the hour and the opened gate but keeps the cap check and
+// the claim. A manual call may pass { days } to widen the search window of a fresh run.
 //
 // Secrets: ANTHROPIC_API_KEY, DIGEST_CRON_SECRET; SUPABASE_* injected by the platform.
 
 import { createClient } from '@supabase/supabase-js'
 import { DOMParser } from 'linkedom'
-import { accountActive, capReached, effectiveCaps, costUsd, windows } from '../model/logic.js'
+import { accountActive, capReached, effectiveCaps, costUsd, windows, localClock, digestGate } from '../model/logic.js'
 // The app's own modules, bundled by `npm run bundle:functions` into public/server/ and
 // committed. The edge runtime resolves remote modules when the function is deployed and
 // only from an allowlist of hosts (Netlify is not one; jsDelivr is), so the import is the
@@ -56,19 +60,6 @@ function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 }
 
-// Local wall-clock hour and calendar day for a timezone. Intl is available on Deno.
-export function localClock(now: Date, timezone: string) {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
-    const get = (t: string) => parts.find((p) => p.type === t)?.value || ''
-    const hour = Number(get('hour')) % 24
-    return { hour, day: `${get('year')}-${get('month')}-${get('day')}` }
-  } catch {
-    const hour = now.getUTCHours()
-    return { hour, day: now.toISOString().slice(0, 10) }
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json(405, { error: 'POST only' })
@@ -95,6 +86,13 @@ Deno.serve(async (req) => {
     targetUserId = data.user.id
     manual = true
   }
+  // A manual run may widen a fresh search (the app's catch-up prompt). Resumes ignore it.
+  let days: number | undefined
+  if (manual) {
+    const body = await req.json().catch(() => ({}))
+    const n = Number(body?.days)
+    if (Number.isFinite(n) && n > 0) days = n
+  }
 
   const { data: config } = await admin.from('sponsor_config').select('*').eq('id', true).maybeSingle()
   if (!config) return json(500, { error: 'sponsor config missing' })
@@ -113,8 +111,8 @@ Deno.serve(async (req) => {
     if (!accountActive(account, now)) continue
     const { hour, day } = localClock(now, row.timezone)
     const ranToday = row.last_run_at && localClock(new Date(row.last_run_at), row.timezone).day === day
-    const claimedFresh = row.claimed_at && now.getTime() - new Date(row.claimed_at).getTime() < CLAIM_STALE_MS
-    if (claimedFresh && !manual) continue
+    const claimedFresh = !!row.claimed_at && now.getTime() - new Date(row.claimed_at).getTime() < CLAIM_STALE_MS
+    if (claimedFresh) { reason = 'already running'; continue }
 
     const { data: kv } = await admin.from('kv').select('value').eq('user_id', row.user_id).eq('collection', 'digests').eq('key', 'daily:latest').maybeSingle()
     const record = kv?.value || null
@@ -126,12 +124,8 @@ Deno.serve(async (req) => {
     // ranAt, not savedAt: savedAt moves whenever the reader hearts or saves a paper.
     const ranAt = record?.ranAt ?? record?.savedAt
     const savedToday = hasPapers && ranAt && localClock(new Date(ranAt), row.timezone).day === day
-    if (savedToday && !midFlight) { reason = "today's digest already exists"; continue }
-    if (!manual) {
-      if (ranToday && !midFlight) continue
-      if (!midFlight && hour !== Number(row.hour_local)) continue
-      if (!schedulerMayRun(record)) { reason = 'last digest unopened'; continue }
-    }
+    const gate = digestGate({ manual, hour, hourLocal: row.hour_local, ranToday: !!ranToday, midFlight: !!midFlight, savedToday: !!savedToday, mayRun: schedulerMayRun(record) })
+    if (!gate.run) { reason = gate.reason; continue }
 
     // Caps: same rule as the proxy, checked before any spend.
     const { dayStart, monthStart } = windows(now)
@@ -179,7 +173,7 @@ Deno.serve(async (req) => {
   const log: string[] = []
   let result: any
   try {
-    result = await runDailyDigest({ budgetMs: BUDGET_MS, log: (line: string) => log.push(line) })
+    result = await runDailyDigest({ budgetMs: BUDGET_MS, days, log: (line: string) => log.push(line) })
   } catch (err) {
     result = { phase: 'error', note: (err as Error)?.message || String(err) }
   }
