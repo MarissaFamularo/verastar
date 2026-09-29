@@ -46,7 +46,7 @@ export default function DigestSchedule() {
       const out = await runScheduledDigestNow()
       setRunNote(out?.ran
         ? (out.phase === 'done' ? 'Your digest is ready. Open the Digest tab.' : out.phase === 'reading' ? 'Reading in progress; it will finish in the background over the next few minutes.' : out.note || 'Nothing new to read.')
-        : out?.reason === "today's digest already exists" ? 'Today\u2019s digest is already here. The next run is tomorrow morning.' : 'Nothing ran.')
+        : out?.reason === "today's digest already exists" ? 'Today\u2019s digest is already here. The next run is tomorrow morning.' : out?.reason === 'already running' ? 'Your digest is already being prepared. It will be on the Digest tab in a few minutes.' : 'Nothing ran.')
       setState('idle')
     } catch (err) {
       setError(err.message)
@@ -60,7 +60,7 @@ export default function DigestSchedule() {
     <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
       <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>Morning digest, ready when you wake up</p>
       <p style={{ margin: '3px 0 8px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.5 }}>
-        Verastar can run your digest for you each morning. It waits until you have opened the last one, so nothing piles up unread.
+        Verastar can run your digest for you each morning. It waits until you have opened the last one, so nothing piles up unread; if that one is still unopened at your hour, the new one starts soon after you open it.
       </p>
       <div className="flex flex-wrap items-center" style={{ gap: 10 }}>
         <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>

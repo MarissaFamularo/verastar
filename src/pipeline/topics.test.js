@@ -24,6 +24,7 @@ import {
   lookbackOptions,
   lookbackGap,
   searchSummary,
+  searchFailedNote,
   topicReportRows,
   parseTopicsText,
   DEFAULT_SEARCH_DAYS,
@@ -600,5 +601,20 @@ describe('parseTopicsText', () => {
     expect(parseTopicsText('')).toEqual([])
     expect(parseTopicsText('   ')).toEqual([])
     expect(parseTopicsText(null)).toEqual([])
+  })
+})
+
+describe('searchFailedNote', () => {
+  it('is null for a true empty day', () => {
+    expect(searchFailedNote({ counts: [{ label: 'A', count: 0 }], failed: [] })).toBeNull()
+  })
+  it('names a total failure as a connection problem, never a quiet day', () => {
+    const line = searchFailedNote({ counts: [], failed: [{ label: 'A' }, { label: 'B' }] })
+    expect(line).toMatch(/any of your 2 topic searches/)
+    expect(line).toMatch(/not a quiet day/)
+    expect(line).not.toMatch(/Nothing published/)
+  })
+  it('calls a partial failure incomplete', () => {
+    expect(searchFailedNote({ counts: [{ label: 'A', count: 0 }], failed: [{ label: 'B' }] })).toMatch(/^1 of your 2 topic searches failed/)
   })
 })

@@ -176,4 +176,23 @@ describe('runDailyDigest', () => {
     expect(saved.processedResults.map((r) => r.paper.id)).toContain('104')
     expect(saved.results.map((r) => r.paper.id)).not.toContain('104')
   })
+
+  // 2026-09-28: every topic search failed and the day read as "nothing published". A failed
+  // search must leave the last digest alone and stay unfinished so the next tick retries.
+  it('treats zero candidates from failed searches as an error, not an empty day', async () => {
+    const yesterday = { kind: 'daily', ranAt: '2026-09-27T09:00:00.000Z', openedAt: '2026-09-28T10:34:43.000Z', runBy: 'scheduler', results: [{ paper: { id: '9' } }], server: { phase: 'done' } }
+    mem.set('digests/daily:latest', yesterday)
+    vi.mocked(searchCandidates).mockResolvedValueOnce({ candidates: [], counts: [], failed: [{ label: 'CLTI', error: 'Load failed' }], skipped: 0, days: 3 })
+    const out = await runDailyDigest()
+    expect(out.phase).toBe('error')
+    expect(out.note).toMatch(/PubMed search failed for 1 topic/)
+    expect(mem.get('digests/daily:latest')).toEqual(yesterday)
+    expect(mem.get('digests/daily:last-successful-scan')).toBeUndefined()
+  })
+
+  it('still records a true empty day as empty', async () => {
+    vi.mocked(searchCandidates).mockResolvedValueOnce({ candidates: [], counts: [{ label: 'CLTI', found: 0 }], failed: [], skipped: 0, days: 3 })
+    expect((await runDailyDigest()).phase).toBe('empty')
+    expect(mem.get('digests/daily:latest').server.empty).toBe(true)
+  })
 })

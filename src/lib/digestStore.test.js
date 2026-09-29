@@ -38,6 +38,8 @@ import {
   sameDayNote,
   saveSuccessfulScan,
   loadSuccessfulScan,
+  mayOverwriteDigest,
+  saveDailyDigestIfCurrent,
 } from './digestStore.js'
 import { store, __data } from './store.js'
 
@@ -404,6 +406,37 @@ describe('ranAt', () => {
   })
   it('falls back to savedAt for records written before ranAt existed', () => {
     expect(reviveDigest({ kind: 'daily', savedAt: '2026-09-20T09:00:00.000Z' }).ranAt).toBe('2026-09-20T09:00:00.000Z')
+  })
+})
+
+// The screen's re-saves (a heart, an open-access link landing) must never write yesterday's
+// digest back over the one the server started this morning.
+describe('saving from the digest screen', () => {
+  const yesterday = '2026-09-27T09:00:00.000Z'
+  const today = '2026-09-28T10:40:00.000Z'
+
+  it('refuses to replace a newer scan', () => {
+    expect(mayOverwriteDigest({ kind: 'daily', ranAt: today }, yesterday)).toBe(false)
+  })
+  it('allows the same scan, an older one, or nothing stored', () => {
+    expect(mayOverwriteDigest({ kind: 'daily', ranAt: yesterday }, yesterday)).toBe(true)
+    expect(mayOverwriteDigest({ kind: 'daily', ranAt: yesterday }, today)).toBe(true)
+    expect(mayOverwriteDigest(null, yesterday)).toBe(true)
+  })
+  it('never blocks on a record from before ranAt existed', () => {
+    expect(mayOverwriteDigest({ kind: 'daily', savedAt: today }, yesterday)).toBe(true)
+  })
+  it('skips the write and leaves the newer digest in place', async () => {
+    await saveDailyDigest({ ...snapshot(), runBy: 'scheduler', ranAt: today, server: { phase: 'reading' } })
+    expect(await saveDailyDigestIfCurrent({ ...snapshot(), ranAt: yesterday })).toBe(false)
+    const stored = await store.get('digests', 'daily:latest')
+    expect(stored.ranAt).toBe(today)
+    expect(stored.runBy).toBe('scheduler')
+  })
+  it('writes when the digest on screen is the current one', async () => {
+    await saveDailyDigest({ ...snapshot(), ranAt: yesterday })
+    expect(await saveDailyDigestIfCurrent({ ...snapshot(), ranAt: yesterday, openedAt: today })).toBe(true)
+    expect((await store.get('digests', 'daily:latest')).openedAt).toBe(today)
   })
 })
 

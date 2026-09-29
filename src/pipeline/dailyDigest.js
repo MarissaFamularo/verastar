@@ -103,6 +103,12 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
     })
     const allTopicsSearched = search.failed.length === 0
     log(`search: ${search.candidates.length} candidates, ${search.failed.length} failed topics`)
+    // Nothing found BECAUSE searches failed is not an empty day. Persist nothing (the last
+    // digest stays) and report an error, which leaves the day unfinished so the next tick
+    // searches again instead of recording a false empty as today's run.
+    if (!search.candidates.length && !allTopicsSearched) {
+      return { phase: 'error', papers: 0, read: 0, note: `PubMed search failed for ${search.failed.length} topic${search.failed.length === 1 ? '' : 's'}` }
+    }
     if (!search.candidates.length) {
       if (allTopicsSearched) await saveSuccessfulScan({ windowDays: search.days }).catch(() => {})
       await persist({ searchContext: { counts: search.counts, failed: search.failed, days: search.days }, server: { ...state.server, phase: 'done', finishedAt: new Date(now()).toISOString(), empty: true } })

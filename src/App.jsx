@@ -730,12 +730,15 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
             </form>
           </div>
 
-          {isSponsored() && !saved && (
+          {isSponsored() && (
             <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(127,191,154,.25)', background: 'rgba(127,191,154,.07)', padding: '10px 13px' }}>
-              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-verified-soft)' }}>Sponsored access is active on this account. No key needed.</p>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-verified-soft)' }}>
+                Sponsored access is active on this account. No key needed.
+                {saved ? ' Your saved key is not used while sponsorship is active.' : ''}
+              </p>
             </div>
           )}
-          {!(isSponsored() && !saved) && <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
+          {!isSponsored() && <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
             <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
               Estimated Claude spend on this device: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}>${usage.estimatedUsd < 0.01 ? usage.estimatedUsd.toFixed(4) : usage.estimatedUsd.toFixed(2)}</span>
             </p>
@@ -870,11 +873,11 @@ function MigrationOffer({ account, paperCount, onDecline }) {
 // Right rail on the Digest surface: key status, library counts, active projects,
 // and the Weekend Read teaser. Counts derive from real saved papers.
 export function DigestRail({ saved, onSettings, counts, projects, trellis, onConnections, onLibrary, demo }) {
-  // Access is "ready" with a saved key OR with sponsored access. A sponsored clinician was
-  // just told "no key needed", so the rail must never ask them for one.
-  const sponsoredOnly = !saved && isSponsored()
-  const ready = saved || sponsoredOnly
-  const accessLabel = saved ? 'API key active' : sponsoredOnly ? 'Sponsored access active' : 'Add your API key'
+  // Access is "ready" with a saved key OR with sponsored access. Sponsorship wins over a
+  // saved key (see accessMode), so the label names the lane calls actually take.
+  const sponsored = isSponsored()
+  const ready = saved || sponsored
+  const accessLabel = sponsored ? 'Sponsored access active' : saved ? 'API key active' : 'Add your API key'
   return (
     <aside className="vs-digest-rail" style={{ width: 308, flex: '0 0 auto', padding: '34px 28px', overflowY: 'auto', background: 'rgba(255,255,255,.01)' }}>
       <div

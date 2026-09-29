@@ -12,6 +12,8 @@ import {
   validateRequest,
   cachedResponse,
   extractionFromResponse,
+  localClock,
+  digestGate,
 } from '../../supabase/functions/model/logic.js'
 import { modelRates as clientRates } from './anthropic.js'
 
@@ -100,5 +102,54 @@ describe('request validation and cache responses', () => {
     expect(extractionFromResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"a":1}' }] })).toEqual({ a: 1 })
     expect(extractionFromResponse({ stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"a":' }] })).toBeNull()
     expect(extractionFromResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'nope' }] })).toBeNull()
+  })
+})
+
+describe('digest scheduler gate', () => {
+  const base = { hour: 5, hourLocal: 5 }
+
+  it('runs at her hour when the last digest was opened', () => {
+    expect(digestGate({ ...base, mayRun: true })).toEqual({ run: true })
+  })
+
+  it('waits before her hour', () => {
+    expect(digestGate({ ...base, hour: 4 })).toEqual({ run: false, reason: 'not yet' })
+  })
+
+  it('catches up later the same day once the unopened digest is opened (2026-09-28)', () => {
+    // 5am: Sunday's digest still unopened, so the morning is skipped.
+    expect(digestGate({ ...base, mayRun: false })).toEqual({ run: false, reason: 'last digest unopened' })
+    // 6:35am: she opened it at 6:34; the next tick runs instead of waiting for tomorrow.
+    expect(digestGate({ ...base, hour: 6, mayRun: true })).toEqual({ run: true })
+  })
+
+  it('never runs twice in a day or over a digest from today', () => {
+    expect(digestGate({ ...base, hour: 9, ranToday: true })).toEqual({ run: false, reason: 'already ran today' })
+    expect(digestGate({ ...base, hour: 9, savedToday: true })).toEqual({ run: false, reason: "today's digest already exists" })
+    expect(digestGate({ ...base, manual: true, savedToday: true })).toEqual({ run: false, reason: "today's digest already exists" })
+  })
+
+  it('continues a run that is partway through, whatever the hour', () => {
+    expect(digestGate({ ...base, hour: 7, midFlight: true, ranToday: true, savedToday: true, mayRun: true })).toEqual({ run: true })
+  })
+
+  it('a manual run ignores the hour and the opened gate', () => {
+    expect(digestGate({ ...base, hour: 2, manual: true, mayRun: false })).toEqual({ run: true })
+  })
+
+  it('nobody runs while another tick holds a fresh claim, manual included', () => {
+    expect(digestGate({ ...base, claimedFresh: true })).toEqual({ run: false, reason: 'already running' })
+    expect(digestGate({ ...base, manual: true, claimedFresh: true })).toEqual({ run: false, reason: 'already running' })
+  })
+})
+
+describe('localClock', () => {
+  it('reads the hour and day in the account timezone', () => {
+    expect(localClock(new Date('2026-09-28T09:00:05Z'), 'America/New_York')).toEqual({ hour: 5, day: '2026-09-28' })
+    expect(localClock(new Date('2026-09-28T03:30:00Z'), 'America/New_York')).toEqual({ hour: 23, day: '2026-09-27' })
+  })
+
+  it('falls back to UTC for an unknown timezone', () => {
+    expect(localClock(new Date('2026-09-28T09:00:05Z'), 'Not/AZone')).toEqual({ hour: 9, day: '2026-09-28' })
   })
 })

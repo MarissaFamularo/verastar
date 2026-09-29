@@ -56,7 +56,7 @@ function readUsage() {
 
 export function recordUsage(model, usage, now = new Date()) {
   if (_serverUsage) { try { _serverUsage(model, usage) } catch { /* never breaks a call */ } }
-  // The ledger is "spend on your own key". A sponsored call (no key set) is not that,
+  // The ledger is "spend on your own key". A sponsored call is not that,
   // and a sponsored user never sees a dollar figure anyway. A server run has no ledger.
   const mode = accessMode()
   if (mode === 'sponsored' || mode === 'server') return readUsage()
@@ -124,12 +124,14 @@ export function hasApiKey() {
   return getApiKey().length > 0
 }
 
-// Which lane a model call would take right now. A pasted key always wins: someone on
-// sponsored access who adds their own key has chosen to use it.
+// Which lane a model call would take right now. Active sponsorship wins over a saved key
+// (2026-09-28): the sponsor's lane is the one that also runs the digest on the server, so a
+// sponsored reader is never quietly moved onto her own key. A saved key takes over when the
+// sponsorship ends or she is signed out.
 export function accessMode() {
   if (_serverClient) return 'server'
-  if (hasApiKey()) return 'byok'
   if (isSponsored()) return 'sponsored'
+  if (hasApiKey()) return 'byok'
   return 'none'
 }
 
@@ -216,8 +218,8 @@ let _serverUsage = null
 // site stays identical. Throws when neither lane is open — callers gate on hasModelAccess().
 export function getClient() {
   if (_serverClient) return _serverClient
+  if (isSponsored()) return getSponsoredClient()
   const apiKey = getApiKey()
-  if (!apiKey && isSponsored()) return getSponsoredClient()
   if (!apiKey) {
     throw new Error('No Anthropic API key set. Add your key in Setup.')
   }

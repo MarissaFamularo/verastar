@@ -132,12 +132,19 @@ feature. Two pieces:
   every paper persisted as it finishes) and **budgeted** (`budgetMs` bounds the reading loop),
   because an edge function's wall clock is shorter than a full run.
 - `functions/digest-run` is invoked by pg_cron every five minutes and picks at most one due
-  account per tick: schedule enabled, sponsored and active, local hour matches (or a run is
-  mid-flight), not already run today in the account's timezone, no fresh claim by another
-  tick, today's spend under the daily cap, and **the last digest was opened**. A finished
-  digest nobody opened is never replaced by another one nobody will open
-  (`schedulerMayRun` in `lib/digestStore.js`). The app stamps `openedAt` the first time it
-  shows a digest and logs `digest_opened`.
+  account per tick: schedule enabled, sponsored and active, local hour at or past the chosen
+  hour (or a run is mid-flight), not already run today in the account's timezone, no fresh
+  claim by another tick, today's spend under the daily cap, and **the last digest was
+  opened**. A finished digest nobody opened is never replaced by another one nobody will
+  open (`schedulerMayRun` in `lib/digestStore.js`); a morning skipped for that reason runs
+  on the first tick after she opens it, the same day (`digestGate` in
+  `functions/model/logic.js`). The app stamps `openedAt` the first time it shows a digest
+  and logs `digest_opened`.
+- A sponsored reader's in-app run button calls the same function ("run mine now"), so the
+  run lives on the server and survives the phone locking. Active sponsorship also wins over
+  a saved key for every model call (`accessMode` in `lib/anthropic.js`). A search where
+  topics failed and nothing was found is an error, never an empty day: nothing is
+  persisted and the next tick retries.
 - The function binds the app's own modules to the account under the service role
   (`configureServerClient`, `configureServerStore`, `configureEvidenceCacheServer`) and
   polyfills `DOMParser` with linkedom for the PMC and PubMed XML parsing in `sources.js`.
