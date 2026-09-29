@@ -4,7 +4,7 @@
 // their stated roles. It never proves which endpoint the tuple belongs to. Positive
 // controls are real Results phrasing; every other case is a [false-verify guard].
 import { describe, it, expect } from 'vitest'
-import { verify, TIERS } from './verify.js'
+import { verify, TIERS, numberWords } from './verify.js'
 import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion.js'
 
 const base = { quantity_type: 'single', range_low: null, range_high: null, first_label: null, first_value: null, second_label: null, second_value: null, location_hint: 'Results' }
@@ -124,5 +124,52 @@ describe('verification version compatibility', () => {
   it('still downgrades unstamped and unknown verdicts', () => {
     expect(evidenceVerdict({ tier: 'verified-full-text', flagged: false }).tier).toBe('legacy-unchecked')
     expect(evidenceVerdict({ verificationVersion: 'x', tier: 'verified-estimate', flagged: false, relationshipValidated: true }).tier).toBe('legacy-unchecked')
+  })
+})
+
+// 2026-09-27: a spelled-out measure carrying its bracketed abbreviation, as printed in a
+// real carotid restenosis abstract that the 09-24 grammar withheld.
+describe('estimate tier — bracketed abbreviations (estimates-v2)', () => {
+  const SRC = 'Women had a higher hazard of developing severe restenosis (hazard ratio [HR] 1.77, 95% confidence interval [CI] 1.03 - 3.02).'
+  const restenosis = est({ value: 1.77, ci_low: 1.03, ci_high: 3.02, p_value: null, unit: null, source_quote: SRC })
+  it('validates "hazard ratio [HR] x, 95% confidence interval [CI] a - b"', () => {
+    expect(verify(restenosis, SRC).tier).toBe(TIERS.ESTIMATE)
+  })
+  it('validates parenthesized abbreviations', () => {
+    const src = SRC.replace('[HR]', '(HR)').replace('[CI]', '(CI)')
+    expect(verify({ ...restenosis, source_quote: src }, src).tier).toBe(TIERS.ESTIMATE)
+  })
+  it('[false-verify guard] an abbreviation from a different ratio family', () => {
+    const src = SRC.replace('[HR]', '[OR]')
+    const v = verify({ ...restenosis, source_quote: src }, src)
+    expect(v.tier).not.toBe(TIERS.ESTIMATE)
+    expect(v.flagged).toBe(true)
+  })
+  it('[false-verify guard] swapped bounds still fail with the abbreviation present', () => {
+    expect(verify({ ...restenosis, ci_low: 3.02, ci_high: 1.03 }, SRC).flagged).toBe(true)
+  })
+  it('reads a 2026-09-24 verdict as stamped', () => {
+    const old = { verificationVersion: '2026-09-24.estimates-v1', tier: 'verified-estimate', flagged: false, relationshipValidated: true }
+    expect(evidenceVerdict(old).tier).toBe('verified-estimate')
+  })
+})
+
+// A count written as a word is located evidence, never a verified numeral and never a
+// red "does not match the source".
+describe('spelled-out numbers', () => {
+  const SRC = 'Of 39 reports, eight achieved temporal, external, or multicenter validation. Seventy-nine percent were urban.'
+  const q = (value, source_quote) => ({ ...base, name: 'Reports validated', unit: null, value, ci_low: null, ci_high: null, p_value: null, source_quote })
+  it('numberWords reads 0–99 and ignores words that merely contain one', () => {
+    expect(numberWords('seventy-nine, eight, someone, one, twenty one')).toEqual([79, 8, 1, 21])
+  })
+  it('a value written as a word is source-located, still flagged', () => {
+    const v = verify(q(8, 'eight achieved temporal, external, or multicenter validation'), SRC)
+    expect(v.tier).toBe(TIERS.LOCATED)
+    expect(v.flagged).toBe(true)
+    expect(v.relationshipValidated).toBe(false)
+    expect(verify(q(79, 'Seventy-nine percent were urban'), SRC).tier).toBe(TIERS.LOCATED)
+  })
+  it('a value that matches neither numeral nor word stays flagged red', () => {
+    expect(verify(q(9, 'eight achieved temporal, external, or multicenter validation'), SRC).tier).toBe(TIERS.FLAGGED)
   })
 })

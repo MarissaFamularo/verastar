@@ -153,6 +153,14 @@ export function sanitizeRanking(rk, verified) {
   }
 }
 
+// Output budget for one ranking call. Every paper gets four prose fields plus JSON
+// framing (~500 tokens in practice); a fixed 8192 could truncate a combined re-rank of
+// fifteen or more papers, which failed the whole call and left papers unsummarized.
+export function triageMaxTokens(count) {
+  const n = Math.max(0, Number(count) || 0)
+  return Math.min(32000, Math.max(8192, 1024 + n * 700))
+}
+
 // The clinician's own rubric leads; the fixed output contract follows. Editing the rubric
 // (in the steering profile) changes how papers score and rank.
 function buildSystem(rubric) {
@@ -177,7 +185,7 @@ export async function triage({
   rubric = '',
   candidates,
   model = MODELS.triage,
-  maxTokens = 8192,
+  maxTokens,
 }) {
   const stars = northStars.length ? northStars.join(', ') : '(none set)'
   const projs = projects.length ? projects.join(', ') : '(none set)'
@@ -201,7 +209,7 @@ export async function triage({
     system: buildSystem(rubric),
     content,
     schema: TRIAGE_SCHEMA,
-    maxTokens,
+    maxTokens: maxTokens ?? triageMaxTokens(candidates.length),
     thinking: { type: 'disabled' }, // ranking/summary is not a reasoning task; keep output for JSON
   })
   // The guard, unconditionally — every ranking is sanitized against ITS paper's verified
