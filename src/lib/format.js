@@ -117,7 +117,12 @@ export function fmtNum(q) {
       ? `${q.first_label}: ${first} to ${q.second_label}: ${second}`
       : `from ${first} to ${second}`
   } else if (hasPair && q.quantity_type === 'comparison') {
-    s = `${q.first_label}: ${printedValue(q, 'first_value')} versus ${q.second_label}: ${printedValue(q, 'second_value')}`
+    const first = printedValue(q, 'first_value')
+    const second = printedValue(q, 'second_value')
+    // Labels are optional since 2026-09-30 ("36% vs. 26%" with the groups named elsewhere).
+    s = q.first_label && q.second_label
+      ? `${q.first_label}: ${first} versus ${q.second_label}: ${second}`
+      : `${first} versus ${second}`
   } else {
     s = hasRange ? printedRange(q) : printedValue(q, 'value')
   }

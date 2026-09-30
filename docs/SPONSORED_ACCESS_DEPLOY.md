@@ -45,8 +45,13 @@ row with `purpose = 'ping'`. A non-sponsored account must get a 403.
 ## 4b. Deploy the scheduler and its cron job
 
 ```bash
-supabase functions deploy digest-run --no-verify-jwt
+supabase functions deploy digest-run --no-verify-jwt --import-map supabase/functions/deno.json --project-ref lahahztitoqjumrxjcim
 ```
+
+`--import-map` is required: there is no `supabase/config.toml`, so without it the CLI does
+not upload the shared `deno.json` and the deploy fails with `Relative import path
+"linkedom" not prefixed with / or ./ or ../` (2026-09-30). Deploy from a checkout of
+current `main` (`git pull` first) so the pinned bundle below is the one you just committed.
 
 All functions share `supabase/functions/deno.json` (the import map). `digest-run` needs the
 app's own pipeline modules; `npm run bundle:functions` bundles them into
@@ -83,7 +88,7 @@ and PubMed XML shapes in Node, not yet against a live NCBI response on Deno.
 ## 5. Enroll accounts
 
 Preferred: an invite code per cohort. Deploy `redeem-invite` alongside the others
-(`supabase functions deploy redeem-invite --no-verify-jwt`), then:
+(`supabase functions deploy redeem-invite --no-verify-jwt --import-map supabase/functions/deno.json`; it imports `@supabase/supabase-js` bare, like `digest-run`), then:
 
 ```sql
 insert into sponsor_invites (code, cohort, max_uses, expires_at, ends_at, note)
