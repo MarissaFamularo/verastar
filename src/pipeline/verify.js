@@ -8,11 +8,11 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-09-27.estimates-v2'
+export const VERIFICATION_VERSION = '2026-09-30.estimates-v3'
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
-export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1', '2026-09-24.estimates-v1']
+export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1', '2026-09-24.estimates-v1', '2026-09-27.estimates-v2']
 
 export const TIERS = {
   REGISTRY: 'verified-registry',
@@ -26,6 +26,9 @@ export const TIERS = {
   // A printed ratio tuple (value, CI, P) validated in its stated roles; the endpoint it
   // belongs to is NOT validated, and the badge says so.
   ESTIMATE: 'verified-estimate',
+  // Two group values printed as "A vs B" (and their P), in order; which groups they belong
+  // to and the endpoint are NOT validated, and the badge says so.
+  COMPARISON: 'verified-comparison',
 }
 
 // --- 1. Normalization ---------------------------------------------------------
@@ -307,13 +310,16 @@ function validateRelationship(quantity, matched, corpus, declaredType) {
 // tuple to an endpoint, comparison, population or timepoint — the verdict says so
 // (endpointValidated: false) and the badge reads "endpoint unchecked".
 //
-// Ratio measures only: they are unsigned and unitless, so the dash between CI bounds can
-// never be a minus sign and no unit binding is needed. Differences stay unresolved.
+// Ratio measures and discrimination (AUC / C-statistic) only: they are unsigned and
+// unitless, so the dash between CI bounds can never be a minus sign and no unit binding is
+// needed. Differences stay unresolved.
 const RATIO_GROUPS = [
-  ['hr', 'ahr', 'shr', 'adjusted hr', 'hazard ratio', 'adjusted hazard ratio', 'subdistribution hazard ratio'],
-  ['or', 'aor', 'adjusted or', 'odds ratio', 'adjusted odds ratio'],
-  ['rr', 'risk ratio', 'relative risk', 'adjusted risk ratio', 'adjusted relative risk'],
-  ['irr', 'incidence rate ratio', 'rate ratio'],
+  // Plurals too: "adjusted HRs were 2.59 (95% CI: 1.34-4.98, p = 0.004) for ...".
+  ['hr', 'ahr', 'shr', 'adjusted hr', 'hazard ratio', 'adjusted hazard ratio', 'subdistribution hazard ratio', 'hrs', 'ahrs', 'adjusted hrs', 'hazard ratios', 'adjusted hazard ratios'],
+  ['or', 'aor', 'adjusted or', 'odds ratio', 'adjusted odds ratio', 'ors', 'aors', 'adjusted ors', 'odds ratios', 'adjusted odds ratios'],
+  ['rr', 'risk ratio', 'relative risk', 'adjusted risk ratio', 'adjusted relative risk', 'rrs', 'risk ratios', 'relative risks'],
+  ['irr', 'incidence rate ratio', 'rate ratio', 'irrs', 'incidence rate ratios', 'rate ratios'],
+  ['auc', 'auroc', 'roc-auc', 'c-statistic', 'c statistic', 'c-index', 'area under the curve'],
 ]
 const RATIO_NAMES = RATIO_GROUPS.flat().sort((a, b) => b.length - a.length)
 const UNSIGNED = '(?<![\\d.])((?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d))'
@@ -325,7 +331,7 @@ const MEASURE = `(?:(?<=[(\\[])or|(?<![a-z])(?:${RATIO_NAMES.filter((n) => n !==
 // 95% confidence interval [CI] 1.03 - 3.02" — which is a label, not a second value.
 const ABBREV = `(?:\\s*[(\\[](${RATIO_NAMES.filter((n) => !n.includes(' ')).join('|')})[)\\]])?`
 const ESTIMATE_TUPLE = new RegExp(
-  `(${MEASURE})(?![a-z])${ABBREV}\\s*(?:[,:=]|\\s(?:was|of|is))?\\s*${UNSIGNED}` +
+  `(${MEASURE})(?![a-z])${ABBREV}\\s*(?:[,:=]|\\s(?:was|were|of|is|are))?\\s*${UNSIGNED}` +
   `\\s*[(\\[,;]?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval(?:\\s*[(\\[]ci[)\\]])?)\\s*[,:]?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
   `(?:\\s*[,;]\\s*p\\s*(?:-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${UNSIGNED})?`,
   'g',
@@ -357,6 +363,50 @@ function validateEstimate(quantity, matched, corpus, declaredType) {
   const fields = [[quantity.value, value], [quantity.ci_low, ciLow], [quantity.ci_high, ciHigh]]
   if (!fields.every(([mine, printed]) => Number.isFinite(mine) && numbersEqual(mine, Number(printed)))) return false
   if (quantity.p_value != null && !(p != null && Number.isFinite(quantity.p_value) && numbersEqual(quantity.p_value, Number(p)))) return false
+  return true
+}
+
+// --- Printed two-group comparison (2026-09-30) ---------------------------------
+//
+// Results print group values as "(36% vs. 26%, P=0.035)" or "144.3 ± 63.7 vs 341.8 ± 106.8
+// minutes", usually with the groups named earlier in the sentence. This validates that the
+// span prints exactly one such pair, that the extraction's first and second values are its
+// left and right numbers in that order, that a claimed unit is printed on the pair, and
+// that a claimed P is the one printed directly after it. It does NOT bind the values to
+// groups or to an endpoint: the verdict carries endpointValidated: false and the badge
+// reads "groups unchecked". Unsigned values only; CIs, "compared with", tables, fuzzy and
+// repeated quotes stay unresolved.
+const COMPARATOR = /(?<![a-z])(?:vs\.?|versus)(?![a-z])/g
+const PAIR_NUM = '(?<![\\d.±a-z-])((?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d))'
+const SPREAD_NUM = '(?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d)'
+
+function validateComparison(quantity, matched, corpus, declaredType) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (declaredType !== 'comparison') return false
+  const span = corpus.slice(matched.index, matched.index + matched.length)
+  if (corpus.indexOf(span, matched.index + 1) !== -1) return false
+  if ((span.match(COMPARATOR) || []).length !== 1) return false
+  if ((span.match(CI_CLAUSE) || []).length !== 0) return false
+  if (quantity.ci_low != null || quantity.ci_high != null) return false
+  const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
+  if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
+  if (!normalize(quantity.name)) return false
+  const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const unit = normalize(quantity.unit)
+  // A claimed unit must be printed on the right-hand value (after it or after its ± spread);
+  // the left-hand value may carry it too, or nothing. "%" attaches without a space.
+  const u = unit ? (unit === '%' ? '\\s*%' : `\\s*${escape(unit)}(?![a-z])`) : '(?:\\s*%)?'
+  const spread = `\\s*±\\s*${SPREAD_NUM}`
+  const left = `${PAIR_NUM}(?:${u})?(?:${spread}(?:${u})?)?`
+  const right = unit
+    ? `${PAIR_NUM}(?:${u}(?:${spread}(?:${u})?)?|${spread}${u})`
+    : `${PAIR_NUM}${u}(?:${spread}${u})?`
+  const p = `(?:\\s*[,;]\\s*p\\s*(?:-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${PAIR_NUM})?`
+  const pairs = [...span.matchAll(new RegExp(`${left}\\s*(?:vs\\.?|versus)\\s*${right}(?![\\d.])${p}`, 'g'))]
+  if (pairs.length !== 1) return false
+  const [, first, second, printedP] = pairs[0]
+  if (!numbersEqual(quantity.first_value, Number(first)) || !numbersEqual(quantity.second_value, Number(second))) return false
+  if (quantity.p_value != null && !(printedP != null && numbersEqual(quantity.p_value, Number(printedP)))) return false
   return true
 }
 
@@ -507,7 +557,7 @@ export function verify(quantity, source, opts = {}) {
       ? rangeShape
       : declaredType === 'change'
         ? pairedBase && (noLabels || !!labelsInQuote)
-        : declaredType === 'comparison' && pairedBase && !!labelsInQuote
+        : declaredType === 'comparison' && pairedBase && (noLabels || !!labelsInQuote)
   const shapeError = validEstimateShape
     ? ''
     : 'Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison.'
@@ -526,6 +576,7 @@ export function verify(quantity, source, opts = {}) {
   const matchedCorpus = matched?.corpus === 'tables' ? normTables : normProse
   const relationshipValidated = consistent && validateRelationship(quantity, matched, matchedCorpus, declaredType)
   const estimateValidated = consistent && !relationshipValidated && validateEstimate(quantity, matched, matchedCorpus, declaredType)
+  const comparisonValidated = consistent && !relationshipValidated && !estimateValidated && validateComparison(quantity, matched, matchedCorpus, declaredType)
   const regRow = relationshipValidated ? registryMatch(quantity, opts.registry) : null
   let tier
   let reason
@@ -545,6 +596,10 @@ export function verify(quantity, source, opts = {}) {
     tier = TIERS.ESTIMATE
     const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'
     reason = `Estimate, confidence interval and P value verified as printed together in ${where}. Which endpoint and comparison they belong to is not checked — read the quote.`
+  } else if (comparisonValidated) {
+    tier = TIERS.COMPARISON
+    const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'
+    reason = `Both values${quantity.p_value != null ? ' and the P value' : ''} verified as printed, in that order, in ${where}. Which groups and endpoint they belong to is not checked — read the quote.`
   } else if (!relationshipValidated) {
     tier = TIERS.LOCATED
     reason = 'Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.'
@@ -566,7 +621,7 @@ export function verify(quantity, source, opts = {}) {
     reason = 'Explicit quantity relationship validated in a source sentence; broader clinical interpretation is unchecked.'
   }
 
-  const valueValidated = relationshipValidated || estimateValidated
+  const valueValidated = relationshipValidated || estimateValidated || comparisonValidated
   const warnings = plausibilityWarnings(quantity, { verifiedAsPrinted: valueValidated })
 
   return {
@@ -579,7 +634,7 @@ export function verify(quantity, source, opts = {}) {
     // two apart — only the sentence grammar binds a value to its endpoint.
     relationshipValidated: valueValidated,
     endpointValidated: relationshipValidated,
-    relationshipStatus: relationshipValidated ? 'validated' : estimateValidated ? 'estimate-validated' : 'unresolved',
+    relationshipStatus: relationshipValidated ? 'validated' : estimateValidated ? 'estimate-validated' : comparisonValidated ? 'comparison-validated' : 'unresolved',
     sourceTier,
     found,
     consistent,

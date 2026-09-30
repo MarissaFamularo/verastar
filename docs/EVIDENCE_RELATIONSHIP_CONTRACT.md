@@ -1,5 +1,28 @@
 # Evidence relationship contract — 2026-09-11
 
+## Amendment 2026-09-30 — two-group comparisons, AUC, plural ratio names (`2026-09-30.estimates-v3`)
+
+- New tier `verified-comparison` ("Values verified as printed · groups unchecked"): a
+  `comparison` quantity whose exact, unique prose span prints exactly one `A vs B` / `A versus B`
+  pair, with the extraction's first and second values as its left and right numbers in that
+  order. A claimed unit must be printed on the pair (right-hand value or its ± spread); a
+  claimed P must be the one printed directly after it (`, P = .028`). Mean ± SD pairs are
+  admitted; the spread is never a group value. Which groups and endpoint the values belong
+  to is **not** validated (`endpointValidated: false`, `relationshipStatus:
+  'comparison-validated'`). Withheld: two comparators in the span, any CI clause or claimed
+  CI, words between a value and "vs", "compared with", negative values, range bounds,
+  tables, fuzzy and repeated quotes, qualifier fields.
+- A `comparison` may now omit both labels (the groups are usually named earlier in the
+  sentence). Labels, when given, must still be exact substrings of the quote.
+- The estimate tier admits AUC / AUROC / ROC-AUC / C-statistic / C-index tuples (unsigned,
+  unitless) and plural ratio names ("adjusted HRs were 2.59 (95% CI: 1.34-4.98, p = 0.004)").
+
+Earlier stamps (`2026-09-11`, `2026-09-24`, `2026-09-27`) remain readable as stamped.
+Tests: `comparisonVerify.test.js` (4 controls, 19 false-verify guards) and additions to
+`estimateVerify.test.js`, in both apps. On the 30 Sep digest, 4 of 11 extracted two-group
+results verify; the rest are phrased without "vs", print two pairs in one quote, or carry
+a paraphrased group label.
+
 ## Amendment 2026-09-27 — bracketed abbreviations, spelled-out numbers (`2026-09-27.estimates-v2`)
 
 Two parser gaps found on a real digest, no change in what the estimate tier claims:

@@ -173,3 +173,36 @@ describe('spelled-out numbers', () => {
     expect(verify(q(9, 'eight achieved temporal, external, or multicenter validation'), SRC).tier).toBe(TIERS.FLAGGED)
   })
 })
+
+// 2026-09-30: discrimination estimates share the ratio grammar (unsigned, unitless).
+describe('estimate tier — AUC and C-statistic (estimates-v3)', () => {
+  const SRC = 'In external validation, the Random Forest achieved an ROC-AUC of 0.68 (95% CI 0.53-0.83).'
+  const auc = est({ name: 'External validation AUC', unit: null, value: 0.68, ci_low: 0.53, ci_high: 0.83, p_value: null, source_quote: 'the Random Forest achieved an ROC-AUC of 0.68 (95% CI 0.53-0.83)' })
+  it('validates "ROC-AUC of x (95% CI a-b)"', () => expect(verify(auc, SRC).tier).toBe(TIERS.ESTIMATE))
+  it('validates "C-statistic 0.81, 95% CI 0.77-0.85"', () => {
+    const src = 'Discrimination was good (C-statistic 0.81, 95% CI 0.77-0.85).'
+    expect(verify({ ...auc, value: 0.81, ci_low: 0.77, ci_high: 0.85, source_quote: src }, src).tier).toBe(TIERS.ESTIMATE)
+  })
+  it('[false-verify guard] AUC bound swapped for the estimate', () => {
+    expect(verify({ ...auc, value: 0.53, ci_low: 0.68 }, SRC).flagged).toBe(true)
+  })
+  it('[false-verify guard] a ratio unit claimed on an AUC', () => {
+    expect(verify({ ...auc, unit: 'HR' }, SRC).flagged).toBe(true)
+  })
+  it('[false-verify guard] an AUC range without a CI', () => {
+    const src = 'LLM AUC 0.703-0.747; specialists 0.712-0.764.'
+    expect(verify({ ...auc, value: 0.703, ci_low: null, ci_high: null, source_quote: src }, src).flagged).toBe(true)
+  })
+})
+
+describe('estimate tier — plural measure names (estimates-v3)', () => {
+  const SRC = 'Relative to eGFR ≥ 60, adjusted HRs were 2.59 (95% CI: 1.34-4.98, p = 0.004) for eGFR 30-< 45 and 4.67 (95% CI: 2.63-8.30, p < 0.001) for eGFR < 30.'
+  const q = est({ name: 'Adjusted HR, eGFR 30-45', unit: 'HR', value: 2.59, ci_low: 1.34, ci_high: 4.98, p_value: 0.004, source_quote: 'adjusted HRs were 2.59 (95% CI: 1.34-4.98, p = 0.004) for eGFR 30-< 45' })
+  it('validates "adjusted HRs were x (95% CI: a-b, p = p)"', () => expect(verify(q, SRC).tier).toBe(TIERS.ESTIMATE))
+  it('[false-verify guard] a quote spanning both tuples', () => {
+    expect(verify({ ...q, source_quote: SRC.slice(SRC.indexOf('adjusted'), -1) }, SRC).flagged).toBe(true)
+  })
+  it('[false-verify guard] the second tuple has no measure name of its own', () => {
+    expect(verify({ ...q, value: 4.67, ci_low: 2.63, ci_high: 8.3, p_value: 0.001, source_quote: '4.67 (95% CI: 2.63-8.30, p < 0.001) for eGFR < 30' }, SRC).flagged).toBe(true)
+  })
+})
