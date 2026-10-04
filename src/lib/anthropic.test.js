@@ -17,6 +17,8 @@ import {
   getNcbiCredentialStatus,
   clearNcbiCredentials,
   modelRates,
+  thinkingParam,
+  MODELS,
   recordUsage,
   getUsageSummary,
   parseStructuredResponse,
@@ -137,9 +139,8 @@ describe('unified browser credential persistence', () => {
 })
 
 describe('usage accounting', () => {
-  it('uses the dated Sonnet 5 rate and accumulates calls', () => {
-    expect(modelRates('claude-sonnet-5', new Date('2026-08-05T00:00:00Z'))).toEqual({ input: 2, output: 10 })
-    expect(modelRates('claude-sonnet-5', new Date('2026-09-02T00:00:00Z'))).toEqual({ input: 3, output: 15 })
+  it('bills Sonnet 5 at $2/$10 after the cancelled 2026-09-01 rise, and accumulates calls', () => {
+    expect(modelRates('claude-sonnet-5')).toEqual({ input: 2, output: 10 })
     recordUsage('claude-sonnet-5', { input_tokens: 1000, output_tokens: 100 }, new Date('2026-08-05T00:00:00Z'))
     recordUsage('claude-haiku-4-5-20251001', { input_tokens: 1000, output_tokens: 100 }, new Date('2026-08-05T00:00:00Z'))
     const summary = getUsageSummary()
@@ -180,5 +181,23 @@ describe('structured response completion', () => {
         expect(err).toMatchObject({ retryable: true })
       }
     }
+  })
+})
+
+// 2026-10-04 Sonnet 5.5 switch: 'disabled' is a 400 on Sonnet 5.5, so every structured
+// call (all of which ask for 'disabled') would fail without this mapping.
+describe('thinkingParam', () => {
+  it('sends between_tools for Sonnet 5.5', () => {
+    expect(thinkingParam('claude-sonnet-5-5', { type: 'disabled' })).toEqual({ type: 'between_tools' })
+  })
+  it('leaves Haiku 4.5 and Sonnet 5 on disabled, and other settings untouched', () => {
+    expect(thinkingParam('claude-haiku-4-5-20251001', { type: 'disabled' })).toEqual({ type: 'disabled' })
+    expect(thinkingParam('claude-sonnet-5', { type: 'disabled' })).toEqual({ type: 'disabled' })
+    expect(thinkingParam('claude-sonnet-5-5', undefined)).toBeUndefined()
+    expect(thinkingParam('claude-sonnet-5-5', { type: 'adaptive' })).toEqual({ type: 'adaptive' })
+  })
+  it('the Sonnet lanes run Sonnet 5.5 at the Sonnet 5 price', () => {
+    for (const lane of ['extraction', 'triage', 'interview']) expect(MODELS[lane]).toBe('claude-sonnet-5-5')
+    expect(modelRates('claude-sonnet-5-5')).toEqual({ input: 2, output: 10 })
   })
 })

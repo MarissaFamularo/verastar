@@ -8,7 +8,8 @@
 //
 // Facts locked in docs/FACTS.md:
 //   - new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
-//   - models: extraction/triage/interview -> claude-sonnet-5; fast/check -> claude-haiku-4-5
+//   - models: extraction/triage/interview -> claude-sonnet-5-5; fast/check -> claude-haiku-4-5
+//   - Sonnet 5.5 REJECTS thinking { type: 'disabled' } (400) -> thinkingParam() sends 'between_tools'
 //   - current models REJECT temperature / top_p / top_k / budget_tokens (400)
 //   - structured output: output_config: { format: { type: "json_schema", schema } }
 //   - do NOT combine citations with output_config.format (400) -> separate calls
@@ -26,19 +27,21 @@ export const MODELS = {
   // Extraction ran Opus for the hackathon; downgraded to Sonnet because the deterministic
   // verifier gates every extracted number against the source — a weaker extractor can
   // miss values (they fail verification and get flagged), never fabricate one on screen.
-  extraction: 'claude-sonnet-5',
-  triage: 'claude-sonnet-5',
-  interview: 'claude-sonnet-5',
+  // Sonnet 5.5 since 2026-10-04: same price and tokenizer as Sonnet 5, supported longer.
+  extraction: 'claude-sonnet-5-5',
+  triage: 'claude-sonnet-5-5',
+  interview: 'claude-sonnet-5-5',
   fast: 'claude-haiku-4-5-20251001',
 }
 
 // Browser-local spend ledger. Anthropic returns token usage on every successful response,
 // including a response whose JSON is later rejected, so record it before parsing. Prices
-// are USD per million tokens; Sonnet 5's introductory rate ends after 2026-08-31.
-export function modelRates(model, now = new Date()) {
+// are USD per million tokens. Sonnet 5's $2/$10 launch rate became its standard price; the
+// scheduled 2026-09-01 rise to $3/$15 was cancelled (Anthropic pricing page, checked 2026-10-04).
+export function modelRates(model) {
   if (String(model).includes('haiku-4-5')) return { input: 1, output: 5 }
   if (String(model).includes('sonnet-5')) {
-    return now < new Date('2026-09-01T00:00:00Z') ? { input: 2, output: 10 } : { input: 3, output: 15 }
+    return { input: 2, output: 10 }
   }
   return { input: 3, output: 15 }
 }
@@ -349,13 +352,23 @@ export function parseStructuredResponse(res) {
 // names the exact source text an extraction came from; the proxy serves a cached extraction
 // for the same key instead of calling the model, and stores a fresh one for the next reader.
 // Both are headers, so a BYOK call (browser-direct to Anthropic) simply carries them unused.
+// Callers ask for thinking { type: 'disabled' } (adaptive thinking truncates structured JSON).
+// Sonnet 5.5 rejects 'disabled' with a 400; its lowest setting is 'between_tools', which on a
+// tool-free call returns text only — what 'disabled' did on Sonnet 5. Haiku 4.5 still takes
+// 'disabled'. Pure; exported for tests.
+export function thinkingParam(model, thinking) {
+  if (thinking?.type === 'disabled' && String(model).includes('sonnet-5-5')) return { type: 'between_tools' }
+  return thinking
+}
+
 export async function extractStructured({ model = MODELS.extraction, system, content, schema, maxTokens = 4096, thinking, purpose, cacheKey }) {
   const client = getClient()
+  const thinkingConfig = thinkingParam(model, thinking)
   const res = await guarded(() => client.messages.create({
     model,
     max_tokens: maxTokens,
     ...(system ? { system } : {}),
-    ...(thinking ? { thinking } : {}),
+    ...(thinkingConfig ? { thinking: thinkingConfig } : {}),
     messages: [{ role: 'user', content }],
     output_config: { format: { type: 'json_schema', schema } },
   }, requestOptions({ purpose, cacheKey })))

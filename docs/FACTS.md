@@ -8,8 +8,11 @@
   `anthropic-dangerous-direct-browser-access` header. `apiKey` comes from browser storage:
   sessionStorage by default, or localStorage after “Remember on this device” — never repo,
   file, IndexedDB, logs, or a server.
-- Models: extraction → `claude-opus-4-8`; triage / onboarding interview →
-  `claude-sonnet-5` or `claude-haiku-4-5`. No `claude-3-*`.
+- Models (2026-10-04): extraction / triage / interview → `claude-sonnet-5-5`; prose check →
+  `claude-haiku-4-5-20251001`. No `claude-3-*`.
+- Sonnet 5.5 **rejects** `thinking: { type: "disabled" }` (400); its lowest setting is
+  `{ type: "between_tools" }` (text-only on a tool-free call). Haiku 4.5 still takes
+  `disabled`. `thinkingParam()` in `src/lib/anthropic.js` maps it per model.
 - Current models **reject** `temperature`, `top_p`, `top_k`, `budget_tokens` (400).
   Determinism comes from strict schema + deterministic verify, not sampling params.
 - Structured output: `output_config: { format: { type: "json_schema", schema } }`.

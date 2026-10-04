@@ -7,12 +7,12 @@
 // USD per million tokens. Mirrors modelRates() in src/lib/anthropic.js; keep the two
 // in step. Cache reads are billed at a tenth of input. Unknown models take the Sonnet
 // rate so a new model id never bills at zero.
-export function modelRates(model, now = new Date()) {
+export function modelRates(model) {
   const id = String(model || '')
   if (id.includes('haiku-4-5')) return { input: 1, output: 5 }
   if (id.includes('opus')) return { input: 5, output: 25 }
   if (id.includes('sonnet-5')) {
-    return now < new Date('2026-09-01T00:00:00Z') ? { input: 2, output: 10 } : { input: 3, output: 15 }
+    return { input: 2, output: 10 }
   }
   return { input: 3, output: 15 }
 }

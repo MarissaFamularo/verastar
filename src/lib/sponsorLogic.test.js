@@ -20,9 +20,13 @@ import { modelRates as clientRates } from './anthropic.js'
 describe('rates and cost', () => {
   it('mirrors the client ledger for the models the app uses', () => {
     const now = new Date('2026-09-17T12:00:00Z')
-    for (const m of ['claude-sonnet-5', 'claude-haiku-4-5-20251001']) {
+    for (const m of ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-haiku-4-5-20251001']) {
       expect(modelRates(m, now)).toEqual(clientRates(m, now))
     }
+  })
+  it('charges sponsor caps Sonnet 5 at $2/$10 — the 2026-09-01 rise was cancelled', () => {
+    const now = new Date('2026-10-04T12:00:00Z')
+    expect(costUsd('claude-sonnet-5', { input_tokens: 1_000_000, output_tokens: 1_000_000 }, now)).toBeCloseTo(12, 9)
   })
   it('never bills an unknown model at zero', () => {
     expect(costUsd('claude-something-new', { input_tokens: 1_000_000 })).toBeGreaterThan(0)
