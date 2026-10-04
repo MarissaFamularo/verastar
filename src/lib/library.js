@@ -12,6 +12,7 @@
 // the existing `profile` object store under the key 'libraryHandle' — NO schema/DB_VERSION bump.
 
 import { store, getProfile } from './store.js'
+import { usableFinding } from './findingGate.js'
 import { resolveOaLink, oaPatch } from '../pipeline/openaccess.js'
 import { computeDrain, stampVaultWritten, weekendKey } from './drain.js'
 import {
@@ -272,7 +273,7 @@ export async function syncAllToLibrary(onProgress) {
       title: p.title,
       citation: p.citation,
       tier: p.tier,
-      finding: p.finding,
+      finding: usableFinding(p),
     }))
     await writeFileInDir(root, `digests/${date}_digest.md`, digestMd(date, entries))
     step(`digests/${date}_digest.md`)

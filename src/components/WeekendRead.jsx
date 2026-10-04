@@ -21,6 +21,7 @@ import { appendConnectionsToLibrary } from '../lib/library.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { setPaperFavorite } from '../lib/favorites.js'
 import { logEvent } from '../lib/events.js'
+import { usableFinding } from '../lib/findingGate.js'
 import HeartButton from './HeartButton.jsx'
 import { useWindowFocusRefresh } from '../lib/focusRefresh.js'
 
@@ -73,7 +74,7 @@ function PaperRow({ paper, onToggleFavorite }) {
           )}
         </p>
       )}
-      {paper?.finding && <p style={{ margin: '7px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--color-fg-dim)' }}>{paper.finding}</p>}
+      {usableFinding(paper) && <p style={{ margin: '7px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--color-fg-dim)' }}>{usableFinding(paper)}</p>}
     </li>
   )
 }

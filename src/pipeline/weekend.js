@@ -13,6 +13,7 @@
 // — same gotcha as triage/select/connect).
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
+import { usableFinding } from '../lib/findingGate.js'
 
 export const WEEKEND_SCHEMA = {
   type: 'object',
@@ -71,7 +72,7 @@ export function buildWeekendContent({ papers, libraryPapers = [], northStars = [
       const tags = (p.tags || []).slice(0, 6).join(', ')
       return (
         `[${id}] ${p.title || '(untitled)'}\n` +
-        `  Finding: ${p.finding || '(no verified finding)'}\n` +
+        `  Finding: ${usableFinding(p) || '(no verified finding)'}\n` +
         (p.relevance ? `  Relevance: ${p.relevance}\n` : '') +
         (tags ? `  Tags: ${tags}\n` : '')
       ).trimEnd()
@@ -83,7 +84,7 @@ export function buildWeekendContent({ papers, libraryPapers = [], northStars = [
     const shelf = libraryPapers
       .map((p) => {
         const id = String(p.pmid || p.id)
-        const finding = (p.finding || '').replace(/\s+/g, ' ').slice(0, 200)
+        const finding = usableFinding(p).replace(/\s+/g, ' ').slice(0, 200)
         const tags = (p.tags || []).slice(0, 4).join(', ')
         return `[${id}] ${p.title || '(untitled)'}${finding ? ` — ${finding}` : ''}${tags ? ` (${tags})` : ''}`
       })

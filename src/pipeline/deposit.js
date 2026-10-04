@@ -11,6 +11,7 @@ import { listDomains, removeDomain, userDomainKeys } from '../lib/domains.js'
 import { analyzePaper, synthesizeConcept, proposeDomainMerges } from './concepts.js'
 import { resolveCategory, ensureOtherCategory, addSourceToNode } from './categorize.js'
 import { excludeRetracted } from './retractions.js'
+import { usableFinding } from '../lib/findingGate.js'
 import {
   loadGraph,
   syncAnchors,
@@ -38,7 +39,7 @@ export async function filePaper(paper) {
   // topic that duplicates the map's yellow project star.
   const profile = await getProfile()
   const { concept, hub, domain, tags } = await analyzePaper({
-    paper: { title: paper.title, finding: paper.finding, relevance: paper.relevance, text: paper.fullText },
+    paper: { title: paper.title, finding: usableFinding(paper), relevance: paper.relevance, text: paper.fullText },
     concepts: existing.map((c) => ({ name: c.label, domain: c.domain, isHub: c.isHub })),
     projects: profile?.projects || [],
     categories: hubs.map((h) => h.label),
@@ -85,7 +86,7 @@ export async function synthesizeGroup(groupId) {
   )
   const summary = await synthesizeConcept({
     concept: node,
-    papers: members.map((p) => ({ title: p.title, finding: p.finding })),
+    papers: members.map((p) => ({ title: p.title, finding: usableFinding(p) })),
   })
   if (summary) await setConceptSummary(groupId, summary)
 }

@@ -9,6 +9,7 @@
 // truncates structured JSON — same gotcha as triage/select/onboard).
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
+import { usableFinding } from '../lib/findingGate.js'
 
 export const CONNECT_SCHEMA = {
   type: 'object',
@@ -60,7 +61,7 @@ export async function proposeConnections({ paper, candidates, subjectKind = 'pap
 
   const content =
     `${head}: ${paper.title || '(untitled)'}\n` +
-    (paper.finding ? `Finding: ${paper.finding}\n` : '') +
+    (usableFinding(paper) ? `Finding: ${usableFinding(paper)}\n` : '') +
     (paper.relevance ? `Relevance: ${paper.relevance}\n` : '') +
     (paper.abstract ? `\nAbstract:\n${paper.abstract.slice(0, 2500)}\n` : '') +
     `\nEXISTING NODES (propose connections only to these ids):\n${list}`
