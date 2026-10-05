@@ -162,3 +162,22 @@ describe('saved quantity rendering policy', () => {
     expect(html).not.toContain('Claim withheld')
   })
 })
+
+describe('Library summary links each verified number to its quote', () => {
+  const SRC = 'Results. The hazard ratio was 0.84 (95% CI 0.61-1.16). Conclusion.'
+  const q = { name: 'Hazard ratio', quantity_type: 'single', value: 0.84, ci_low: 0.61, ci_high: 1.16, source_quote: 'hazard ratio was 0.84 (95% CI 0.61-1.16)' }
+  const withVerdict = { ...q, verdict: verify(q, SRC, { sourceTier: 'abstract_only' }) }
+  const saved = (extra) => paper({ finding: 'Mortality fell (HR 0.84, CI 0.61–1.16).', quantities: [withVerdict], ...extra })
+
+  it('makes each verified number in the summary, and each quote, open the source', () => {
+    expect(withVerdict.verdict.relationshipValidated).toBe(true)
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: saved({ fullText: SRC }) }))
+    expect(html.match(/Matched to the source by the app/g)).toHaveLength(3)
+    expect(html).toContain('see in source')
+  })
+  it('falls back to plain text when no source text was saved', () => {
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: saved({ fullText: '', tables: '' }) }))
+    expect(html).not.toContain('see in source')
+    expect(html).not.toContain('Matched to the source by the app')
+  })
+})

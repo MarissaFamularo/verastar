@@ -10,6 +10,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { ClaimCheckMark } from './ClaimCheckMark.jsx'
+import SourceViewer from './SourceViewer.jsx'
+import { linkFindingNumbers } from '../lib/claimCheck.js'
 import { store } from '../lib/store.js'
 import { logEvent } from '../lib/events.js'
 import { hasModelAccess } from '../lib/anthropic.js'
@@ -501,6 +503,18 @@ export function SavedDigestDetails({ paper }) {
   const extractionStatus = extractionVersionStatus(paper)
   const articleUrl = paper.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`
   const fullTextUrl = paper.pdfUrl || paper.oaUrl || pmcUrl(paper.pmcid)
+  // Same source panel as the digest: every verified number opens its own quote,
+  // highlighted in the source text saved with the paper.
+  const [viewer, setViewer] = useState(null)
+  const verifiedRows = evidenceRows
+    .filter((quantity) => isRelationshipValidated(quantity.verdict))
+    .map((quantity) => ({ quantity, verdict: quantity.verdict }))
+  const canOpen = (quantity) => !!quantity?.source_quote && !!(paper.fullText || paper.tables)
+  function openSource(quantity) {
+    const tables = evidenceVerdict(quantity.verdict).matched?.corpus === 'tables' && paper.tables
+    setViewer({ quantity, corpusLabel: tables ? 'tables' : 'prose', corpusText: tables ? paper.tables : paper.fullText })
+  }
+  const linkStyle = { padding: 0, border: 0, background: 'transparent', font: 'inherit', color: 'var(--color-verified-soft)', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3, cursor: 'pointer' }
 
   return (
     <div style={{ marginTop: 10, borderRadius: 10, border: '1px solid var(--hairline)', background: 'rgba(255,255,255,.015)', padding: '12px 14px' }}>
@@ -522,7 +536,15 @@ export function SavedDigestDetails({ paper }) {
         ) : (
           <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
             <span style={{ fontWeight: 600, color: 'var(--color-fg-soft)' }}>Summary:</span>{' '}
-            {paper.finding}
+            {linkFindingNumbers(paper.finding, verifiedRows).map((seg, i) =>
+              seg.row && canOpen(seg.row.quantity) ? (
+                <button key={i} type="button" onClick={() => openSource(seg.row.quantity)} title={`Matched to the source by the app — open the quote for ${seg.row.quantity.name}`} style={linkStyle}>
+                  {seg.text}
+                </button>
+              ) : (
+                <span key={i}>{seg.text}</span>
+              )
+            )}
             {' '}<ClaimCheckMark check={paper.check} size={12} />
           </p>
         )
@@ -544,7 +566,13 @@ export function SavedDigestDetails({ paper }) {
                 <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{isRelationshipValidated(quantity.verdict) ? fmtNum(quantity) : 'Claim withheld — review source'}</span>
                 {(!isRelationshipValidated(quantity.verdict) || evidenceVerdict(quantity.verdict).relationshipStatus === 'estimate-validated') && <span style={{ display: 'block', color: 'var(--color-abstract)' }}>{evidenceVerdict(quantity.verdict).reason}</span>}
-                {quantity.source_quote && <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--color-fg-faint)' }}>&ldquo;{quantity.source_quote}&rdquo;</span>}
+                {quantity.source_quote && (canOpen(quantity) ? (
+                  <button type="button" onClick={() => openSource(quantity)} title="Show this quote in the source text" style={{ display: 'block', marginTop: 2, padding: 0, border: 0, background: 'transparent', textAlign: 'left', fontFamily: 'inherit', fontSize: 11, color: 'var(--color-fg-faint)', cursor: 'pointer' }}>
+                    &ldquo;{quantity.source_quote}&rdquo; <span style={{ color: 'var(--color-verified-soft)' }}>see in source ↗</span>
+                  </button>
+                ) : (
+                  <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--color-fg-faint)' }}>&ldquo;{quantity.source_quote}&rdquo;</span>
+                ))}
               </li>
             ))}
           </ul>
@@ -573,6 +601,16 @@ export function SavedDigestDetails({ paper }) {
           </a>
         )}
       </div>
+
+      <SourceViewer
+        open={viewer !== null}
+        onClose={() => setViewer(null)}
+        title={paper.title}
+        corpusLabel={viewer?.corpusLabel}
+        corpusText={viewer?.corpusText}
+        quote={viewer?.quantity?.source_quote}
+        valueLabel={viewer && isRelationshipValidated(viewer.quantity.verdict) ? fmtNum(viewer.quantity) : undefined}
+      />
     </div>
   )
 }
