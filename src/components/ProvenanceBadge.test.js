@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import ProvenanceBadge, { badgeWord } from './ProvenanceBadge.jsx'
+import ProvenanceBadge from './ProvenanceBadge.jsx'
+import { badgeWord } from '../lib/badgeWord.js'
 import { TIERS } from '../pipeline/verify.js'
 
 describe('ProvenanceBadge — one word, detail on hover', () => {
