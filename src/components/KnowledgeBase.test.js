@@ -198,6 +198,14 @@ describe('Library evidence is re-checked under the current verifier', () => {
   it('leaves verdicts alone when no source text was saved', () => {
     expect(currentPaperQuantities({ quantities: [crossing] })[0]).toBe(crossing)
   })
+  it('leads with the numbers the summary uses and folds the rest', () => {
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, {
+      paper: paper({ finding: 'Crossing succeeded in most lesions (93.2%).', quantities: [crossing, technical], fullText: SRC }),
+    }))
+    expect(html).toContain('1 NUMBER IN THE SUMMARY, VERIFIED')
+    expect(html).toContain('1 more value from the paper')
+    expect(html).not.toContain('Technical success:')
+  })
   it('renders the upgraded values in the saved details', () => {
     const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper({ quantities: [crossing, technical], fullText: SRC }) }))
     expect(html).toContain('2 VALUES VERIFIED')

@@ -2,7 +2,7 @@
 // matched to source quotes (proof), the claim around them is judged by models (not proof).
 
 import { describe, it, expect } from 'vitest'
-import { claimCheckLabel, linkFindingNumbers } from './claimCheck.js'
+import { claimCheckLabel, linkFindingNumbers, rowsInFinding } from './claimCheck.js'
 
 const OR_PATENCY = { quantity: { name: 'odds ratio, primary patency', quantity_type: 'single', value: 0.3, ci_low: 0.11, ci_high: 0.88, printed: { value: '0.30' } } }
 const OR_TLR = { quantity: { name: 'odds ratio, TLR-free survival', quantity_type: 'single', value: 0.28, ci_low: 0.09, ci_high: 0.86 } }
@@ -49,5 +49,16 @@ describe('claimCheckLabel — says what was checked, and by what', () => {
   })
   it('never labels a claim "grounded" or "verified"', () => {
     expect(claimCheckLabel({ verdict: 'supported' }).text).not.toMatch(/grounded|verified|proven/i)
+  })
+})
+
+describe('rowsInFinding — what the evidence panels lead with', () => {
+  const OTHER = { quantity: { name: 'Technical success', quantity_type: 'comparison', first_value: 94.3, second_value: 94.6, unit: '%' } }
+  it('returns only the rows the sentence quotes, once each, in sentence order', () => {
+    const finding = 'TLR-free survival (OR 0.28, CI 0.09–0.86) and primary patency (OR 0.30, CI 0.11–0.88).'
+    expect(rowsInFinding(finding, [OR_PATENCY, OTHER, OR_TLR])).toEqual([OR_TLR, OR_PATENCY])
+  })
+  it('is empty for a number-free finding', () => {
+    expect(rowsInFinding('No clear benefit.', [OR_PATENCY])).toEqual([])
   })
 })

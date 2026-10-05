@@ -57,3 +57,15 @@ export function linkFindingNumbers(finding, rows) {
   if (cursor < text.length) segments.push({ text: text.slice(cursor) })
   return segments
 }
+
+// The verified rows the finding actually quotes, in the order the sentence uses them —
+// what the evidence panels lead with. Everything else the paper reported sits behind
+// "more values" (2026-10-04: a full list of every extracted value, red withheld rows
+// included, buried the few numbers the summary rests on).
+export function rowsInFinding(finding, rows) {
+  const used = []
+  for (const seg of linkFindingNumbers(finding, rows)) {
+    if (seg.row && !used.includes(seg.row)) used.push(seg.row)
+  }
+  return used
+}

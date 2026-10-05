@@ -1,5 +1,5 @@
 import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion.js'
-import { linkFindingNumbers } from '../lib/claimCheck.js'
+import { linkFindingNumbers, rowsInFinding } from '../lib/claimCheck.js'
 import { ClaimCheckMark } from './ClaimCheckMark.jsx'
 // components/SpineCheck.jsx — the spine-day test oracle, made demoable.
 //
@@ -2014,6 +2014,14 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                   const flaggedRows = res.rows.filter((r) => !isRelationshipValidated(r.verdict))
                   const isOpen = !!expanded[paper.id]
                   const total = verifiedRows.length
+                  // Lead with the numbers the summary actually uses; everything else the
+                  // paper reported sits behind "more values". A number-free (or withheld)
+                  // summary uses none, and then the full list shows as before.
+                  const summaryRows = take?.finding && take?.check?.verdict !== 'refuted' ? rowsInFinding(take.finding, verifiedRows) : []
+                  const focused = summaryRows.length > 0
+                  const moreRows = focused ? [...verifiedRows.filter((r) => !summaryRows.includes(r)), ...flaggedRows] : []
+                  const moreKey = `${paper.id}:more`
+                  const moreOpen = !!expanded[moreKey]
                   // No numeric results (review / methods piece) — the finding + citation carry the card.
                   if (res.rows.length === 0 && !res.corrupt) return null
                   return (
@@ -2027,15 +2035,38 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                         style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-fg-muted)' }}
                       >
                         {isOpen
-                          ? '▾ Hide the checked numbers'
-                          : total > 0
-                            ? `▸ See the checked numbers (${total})`
-                            : '▸ See what was checked'}
+                          ? focused ? '▾ Hide the numbers in the summary' : '▾ Hide the checked numbers'
+                          : focused
+                            ? `▸ See the numbers in the summary (${summaryRows.length})`
+                            : total > 0
+                              ? `▸ See the checked numbers (${total})`
+                              : '▸ See what was checked'}
                       </button>
 
                       {isOpen && (
                         <div style={{ marginTop: 10, borderRadius: 10, border: '1px solid var(--hairline)', background: 'rgba(255,255,255,.015)', padding: '0 14px 8px' }}>
-                          {total > 0 ? (
+                          {focused ? (
+                            <>
+                              <p style={{ paddingTop: 12, margin: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--color-verified-soft)' }}>
+                                The numbers in the summary, each verified against the source — click any to see it
+                              </p>
+                              {summaryRows.map((row, i) => (
+                                <Row key={i} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
+                              ))}
+                              {moreRows.length > 0 && (
+                                <button
+                                  onClick={() => setExpanded((p) => ({ ...p, [moreKey]: !moreOpen }))}
+                                  className="cursor-pointer"
+                                  style={{ display: 'block', margin: '10px 0 2px', fontSize: 12, fontWeight: 500, color: 'var(--color-fg-muted)' }}
+                                >
+                                  {moreOpen ? '▾ Hide' : '▸'} {moreRows.length} more value{moreRows.length === 1 ? '' : 's'} from the paper
+                                </button>
+                              )}
+                              {moreOpen && moreRows.map((row, i) => (
+                                <Row key={`more-${i}`} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
+                              ))}
+                            </>
+                          ) : total > 0 ? (
                             <p style={{ paddingTop: 12, margin: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--color-verified-soft)' }}>
                               Every value below re-verified against the source — click any to see it
                             </p>
@@ -2044,11 +2075,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                               No value could be verified — the source quotes are below
                             </p>
                           )}
-                          {verifiedRows.map((row, i) => (
+                          {!focused && verifiedRows.map((row, i) => (
                             <Row key={i} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                           ))}
 
-                          {flaggedRows.length > 0 && (
+                          {!focused && flaggedRows.length > 0 && (
                             <div style={{ marginTop: 8 }}>
                               <p style={{ margin: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--color-fg-muted)' }}>
                                 {flaggedRows.length} value{flaggedRows.length === 1 ? '' : 's'} flagged — greyed, never charted

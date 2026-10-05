@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ClaimCheckMark } from './ClaimCheckMark.jsx'
 import SourceViewer from './SourceViewer.jsx'
-import { linkFindingNumbers } from '../lib/claimCheck.js'
+import { linkFindingNumbers, rowsInFinding } from '../lib/claimCheck.js'
 import { store } from '../lib/store.js'
 import { logEvent } from '../lib/events.js'
 import { hasModelAccess } from '../lib/anthropic.js'
@@ -510,6 +510,15 @@ export function SavedDigestDetails({ paper }) {
   const verifiedRows = evidenceRows
     .filter((quantity) => isRelationshipValidated(quantity.verdict))
     .map((quantity) => ({ quantity, verdict: quantity.verdict }))
+  // Lead with the numbers the summary uses; the rest of what the paper reported sits
+  // behind "more values". With a number-free or withheld summary, the full list shows.
+  const summaryQuantities = paper.finding && paper.check?.verdict !== 'refuted'
+    ? rowsInFinding(paper.finding, verifiedRows).map((row) => row.quantity)
+    : []
+  const focused = summaryQuantities.length > 0
+  const moreQuantities = evidenceRows.filter((quantity) => !summaryQuantities.includes(quantity))
+  const [moreOpen, setMoreOpen] = useState(false)
+  const shownQuantities = focused ? [...summaryQuantities, ...(moreOpen ? moreQuantities : [])] : evidenceRows
   const canOpen = (quantity) => !!quantity?.source_quote && !!(paper.fullText || paper.tables)
   function openSource(quantity) {
     const tables = evidenceVerdict(quantity.verdict).matched?.corpus === 'tables' && paper.tables
@@ -560,9 +569,13 @@ export function SavedDigestDetails({ paper }) {
 
       {evidenceRows.length > 0 ? (
         <div style={{ marginTop: 10, borderRadius: 9, border: '1px solid rgba(127,191,154,.2)', background: 'rgba(127,191,154,.04)', padding: '8px 10px' }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>EVIDENCE · {verifiedCount} {verifiedCount === 1 ? 'VALUE' : 'VALUES'} VERIFIED</p>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>
+            {focused
+              ? `EVIDENCE · ${summaryQuantities.length} ${summaryQuantities.length === 1 ? 'NUMBER' : 'NUMBERS'} IN THE SUMMARY, VERIFIED`
+              : `EVIDENCE · ${verifiedCount} ${verifiedCount === 1 ? 'VALUE' : 'VALUES'} VERIFIED`}
+          </p>
           <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {evidenceRows.map((quantity, index) => (
+            {shownQuantities.map((quantity, index) => (
               <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
                 <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{isRelationshipValidated(quantity.verdict) ? fmtNum(quantity) : 'Claim withheld — review source'}</span>
@@ -577,6 +590,11 @@ export function SavedDigestDetails({ paper }) {
               </li>
             ))}
           </ul>
+          {focused && moreQuantities.length > 0 && (
+            <button type="button" onClick={() => setMoreOpen((v) => !v)} style={{ marginTop: 8, padding: 0, border: 0, background: 'transparent', fontFamily: 'inherit', fontSize: 11.5, color: 'var(--color-fg-muted)', cursor: 'pointer' }}>
+              {moreOpen ? '▾ Hide' : '▸'} {moreQuantities.length} more value{moreQuantities.length === 1 ? '' : 's'} from the paper
+            </button>
+          )}
         </div>
       ) : (
         <p style={{ margin: '10px 0 0', fontSize: 11.5, lineHeight: 1.45, color: 'var(--color-fg-faint)', fontStyle: 'italic' }}>
