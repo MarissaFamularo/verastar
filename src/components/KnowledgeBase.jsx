@@ -497,7 +497,7 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
 // The saved snapshot from the paper's digest/manual-add run. One disclosure owns the whole
 // context so the summary, project connection, caution, verified values, and reading links do not
 // look like unrelated fragments. Exported for focused rendering tests.
-export function SavedDigestDetails({ paper }) {
+export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
   // Re-derived under the current verifier when the saved stamp is stale (read-time only).
   const evidenceRows = useMemo(() => currentPaperQuantities(paper), [paper])
   const verifiedCount = evidenceRows.filter((quantity) => isRelationshipValidated(quantity.verdict)).length
@@ -518,6 +518,8 @@ export function SavedDigestDetails({ paper }) {
   const focused = summaryQuantities.length > 0
   const moreQuantities = evidenceRows.filter((quantity) => !summaryQuantities.includes(quantity))
   const [moreOpen, setMoreOpen] = useState(false)
+  // Closed by default, like the digest card: the numbers are one deliberate click away.
+  const [evidenceOpen, setEvidenceOpen] = useState(initialEvidenceOpen)
   const shownQuantities = focused ? [...summaryQuantities, ...(moreOpen ? moreQuantities : [])] : evidenceRows
   const canOpen = (quantity) => !!quantity?.source_quote && !!(paper.fullText || paper.tables)
   function openSource(quantity) {
@@ -569,11 +571,13 @@ export function SavedDigestDetails({ paper }) {
 
       {evidenceRows.length > 0 ? (
         <div style={{ marginTop: 10, borderRadius: 9, border: '1px solid rgba(127,191,154,.2)', background: 'rgba(127,191,154,.04)', padding: '8px 10px' }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>
+          <button type="button" onClick={() => setEvidenceOpen((v) => !v)} aria-expanded={evidenceOpen} style={{ padding: 0, border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>
+            {evidenceOpen ? '▾ ' : '▸ '}
             {focused
               ? `EVIDENCE · ${summaryQuantities.length} ${summaryQuantities.length === 1 ? 'NUMBER' : 'NUMBERS'} IN THE SUMMARY, VERIFIED`
               : `EVIDENCE · ${verifiedCount} ${verifiedCount === 1 ? 'VALUE' : 'VALUES'} VERIFIED`}
-          </p>
+          </button>
+          {evidenceOpen && <>
           <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
             {shownQuantities.map((quantity, index) => (
               <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
@@ -595,6 +599,7 @@ export function SavedDigestDetails({ paper }) {
               {moreOpen ? '▾ Hide' : '▸'} {moreQuantities.length} more value{moreQuantities.length === 1 ? '' : 's'} from the paper
             </button>
           )}
+          </>}
         </div>
       ) : (
         <p style={{ margin: '10px 0 0', fontSize: 11.5, lineHeight: 1.45, color: 'var(--color-fg-faint)', fontStyle: 'italic' }}>

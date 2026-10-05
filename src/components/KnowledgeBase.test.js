@@ -51,7 +51,7 @@ describe('Library paper digest disclosure', () => {
   })
 
   it('renders the complete saved digest snapshot together', () => {
-    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper() }))
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { initialEvidenceOpen: true, paper: paper() }))
 
     expect(html).toContain('SAVED DIGEST DETAILS')
     expect(html).toContain('>Summary:<')
@@ -148,7 +148,7 @@ describe('RetractionNotice', () => {
 describe('saved quantity rendering policy', () => {
   it('withholds an old swapped claim but keeps its exact saved source available', () => {
     const quantity = { name: 'Mortality', quantity_type: 'comparison', first_label: 'Treatment A', first_value: 20, second_label: 'Treatment B', second_value: 10, unit: '%', source_quote: 'Mortality was 10% in Treatment A and 20% in Treatment B.', tier: 'verified-full-text' }
-    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper({ quantities: [quantity] }) }))
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { initialEvidenceOpen: true, paper: paper({ quantities: [quantity] }) }))
     expect(html).toContain('Claim withheld')
     expect(html).toContain('Mortality was 10% in Treatment A and 20% in Treatment B.')
     expect(html).not.toContain('Treatment A: 20')
@@ -157,7 +157,7 @@ describe('saved quantity rendering policy', () => {
   it('renders a current correctly bound claim through the same saved surface', () => {
     const quantity = { name: 'Mortality', value: 10, unit: '%', source_quote: 'Mortality was 10%.' }
     quantity.verdict = verify(quantity, quantity.source_quote)
-    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper({ quantities: [quantity] }) }))
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { initialEvidenceOpen: true, paper: paper({ quantities: [quantity] }) }))
     expect(html).toContain('1 VALUE VERIFIED')
     expect(html).toContain('10%')
     expect(html).not.toContain('Claim withheld')
@@ -172,12 +172,12 @@ describe('Library summary links each verified number to its quote', () => {
 
   it('makes each verified number in the summary, and each quote, open the source', () => {
     expect(withVerdict.verdict.relationshipValidated).toBe(true)
-    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: saved({ fullText: SRC }) }))
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { initialEvidenceOpen: true, paper: saved({ fullText: SRC }) }))
     expect(html.match(/Matched to the source by the app/g)).toHaveLength(3)
     expect(html).toContain('see in source')
   })
   it('falls back to plain text when no source text was saved', () => {
-    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: saved({ fullText: '', tables: '' }) }))
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { initialEvidenceOpen: true, paper: saved({ fullText: '', tables: '' }) }))
     expect(html).not.toContain('see in source')
     expect(html).not.toContain('Matched to the source by the app')
   })
@@ -190,6 +190,14 @@ describe('Library evidence is re-checked under the current verifier', () => {
   const crossing = stale({ name: 'Successful lesion crossing', quantity_type: 'single', unit: '%', value: 93.2, ci_low: null, ci_high: null, p_value: null, range_low: null, range_high: null, first_label: null, first_value: null, second_label: null, second_value: null, source_quote: 'Successful lesion crossing was achieved in 109 of 117 CTOs (93.2%).', location_hint: 'Abstract, Results' })
   const technical = stale({ name: 'Technical success', quantity_type: 'comparison', unit: '%', value: null, ci_low: null, ci_high: null, p_value: null, range_low: null, range_high: null, first_label: 'RA + DCB', first_value: 94.3, second_label: 'DCB alone', second_value: 94.6, source_quote: 'Technical success was similar for RA + DCB (94.3%) and DCB alone (94.6%).', location_hint: 'Abstract, Results' })
 
+  it('keeps the evidence list closed until it is opened', () => {
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, {
+      paper: paper({ finding: 'Crossing succeeded in most lesions (93.2%).', quantities: [crossing, technical], fullText: SRC }),
+    }))
+    expect(html).toContain('▸ EVIDENCE · 1 NUMBER IN THE SUMMARY, VERIFIED')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).not.toContain('Successful lesion crossing:')
+  })
   it('upgrades stale verdicts from the saved source text', () => {
     const out = currentPaperQuantities({ quantities: [crossing, technical], fullText: SRC })
     expect(out.map((q) => q.verdict.tier)).toEqual(['verified-proportion', 'verified-comparison'])
@@ -200,6 +208,7 @@ describe('Library evidence is re-checked under the current verifier', () => {
   })
   it('leads with the numbers the summary uses and folds the rest', () => {
     const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, {
+      initialEvidenceOpen: true,
       paper: paper({ finding: 'Crossing succeeded in most lesions (93.2%).', quantities: [crossing, technical], fullText: SRC }),
     }))
     expect(html).toContain('1 NUMBER IN THE SUMMARY, VERIFIED')
@@ -207,7 +216,7 @@ describe('Library evidence is re-checked under the current verifier', () => {
     expect(html).not.toContain('Technical success:')
   })
   it('renders the upgraded values in the saved details', () => {
-    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper({ quantities: [crossing, technical], fullText: SRC }) }))
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { initialEvidenceOpen: true, paper: paper({ quantities: [crossing, technical], fullText: SRC }) }))
     expect(html).toContain('2 VALUES VERIFIED')
     expect(html).toContain('93.2%')
   })
