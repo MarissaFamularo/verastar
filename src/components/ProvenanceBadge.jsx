@@ -22,15 +22,36 @@ const ESTIMATE_SOURCE = { abstract_only: { label: 'Estimate verified as printed 
 const PROPORTION_SOURCE = { abstract_only: { label: 'Percentage recomputed from its count · abstract · endpoint unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' }, user_text: { label: 'Percentage recomputed from its count · your file · endpoint unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' } }
 const COMPARISON_SOURCE = { abstract_only: { label: 'Values verified as printed · abstract · groups unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' }, user_text: { label: 'Values verified as printed · your file · groups unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' } }
 
+// The badge is ONE word (2026-10-04: multi-part labels read as noise). What exactly was
+// matched — and what was not, e.g. "endpoint unchecked" — moves to the hover text; the
+// verbatim quote still renders directly under every badge, so no evidence hides.
+const WORD = {
+  'verified-registry': 'Verified',
+  'verified-full-text': 'Verified',
+  'abstract-only': 'Verified',
+  'verified-user-text': 'Verified',
+  'verified-estimate': 'Verified',
+  'verified-comparison': 'Verified',
+  'verified-proportion': 'Verified',
+  'source-located': 'Unresolved',
+  'legacy-unchecked': 'Outdated',
+  flagged: 'Flagged',
+}
+
+export function badgeWord(tier) {
+  return WORD[tier] || WORD.flagged
+}
+
 export default function ProvenanceBadge({ tier, sourceTier }) {
   const s = (tier === 'verified-estimate' && ESTIMATE_SOURCE[sourceTier]) || (tier === 'verified-comparison' && COMPARISON_SOURCE[sourceTier]) || (tier === 'verified-proportion' && PROPORTION_SOURCE[sourceTier]) || STYLES[tier] || STYLES.flagged
   return (
     <span
+      title={s.label}
       className="inline-flex items-center"
-      style={{ gap: 6, borderRadius: 999, padding: '2px 10px', fontSize: 11.5, fontWeight: 600, background: s.bg, color: s.text }}
+      style={{ gap: 6, borderRadius: 999, padding: '2px 10px', fontSize: 11.5, fontWeight: 600, background: s.bg, color: s.text, cursor: 'help' }}
     >
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.dot }} />
-      {s.label}
+      {badgeWord(tier)}
     </span>
   )
 }
