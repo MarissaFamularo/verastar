@@ -11,6 +11,7 @@ import {
   EXTRACTION_RETRY_MAX_TOKENS,
   EXTRACTION_SCHEMA,
   extractQuantities,
+  dropUnprovenLabels,
 } from './extract.js'
 import { verify } from './verify.js'
 
@@ -87,5 +88,25 @@ describe('quote rule ↔ verifier contract', () => {
     const { system } = vi.mocked(extractStructured).mock.calls[0][0]
     expect(system).toMatch(/shortest contiguous span/)
     expect(system).toMatch(/ALWAYS extract\s+the primary outcome/)
+  })
+})
+
+describe('dropUnprovenLabels — a group label the quote does not print cannot be proven', () => {
+  const base = { name: '12-month primary patency, RA+DCB vs DCB alone', quantity_type: 'comparison', first_value: 67.3, second_value: 50, unit: '%', p_value: 0.16, source_quote: 'At 12 months, primary patency (67.3% vs. 50%, p = 0.16)' }
+  const SRC = 'At 12 months, primary patency (67.3% vs. 50%, p = 0.16) and freedom from TLR (70.2% vs. 54.2%, p = 0.26) did not differ.'
+
+  it('drops both labels when either is missing from the quote, so the row can verify unlabeled', () => {
+    const q = { ...base, first_label: 'RA+DCB', second_label: 'DCB alone' }
+    expect(verify(q, SRC).shapeError).not.toBe('')
+    const fixed = dropUnprovenLabels(q)
+    expect(fixed).toMatchObject({ first_label: null, second_label: null })
+    expect(verify(fixed, SRC, { sourceTier: 'full_text' }).relationshipStatus).toBe('comparison-validated')
+  })
+  it('keeps labels the quote prints', () => {
+    const q = { ...base, source_quote: 'patency was 67.3% with RA+DCB vs. 50% with DCB alone', first_label: 'RA+DCB', second_label: 'DCB alone' }
+    expect(dropUnprovenLabels(q)).toBe(q)
+  })
+  it('leaves an unlabeled quantity untouched', () => {
+    expect(dropUnprovenLabels(base)).toBe(base)
   })
 })

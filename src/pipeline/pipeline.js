@@ -20,7 +20,7 @@ import {
   searchPubmed,
   searchPaceMs,
 } from './sources.js'
-import { extractQuantities } from './extract.js'
+import { extractQuantities, dropUnprovenLabels } from './extract.js'
 import { MODELS } from '../lib/anthropic.js'
 import { sha256Hex, cacheKeyHeader, lookupCachedExtraction, storeCachedExtraction } from './evidenceCache.js'
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
@@ -255,7 +255,7 @@ export async function runPaper(paper, { onStage, userText = null, cacheOnly = fa
     }
 
     notify('verifying')
-    const rows = extracted.quantities.map((quantity) => ({
+    const rows = extracted.quantities.map(dropUnprovenLabels).map((quantity) => ({
       quantity,
       verdict: verify(quantity, { text: source.text, tables: source.tables }, {
         sourceTier: source.tier,

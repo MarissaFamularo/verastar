@@ -9,6 +9,7 @@
 // around an estimate rather than the estimate's semantic shape.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
+import { normalize } from './verify.js'
 
 export const EXTRACTION_MAX_TOKENS = 8192
 export const EXTRACTION_RETRY_MAX_TOKENS = 16384
@@ -97,6 +98,9 @@ Non-negotiable rules:
     source order even if the second group is named first elsewhere. Set value and range
     fields to null.
   Any labels you supply must be non-empty exact substrings of source_quote, not inferred descriptions.
+  When the quote does not print the group names (e.g. "primary patency (67.3% vs. 50%,
+  p = 0.16)", with the groups named earlier in the paper), set BOTH labels to null and put
+  the groups in name instead ("12-month primary patency, RA+DCB vs DCB alone").
   A reported estimate range is NOT a confidence interval. Keep ci_low/ci_high for a CI
   explicitly identified as such by the source.
 - Preserve the source's printed precision in source_quote. For example, copy "1.00" and
@@ -151,4 +155,24 @@ export async function extractQuantities({ studyId, sourceText, model = MODELS.ex
   // Guarantee study_id is set even if the model omitted it.
   if (!result.study_id) result.study_id = studyId
   return result
+}
+
+// Group labels are the model's claim about which value belongs to which group. A label
+// the quote does not print cannot be proven, and verify.js rejects the whole row over it
+// (the 2026-10-04 SFA paper lost its primary outcome this way). Drop BOTH labels when
+// either is missing from the quote: the row then verifies, at most, as an unlabeled
+// comparison, which the verdict and badge already mark "groups unchecked". This only ever
+// removes an unproven claim; it never adds one. Applied in the pipeline right before
+// verify, so cached extractions get it too.
+export function dropUnprovenLabels(quantity) {
+  const first = quantity?.first_label
+  const second = quantity?.second_label
+  if (first == null && second == null) return quantity
+  const quote = normalize(quantity.source_quote || '')
+  const printed = (label) => {
+    const l = normalize(label || '')
+    return l.length > 0 && quote.includes(l)
+  }
+  if (printed(first) && printed(second)) return quantity
+  return { ...quantity, first_label: null, second_label: null }
 }
