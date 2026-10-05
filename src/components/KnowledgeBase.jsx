@@ -35,7 +35,7 @@ import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
 import SharePaperButton from './SharePaperButton.jsx'
 import { fmtNum } from '../lib/format.js'
-import { evidenceVerdict, isRelationshipValidated, extractionVersionStatus } from '../lib/evidenceVersion.js'
+import { evidenceVerdict, isRelationshipValidated, extractionVersionStatus, currentPaperQuantities } from '../lib/evidenceVersion.js'
 import { needsDigestDetails, refreshSavedPaperEvidence } from '../pipeline/refreshEvidence.js'
 
 const REFRESH_STAGE_LABEL = {
@@ -498,7 +498,8 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
 // context so the summary, project connection, caution, verified values, and reading links do not
 // look like unrelated fragments. Exported for focused rendering tests.
 export function SavedDigestDetails({ paper }) {
-  const evidenceRows = Array.isArray(paper.quantities) ? paper.quantities : []
+  // Re-derived under the current verifier when the saved stamp is stale (read-time only).
+  const evidenceRows = useMemo(() => currentPaperQuantities(paper), [paper])
   const verifiedCount = evidenceRows.filter((quantity) => isRelationshipValidated(quantity.verdict)).length
   const extractionStatus = extractionVersionStatus(paper)
   const articleUrl = paper.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`
@@ -561,7 +562,7 @@ export function SavedDigestDetails({ paper }) {
         <div style={{ marginTop: 10, borderRadius: 9, border: '1px solid rgba(127,191,154,.2)', background: 'rgba(127,191,154,.04)', padding: '8px 10px' }}>
           <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>EVIDENCE · {verifiedCount} {verifiedCount === 1 ? 'VALUE' : 'VALUES'} VERIFIED</p>
           <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {paper.quantities.map((quantity, index) => (
+            {evidenceRows.map((quantity, index) => (
               <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
                 <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{isRelationshipValidated(quantity.verdict) ? fmtNum(quantity) : 'Claim withheld — review source'}</span>

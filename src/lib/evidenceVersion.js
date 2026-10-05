@@ -1,4 +1,4 @@
-import { VERIFICATION_VERSION, COMPATIBLE_VERIFICATION_VERSIONS } from '../pipeline/verify.js'
+import { verify, VERIFICATION_VERSION, COMPATIBLE_VERIFICATION_VERSIONS } from '../pipeline/verify.js'
 export { VERIFICATION_VERSION }
 
 // Read-time policy only: old persisted source, annotations and provenance remain intact.
@@ -16,6 +16,27 @@ export function evidenceVerdict(verdict) {
     reason: 'Earlier verification checked source tokens only. Claim relationships have not been checked under the current rules; inspect the saved source before use.',
     warnings: (verdict?.warnings || []).map((warning) => ({ ...warning, status: 'unverified', message: String(warning?.message || '').replace(/^Verified as printed, but/, 'Unverified extraction; additionally,') })),
   }
+}
+
+// A saved paper's evidence under the CURRENT verifier. Library papers keep the verdict
+// stamped when they were saved; a stale stamp is re-derived from the source text saved
+// with the paper — the same corpus it was first verified against — exactly as the digest
+// store does (lib/digestStore.js), so a verifier fix reaches the Library without a paid
+// re-run. Read-time only: nothing is written back. The saved bookkeeping fields (tier,
+// verdict) are stripped first, since verify refuses fields it does not know. Without saved
+// source text the read-time version policy (evidenceVerdict) applies as before.
+export function currentPaperQuantities(paper) {
+  const quantities = Array.isArray(paper?.quantities) ? paper.quantities : []
+  const text = paper?.fullText || ''
+  const tables = paper?.tables || ''
+  if (!text && !tables) return quantities
+  return quantities.map((saved) => {
+    if (saved?.verdict?.verificationVersion === VERIFICATION_VERSION) return saved
+    const { tier, verdict, ...quantity } = saved || {}
+    if (!quantity.source_quote) return saved
+    const fresh = verify(quantity, { text, tables }, { sourceTier: verdict?.sourceTier || 'abstract_only' })
+    return { ...quantity, tier: fresh.tier, verdict: fresh }
+  })
 }
 
 export function isRelationshipValidated(verdict) {

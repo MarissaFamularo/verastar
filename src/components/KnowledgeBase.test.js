@@ -1,4 +1,5 @@
 import { verify } from '../pipeline/verify.js'
+import { currentPaperQuantities, isRelationshipValidated } from '../lib/evidenceVersion.js'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -179,5 +180,27 @@ describe('Library summary links each verified number to its quote', () => {
     const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: saved({ fullText: '', tables: '' }) }))
     expect(html).not.toContain('see in source')
     expect(html).not.toContain('Matched to the source by the app')
+  })
+})
+
+describe('Library evidence is re-checked under the current verifier', () => {
+  const SRC = 'Successful lesion crossing was achieved in 109 of 117 CTOs (93.2%). Technical success was similar for RA + DCB (94.3%) and DCB alone (94.6%).'
+  // The exact rows saved for PMID 42829536 under estimates-v3, bookkeeping fields included.
+  const stale = (q) => ({ ...q, tier: 'source-located', verdict: { tier: 'source-located', flagged: true, relationshipValidated: false, relationshipStatus: 'unresolved', sourceTier: 'abstract_only', verificationVersion: '2026-09-30.estimates-v3', reason: 'Quote and numeric tokens located; relationships remain unresolved.' } })
+  const crossing = stale({ name: 'Successful lesion crossing', quantity_type: 'single', unit: '%', value: 93.2, ci_low: null, ci_high: null, p_value: null, range_low: null, range_high: null, first_label: null, first_value: null, second_label: null, second_value: null, source_quote: 'Successful lesion crossing was achieved in 109 of 117 CTOs (93.2%).', location_hint: 'Abstract, Results' })
+  const technical = stale({ name: 'Technical success', quantity_type: 'comparison', unit: '%', value: null, ci_low: null, ci_high: null, p_value: null, range_low: null, range_high: null, first_label: 'RA + DCB', first_value: 94.3, second_label: 'DCB alone', second_value: 94.6, source_quote: 'Technical success was similar for RA + DCB (94.3%) and DCB alone (94.6%).', location_hint: 'Abstract, Results' })
+
+  it('upgrades stale verdicts from the saved source text', () => {
+    const out = currentPaperQuantities({ quantities: [crossing, technical], fullText: SRC })
+    expect(out.map((q) => q.verdict.tier)).toEqual(['verified-proportion', 'verified-comparison'])
+    expect(out.every((q) => isRelationshipValidated(q.verdict))).toBe(true)
+  })
+  it('leaves verdicts alone when no source text was saved', () => {
+    expect(currentPaperQuantities({ quantities: [crossing] })[0]).toBe(crossing)
+  })
+  it('renders the upgraded values in the saved details', () => {
+    const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper({ quantities: [crossing, technical], fullText: SRC }) }))
+    expect(html).toContain('2 VALUES VERIFIED')
+    expect(html).toContain('93.2%')
   })
 })
