@@ -583,7 +583,7 @@ export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
               <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
                 <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{isRelationshipValidated(quantity.verdict) ? fmtNum(quantity) : 'Claim withheld — review source'}</span>
-                {(!isRelationshipValidated(quantity.verdict) || ['estimate-validated', 'proportion-validated'].includes(evidenceVerdict(quantity.verdict).relationshipStatus)) && <span style={{ display: 'block', color: 'var(--color-abstract)' }}>{evidenceVerdict(quantity.verdict).reason}</span>}
+                {(!isRelationshipValidated(quantity.verdict) || ['estimate-validated', 'proportion-validated', 'heterogeneity-validated'].includes(evidenceVerdict(quantity.verdict).relationshipStatus)) && <span style={{ display: 'block', color: 'var(--color-abstract)' }}>{evidenceVerdict(quantity.verdict).reason}</span>}
                 {quantity.source_quote && (canOpen(quantity) ? (
                   <button type="button" onClick={() => openSource(quantity)} title="Show this quote in the source text" style={{ display: 'block', marginTop: 2, padding: 0, border: 0, background: 'transparent', textAlign: 'left', fontFamily: 'inherit', fontSize: 11, color: 'var(--color-fg-faint)', cursor: 'pointer' }}>
                     &ldquo;{quantity.source_quote}&rdquo; <span style={{ color: 'var(--color-verified-soft)' }}>see in source ↗</span>

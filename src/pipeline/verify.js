@@ -8,11 +8,11 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-04.estimates-v4'
+export const VERIFICATION_VERSION = '2026-10-04.estimates-v6'
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
-export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1', '2026-09-24.estimates-v1', '2026-09-27.estimates-v2', '2026-09-30.estimates-v3']
+export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1', '2026-09-24.estimates-v1', '2026-09-27.estimates-v2', '2026-09-30.estimates-v3', '2026-10-04.estimates-v4', '2026-10-04.estimates-v5']
 
 export const TIERS = {
   REGISTRY: 'verified-registry',
@@ -32,6 +32,9 @@ export const TIERS = {
   // A percentage printed with its own count ("109 of 117 CTOs (93.2%)") whose value the
   // app RECOMPUTED from that count. The endpoint it belongs to is NOT validated.
   PROPORTION: 'verified-proportion',
+  // A meta-analysis I² printed as "I² = 89.0%". Which pooled analysis it describes is
+  // NOT validated.
+  HETEROGENEITY: 'verified-heterogeneity',
 }
 
 // --- 1. Normalization ---------------------------------------------------------
@@ -499,6 +502,50 @@ function validateProportion(quantity, matched, corpus, declaredType) {
   return Math.abs(exact - pct) <= 0.5 * 10 ** -decimals + 1e-9
 }
 
+// --- Heterogeneity I² (2026-10-04) ---------------------------------------------
+//
+// "… k = 2; τ² = 0.18; I² = 89.0%; Cochran Q-test p = 0.003 …". NFKC folds "I²" to "i2"
+// and "τ²" to "τ2", so the token is "i2" with no letter before it, then a separator ("=",
+// ":", ",", "was", "of", "is" or a space), then the percentage. The quantity must SAY it
+// is I² or heterogeneity — a bare percentage in a meta-analysis sentence proves nothing
+// about which statistic it is — and the span must print exactly one I². 0–100 only; no
+// CI. A P may ride along only when the span LABELS it as the heterogeneity test ("Cochran
+// Q-test p = 0.003", "p for heterogeneity = …") and prints exactly one such P: the pooled
+// estimate's own P is a different statistic and never qualifies. Which pooled analysis it
+// belongs to is not checked.
+const I2_TUPLE = /(?<![a-z0-9])i\s*2(?:\s*[=:,]\s*|\s+(?:was\s+|of\s+|is\s+)?)((?:\d+\.\d+|\.\d+|\d+)(?!\d)(?!\.\d))\s*%/g
+const I2_NAME = /(?<![a-z0-9])i\s*2(?![a-z0-9])|heterogeneity|inconsistency/
+const HET_P_NUM = '((?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d))'
+const HET_P = new RegExp(
+  `(?<![a-z])q(?:[- ]?test)?\\s*,?\\s*p(?:\\s*-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${HET_P_NUM}` +
+  `|(?<![a-z])p(?:\\s*-?\\s*value)?\\s*(?:for|of)\\s+heterogeneity\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${HET_P_NUM}`,
+  'g',
+)
+
+function validateHeterogeneity(quantity, matched, corpus, declaredType) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (declaredType !== 'single') return false
+  const span = corpus.slice(matched.index, matched.index + matched.length)
+  if (corpus.indexOf(span, matched.index + 1) !== -1) return false
+  if (quantity.ci_low != null || quantity.ci_high != null) return false
+  const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
+  if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
+  if (!I2_NAME.test(normalize(quantity.name))) return false
+  if (quantity.p_value != null) {
+    const hetP = [...span.matchAll(HET_P)]
+    if (hetP.length !== 1) return false
+    const printedP = Number(hetP[0][1] ?? hetP[0][2])
+    if (!Number.isFinite(quantity.p_value) || !numbersEqual(quantity.p_value, printedP)) return false
+  }
+  const unit = normalize(quantity.unit)
+  if (unit && unit !== '%' && unit !== 'percent') return false
+  const tuples = [...span.matchAll(I2_TUPLE)]
+  if (tuples.length !== 1) return false
+  const printed = Number(tuples[0][1])
+  if (!(printed >= 0 && printed <= 100)) return false
+  return Number.isFinite(quantity.value) && numbersEqual(quantity.value, printed)
+}
+
 // --- Spelled-out numbers (source-located only) ---------------------------------
 //
 // Prose writes small counts as words ("eight achieved external validation", "Seventy-nine
@@ -668,6 +715,7 @@ export function verify(quantity, source, opts = {}) {
   const comparisonValidated = consistent && !relationshipValidated && !estimateValidated &&
     (validateComparison(quantity, matched, matchedCorpus, declaredType) || validateAndPair(quantity, matched, matchedCorpus, declaredType))
   const proportionValidated = consistent && !relationshipValidated && !estimateValidated && !comparisonValidated && validateProportion(quantity, matched, matchedCorpus, declaredType)
+  const heterogeneityValidated = consistent && !relationshipValidated && !estimateValidated && !comparisonValidated && !proportionValidated && validateHeterogeneity(quantity, matched, matchedCorpus, declaredType)
   const regRow = relationshipValidated ? registryMatch(quantity, opts.registry) : null
   let tier
   let reason
@@ -695,6 +743,10 @@ export function verify(quantity, source, opts = {}) {
     tier = TIERS.PROPORTION
     const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'
     reason = `Percentage verified as printed in ${where} and recomputed from its printed count. Which endpoint it belongs to is not checked — read the quote.`
+  } else if (heterogeneityValidated) {
+    tier = TIERS.HETEROGENEITY
+    const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'
+    reason = `I² verified as printed in ${where}. Which pooled analysis it describes is not checked — read the quote.`
   } else if (!relationshipValidated) {
     tier = TIERS.LOCATED
     reason = 'Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.'
@@ -716,7 +768,7 @@ export function verify(quantity, source, opts = {}) {
     reason = 'Explicit quantity relationship validated in a source sentence; broader clinical interpretation is unchecked.'
   }
 
-  const valueValidated = relationshipValidated || estimateValidated || comparisonValidated || proportionValidated
+  const valueValidated = relationshipValidated || estimateValidated || comparisonValidated || proportionValidated || heterogeneityValidated
   const warnings = plausibilityWarnings(quantity, { verifiedAsPrinted: valueValidated })
 
   return {
@@ -729,7 +781,7 @@ export function verify(quantity, source, opts = {}) {
     // two apart — only the sentence grammar binds a value to its endpoint.
     relationshipValidated: valueValidated,
     endpointValidated: relationshipValidated,
-    relationshipStatus: relationshipValidated ? 'validated' : estimateValidated ? 'estimate-validated' : comparisonValidated ? 'comparison-validated' : proportionValidated ? 'proportion-validated' : 'unresolved',
+    relationshipStatus: relationshipValidated ? 'validated' : estimateValidated ? 'estimate-validated' : comparisonValidated ? 'comparison-validated' : proportionValidated ? 'proportion-validated' : heterogeneityValidated ? 'heterogeneity-validated' : 'unresolved',
     sourceTier,
     found,
     consistent,

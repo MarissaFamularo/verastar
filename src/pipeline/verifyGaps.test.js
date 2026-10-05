@@ -40,9 +40,6 @@ describe('estimate with a qualifier between measure and verb (frailty meta-analy
   it('[false-verify guard] a mistranscribed CI bound still fails', () => {
     expect(ok(hr({ ci_high: 3.93 }), FRAILTY)).toBe(false)
   })
-  it('[false-verify guard] I² has no rule and stays unverified', () => {
-    expect(ok(q({ name: 'I²', unit: '%', value: 89, source_quote: FRAILTY }), FRAILTY)).toBe(false)
-  })
 })
 
 describe('two groups joined by "and" (SFA technical success)', () => {
@@ -114,10 +111,60 @@ describe('proportion recomputed from its printed count (SFA lesion crossing)', (
   })
 })
 
+describe('heterogeneity I² (frailty meta-analysis)', () => {
+  const FRAILTY = 'The exploratory pooled hazard ratio for the prioritized highest/binary frailty contrast versus the lowest/non-frail reference group was 1.81 (95% confidence interval = 0.97-3.39; k = 2; τ² = 0.18; I² = 89.0%; Cochran Q-test p = 0.003 for heterogeneity).'
+  const i2 = (fields) => q({ name: 'Heterogeneity (I²) for pooled death or major amputation analysis', unit: '%', value: 89, source_quote: FRAILTY, ...fields })
+
+  it('verifies the real sentence, analysis unchecked', () => {
+    const v = verify(i2(), FRAILTY, { sourceTier: 'abstract_only' })
+    expect(v.tier).toBe(TIERS.HETEROGENEITY)
+    expect(v.relationshipStatus).toBe('heterogeneity-validated')
+    expect(v.endpointValidated).toBe(false)
+  })
+  it('accepts "I2", a colon, and "was"', () => {
+    for (const src of ['Heterogeneity was substantial (I2: 76%).', 'Heterogeneity was substantial; I² was 76%.']) {
+      expect(ok(i2({ value: 76, source_quote: src }), src)).toBe(true)
+    }
+  })
+  it('[false-verify guard] τ² is not I²', () => {
+    expect(ok(i2({ name: 'Heterogeneity (tau²)', unit: null, value: 0.18 }), FRAILTY)).toBe(false)
+  })
+  it('[false-verify guard] a percentage not named as I² or heterogeneity proves nothing', () => {
+    expect(ok(i2({ name: 'Pooled event rate' }), FRAILTY)).toBe(false)
+  })
+  it('[false-verify guard] a mistranscribed I² fails', () => {
+    expect(ok(i2({ value: 98 }), FRAILTY)).toBe(false)
+  })
+  it('[false-verify guard] two I² values in one quote are ambiguous', () => {
+    const src = 'Heterogeneity was high for mortality (I² = 89%) and low for stroke (I² = 12%).'
+    expect(ok(i2({ value: 89, source_quote: src }), src)).toBe(false)
+  })
+  it('carries the Q-test P when the quote labels it as the heterogeneity test', () => {
+    expect(ok(i2({ p_value: 0.003 }), FRAILTY)).toBe(true)
+    const src = 'Heterogeneity was substantial (I² = 76%, P for heterogeneity = 0.01).'
+    expect(ok(i2({ value: 76, p_value: 0.01, source_quote: src }), src)).toBe(true)
+  })
+  it('[false-verify guard] a mistranscribed heterogeneity P fails', () => {
+    expect(ok(i2({ p_value: 0.03 }), FRAILTY)).toBe(false)
+  })
+  it('[false-verify guard] the pooled estimate\'s own P is not the heterogeneity P', () => {
+    const src = 'The pooled odds ratio was 1.40 (P = 0.02), with I² = 55%.'
+    expect(ok(i2({ value: 55, p_value: 0.02, source_quote: src }), src)).toBe(false)
+  })
+  it('[false-verify guard] two heterogeneity P values in one quote are ambiguous', () => {
+    const src = 'Heterogeneity was high (I² = 89%; Q-test p = 0.003), versus low in the sensitivity analysis (Q-test p = 0.40).'
+    expect(ok(i2({ value: 89, p_value: 0.003, source_quote: src }), src)).toBe(false)
+  })
+  it('[false-verify guard] "i2" inside a word is not I²', () => {
+    const src = 'Heterogeneity analysis of the MI2 cohort found 40% recurrence.'
+    expect(ok(i2({ value: 40, source_quote: src }), src)).toBe(false)
+  })
+})
+
 describe('version', () => {
-  it('bumps, and keeps the previous stamp readable — new rules only add coverage', () => {
-    expect(VERIFICATION_VERSION).toBe('2026-10-04.estimates-v4')
-    expect(COMPATIBLE_VERIFICATION_VERSIONS).toContain('2026-09-30.estimates-v3')
+  it('bumps, and keeps the previous stamps readable — new rules only add coverage', () => {
+    expect(VERIFICATION_VERSION).toBe('2026-10-04.estimates-v6')
+    expect(COMPATIBLE_VERIFICATION_VERSIONS).toEqual(expect.arrayContaining(['2026-09-30.estimates-v3', '2026-10-04.estimates-v4', '2026-10-04.estimates-v5']))
     const old = { ...verify(q({ name: 'x', unit: 'HR', value: 0.84, ci_low: 0.61, ci_high: 1.16, source_quote: 'HR 0.84 (95% CI 0.61-1.16)' }), 'Results: HR 0.84 (95% CI 0.61-1.16).'), verificationVersion: '2026-09-30.estimates-v3' }
     expect(evidenceVerdict(old).tier).toBe(old.tier)
   })

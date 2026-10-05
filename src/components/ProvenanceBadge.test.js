@@ -6,7 +6,7 @@ import { TIERS } from '../pipeline/verify.js'
 
 describe('ProvenanceBadge — one word, detail on hover', () => {
   it('says Verified for every tier that matched, and never for one that did not', () => {
-    for (const tier of [TIERS.REGISTRY, TIERS.FULL_TEXT, TIERS.ABSTRACT, TIERS.USER_TEXT, TIERS.ESTIMATE, TIERS.COMPARISON, TIERS.PROPORTION]) {
+    for (const tier of [TIERS.REGISTRY, TIERS.FULL_TEXT, TIERS.ABSTRACT, TIERS.USER_TEXT, TIERS.ESTIMATE, TIERS.COMPARISON, TIERS.PROPORTION, TIERS.HETEROGENEITY]) {
       expect(badgeWord(tier)).toBe('Verified')
     }
     expect(badgeWord(TIERS.LOCATED)).toBe('Unresolved')

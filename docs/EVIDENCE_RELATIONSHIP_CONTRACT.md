@@ -22,7 +22,16 @@ none changes what an existing tier claims:
   (109/117 = 93.16… → 93.2). Exactly one such tuple in the span; n ≤ N; no CI or P.
   `relationshipStatus: 'proportion-validated'`, `endpointValidated: false`.
 
-I² and other heterogeneity statistics still have no rule. Tests:
+**Same day, `2026-10-04.estimates-v6`** (v5 was a local-only build that refused any P on I²; v6 re-checks its verdicts): new tier `verified-heterogeneity` ("I² verified as
+printed · analysis unchecked"). A `single` quantity whose name says I² / heterogeneity /
+inconsistency verifies when its span prints exactly one "I² = x%" (NFKC "i2"; separator `=`,
+`:`, `,`, "was", "of", "is" or a space), x is 0–100 and equals the value, and no CI is claimed.
+A claimed P is accepted only when the span labels exactly one P as the heterogeneity test
+("Cochran Q-test p = 0.003", "P for heterogeneity = …"); the pooled estimate's own P never
+qualifies. τ² never matches. Which pooled analysis it describes is not checked. Tests in
+the same file (3 controls, 8 guards); v4 stays readable.
+
+Tests:
 `src/pipeline/verifyGaps.test.js` (5 controls, 17 false-verify guards). `estimates-v3`
 verdicts remain readable as stamped (a subset). PaperTrellis's copy of the verifier was
 not changed by this amendment.
