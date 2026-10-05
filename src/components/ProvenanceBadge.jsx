@@ -11,6 +11,7 @@ const STYLES = {
   'verified-user-text': { label: 'Verified against user-supplied text', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
   'verified-estimate': { label: 'Estimate verified as printed · endpoint unchecked', dot: 'var(--color-verified)', text: 'var(--color-verified-soft)', bg: 'rgba(127,191,154,.10)' },
   'verified-comparison': { label: 'Values verified as printed · groups unchecked', dot: 'var(--color-verified)', text: 'var(--color-verified-soft)', bg: 'rgba(127,191,154,.10)' },
+  'verified-proportion': { label: 'Percentage recomputed from its count · endpoint unchecked', dot: 'var(--color-verified)', text: 'var(--color-verified-soft)', bg: 'rgba(127,191,154,.10)' },
   'source-located': { label: 'Source located · relationship unresolved', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' },
   'legacy-unchecked': { label: 'Earlier evidence · relationships unchecked', dot: 'var(--color-fg-muted)', text: 'var(--color-fg-muted)', bg: 'rgba(255,255,255,.05)' },
   flagged: { label: 'Flagged — not verified', dot: 'var(--color-fg-muted)', text: 'var(--color-fg-muted)', bg: 'rgba(255,255,255,.05)' },
@@ -18,10 +19,11 @@ const STYLES = {
 
 // An estimate tuple can come from any source tier; say which when it is not the full text.
 const ESTIMATE_SOURCE = { abstract_only: { label: 'Estimate verified as printed · abstract · endpoint unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' }, user_text: { label: 'Estimate verified as printed · your file · endpoint unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' } }
+const PROPORTION_SOURCE = { abstract_only: { label: 'Percentage recomputed from its count · abstract · endpoint unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' }, user_text: { label: 'Percentage recomputed from its count · your file · endpoint unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' } }
 const COMPARISON_SOURCE = { abstract_only: { label: 'Values verified as printed · abstract · groups unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' }, user_text: { label: 'Values verified as printed · your file · groups unchecked', dot: 'var(--color-abstract)', text: 'var(--color-abstract)', bg: 'rgba(230,184,119,.14)' } }
 
 export default function ProvenanceBadge({ tier, sourceTier }) {
-  const s = (tier === 'verified-estimate' && ESTIMATE_SOURCE[sourceTier]) || (tier === 'verified-comparison' && COMPARISON_SOURCE[sourceTier]) || STYLES[tier] || STYLES.flagged
+  const s = (tier === 'verified-estimate' && ESTIMATE_SOURCE[sourceTier]) || (tier === 'verified-comparison' && COMPARISON_SOURCE[sourceTier]) || (tier === 'verified-proportion' && PROPORTION_SOURCE[sourceTier]) || STYLES[tier] || STYLES.flagged
   return (
     <span
       className="inline-flex items-center"

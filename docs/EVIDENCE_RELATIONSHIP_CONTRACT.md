@@ -1,5 +1,32 @@
 # Evidence relationship contract — 2026-09-11
 
+## Amendment 2026-10-04 — qualifiers, "and" pairs, recomputed proportions (`2026-10-04.estimates-v4`)
+
+Three true printed values from a real digest that no rule admitted. Each is narrow, and
+none changes what an existing tier claims:
+
+- **Estimate qualifier.** The estimate tuple may carry a qualifier between the measure and
+  its verb ("the pooled hazard ratio for the highest versus lowest frailty group was 1.81
+  (95% confidence interval = 0.97-3.39 …)"), and the CI clause may use `=`. The qualifier
+  must be plain description: no digit, no sentence punctuation, no verb (a verb means the
+  match spanned a clause), and no second measure name (English "or" is allowed). Same tier,
+  same "endpoint unchecked" claim.
+- **"and" pair.** A `comparison` printed as "similar for A (x%) and B (y%)" verifies as
+  `verified-comparison` only when both labels are supplied and each is printed directly
+  before its own bracketed value, the span holds exactly two bracketed values, a comparison
+  cue word ("similar", "compared", "higher" …) precedes the pair, and no CI or P is
+  claimed. Without the cue, "mortality (5%) and stroke (3%)" stays unresolved.
+- **New tier `verified-proportion`** ("Percentage recomputed from its count · endpoint
+  unchecked"): a `single` percentage printed as "n of N (p%)" / "n out of N" / "n/N"
+  verifies only when the app recomputes n/N and it rounds to the printed precision
+  (109/117 = 93.16… → 93.2). Exactly one such tuple in the span; n ≤ N; no CI or P.
+  `relationshipStatus: 'proportion-validated'`, `endpointValidated: false`.
+
+I² and other heterogeneity statistics still have no rule. Tests:
+`src/pipeline/verifyGaps.test.js` (5 controls, 17 false-verify guards). `estimates-v3`
+verdicts remain readable as stamped (a subset). PaperTrellis's copy of the verifier was
+not changed by this amendment.
+
 ## Amendment 2026-09-30 — two-group comparisons, AUC, plural ratio names (`2026-09-30.estimates-v3`)
 
 - New tier `verified-comparison` ("Values verified as printed · groups unchecked"): a

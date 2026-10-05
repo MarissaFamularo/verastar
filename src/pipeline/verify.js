@@ -8,11 +8,11 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-09-30.estimates-v3'
+export const VERIFICATION_VERSION = '2026-10-04.estimates-v4'
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
-export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1', '2026-09-24.estimates-v1', '2026-09-27.estimates-v2']
+export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1', '2026-09-24.estimates-v1', '2026-09-27.estimates-v2', '2026-09-30.estimates-v3']
 
 export const TIERS = {
   REGISTRY: 'verified-registry',
@@ -29,6 +29,9 @@ export const TIERS = {
   // Two group values printed as "A vs B" (and their P), in order; which groups they belong
   // to and the endpoint are NOT validated, and the badge says so.
   COMPARISON: 'verified-comparison',
+  // A percentage printed with its own count ("109 of 117 CTOs (93.2%)") whose value the
+  // app RECOMPUTED from that count. The endpoint it belongs to is NOT validated.
+  PROPORTION: 'verified-proportion',
 }
 
 // --- 1. Normalization ---------------------------------------------------------
@@ -330,13 +333,25 @@ const MEASURE = `(?:(?<=[(\\[])or|(?<![a-z])(?:${RATIO_NAMES.filter((n) => n !==
 // A spelled-out name may carry its bracketed abbreviation — "hazard ratio [HR] 1.77,
 // 95% confidence interval [CI] 1.03 - 3.02" — which is a label, not a second value.
 const ABBREV = `(?:\\s*[(\\[](${RATIO_NAMES.filter((n) => !n.includes(' ')).join('|')})[)\\]])?`
+// A qualifier may name what the estimate is for, between the measure and its verb
+// (2026-10-04): "the pooled hazard ratio for the highest versus lowest frailty group was
+// 1.81". It is captured so validateEstimate can refuse one that is not plain description
+// (another measure, a verb, a number, sentence punctuation) — see QUALIFIER_* below.
+const QUALIFIER = `\\s+(?:for|in|among|comparing|between|across|after|with)\\s+([^\\d;:=()\\[\\]<>.!?]{1,200}?)\\s+(?:was|were|is|are)`
 const ESTIMATE_TUPLE = new RegExp(
-  `(${MEASURE})(?![a-z])${ABBREV}\\s*(?:[,:=]|\\s(?:was|were|of|is|are))?\\s*${UNSIGNED}` +
-  `\\s*[(\\[,;]?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval(?:\\s*[(\\[]ci[)\\]])?)\\s*[,:]?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
+  `(${MEASURE})(?![a-z])${ABBREV}(?:${QUALIFIER}|\\s*(?:[,:=]|\\s(?:was|were|of|is|are)))?\\s*${UNSIGNED}` +
+  `\\s*[(\\[,;]?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval(?:\\s*[(\\[]ci[)\\]])?)\\s*[,:=]?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
   `(?:\\s*[,;]\\s*p\\s*(?:-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${UNSIGNED})?`,
   'g',
 )
 const CI_CLAUSE = /\d\s*%\s*(?:ci|confidence interval)\b/g
+// A qualifier must be plain description. A verb inside it means the lazy match spanned
+// a clause ("hazard ratio for death was similar and the rate was 1.2" would bind the
+// rate's value to the hazard ratio); another measure name means two estimates compete for
+// one value. English "or" ("death or major amputation") is allowed — a bare OR
+// abbreviation can only bind a value it directly precedes, and the qualifier holds none.
+const QUALIFIER_VERB = /(?<![a-z])(?:was|were|is|are|had|showed|reported)(?![a-z])/
+const QUALIFIER_MEASURE = new RegExp(`(?<![a-z])(?:${RATIO_NAMES.filter((n) => n !== 'or').map((n) => n.replace(/ /g, '\\s')).join('|')})(?![a-z])`)
 
 function validateEstimate(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
@@ -351,7 +366,8 @@ function validateEstimate(quantity, matched, corpus, declaredType) {
   const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
   if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
   if (!normalize(quantity.name)) return false
-  const [, measure, abbrev, value, , ciLow, ciHigh, p] = tuples[0]
+  const [, measure, abbrev, qualifier, value, , ciLow, ciHigh, p] = tuples[0]
+  if (qualifier != null && (QUALIFIER_VERB.test(qualifier) || QUALIFIER_MEASURE.test(qualifier))) return false
   const familyOf = (name) => RATIO_GROUPS.find((names) => names.includes(normalize(name).replace(/\s+/g, ' ')))
   // "hazard ratio [OR] 1.2" names two measures; the tuple's role is then ambiguous.
   if (abbrev && familyOf(abbrev) !== familyOf(measure)) return false
@@ -408,6 +424,79 @@ function validateComparison(quantity, matched, corpus, declaredType) {
   if (!numbersEqual(quantity.first_value, Number(first)) || !numbersEqual(quantity.second_value, Number(second))) return false
   if (quantity.p_value != null && !(printedP != null && numbersEqual(quantity.p_value, Number(printedP)))) return false
   return true
+}
+
+// --- Printed two-group pair without "vs" (2026-10-04) --------------------------
+//
+// "Technical success was similar for RA + DCB (94.3%) and DCB alone (94.6%)." An "and"
+// list is the same shape as two different endpoints ("mortality (5%) and stroke (3%)"),
+// so this is far narrower than the "vs" grammar: both group labels must be supplied,
+// each printed IMMEDIATELY before its own bracketed value, exactly two bracketed values
+// in the span, a comparison cue word in the span, no CI and no claimed P. The badge still
+// reads "groups unchecked" — the cue word makes a comparison likely, not proven.
+const AND_PAIR_CUE = /(?<![a-z])(?:similar|comparable|compared|differ|differed|different|difference|higher|lower|greater|fewer|more|less)(?![a-z])/
+const BRACKETED_NUM = /[([]\s*(?:\d+\.\d+|\.\d+|\d+)\s*%?\s*[)\]]/g
+
+function validateAndPair(quantity, matched, corpus, declaredType) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (declaredType !== 'comparison') return false
+  const span = corpus.slice(matched.index, matched.index + matched.length)
+  if (corpus.indexOf(span, matched.index + 1) !== -1) return false
+  if ((span.match(COMPARATOR) || []).length !== 0) return false
+  if ((span.match(CI_CLAUSE) || []).length !== 0) return false
+  if (quantity.ci_low != null || quantity.ci_high != null || quantity.p_value != null) return false
+  const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
+  if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
+  if (!normalize(quantity.name)) return false
+  const first = normalize(quantity.first_label)
+  const second = normalize(quantity.second_label)
+  if (!first || !second || first === second || first.includes(second) || second.includes(first)) return false
+  const unit = normalize(quantity.unit)
+  if (unit && unit !== '%') return false
+  if ((span.match(BRACKETED_NUM) || []).length !== 2) return false
+  const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pct = unit === '%' ? '\\s*%' : '(?:\\s*%)?'
+  const num = `\\s*${PAIR_NUM}${pct}\\s*`
+  const pairs = [...span.matchAll(new RegExp(`(?<![a-z])${escape(first)}\\s*[(\\[]${num}[)\\]]\\s*,?\\s*and\\s+${escape(second)}\\s*[(\\[]${num}[)\\]]`, 'g'))]
+  if (pairs.length !== 1) return false
+  if (!AND_PAIR_CUE.test(span.slice(0, pairs[0].index))) return false
+  const [, a, b] = pairs[0]
+  return numbersEqual(quantity.first_value, Number(a)) && numbersEqual(quantity.second_value, Number(b))
+}
+
+// --- Printed proportion, recomputed (2026-10-04) --------------------------------
+//
+// "Successful lesion crossing was achieved in 109 of 117 CTOs (93.2%)." The one result
+// shape the app can check arithmetically: the printed percentage must be the printed
+// count over the printed denominator, rounded to the printed precision (109/117 = 93.16…
+// → 93.2). A misread count, a swapped denominator, or a percentage from elsewhere in the
+// sentence fails the arithmetic. Exactly one such tuple in the span; up to four words may
+// name what was counted between the denominator and the bracket. Endpoint unchecked.
+const PROPORTION_TUPLE = /(?<![\d.])(\d+)\s*(?:of|out of|\/)\s*(\d+)(?![\d.])((?:\s+[a-z][a-z-]*){0,4})\s*[([]\s*(\d+(?:\.\d+)?)\s*%\s*[)\]]/g
+
+function validateProportion(quantity, matched, corpus, declaredType) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (declaredType !== 'single') return false
+  const span = corpus.slice(matched.index, matched.index + matched.length)
+  if (corpus.indexOf(span, matched.index + 1) !== -1) return false
+  if (quantity.ci_low != null || quantity.ci_high != null || quantity.p_value != null) return false
+  const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
+  if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
+  if (!normalize(quantity.name)) return false
+  const unit = normalize(quantity.unit)
+  if (unit && unit !== '%' && unit !== 'percent') return false
+  const tuples = [...span.matchAll(PROPORTION_TUPLE)]
+  if (tuples.length !== 1) return false
+  const [, n, total, , printed] = tuples[0]
+  const count = Number(n)
+  const denominator = Number(total)
+  const pct = Number(printed)
+  if (!(denominator > 0) || count > denominator) return false
+  if (!Number.isFinite(quantity.value) || !numbersEqual(quantity.value, pct)) return false
+  const decimals = (printed.split('.')[1] || '').length
+  const exact = (100 * count) / denominator
+  // Half a unit in the last printed place, plus float slack: 93.16 prints as 93.2.
+  return Math.abs(exact - pct) <= 0.5 * 10 ** -decimals + 1e-9
 }
 
 // --- Spelled-out numbers (source-located only) ---------------------------------
@@ -576,7 +665,9 @@ export function verify(quantity, source, opts = {}) {
   const matchedCorpus = matched?.corpus === 'tables' ? normTables : normProse
   const relationshipValidated = consistent && validateRelationship(quantity, matched, matchedCorpus, declaredType)
   const estimateValidated = consistent && !relationshipValidated && validateEstimate(quantity, matched, matchedCorpus, declaredType)
-  const comparisonValidated = consistent && !relationshipValidated && !estimateValidated && validateComparison(quantity, matched, matchedCorpus, declaredType)
+  const comparisonValidated = consistent && !relationshipValidated && !estimateValidated &&
+    (validateComparison(quantity, matched, matchedCorpus, declaredType) || validateAndPair(quantity, matched, matchedCorpus, declaredType))
+  const proportionValidated = consistent && !relationshipValidated && !estimateValidated && !comparisonValidated && validateProportion(quantity, matched, matchedCorpus, declaredType)
   const regRow = relationshipValidated ? registryMatch(quantity, opts.registry) : null
   let tier
   let reason
@@ -600,6 +691,10 @@ export function verify(quantity, source, opts = {}) {
     tier = TIERS.COMPARISON
     const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'
     reason = `Both values${quantity.p_value != null ? ' and the P value' : ''} verified as printed, in that order, in ${where}. Which groups and endpoint they belong to is not checked — read the quote.`
+  } else if (proportionValidated) {
+    tier = TIERS.PROPORTION
+    const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'
+    reason = `Percentage verified as printed in ${where} and recomputed from its printed count. Which endpoint it belongs to is not checked — read the quote.`
   } else if (!relationshipValidated) {
     tier = TIERS.LOCATED
     reason = 'Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.'
@@ -621,7 +716,7 @@ export function verify(quantity, source, opts = {}) {
     reason = 'Explicit quantity relationship validated in a source sentence; broader clinical interpretation is unchecked.'
   }
 
-  const valueValidated = relationshipValidated || estimateValidated || comparisonValidated
+  const valueValidated = relationshipValidated || estimateValidated || comparisonValidated || proportionValidated
   const warnings = plausibilityWarnings(quantity, { verifiedAsPrinted: valueValidated })
 
   return {
@@ -634,7 +729,7 @@ export function verify(quantity, source, opts = {}) {
     // two apart — only the sentence grammar binds a value to its endpoint.
     relationshipValidated: valueValidated,
     endpointValidated: relationshipValidated,
-    relationshipStatus: relationshipValidated ? 'validated' : estimateValidated ? 'estimate-validated' : comparisonValidated ? 'comparison-validated' : 'unresolved',
+    relationshipStatus: relationshipValidated ? 'validated' : estimateValidated ? 'estimate-validated' : comparisonValidated ? 'comparison-validated' : proportionValidated ? 'proportion-validated' : 'unresolved',
     sourceTier,
     found,
     consistent,
