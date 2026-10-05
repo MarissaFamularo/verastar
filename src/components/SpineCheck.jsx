@@ -1021,7 +1021,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             // The finding is written only from values the app verified.
             verified: r.rows
               .filter((row) => isRelationshipValidated(row.verdict))
-              .map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity) })),
+              .map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity), quote: row.quantity.source_quote })),
           })),
         })
         const byId = {}

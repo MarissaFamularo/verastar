@@ -201,7 +201,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
           topics: r.paper.topics,
           topicSteering: r.paper.topicSteering,
           summary: r.sourceDoc?.text || '',
-          verified: r.rows.filter((row) => isRelationshipValidated(row.verdict)).map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity) })),
+          verified: r.rows.filter((row) => isRelationshipValidated(row.verdict)).map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity), quote: row.quantity.source_quote })),
         })),
       })
       triaged = takesById(rankings)

@@ -6,7 +6,7 @@
 // rankings and verified rows, no model call.
 
 import { describe, it, expect } from 'vitest'
-import { allowedNumbers, numbersGrounded, stripNumbers, sanitizeRanking, OUTPUT_CONTRACT } from './triage.js'
+import { allowedNumbers, allowedTimepoints, numbersGrounded, stripNumbers, sanitizeRanking, OUTPUT_CONTRACT } from './triage.js'
 
 // Verified rows as the callers build them: { name, value } where value is fmtNum output.
 const V_HR = [{ name: 'hazard ratio', value: '0.84 (CI 0.61–1.16)' }]
@@ -195,5 +195,37 @@ describe('sanitizeRanking — the guard every ranking passes before it can rende
     expect(out.finding).toBe('')
     expect(out.designCaution).toBe('')
     expect(out.relevance).toBe('')
+  })
+})
+
+// 2026-10-04, PMID 42829536: the verified 12-month result's timepoint was stripped from
+// "no clear benefit at 12 months" because value strings never carry a timepoint.
+describe('timepoints printed in a verified quote', () => {
+  const V = [{ name: '12-month primary patency', value: '67.3% versus 50% (P = 0.16)', quote: 'At 12 months, primary patency (67.3% vs. 50%, p = 0.16)' }]
+
+  it('reads the timepoint out of the verified quote', () => {
+    expect(allowedTimepoints(V)).toEqual([12])
+  })
+  it('lets a finding carry that timepoint, spelled either way', () => {
+    const tps = allowedTimepoints(V)
+    const allowed = allowedNumbers(V)
+    expect(numbersGrounded('No clear patency benefit at 12 months (67.3% versus 50%).', allowed, tps)).toBe(true)
+    expect(numbersGrounded('No clear 12-month patency benefit.', allowed, tps)).toBe(true)
+  })
+  it('never lets a timepoint launder a statistic, or a different timepoint', () => {
+    const tps = allowedTimepoints(V)
+    const allowed = allowedNumbers(V)
+    expect(numbersGrounded('Patency was 12% higher.', allowed, tps)).toBe(false)
+    expect(numbersGrounded('in 12 patients', allowed, tps)).toBe(false)
+    expect(numbersGrounded('No clear benefit at 24 months.', allowed, tps)).toBe(false)
+  })
+  it('a statistic in the quote never becomes a timepoint', () => {
+    const W = [{ name: 'x', value: '0.30', quote: 'odds ratio 0.30 in 117 CTOs' }]
+    expect(allowedTimepoints(W)).toEqual([])
+  })
+  it('sanitizeRanking keeps the timepoint end to end, and still strips without a verified quote', () => {
+    const rk = { id: 'p', finding: 'No clear patency benefit at 12 months (67.3% versus 50%).', finding_plain: 'No clear patency benefit.' }
+    expect(sanitizeRanking(rk, V).finding).toBe(rk.finding)
+    expect(sanitizeRanking(rk, [{ ...V[0], quote: undefined }]).finding).toBe('No clear patency benefit.')
   })
 })

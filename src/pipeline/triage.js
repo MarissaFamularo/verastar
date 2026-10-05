@@ -67,7 +67,7 @@ CLAIM-STRENGTH RULES — apply these to BOTH finding and finding_plain:
 - A non-significant result does not prove equivalence or "no effect". Say "no statistically clear difference" unless the study actually tested and established equivalence or non-inferiority.
 - When a reported effect estimate, confidence interval, P value, and source conclusion appear to conflict, preserve the uncertainty rather than choosing the strongest interpretation.
 
-HARD RULE: finding may contain ONLY numbers that appear verbatim in that paper's Verified results — the app deterministically checks every digit and discards the sentence if one is unbacked, so an unlisted number means your finding is thrown away. finding_plain, design_caution, and relevance may not contain ANY number, effect size, hazard/risk ratio, confidence interval, p-value, percentage, or sample size — no digits, ever.`
+HARD RULE: finding may contain ONLY numbers that appear verbatim in that paper's Verified results, plus a result's printed timepoint (shown as "timepoint as printed") written as a timepoint — "at 12 months", "12-month patency" — the app deterministically checks every digit and discards the sentence if one is unbacked, so an unlisted number means your finding is thrown away. finding_plain, design_caution, and relevance may not contain ANY number, effect size, hazard/risk ratio, confidence interval, p-value, percentage, or sample size — no digits, ever.`
 
 // --- The number guard --------------------------------------------------------
 //
@@ -89,6 +89,27 @@ export function allowedNumbers(verified) {
   return out
 }
 
+// Timepoints (2026-10-04). A result's value strings never carry its timepoint — "67.3%
+// versus 50%" — so "no clear benefit at 12 months" lost its 12 even when the 12-month
+// result itself verified. A finding may also carry a number used AS A TIMEPOINT (number
+// then a time unit: "at 12 months", "12-month") when that same number-and-unit is printed
+// in the quote of one of the paper's VERIFIED rows. Narrow on both sides: the token must
+// sit before a time unit in the finding, and the quote must print it before a time unit,
+// so a timepoint can never launder a statistic and a statistic never launders a timepoint.
+// Whether it is the RIGHT timepoint for the claim is a prose judgment — the check pass
+// (pipeline/check.js) covers it, not this guard.
+const TIME_UNIT = '(?:hours?|days?|weeks?|months?|years?)\\b'
+const QUOTE_TIMEPOINT = new RegExp(`(?<![\\d.])(\\d+(?:\\.\\d+)?)\\s*-?\\s*${TIME_UNIT}`, 'g')
+const FOLLOWED_BY_UNIT = new RegExp(`^\\s*-?\\s*${TIME_UNIT}`)
+
+export function allowedTimepoints(verified) {
+  const out = []
+  for (const v of verified || []) {
+    for (const m of normalize(String(v?.quote ?? '')).matchAll(QUOTE_TIMEPOINT)) out.push(Number(m[1]))
+  }
+  return out
+}
+
 // Nomenclature exemption, shared by the check and the strip so the two layers can never
 // disagree: a numeric token whose character DIRECTLY before it is a letter is part of a
 // name (TcPO2, CD34, P2Y12, COVID-19, SF-36 — the token there starts at the dash), not a
@@ -102,10 +123,13 @@ const isLetter = (ch) => ch != null && /[a-z]/i.test(ch)
 // representation-equality: 8 == 8.0, 0.84 == .84 — never rounding). Boundary-safe by
 // construction: extractNumbersWithIndex tokenizes "2008" as 2008, so a verified 8 can
 // never launder a year, and 0.84 never satisfies 0.8.
-export function numbersGrounded(text, allowed) {
+export function numbersGrounded(text, allowed, timepoints = []) {
   const norm = normalize(text || '')
   return extractNumbersWithIndex(norm).every(
-    (t) => isLetter(norm[t.start - 1]) || allowed.some((a) => numbersEqual(a, t.value))
+    (t) =>
+      isLetter(norm[t.start - 1]) ||
+      allowed.some((a) => numbersEqual(a, t.value)) ||
+      (FOLLOWED_BY_UNIT.test(norm.slice(t.end)) && timepoints.some((a) => numbersEqual(a, t.value)))
   )
 }
 
@@ -134,6 +158,7 @@ export function stripNumbers(text) {
 // Pure — unit-tested without a model call.
 export function sanitizeRanking(rk, verified) {
   const allowed = allowedNumbers(verified)
+  const timepoints = allowedTimepoints(verified)
   // Digit-free by contract: pass through untouched when the guard sees no gated number
   // (empty allowed set = nothing is permitted), strip otherwise.
   const plain = (t) => {
@@ -145,7 +170,7 @@ export function sanitizeRanking(rk, verified) {
     id: rk?.id,
     score: rk?.score,
     tier: rk?.tier,
-    finding: numbersGrounded(finding, allowed)
+    finding: numbersGrounded(finding, allowed, timepoints)
       ? finding
       : plain(rk?.finding_plain) || stripNumbers(finding),
     designCaution: plain(rk?.design_caution),
@@ -171,7 +196,7 @@ function buildSystem(rubric) {
   return header + OUTPUT_CONTRACT
 }
 
-// candidates: [{ id, title, summary, design, verified: [{name, value}] }] — `value` is the
+// candidates: [{ id, title, summary, design, verified: [{name, value, quote}] }] — `value` is the
 // fmtNum-formatted string (callers format via lib/format.js), so the prompt shows the model
 // the exact rendering the fact channel uses and an inline number can never disagree with it.
 // Returns [{ id, score, tier, finding, relevance, check }], every ranking already
@@ -195,7 +220,10 @@ export async function triage({
     candidates
       .map((c) => {
         const facts = (c.verified || []).length
-          ? c.verified.map((v) => `  - ${v.name}: ${v.value}`).join('\n')
+          ? c.verified.map((v) => {
+              const tps = [...new Set(allowedTimepoints([v]))]
+              return `  - ${v.name}: ${v.value}${tps.length ? ` (timepoint as printed: ${tps.join(', ')})` : ''}`
+            }).join('\n')
           : '  (no verified values)'
         const steering = (Array.isArray(c.topicSteering) ? c.topicSteering : [])
           .map((row) => `${row.topic || 'Unnamed topic'} → ${(row.northStars || []).length ? row.northStars.join(', ') : '(unmapped)'}`)

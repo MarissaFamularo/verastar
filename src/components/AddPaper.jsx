@@ -117,7 +117,7 @@ export default function AddPaper({ onAdded }) {
               ? []
               : res.rows
                   .filter((r) => !r.verdict.flagged)
-                  .map((r) => ({ name: r.quantity.name, value: fmtNum(r.quantity) })),
+                  .map((r) => ({ name: r.quantity.name, value: fmtNum(r.quantity), quote: r.quantity.source_quote })),
           },
         ],
       })
