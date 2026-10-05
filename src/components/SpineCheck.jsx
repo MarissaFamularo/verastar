@@ -1,4 +1,6 @@
 import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion.js'
+import { linkFindingNumbers } from '../lib/claimCheck.js'
+import { ClaimCheckMark } from './ClaimCheckMark.jsx'
 // components/SpineCheck.jsx — the spine-day test oracle, made demoable.
 //
 // Runs the REAL pipeline on the demo corpus live (fetch -> extract -> verify) and shows
@@ -1960,23 +1962,29 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                 <p style={{ margin: '12px 0 0', fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 15, color: 'var(--color-fg-dim)', lineHeight: 1.55 }}>{take.relevance}</p>
               )}
 
-              {/* The finding — verified prose. Numbers are gated deterministically; the prose
-                  itself passed an adversarial source check (direction, comparator, population).
-                  A finding the check refuted is WITHHELD, not rendered — same bias as the
-                  number guard: an unsupported claim on screen is fatal, a withheld one is not. */}
+              {/* The finding. Two kinds of backing, kept visibly apart (lib/claimCheck.js):
+                  every NUMBER links to its own source quote — matched by the verifier,
+                  proof — and the CLAIM around them carries a label naming the models that
+                  judged it, which is not proof. A refuted finding is WITHHELD, not rendered:
+                  an unsupported claim on screen is fatal, a withheld one is not. */}
               {take?.finding && take?.check?.verdict !== 'refuted' && (
                 <p style={{ margin: '11px 0 0', fontSize: 15.5, lineHeight: 1.65, color: 'var(--color-fg-soft)' }}>
-                  {take.finding}{' '}
-                  {take?.check?.verdict === 'supported' && (
-                    <span title="A second model independently confirmed this summary against the source text — direction of effect, comparison, and population" className="whitespace-nowrap" style={{ fontSize: 12, color: 'var(--color-verified-soft)', opacity: 0.85 }}>
-                      ✓ checked{' '}
-                    </span>
-                  )}
-                  {heroRow && (
-                    <button onClick={() => openSource(heroRow.quantity, heroRow.verdict, res.sourceDoc, title)} className="cursor-pointer whitespace-nowrap" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-verified-soft)' }}>
-                      grounded in source ↗
-                    </button>
-                  )}
+                  {linkFindingNumbers(take.finding, verifiedRows).map((seg, i) =>
+                    seg.row ? (
+                      <button
+                        key={i}
+                        onClick={() => openSource(seg.row.quantity, seg.row.verdict, res.sourceDoc, title)}
+                        title={`Matched to the source by the app — open the quote for ${seg.row.quantity.name}`}
+                        className="cursor-pointer"
+                        style={{ padding: 0, border: 0, background: 'transparent', font: 'inherit', color: 'var(--color-verified-soft)', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+                      >
+                        {seg.text}
+                      </button>
+                    ) : (
+                      <span key={i}>{seg.text}</span>
+                    )
+                  )}{' '}
+                  <ClaimCheckMark check={take.check} size={12} />
                 </p>
               )}
               {take?.finding && take?.check?.verdict === 'refuted' && (
@@ -1994,11 +2002,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                 <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--color-abstract)', paddingLeft: 10, fontSize: 13.5, lineHeight: 1.55, color: 'var(--color-fg-dim)' }}>
                   <span style={{ fontWeight: 600, color: 'var(--color-abstract)' }}>Design caution:</span>{' '}
                   {take.designCaution}
-                  {take?.cautionCheck?.verdict === 'supported' && (
-                    <span title="A second model confirmed that this methodological limitation is supported by the source" className="whitespace-nowrap" style={{ marginLeft: 5, fontSize: 11.5, color: 'var(--color-verified-soft)', opacity: 0.85 }}>
-                      ✓ checked
-                    </span>
-                  )}
+                  {' '}<ClaimCheckMark check={take.cautionCheck} size={11.5} />
                 </p>
               )}
 
@@ -2085,3 +2089,4 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     </section>
   )
 }
+

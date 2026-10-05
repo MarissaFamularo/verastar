@@ -53,7 +53,7 @@ describe('Library paper digest disclosure', () => {
     const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper() }))
 
     expect(html).toContain('SAVED DIGEST DETAILS')
-    expect(html).toContain('Checked summary:')
+    expect(html).toContain('>Summary:<')
     expect(html).toContain('The intervention improved the primary outcome.')
     expect(html).toContain('Why it connects to your work:')
     expect(html).toContain('The observational design cannot establish causality.')

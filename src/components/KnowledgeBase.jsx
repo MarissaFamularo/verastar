@@ -9,6 +9,7 @@
 // the flat-file vault lives on its own Library surface now.
 
 import { useEffect, useMemo, useState } from 'react'
+import { ClaimCheckMark } from './ClaimCheckMark.jsx'
 import { store } from '../lib/store.js'
 import { logEvent } from '../lib/events.js'
 import { hasModelAccess } from '../lib/anthropic.js'
@@ -520,9 +521,9 @@ export function SavedDigestDetails({ paper }) {
           </p>
         ) : (
           <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
-            <span style={{ fontWeight: 600, color: 'var(--color-fg-soft)' }}>Checked summary:</span>{' '}
+            <span style={{ fontWeight: 600, color: 'var(--color-fg-soft)' }}>Summary:</span>{' '}
             {paper.finding}
-            {paper.check?.verdict === 'supported' && <span style={{ marginLeft: 5, color: 'var(--color-verified-soft)' }}>✓ checked</span>}
+            {' '}<ClaimCheckMark check={paper.check} size={12} />
           </p>
         )
       )}
@@ -530,7 +531,7 @@ export function SavedDigestDetails({ paper }) {
       {paper.designCaution && paper.cautionCheck?.verdict !== 'refuted' && (
         <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--color-abstract)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
           <span style={{ fontWeight: 600, color: 'var(--color-abstract)' }}>Design caution:</span>{' '}
-          {paper.designCaution}
+          {paper.designCaution}{' '}<ClaimCheckMark check={paper.cautionCheck} size={12} />
         </p>
       )}
 
