@@ -108,7 +108,7 @@ describe('fmtNum — the fact-channel value string', () => {
     expect(fmtNum(q({
       quantity_type: 'change', first_value: 2.4, second_value: 9.5, unit: '%',
       source_quote: 'DCD HTx increased from 2.4% to 9.5%',
-    }))).toBe('from 2.4 to 9.5 %')
+    }))).toBe('from 2.4% to 9.5%')
   })
 
   it('renders comparison labels beside the correct values', () => {
@@ -142,7 +142,7 @@ describe('fmtNum — the fact-channel value string', () => {
     expect(fmtNum(q({ value: 0.84, ci_low: 0.61, ci_high: 1.16, source_quote: 'HR 0.84' }))).toBe(
       '0.84 (CI 0.61–1.16)',
     )
-    expect(fmtNum(q({ value: 84, unit: '%' }))).toBe('84 %')
+    expect(fmtNum(q({ value: 84, unit: '%' }))).toBe('84%')
     expect(fmtNum(q({ value: null }))).toBe('')
   })
 
@@ -164,5 +164,18 @@ describe('fmtNum — the fact-channel value string', () => {
       source_quote: 'hazard ratio 0.84 (0.61 to 1.16); p value 0.22',
     })
     expect(fmtNum(noOp)).toBe('0.84 (CI 0.61–1.16), P 0.22')
+  })
+})
+
+describe('fmtNum — percent sits on every value it describes', () => {
+  const base = { source_quote: 'primary patency (67.3% vs. 50%, p = 0.16)', p_value: 0.16 }
+  it('glues % to both sides of a comparison', () => {
+    expect(fmtNum({ ...base, quantity_type: 'comparison', first_value: 67.3, second_value: 50, unit: '%' })).toBe('67.3% versus 50%, P=0.16')
+  })
+  it('keeps a word unit once, after the values', () => {
+    expect(fmtNum({ quantity_type: 'comparison', first_value: 144.3, second_value: 341.8, unit: 'minutes', source_quote: '144.3 vs 341.8 minutes' })).toBe('144.3 versus 341.8 minutes')
+  })
+  it('glues % to a range end', () => {
+    expect(fmtNum({ quantity_type: 'range', range_low: 10, range_high: 20, unit: '%', source_quote: 'between 10 and 20%' })).toMatch(/^10.20%$/)
   })
 })

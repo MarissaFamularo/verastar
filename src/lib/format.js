@@ -110,23 +110,28 @@ export function fmtNum(q) {
   const hasRange = q.range_low != null && q.range_high != null
   if (q.value == null && !hasRange && !hasPair) return ''
   let s
+  // "%" is glued to every value it describes ("67.3% versus 50%"); a word unit is said
+  // once, after the values ("144.3 versus 341.8 minutes"). Before 2026-10-04 "%" rendered
+  // once with a space — "67.3 versus 50 %" — and the writer copies this string verbatim.
+  const pct = q.unit === '%'
+  const v = (field) => `${printedValue(q, field)}${pct ? '%' : ''}`
   if (hasPair && q.quantity_type === 'change') {
-    const first = printedValue(q, 'first_value')
-    const second = printedValue(q, 'second_value')
+    const first = v('first_value')
+    const second = v('second_value')
     s = q.first_label && q.second_label
       ? `${q.first_label}: ${first} to ${q.second_label}: ${second}`
       : `from ${first} to ${second}`
   } else if (hasPair && q.quantity_type === 'comparison') {
-    const first = printedValue(q, 'first_value')
-    const second = printedValue(q, 'second_value')
+    const first = v('first_value')
+    const second = v('second_value')
     // Labels are optional since 2026-09-30 ("36% vs. 26%" with the groups named elsewhere).
     s = q.first_label && q.second_label
       ? `${q.first_label}: ${first} versus ${q.second_label}: ${second}`
       : `${first} versus ${second}`
   } else {
-    s = hasRange ? printedRange(q) : printedValue(q, 'value')
+    s = hasRange ? printedRange(q) + (pct ? '%' : '') : v('value')
   }
-  if (q.unit) s += ` ${q.unit}`
+  if (q.unit && !pct) s += ` ${q.unit}`
   if (q.ci_low != null && q.ci_high != null) {
     s += ` (CI ${printedValue(q, 'ci_low')}–${printedValue(q, 'ci_high')})`
   }

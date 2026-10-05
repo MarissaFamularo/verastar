@@ -158,7 +158,7 @@ describe('saved quantity rendering policy', () => {
     quantity.verdict = verify(quantity, quantity.source_quote)
     const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { paper: paper({ quantities: [quantity] }) }))
     expect(html).toContain('1 VALUE VERIFIED')
-    expect(html).toContain('10 %')
+    expect(html).toContain('10%')
     expect(html).not.toContain('Claim withheld')
   })
 })

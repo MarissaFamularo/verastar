@@ -83,7 +83,7 @@ describe('sourceNoteMd', () => {
 
   it('renders each verified quantity WITH its tier and a PubMed link', () => {
     const md = sourceNoteMd(paper())
-    expect(md).toContain('Amputation-free survival:** 84 %')
+    expect(md).toContain('Amputation-free survival:** 84%')
     expect(md).toContain('tier: `verified-full-text`')
     expect(md).toContain('https://pubmed.ncbi.nlm.nih.gov/12345/')
   })
@@ -141,7 +141,7 @@ describe('sourceNoteMd', () => {
     expect(md).toContain("Summary withheld — the source check couldn't confirm it (direction of effect reversed)")
     expect(md).toContain('Read the paper before repeating a takeaway.')
     // verified numbers are the app-owned channel — unaffected by the prose gate
-    expect(md).toContain('Amputation-free survival:** 84 %')
+    expect(md).toContain('Amputation-free survival:** 84%')
   })
 
   it('withholds a refuted finding without dangling parens when there is no reason', () => {
