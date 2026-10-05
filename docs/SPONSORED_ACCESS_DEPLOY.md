@@ -28,8 +28,10 @@ Values come from the private plan. Change later with `update sponsor_config set 
 ## 3. Secrets
 
 In the project's Edge Function secrets: `ANTHROPIC_API_KEY` = the sponsor key, and
-`DIGEST_CRON_SECRET` = a long random string that only pg_cron knows. `SUPABASE_URL`,
-`SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the platform.
+`DIGEST_CRON_SECRET` = a long random string that only pg_cron knows. pg_cron reads its copy
+from Supabase Vault as `verastar_digest_cron_secret` (step 4b); the two values must match.
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the
+platform.
 
 ## 4. Deploy the function
 
@@ -60,8 +62,20 @@ is committed, and `digest-run/index.ts` imports it from jsDelivr pinned to a com
 (`https://cdn.jsdelivr.net/gh/MarissaFamularo/verastar@<sha>/public/server/app.bundle.js`).
 The edge runtime resolves remote imports at deploy time and only from an allowlist of hosts
 (Netlify is not on it; jsDelivr is). A pipeline change reaches the scheduler by rebuilding
-the bundle, committing, updating the pin to the new commit, and redeploying `digest-run`. Then, in the SQL editor with the `pg_cron` and
-`pg_net` extensions enabled:
+the bundle, committing, updating the pin to the new commit, and redeploying `digest-run`.
+
+Store the cron secret in Supabase Vault (Dashboard → Integrations → Vault → Add secret,
+name `verastar_digest_cron_secret`, value = the same string as the `DIGEST_CRON_SECRET`
+Edge Function secret). Or in SQL:
+
+```sql
+select vault.create_secret('<DIGEST_CRON_SECRET>', 'verastar_digest_cron_secret',
+  'x-cron-secret for verastar-digest-run; must equal Edge secret DIGEST_CRON_SECRET');
+```
+
+Then, in the SQL editor with the `pg_cron` and `pg_net` extensions enabled, schedule the
+job. It reads the secret from Vault at run time, so the secret never appears in `cron.job`
+or in `cron.job_run_details`:
 
 ```sql
 select cron.schedule(
@@ -70,12 +84,22 @@ select cron.schedule(
   $$
   select net.http_post(
     url := '<PROJECT_URL>/functions/v1/digest-run',
-    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', '<DIGEST_CRON_SECRET>'),
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets
+                        where name = 'verastar_digest_cron_secret')
+    ),
     body := '{}'::jsonb
   );
   $$
 );
 ```
+
+Never paste the secret into `cron.schedule` itself. To rotate it, set the new value in both
+places: the Edge secret `DIGEST_CRON_SECRET` and the Vault secret (`select
+vault.update_secret(id, '<new>') from vault.secrets where name = 'verastar_digest_cron_secret';`).
+A mismatch shows up as `net._http_response` rows with status 401 and body
+`{"error":"unauthorized"}`. With matching values, every tick returns 200 with a `ran` field.
 
 Each tick runs at most one account for up to about 100 seconds of reading and hands the
 rest to the next tick, so a digest of eight papers completes within two or three ticks and
