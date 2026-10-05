@@ -12,6 +12,7 @@ import {
   EXTRACTION_SCHEMA,
   extractQuantities,
 } from './extract.js'
+import { verify } from './verify.js'
 
 beforeEach(() => {
   vi.mocked(extractStructured).mockReset()
@@ -64,5 +65,27 @@ describe('extraction quantity semantics', () => {
     await expect(extractQuantities({ studyId: '123', sourceText: 'Abstract text.' }))
       .rejects.toThrow('API credit balance is too low')
     expect(extractStructured).toHaveBeenCalledTimes(1)
+  })
+})
+
+// The quote rule in SYSTEM exists because of this verifier contract (2026-10-04, PMID
+// 42829536): a sentence packing two "vs." pairs can never verify, so the extractor must
+// cut one result per quote. If verify.js ever changes this, the prompt must change too.
+describe('quote rule ↔ verifier contract', () => {
+  const SRC = 'At 12 months, primary patency (67.3% vs. 50%, p = 0.16) and freedom from TLR (70.2% vs. 54.2%, p = 0.26) did not differ between treatment modalities, nor between femoral and popliteal access.'
+  const q = (source_quote) => ({ name: '12-month primary patency', quantity_type: 'comparison', first_value: 67.3, second_value: 50, unit: '%', p_value: 0.16, source_quote })
+  it('a packed sentence with two comparisons does not verify', () => {
+    expect(verify(q(SRC), SRC, { sourceTier: 'full_text' }).relationshipValidated).toBe(false)
+  })
+  it('one result cut at its end, with its timepoint, verifies', () => {
+    const v = verify(q('At 12 months, primary patency (67.3% vs. 50%, p = 0.16)'), SRC, { sourceTier: 'full_text' })
+    expect(v.relationshipValidated).toBe(true)
+    expect(v.relationshipStatus).toBe('comparison-validated')
+  })
+  it('the prompt states the rule', async () => {
+    await extractQuantities({ studyId: '1', sourceText: SRC })
+    const { system } = vi.mocked(extractStructured).mock.calls[0][0]
+    expect(system).toMatch(/shortest contiguous span/)
+    expect(system).toMatch(/ALWAYS extract\s+the primary outcome/)
   })
 })

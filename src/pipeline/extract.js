@@ -65,9 +65,16 @@ export const EXTRACTION_SCHEMA = {
 const SYSTEM = `You extract headline quantitative results from a biomedical paper into a strict schema.
 
 Non-negotiable rules:
-- Copy a complete supporting sentence when available, retaining endpoint, units, groups,
-  timepoints and population. Keep the name faithful to the endpoint and qualifiers.
-  Never rewrite source text to fit a verification template. Matching numeric tokens is
+- source_quote is ONE result's receipt. Copy the shortest contiguous span that holds
+  that result with its endpoint, timepoint, groups and statistics. When a sentence
+  reports one result, copy the whole sentence. When it packs several results together
+  ("At 12 months, primary patency (67.3% vs. 50%, p = 0.16) and freedom from TLR
+  (70.2% vs. 54.2%, p = 0.26) did not differ"), extract each as its own quantity and
+  cut each quote at the end of that result: "At 12 months, primary patency (67.3% vs.
+  50%, p = 0.16)". A quote holding two "vs." pairs or two confidence intervals cannot be
+  verified, so it is wasted. Keep the name faithful to the endpoint, timepoint and
+  qualifiers (e.g. "12-month primary patency, RA+DCB vs DCB alone"). Never rewrite
+  source text to fit a verification template. Matching numeric tokens is
   source-location evidence, not proof of the claim relationship.
 - source_quote MUST be copied VERBATIM from the provided source text — an exact
   substring, character for character. Do NOT paraphrase, re-punctuate, or "clean up"
@@ -100,7 +107,11 @@ Non-negotiable rules:
   is fatal.
 - location_hint names where the quote is (e.g. "Results, primary outcome" or "Table 2").
 - Extract the study's primary and key secondary effect estimates (hazard ratios, risk
-  ratios, mean differences, proportions) — not every number in the paper.
+  ratios, mean differences, proportions) — not every number in the paper. ALWAYS extract
+  the primary outcome's result when the source prints it, INCLUDING a null or
+  non-significant one ("67.3% vs. 50%, p = 0.16"): a clinician needs the headline result
+  whether or not it reached significance, and a significant secondary finding is never
+  a substitute for it.
 - Order quantities by importance: the PRIMARY / headline effect estimate FIRST, then key
   secondary outcomes. The first item should be the number a clinician would quote.
 - design is your best classification of the study design.
