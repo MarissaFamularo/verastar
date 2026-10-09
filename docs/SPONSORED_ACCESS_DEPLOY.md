@@ -145,8 +145,10 @@ stores its extraction in `evidence_cache`. Then:
 insert into reference_papers (specialty, pmid, rank, note) values ('vascular-surgery', '<pmid>', 1, '<why>');
 ```
 
-A new account's first boot seeds from these shelves without a model call. Papers not yet
-in the cache are skipped, so populate the cache first.
+A new account seeds from these shelves without a model call. Papers not yet in the cache
+are retried with backoff (seeding stays open, it does not complete), so populate the cache
+first; accounts waiting on an empty shelf pick it up at their next app open after the
+cooldown.
 
 ## 7. What to watch
 
@@ -154,5 +156,6 @@ in the cache are skipped, so populate the cache first.
   and `cache_hit` rate.
 - `events where type = 'cap_reached'`: who is hitting caps, and whether the daily value is too low.
 - `events where type = 'badge_reported'`: every one is a potential false verify; adjudicate each.
+  Deduplicate retries by `payload->>'reportId'`. Free-text feedback is `type = 'beta_feedback'`.
 - `digest_schedules.last_result` and `events where type = 'digest_scheduled_run'`: whether
   mornings are landing, and `skipped: cap reached` or `last digest unopened` patterns.

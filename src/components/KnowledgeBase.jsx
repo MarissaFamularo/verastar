@@ -34,6 +34,7 @@ import AddPaper from './AddPaper.jsx'
 import FileToDisk from './LibraryPanel.jsx'
 import HeartButton from './HeartButton.jsx'
 import SharePaperButton from './SharePaperButton.jsx'
+import ReportBadgeButton from './ReportBadgeButton.jsx'
 import { fmtNum } from '../lib/format.js'
 import { evidenceVerdict, isRelationshipValidated, extractionVersionStatus, currentPaperQuantities } from '../lib/evidenceVersion.js'
 import { needsDigestDetails, refreshSavedPaperEvidence } from '../pipeline/refreshEvidence.js'
@@ -583,7 +584,7 @@ export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
               <li key={`${quantity.name || 'value'}-${index}`} style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>
                 <span style={{ color: 'var(--color-fg-soft)' }}>{quantity.name || 'Reported value'}:</span>{' '}
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-verified-soft)' }}>{isRelationshipValidated(quantity.verdict) ? fmtNum(quantity) : 'Claim withheld — review source'}</span>
-                {(!isRelationshipValidated(quantity.verdict) || ['estimate-validated', 'proportion-validated', 'heterogeneity-validated'].includes(evidenceVerdict(quantity.verdict).relationshipStatus)) && <span style={{ display: 'block', color: 'var(--color-abstract)' }}>{evidenceVerdict(quantity.verdict).reason}</span>}
+                {(!isRelationshipValidated(quantity.verdict) || ['estimate-validated', 'comparison-validated', 'proportion-validated', 'heterogeneity-validated'].includes(evidenceVerdict(quantity.verdict).relationshipStatus)) && <span style={{ display: 'block', color: 'var(--color-abstract)' }}>{evidenceVerdict(quantity.verdict).reason}</span>}
                 {quantity.source_quote && (canOpen(quantity) ? (
                   <button type="button" onClick={() => openSource(quantity)} title="Show this quote in the source text" style={{ display: 'block', marginTop: 2, padding: 0, border: 0, background: 'transparent', textAlign: 'left', fontFamily: 'inherit', fontSize: 11, color: 'var(--color-fg-faint)', cursor: 'pointer' }}>
                     &ldquo;{quantity.source_quote}&rdquo; <span style={{ color: 'var(--color-verified-soft)' }}>see in source ↗</span>
@@ -591,6 +592,12 @@ export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
                 ) : (
                   <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--color-fg-faint)' }}>&ldquo;{quantity.source_quote}&rdquo;</span>
                 ))}
+                {isRelationshipValidated(quantity.verdict) && (
+                  <ReportBadgeButton
+                    style={{ display: 'flex' }}
+                    report={{ surface: 'library', pmid: paper.pmid, quantity, verdict: quantity.verdict, extractionVersion: paper.extractionVersion, sourceTier: paper.sourceTier, sourceHash: paper.sourceHash }}
+                  />
+                )}
               </li>
             ))}
           </ul>

@@ -84,6 +84,8 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   const [sponsorVersion, setSponsorVersion] = useState(0)
   void sponsorVersion // re-render after an invite code enrolls mid-onboarding
   const sponsored = isSponsored()
+  // With an account, the access code is the path; the personal key opens only on request.
+  const [keyOpen, setKeyOpen] = useState(false)
 
   function connectContinue(e) {
     e.preventDefault()
@@ -312,7 +314,12 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
         )}
 
         <form onSubmit={connectContinue}>
-          {!sponsored && (
+          {!sponsored && canUseCode && !keySet && !keyOpen && (
+            <button type="button" onClick={() => setKeyOpen(true)} aria-expanded={false} className="cursor-pointer" style={{ ...ghostLink, marginTop: 22, fontSize: 13.5 }}>
+              No code? <span style={{ color: 'var(--color-fg-soft)' }}>Use your own Anthropic key instead</span>
+            </button>
+          )}
+          {!sponsored && (!canUseCode || keySet || keyOpen) && (
             <div style={{ marginTop: canUseCode ? 26 : 28 }}>
               {canUseCode && (
                 <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--color-fg-muted)' }}>No code? Use your own Anthropic key.</p>

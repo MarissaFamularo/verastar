@@ -68,12 +68,29 @@ relevance prose ("why this matters") is personalized to north stars and stays pe
   hand, populated only with papers already in `evidence_cache`. Specialty slugs:
   `vascular-surgery`, `general-surgery`, `cardiology`, `general`. The onboarding drafter
   records `profile.specialty` from the intake answers.
-- On the first boot of a signed-in, onboarded account with an empty library, up to 20
-  rows (own shelf by rank, then `general`) run through `runPaper` in `cacheOnly` mode and
-  save with `saveSource: 'seed'` (the Library shows a "Starter" pill). Source text is
-  fetched from PMC or PubMed as for any paper; the cached proposal is verified locally.
-  Nothing is spent; a paper not yet in the cache is skipped. `profile.seededAt` makes it
-  run once.
+- A signed-in, onboarded account with an empty library starts seeding when the app boots or
+  setup finishes. Up to 20 rows (own shelf by rank, then `general`) run through `runPaper`
+  in `cacheOnly` mode and save with `saveSource: 'seed'` (the Library shows a "Starter"
+  pill). Source text is fetched from PMC or PubMed as for any paper; the cached proposal is
+  verified locally. Nothing is spent: the save passes `modelEnrichment: false`, so no
+  concept filing or summary runs (Starter papers are unfiled until the reader refiles).
+- Resumable and idempotent (revised 2026-10-09). Progress lives in its own kv record,
+  `profile/starterSeed` (`startedAt`, `specialty`, `done`, `removed`, `failures`,
+  `incompleteRuns`, `nextAttemptAt`, `completedAt`); seeding never writes the steering
+  profile `profile/me`. Seeding completes only when every pick is saved, already in the
+  library, or was removed by the reader. A failed reference query, an empty shelf, a cache
+  miss or a fetch failure leaves it open; the next attempt waits 6 h, doubling per
+  consecutive incomplete run, capped at 3 days. This is a cooldown, not a timer: the
+  retry happens at the first app open after it. A started run resumes even once the
+  library has papers; a never-started library with papers is left alone. The legacy
+  `profile.seededAt` stamp is ignored, so accounts stamped on an empty shelf recover.
+- Writes are create-only (`savePaper` `ifAbsent`, `restoreDeleted: false`): an existing
+  paper is never merged onto, and a removed one is never restored. Within one browser the
+  Web Locks API excludes concurrent tabs. Across devices (or without Web Locks) nothing
+  excludes; the cloud create is a row-locked compare-and-set that rejects an existing key,
+  and the bookkeeping is re-read and folded monotonically before each write, so a
+  duplicate runner can only repeat free work. Server-side exclusion would need a claim
+  RPC; it is not part of this design.
 
 ## 4. User-supplied text
 
@@ -105,13 +122,26 @@ Append-only `events` rows, per user, RLS as today. Existing types already cover
 - `digest_item_opened` — a card's evidence panel expanded (`pmid`, `values`). "Surfaced"
   in the study means this, not merely listed.
 - `badge_clicked` — a value's click-to-source (`pmid`, `tier`, `flagged`).
-- `badge_reported` — "This badge is wrong?" on a validated value (`pmid`, `name`,
-  `value`, `tier`, `quote` ≤300 chars). The field channel for false verifies.
+- `badge_reported` — "This badge is wrong?" on a validated value, from the digest or the
+  Library. Payload (revised 2026-10-09): `reportId` (client UUID, identical across retries
+  of one report; deduplicate by `payload->>'reportId'`), `surface` (`digest` | `library`),
+  `pmid`, `name`, `value` (as displayed), `quantity` (typed numeric fields, unit,
+  location hint), `tier`, `originalTier`, `relationshipStatus`, `endpointValidated`,
+  `verificationVersion`, `extractionVersion`, `sourceTier`, `sourceHash`, `quote`
+  ≤300 chars, `reportedAt`. The field channel for false verifies. The client shows
+  "Reported" only after the insert returns the stored row id; failures offer Retry.
+  A report control is bound to the evidence identity (paper, value, quote, verdict and
+  versions, source hash), so a changed value never inherits an earlier report or receipt.
+- `beta_feedback` — free-text beta feedback (`reportId`, `text` ≤2000 chars, `view`,
+  `reportedAt`), sent through the same confirmed-insert path.
 - `pdf_uploaded` — (`pmid`, `pages`, `bytes`).
 - `cap_reached` — client-side (`surface`, `remaining`) and server-side (`scope`, `purpose`).
-- `library_seeded` — (`specialty`, `seeded`, `skipped`).
+- `library_seeded` — one per seeding run (`specialty`, `seeded`, `skipped`, `picks`,
+  `queryOk`, `complete`, `attempt`).
 
-Payloads carry ids, tiers and a short quote at most, never source text.
+Payloads carry ids, tiers and a short quote at most, never source text. `events` rows
+are user-editable under the existing RLS (update/delete own rows): reports are a
+feedback channel, not a tamper-proof audit log.
 
 ## 6. Library-wide synthesis cooldown
 

@@ -107,7 +107,15 @@ export function mergeRefreshedEvidence(existing, fresh, refreshedAt = new Date()
 
 // Persist the record, then run the background enrichment (concept filing → summary, OA PDF link,
 // on-disk write). Returns the persisted record immediately; the background work is fire-and-forget.
-export async function savePaper(res, take, { title, source = 'unknown', notes = '' } = {}) {
+//
+// modelEnrichment: false skips every model-backed background step (concept filing, its summary,
+// field tidy, shelf reorganize) and keeps only the free ones (open-access link, on-disk copy).
+// Starter seeding uses it so populating a new library never spends. restoreDeleted: false keeps
+// a paper the reader removed removed; only an explicit user Save may bring one back.
+// ifAbsent: true makes the save create-only: when the paper already exists it is left
+// untouched and savePaper resolves null (signed in, the cloud create also rejects a paper
+// that appeared between this read and the write).
+export async function savePaper(res, take, { title, source = 'unknown', notes = '', modelEnrichment = true, restoreDeleted, ifAbsent = false } = {}) {
   if (res?.retracted || citationIndicatesRetraction(res?.citation)) {
     throw new Error('This article is marked as retracted in PubMed and was not saved.')
   }
@@ -117,12 +125,13 @@ export async function savePaper(res, take, { title, source = 'unknown', notes = 
   // like a refresh: fresh evidence in, everything the record accrued stays (including an
   // earlier "why"; a new note on an existing paper goes through setPaperNote).
   const existing = await store.get('papers', record.id)
+  if (existing && ifAbsent) return null
   const persisted = existing ? mergeRefreshedEvidence(existing, record) : record
-  await store.put('papers', record.id, persisted, { restoreDeleted: !existing })
+  await store.put('papers', record.id, persisted, { restoreDeleted: restoreDeleted ?? !existing })
   // Adoption telemetry on the ONE shared save path, so no entry point can forget it.
   // `source` says which doorway: the digest's checkbox/heart or the manual Add a paper.
   logEvent('paper_saved', { pmid: persisted.pmid, source })
-  enrichInBackground(persisted)
+  enrichInBackground(persisted, { modelEnrichment })
   return persisted
 }
 
@@ -175,25 +184,11 @@ export async function backfillOaPdfs(papers, onPatched) {
 
 // File under a concept (+ re-synthesize its summary), resolve an OA PDF link, and deposit to the
 // on-disk library. Each step is independently try/caught so none can undo the save above.
-function enrichInBackground(record) {
+// The model-backed steps run only when modelEnrichment is true.
+function enrichInBackground(record, { modelEnrichment = true } = {}) {
   const id = record.id
   ;(async () => {
-    try {
-      const filed = await filePaper(record)
-      if (filed?.groupId) await synthesizeGroup(filed.groupId)
-    } catch (err) {
-      console.warn('Concept filing failed (paper still saved):', err.message)
-    }
-    // Library-wide calls: only when the library changed and the cooldown has passed
-    // (pipeline/synthesisCooldown.js). Per-paper filing above is never gated.
-    try {
-      if (await synthesisDue('consolidateDomains')) await consolidateDomains() // keep the field taxonomy a handful as the library grows
-    } catch (err) {
-      console.warn('Field tidy skipped:', err.message)
-    }
-    // Reorganize the category shelves only when the trigger condition says so (>10 hubs, or
-    // enough shelf-less concepts). maybeReorganize never throws; a failure is a silent no-op.
-    if (await synthesisDue('reorganize')) await maybeReorganize()
+    if (modelEnrichment) await enrichWithModel(record).catch((err) => console.warn('Enrichment skipped:', err.message))
     try {
       const doi = record.citation?.doi
       if (doi && !record.pdfUrl && !record.oaUrl) {
@@ -213,4 +208,24 @@ function enrichInBackground(record) {
       console.warn('Library deposit failed (paper still saved):', err.message)
     }
   })()
+}
+
+// The paid half of enrichment: concept filing + its summary, then the library-wide tidies.
+async function enrichWithModel(record) {
+  try {
+    const filed = await filePaper(record)
+    if (filed?.groupId) await synthesizeGroup(filed.groupId)
+  } catch (err) {
+    console.warn('Concept filing failed (paper still saved):', err.message)
+  }
+  // Library-wide calls: only when the library changed and the cooldown has passed
+  // (pipeline/synthesisCooldown.js). Per-paper filing above is never gated.
+  try {
+    if (await synthesisDue('consolidateDomains')) await consolidateDomains() // keep the field taxonomy a handful as the library grows
+  } catch (err) {
+    console.warn('Field tidy skipped:', err.message)
+  }
+  // Reorganize the category shelves only when the trigger condition says so (>10 hubs, or
+  // enough shelf-less concepts). maybeReorganize never throws; a failure is a silent no-op.
+  if (await synthesisDue('reorganize')) await maybeReorganize()
 }

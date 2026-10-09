@@ -64,6 +64,7 @@ import SharePaperButton from './SharePaperButton.jsx'
 import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
+import ReportBadgeButton from './ReportBadgeButton.jsx'
 import SourceViewer from './SourceViewer.jsx'
 import { DEMO_DIGEST } from '../demo/demoDigest.js'
 
@@ -171,18 +172,13 @@ function Citation({ citation, oa, pmcid }) {
   )
 }
 
-function Row({ quantity, verdict: storedVerdict, onOpenSource, hero, pmid }) {
+function Row({ quantity, verdict: storedVerdict, onOpenSource, hero, pmid, run }) {
   const verdict = evidenceVerdict(storedVerdict)
   const clickable = verdict.found && onOpenSource
   // "This badge is wrong" is the field channel for the one failure the product cannot
-  // survive: a green badge on a wrong value. One click, one event row, adjudicated later.
-  const [reported, setReported] = useState(false)
+  // survive: a green badge on a wrong value. The receipt shows only after the report is
+  // stored (ReportBadgeButton); the run's versions and source travel with it.
   const reportable = !verdict.flagged && pmid
-  function report() {
-    if (reported) return
-    setReported(true)
-    logEvent('badge_reported', { pmid, name: quantity.name, value: fmtNum(quantity), tier: verdict.tier, quote: String(quantity.source_quote || '').slice(0, 300) })
-  }
   function open() {
     logEvent('badge_clicked', { pmid: pmid || null, tier: verdict.tier, flagged: !!verdict.flagged })
     onOpenSource()
@@ -207,15 +203,10 @@ function Row({ quantity, verdict: storedVerdict, onOpenSource, hero, pmid }) {
         )}
         <ProvenanceBadge tier={verdict.tier} sourceTier={verdict.sourceTier} />
         {reportable && (
-          <button
-            type="button"
-            onClick={report}
-            title="Tell us this verified value does not match the paper"
-            className="cursor-pointer"
-            style={{ marginLeft: 'auto', fontSize: 11, color: reported ? 'var(--color-verified-soft)' : 'var(--color-fg-faint)', background: 'transparent', border: 0, fontFamily: 'inherit' }}
-          >
-            {reported ? 'Reported, thank you' : 'This badge is wrong?'}
-          </button>
+          <ReportBadgeButton
+            style={{ marginLeft: 'auto' }}
+            report={{ surface: 'digest', pmid, quantity, verdict: storedVerdict, extractionVersion: run?.extractionVersion, sourceTier: run?.source?.tier, sourceHash: run?.source?.hash }}
+          />
         )}
       </div>
       {quantity.source_quote && (
@@ -2051,7 +2042,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                                 The numbers in the summary, each verified against the source — click any to see it
                               </p>
                               {summaryRows.map((row, i) => (
-                                <Row key={i} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
+                                <Row key={i} pmid={paper.pmid} run={res} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                               ))}
                               {moreRows.length > 0 && (
                                 <button
@@ -2063,7 +2054,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                                 </button>
                               )}
                               {moreOpen && moreRows.map((row, i) => (
-                                <Row key={`more-${i}`} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
+                                <Row key={`more-${i}`} pmid={paper.pmid} run={res} quantity={row.quantity} verdict={row.verdict} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                               ))}
                             </>
                           ) : total > 0 ? (
@@ -2076,7 +2067,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                             </p>
                           )}
                           {!focused && verifiedRows.map((row, i) => (
-                            <Row key={i} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
+                            <Row key={i} pmid={paper.pmid} run={res} quantity={row.quantity} verdict={row.verdict} hero={i === 0} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                           ))}
 
                           {!focused && flaggedRows.length > 0 && (
@@ -2085,7 +2076,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                                 {flaggedRows.length} value{flaggedRows.length === 1 ? '' : 's'} flagged — greyed, never charted
                               </p>
                               {flaggedRows.map((row, i) => (
-                                <Row key={i} pmid={paper.pmid} quantity={row.quantity} verdict={row.verdict} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
+                                <Row key={i} pmid={paper.pmid} run={res} quantity={row.quantity} verdict={row.verdict} onOpenSource={() => openSource(row.quantity, row.verdict, res.sourceDoc, title)} />
                               ))}
                             </div>
                           )}

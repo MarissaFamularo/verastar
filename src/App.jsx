@@ -41,6 +41,8 @@ import Memos from './components/Memos.jsx'
 import RetractionNotice from './components/RetractionNotice.jsx'
 import DigestSchedule from './components/DigestSchedule.jsx'
 import InviteCode from './components/InviteCode.jsx'
+import { BetaLabel, FeedbackButton } from './components/BetaFeedback.jsx'
+import { savedKeyLabel } from './lib/accessLabel.js'
 import { DEMO_DIGEST_COUNTS } from './demo/demoDigest.js'
 
 // ── Observatory shell ──────────────────────────────────────────────────────
@@ -266,7 +268,7 @@ function StarMapSmallSky() {
 // no-credential ethos). Renders nothing when Supabase env isn't configured, so a
 // cloned repo without keys keeps the original local-only app. The consent line is
 // required groundwork for the adoption study: one sentence, visible, honest.
-function AccountSection({ account }) {
+function AccountSection({ account, first = false }) {
   const [email, setEmail] = useState('')
   const [sendState, setSendState] = useState('idle') // idle | sending | sent | error
   const [sendError, setSendError] = useState('')
@@ -309,7 +311,7 @@ function AccountSection({ account }) {
 
   return (
     <>
-      <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
+      {!first && <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />}
       <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Account &amp; sync</p>
       {account ? (
         <>
@@ -582,6 +584,9 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
   const [eraseAll, setEraseAll] = useState(false)
   const [settingsVersion, setSettingsVersion] = useState(0)
   void settingsVersion // bumps after an invite code enrolls so sponsored blocks appear without a reload
+  const sponsored = isSponsored()
+  // Advanced starts closed; the main path is account, access, schedule and profile.
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const usage = getUsageSummary()
   const ncbi = getNcbiCredentialStatus()
   void ncbiVersion // state revision makes direct browser-storage writes re-render this block
@@ -601,6 +606,79 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
     setNcbiKeyInput('')
     setNcbiVersion((v) => v + 1)
   }
+  // The personal-key block, rendered in the main Access section without sponsorship and
+  // under Advanced with it.
+  const keySection = (
+    <>
+            <label style={{ display: 'block', fontSize: 13, color: '#aab0be', fontWeight: 500 }}>Anthropic API key</label>
+
+            {saved ? (
+              <>
+                <div className="flex items-center" style={{ marginTop: 8, gap: 10, padding: '10px 13px', borderRadius: 10, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: sponsored ? 'var(--color-fg-muted)' : 'var(--color-verified)', boxShadow: sponsored ? 'none' : '0 0 7px var(--color-verified)' }} />
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-fg-soft)', fontSize: 13, letterSpacing: '.05em' }}>sk-ant-••••••••••••••••</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: sponsored ? 'var(--color-fg-muted)' : 'var(--color-verified-soft)', fontWeight: 600 }}>{savedKeyLabel({ sponsored, remembered })}</span>
+                </div>
+                <div className="flex" style={{ marginTop: 10, gap: 9 }}>
+                  {/* While sponsored, a ping would go through the sponsor's lane, not this key. */}
+                  {!sponsored && (
+                    <button onClick={onPing} disabled={status === 'pinging'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+                      {status === 'pinging' ? 'Testing…' : 'Test connection'}
+                    </button>
+                  )}
+                  <button onClick={onClear} className="cursor-pointer" style={{ padding: '9px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}>
+                    Clear key
+                  </button>
+                </div>
+                <label className="flex items-center cursor-pointer" style={{ gap: 8, marginTop: 10, fontSize: 13, color: 'var(--color-fg-soft)' }}>
+                  <input type="checkbox" checked={remembered} onChange={(e) => onToggleRemember(e.target.checked)} style={{ accentColor: 'var(--color-accent)' }} />
+                  Remember on this device
+                </label>
+                {status === 'ok' && (
+                  <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 600 }}>Anthropic replied “{reply}”</span> — browser-direct call works.
+                  </div>
+                )}
+                {status === 'error' && (
+                  <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 600 }}>Call failed:</span> {error}
+                  </div>
+                )}
+              </>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (keyInput.trim()) onSave(keyInput, remember)
+                }}
+                style={{ marginTop: 8 }}
+              >
+                <div className="flex" style={{ gap: 9 }}>
+                  <input
+                    type="password"
+                    value={keyInput}
+                    onChange={(e) => setKeyInput(e.target.value)}
+                    placeholder="sk-ant-…"
+                    autoComplete="off"
+                    style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
+                  />
+                  <button type="submit" className="cursor-pointer" style={{ padding: '9px 18px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+                    Save
+                  </button>
+                </div>
+                <label className="flex items-center cursor-pointer" style={{ gap: 8, marginTop: 10, fontSize: 13, color: 'var(--color-fg-soft)' }}>
+                  <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ accentColor: 'var(--color-accent)' }} />
+                  Remember on this device
+                </label>
+              </form>
+            )}
+            <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+              {saved && remembered
+                ? 'Your browser credentials are remembered in local storage on this device — never sent to our servers. Clear them any time.'
+                : 'Your browser credentials live only in this tab — never sent to our servers, never written to disk, and cleared when you close the tab. Check “Remember on this device” to keep them across restarts.'}
+            </p>
+    </>
+  )
   return (
     <div
       onClick={onClose}
@@ -630,130 +708,44 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
         </div>
 
         <div style={{ padding: '18px 30px 30px' }}>
-          <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Connection</p>
-          <label style={{ display: 'block', fontSize: 13, color: '#aab0be', fontWeight: 500 }}>Anthropic API key</label>
+          {/* Order (2026-10-09 beta): account, access, schedule, profile first. A sponsored
+              reader never needs a key, so the personal key, NCBI credentials, grouping and
+              start-over sit under Advanced. Without sponsorship the key stays in the main
+              path, since it is the only way to run. */}
+          <AccountSection account={account} first />
 
-          {saved ? (
-            <>
-              <div className="flex items-center" style={{ marginTop: 8, gap: 10, padding: '10px 13px', borderRadius: 10, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-fg-soft)', fontSize: 13, letterSpacing: '.05em' }}>sk-ant-••••••••••••••••</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-verified-soft)', fontWeight: 600 }}>{remembered ? 'Active · remembered' : 'Active'}</span>
-              </div>
-              <div className="flex" style={{ marginTop: 10, gap: 9 }}>
-                <button onClick={onPing} disabled={status === 'pinging'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
-                  {status === 'pinging' ? 'Testing…' : 'Test connection'}
-                </button>
-                <button onClick={onClear} className="cursor-pointer" style={{ padding: '9px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}>
-                  Clear key
-                </button>
-              </div>
-              <label className="flex items-center cursor-pointer" style={{ gap: 8, marginTop: 10, fontSize: 13, color: 'var(--color-fg-soft)' }}>
-                <input type="checkbox" checked={remembered} onChange={(e) => onToggleRemember(e.target.checked)} style={{ accentColor: 'var(--color-accent)' }} />
-                Remember on this device
-              </label>
-              {status === 'ok' && (
-                <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
-                  <span style={{ fontWeight: 600 }}>Anthropic replied “{reply}”</span> — browser-direct call works.
-                </div>
-              )}
-              {status === 'error' && (
-                <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-                  <span style={{ fontWeight: 600 }}>Call failed:</span> {error}
-                </div>
-              )}
-            </>
-          ) : (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                if (keyInput.trim()) onSave(keyInput, remember)
-              }}
-              style={{ marginTop: 8 }}
-            >
-              <div className="flex" style={{ gap: 9 }}>
-                <input
-                  type="password"
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  placeholder="sk-ant-…"
-                  autoComplete="off"
-                  style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
-                />
-                <button type="submit" className="cursor-pointer" style={{ padding: '9px 18px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
-                  Save
-                </button>
-              </div>
-              <label className="flex items-center cursor-pointer" style={{ gap: 8, marginTop: 10, fontSize: 13, color: 'var(--color-fg-soft)' }}>
-                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ accentColor: 'var(--color-accent)' }} />
-                Remember on this device
-              </label>
-            </form>
-          )}
-          <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
-            {saved && remembered
-              ? 'Your browser credentials are remembered in local storage on this device — never sent to our servers. Clear them any time.'
-              : 'Your browser credentials live only in this tab — never sent to our servers, never written to disk, and cleared when you close the tab. Check “Remember on this device” to keep them across restarts.'}
-          </p>
-
-          <div style={{ marginTop: 14, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '12px 13px' }}>
-            <div className="flex items-center" style={{ gap: 8 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>NCBI / PubMed credentials</span>
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: ncbi.keyActive ? 'var(--color-verified-soft)' : 'var(--color-abstract)' }}>
-                API key {ncbi.keyActive ? (ncbi.keyRemembered ? 'active · remembered' : 'active · this session') : 'missing'}
-              </span>
-            </div>
-            <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
-              Email {ncbi.emailActive ? (ncbi.emailRemembered ? 'active · remembered' : 'active · this session') : 'missing'} · API key raises the PubMed request limit.
-            </p>
-            <form onSubmit={saveNcbi} style={{ marginTop: 10 }}>
-              <input
-                type="email"
-                value={ncbiEmailInput}
-                onChange={(e) => setNcbiEmailInput(e.target.value)}
-                placeholder={ncbi.emailActive ? 'Replace NCBI email' : 'NCBI email · optional'}
-                autoComplete="off"
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
-              />
-              <input
-                type="password"
-                value={ncbiKeyInput}
-                onChange={(e) => setNcbiKeyInput(e.target.value)}
-                placeholder={ncbi.keyActive ? 'Replace NCBI API key' : 'NCBI API key · optional'}
-                autoComplete="off"
-                style={{ marginTop: 7, width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
-              />
-              <div className="flex" style={{ marginTop: 8, gap: 8 }}>
-                <button type="submit" disabled={!ncbiEmailInput.trim() && !ncbiKeyInput.trim()} style={{ padding: '6px 10px', border: 0, borderRadius: 8, background: 'var(--color-accent)', color: '#1c1206', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit', opacity: !ncbiEmailInput.trim() && !ncbiKeyInput.trim() ? 0.5 : 1 }}>Save NCBI details</button>
-                {(ncbi.keyActive || ncbi.emailActive) && <button type="button" onClick={clearNcbi} style={{ padding: '6px 10px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 8, background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 11.5, fontFamily: 'inherit' }}>Clear NCBI details</button>}
-              </div>
-            </form>
-          </div>
-
-          {isSponsored() && (
-            <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(127,191,154,.25)', background: 'rgba(127,191,154,.07)', padding: '10px 13px' }}>
-              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-verified-soft)' }}>
-                Sponsored access is active on this account. No key needed.
-                {saved ? ' Your saved key is not used while sponsorship is active.' : ''}
+          <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
+          <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Access</p>
+          {sponsored ? (
+            <div style={{ borderRadius: 10, border: '1px solid rgba(127,191,154,.25)', background: 'rgba(127,191,154,.07)', padding: '10px 13px' }}>
+              <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-verified-soft)' }}>
+                Sponsored access is active on this account. Verastar does the reading for you; no API key needed.
+                {saved ? ' A personal key saved on this device is not used while sponsorship is active.' : ''}
               </p>
             </div>
+          ) : (
+            <>
+              <InviteCode onEnrolled={() => setSettingsVersion((v) => v + 1)} />
+              <div style={{ marginTop: 18 }}>{keySection}</div>
+              <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
+                <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
+                  Estimated Claude spend on this device: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}>${usage.estimatedUsd < 0.01 ? usage.estimatedUsd.toFixed(4) : usage.estimatedUsd.toFixed(2)}</span>
+                </p>
+                <p style={{ margin: '3px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
+                  {usage.calls} paid response{usage.calls === 1 ? '' : 's'} · {Number(usage.inputTokens || 0).toLocaleString()} input tokens · {Number(usage.outputTokens || 0).toLocaleString()} output tokens. Includes responses from runs that later failed; estimated from current Anthropic list prices.
+                </p>
+              </div>
+              <ApiKeyExplainer />
+            </>
           )}
-          {!isSponsored() && <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
-            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
-              Estimated Claude spend on this device: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}>${usage.estimatedUsd < 0.01 ? usage.estimatedUsd.toFixed(4) : usage.estimatedUsd.toFixed(2)}</span>
-            </p>
-            <p style={{ margin: '3px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
-              {usage.calls} paid response{usage.calls === 1 ? '' : 's'} · {Number(usage.inputTokens || 0).toLocaleString()} input tokens · {Number(usage.outputTokens || 0).toLocaleString()} output tokens. Includes responses from runs that later failed; estimated from current Anthropic list prices.
-            </p>
-          </div>}
-
-          <InviteCode onEnrolled={() => setSettingsVersion((v) => v + 1)} />
 
           <DigestSchedule />
 
-          <ApiKeyExplainer />
-
-          <AccountSection account={account} />
+          <div className="flex items-center flex-wrap" style={{ marginTop: 18, gap: 10 }}>
+            <BetaLabel />
+            <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>Something wrong or confusing?</span>
+            <FeedbackButton view="settings" />
+          </div>
 
           <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
 
@@ -762,44 +754,101 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
 
           <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
 
-          <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Library grouping</p>
-          <DomainEditor />
-
-          <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
-
-          <p style={{ margin: '0 0 4px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Start over</p>
-          {!confirmReset ? (
-            <>
-              <p style={{ margin: '10px 0 12px', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
-                Redo setup from the welcome screen. Your library, star map, and API key stay unless you choose to erase them.
-              </p>
-              <button onClick={() => setConfirmReset(true)} className="cursor-pointer" style={{ padding: '9px 15px', border: '1px solid rgba(224,96,90,.4)', borderRadius: 10, background: 'transparent', color: '#f0a9a4', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}>
-                Start over…
-              </button>
-            </>
-          ) : (
-            <div style={{ marginTop: 10, padding: '14px 16px', borderRadius: 12, border: '1px solid rgba(224,96,90,.3)', background: 'rgba(224,96,90,.06)' }}>
-              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: 'var(--color-fg-soft)' }}>
-                This clears your steering profile and returns you to the welcome screen.
-              </p>
-              <label className="flex items-start cursor-pointer" style={{ gap: 8, marginTop: 12, fontSize: 13, lineHeight: 1.5, color: 'var(--color-fg-soft)' }}>
-                <input type="checkbox" checked={eraseAll} onChange={(e) => setEraseAll(e.target.checked)} style={{ marginTop: 3, accentColor: '#e0605a' }} />
-                <span>
-                  {account
-                    ? 'Also sign out and erase everything in this browser — saved papers, star map, digests, and the API key. Your account library is untouched: nothing is deleted from the cloud, and signing back in brings it all back. Files on disk are never touched either.'
-                    : 'Also erase everything in this browser — saved papers, star map, digests, and the API key. Files already written to your disk folder are never touched.'}
-                </span>
-              </label>
-              <div className="flex" style={{ marginTop: 14, gap: 9 }}>
-                <button onClick={() => onStartOver(eraseAll)} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: '#e0605a', color: '#1c0908', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
-                  {eraseAll ? 'Erase & start over' : 'Start over'}
-                </button>
-                <button onClick={() => { setConfirmReset(false); setEraseAll(false) }} className="cursor-pointer" style={{ padding: '9px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}>
-                  Cancel
-                </button>
+          <details open={advancedOpen} onToggle={(e) => setAdvancedOpen(e.currentTarget.open)}>
+            <summary className="cursor-pointer" style={{ minHeight: 32, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, listStyle: 'none', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>
+              <span aria-hidden="true" style={{ fontSize: 9, color: 'var(--color-accent)', letterSpacing: 0 }}>{advancedOpen ? '▼' : '▶'}</span>
+              Advanced
+              <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400, fontSize: 12, color: 'var(--color-fg-faint)' }}>
+                {sponsored ? 'Personal key, PubMed credentials, grouping, start over' : 'PubMed credentials, grouping, start over'}
+              </span>
+            </summary>
+            <div style={{ marginTop: 14 }}>
+              {sponsored && (
+                <div style={{ marginBottom: 18 }}>
+                  <p style={{ margin: '0 0 10px', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+                    Optional. A personal Anthropic key is used only if sponsored access ends.
+                  </p>
+                  {keySection}
+                  <ApiKeyExplainer />
+                </div>
+              )}
+              <div style={{ marginTop: 14, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '12px 13px' }}>
+                <div className="flex items-center" style={{ gap: 8 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>NCBI / PubMed credentials</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: ncbi.keyActive ? 'var(--color-verified-soft)' : 'var(--color-abstract)' }}>
+                    API key {ncbi.keyActive ? (ncbi.keyRemembered ? 'active · remembered' : 'active · this session') : 'missing'}
+                  </span>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
+                  Email {ncbi.emailActive ? (ncbi.emailRemembered ? 'active · remembered' : 'active · this session') : 'missing'} · API key raises the PubMed request limit.
+                </p>
+                <form onSubmit={saveNcbi} style={{ marginTop: 10 }}>
+                  <input
+                    type="email"
+                    value={ncbiEmailInput}
+                    onChange={(e) => setNcbiEmailInput(e.target.value)}
+                    placeholder={ncbi.emailActive ? 'Replace NCBI email' : 'NCBI email · optional'}
+                    autoComplete="off"
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
+                  />
+                  <input
+                    type="password"
+                    value={ncbiKeyInput}
+                    onChange={(e) => setNcbiKeyInput(e.target.value)}
+                    placeholder={ncbi.keyActive ? 'Replace NCBI API key' : 'NCBI API key · optional'}
+                    autoComplete="off"
+                    style={{ marginTop: 7, width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
+                  />
+                  <div className="flex" style={{ marginTop: 8, gap: 8 }}>
+                    <button type="submit" disabled={!ncbiEmailInput.trim() && !ncbiKeyInput.trim()} style={{ padding: '6px 10px', border: 0, borderRadius: 8, background: 'var(--color-accent)', color: '#1c1206', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit', opacity: !ncbiEmailInput.trim() && !ncbiKeyInput.trim() ? 0.5 : 1 }}>Save NCBI details</button>
+                    {(ncbi.keyActive || ncbi.emailActive) && <button type="button" onClick={clearNcbi} style={{ padding: '6px 10px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 8, background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 11.5, fontFamily: 'inherit' }}>Clear NCBI details</button>}
+                  </div>
+                </form>
               </div>
+
+
+              <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
+
+              <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Library grouping</p>
+              <DomainEditor />
+
+              <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
+
+              <p style={{ margin: '0 0 4px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Start over</p>
+              {!confirmReset ? (
+                <>
+                  <p style={{ margin: '10px 0 12px', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
+                    Redo setup from the welcome screen. Your library, star map, and API key stay unless you choose to erase them.
+                  </p>
+                  <button onClick={() => setConfirmReset(true)} className="cursor-pointer" style={{ padding: '9px 15px', border: '1px solid rgba(224,96,90,.4)', borderRadius: 10, background: 'transparent', color: '#f0a9a4', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}>
+                    Start over…
+                  </button>
+                </>
+              ) : (
+                <div style={{ marginTop: 10, padding: '14px 16px', borderRadius: 12, border: '1px solid rgba(224,96,90,.3)', background: 'rgba(224,96,90,.06)' }}>
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: 'var(--color-fg-soft)' }}>
+                    This clears your steering profile and returns you to the welcome screen.
+                  </p>
+                  <label className="flex items-start cursor-pointer" style={{ gap: 8, marginTop: 12, fontSize: 13, lineHeight: 1.5, color: 'var(--color-fg-soft)' }}>
+                    <input type="checkbox" checked={eraseAll} onChange={(e) => setEraseAll(e.target.checked)} style={{ marginTop: 3, accentColor: '#e0605a' }} />
+                    <span>
+                      {account
+                        ? 'Also sign out and erase everything in this browser — saved papers, star map, digests, and the API key. Your account library is untouched: nothing is deleted from the cloud, and signing back in brings it all back. Files on disk are never touched either.'
+                        : 'Also erase everything in this browser — saved papers, star map, digests, and the API key. Files already written to your disk folder are never touched.'}
+                    </span>
+                  </label>
+                  <div className="flex" style={{ marginTop: 14, gap: 9 }}>
+                    <button onClick={() => onStartOver(eraseAll)} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: '#e0605a', color: '#1c0908', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+                      {eraseAll ? 'Erase & start over' : 'Start over'}
+                    </button>
+                    <button onClick={() => { setConfirmReset(false); setEraseAll(false) }} className="cursor-pointer" style={{ padding: '9px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </details>
           {/* Bottom exit for the long scroll — closing shouldn't require a trip
               back to the top of the modal. */}
           <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
@@ -1033,7 +1082,8 @@ export default function App() {
       setOnboarded(!!p?.onboarded)
       setProfile(p || null)
       // A new account's library starts with the reference collection for its specialty,
-      // replayed from the shared cache and verified here. Runs once, never spends.
+      // replayed from the shared cache and verified here. Never spends; resumes until the
+      // shelf is loaded, retrying after a backoff at a later app open (pipeline/seed.js).
       seedLibraryIfDue().then((r) => { if (r?.seeded) refreshCounts() }).catch(() => {})
       // Retractions can land years after a save. Re-check the saved Library on every
       // app open (PubMed esummary only — no model call), in the background; the alert
@@ -1236,7 +1286,12 @@ export default function App() {
                   {/* Amber when the digest on screen isn't today's — the same treatment as a
                       withheld summary, because it's the same kind of fact: the app saying
                       what it does NOT have. */}
-                  <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: dateLine.stale ? 'var(--color-abstract)' : 'var(--color-fg-faint)', fontWeight: 600 }}>{dateLine.text}</p>
+                  <div className="flex items-center flex-wrap" style={{ gap: '6px 10px' }}>
+                    <p style={{ margin: 0, fontSize: 12, letterSpacing: '.15em', textTransform: 'uppercase', color: dateLine.stale ? 'var(--color-abstract)' : 'var(--color-fg-faint)', fontWeight: 600 }}>{dateLine.text}</p>
+                    {/* Beta mark + the one feedback entry, on the screen beta readers open first. */}
+                    <BetaLabel />
+                    {!demo && <FeedbackButton view="digest" style={{ fontSize: 12 }} />}
+                  </div>
                   <h1 className="vs-hero-h1" style={{ margin: '9px 0 0', fontFamily: 'var(--font-serif)', fontSize: 37, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)', lineHeight: 1.08 }}>
                     Good morning, {name}.
                   </h1>
