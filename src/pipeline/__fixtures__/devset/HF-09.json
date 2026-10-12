@@ -1,0 +1,217 @@
+{
+ "row_id": "HF-09",
+ "pmid": "36356631",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Safety, tolerability and efficacy of up-titration of guideline-directed medical \ntherapies for acute heart failure (STRONG-HF): a multinational, open-label, \nrandomised, trial.\n\nBACKGROUND: There is a paucity of evidence for dose and pace of up-titration of \nguideline-directed medical therapies after admission to hospital for acute heart \nfailure.\nMETHODS: In this multinational, open-label, randomised, parallel-group trial \n(STRONG-HF), patients aged 18-85 years admitted to hospital with acute heart \nfailure, not treated with full doses of guideline-directed drug treatment, were \nrecruited from 87 hospitals in 14 countries. Before discharge, eligible patients \nwere randomly assigned (1:1), stratified by left ventricular ejection fraction \n(≤40% vs >40%) and country, with blocks of size 30 within strata and randomly \nordered sub-blocks of 2, 4, and 6, to either usual care or high-intensity care. \nUsual care followed usual local practice, and high-intensity care involved the \nup-titration of treatments to 100% of recommended doses within 2 weeks of \ndischarge and four scheduled outpatient visits over the 2 months after discharge \nthat closely monitored clinical status, laboratory values, and N-terminal \npro-B-type natriuretic peptide (NT-proBNP) concentrations. The primary endpoint \nwas 180-day readmission to hospital due to heart failure or all-cause death. \nEfficacy and safety were assessed in the intention-to-treat (ITT) population \n(ie, all patients validly randomly assigned to treatment). The primary endpoint \nwas assessed in all patients enrolled at hospitals that followed up patients to \nday 180. Because of a protocol amendment to the primary endpoint, the results of \npatients enrolled on or before this amendment were down-weighted. This study is \nregistered with ClinicalTrials.gov, NCT03412201, and is now complete.\nFINDINGS: Between May 10, 2018, and Sept 23, 2022, 1641 patients were screened \nand 1078 were successfully randomly assigned to high-intensity care (n=542) or \nusual care (n=536; ITT population). Mean age was 63·0 years (SD 13·6), 416 (39%) \nof 1078 patients were female, 662 (61%) were male, 832 (77%) were White or \nCaucasian, 230 (21%) were Black, 12 (1%) were other races, one (<1%) was Native \nAmerican, and one (<1%) was Pacific Islander (two [<1%] had missing data on \nrace). The study was stopped early per the data and safety monitoring board's \nrecommendation because of greater than expected between-group differences. As of \ndata cutoff (Oct 13, 2022), by day 90, a higher proportion of patients in the \nhigh-intensity care group had been up-titrated to full doses of prescribed drugs \n(renin-angiotensin blockers 278 [55%] of 505 vs 11 [2%] of 497; β blockers 249 \n[49%] vs 20 [4%]; and mineralocorticoid receptor antagonists 423 [84%] vs 231 \n[46%]). By day 90, blood pressure, pulse, New York Heart Association class, \nbodyweight, and NT-proBNP concentration had decreased more in the high-intensity \ncare group than in the usual care group. Heart failure readmission or all-cause \ndeath up to day 180 occurred in 74 (15·2% down-weighted adjusted Kaplan-Meier \nestimate) of 506 patients in the high-intensity care group and 109 (23·3%) of \n502 patients in the usual care group (adjusted risk difference 8·1% [95% CI \n2·9-13·2]; p=0·0021; risk ratio 0·66 [95% CI 0·50-0·86]). More adverse events by \n90 days occurred in the high-intensity care group (223 [41%] of 542) than in the \nusual care group (158 [29%] of 536) but similar incidences of serious adverse \nevents (88 [16%] vs 92 [17%]) and fatal adverse events (25 [5%] vs 32 [6%]) were \nreported in each group.\nINTERPRETATION: An intensive treatment strategy of rapid up-titration of \nguideline-directed medication and close follow-up after an acute heart failure \nadmission was readily accepted by patients because it reduced symptoms, improved \nquality of life, and reduced the risk of 180-day all-cause death or heart \nfailure readmission compared with usual care.\nFUNDING: Roche Diagnostics.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "180-day heart failure readmission or all-cause death, adjusted risk ratio, high-intensity vs usual care",
+    "quantity_type": "single",
+    "value": 0.66,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "risk ratio",
+    "ci_low": 0.5,
+    "ci_high": 0.86,
+    "p_value": null,
+    "source_quote": "risk ratio 0·66 [95% CI 0·50-0·86]",
+    "location_hint": "Findings, primary endpoint"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "180-day heart failure readmission or all-cause death, adjusted risk difference",
+    "quantity_type": "single",
+    "value": 8.1,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "%",
+    "ci_low": 2.9,
+    "ci_high": 13.2,
+    "p_value": 0.0021,
+    "source_quote": "adjusted risk difference 8·1% [95% CI 2·9-13·2]; p=0·0021",
+    "location_hint": "Findings, primary endpoint"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "180-day heart failure readmission or all-cause death, down-weighted adjusted Kaplan-Meier estimate, high-intensity vs usual care",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "high-intensity care group",
+    "first_value": 15.2,
+    "second_label": "usual care group",
+    "second_value": 23.3,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "74 (15·2% down-weighted adjusted Kaplan-Meier estimate) of 506 patients in the high-intensity care group and 109 (23·3%) of 502 patients in the usual care group",
+    "location_hint": "Findings, primary endpoint"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Day-90 full-dose up-titration of renin-angiotensin blockers, high-intensity vs usual care",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 55,
+    "second_label": null,
+    "second_value": 2,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "renin-angiotensin blockers 278 [55%] of 505 vs 11 [2%] of 497",
+    "location_hint": "Findings, up-titration"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Day-90 full-dose up-titration of mineralocorticoid receptor antagonists, high-intensity vs usual care",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 84,
+    "second_label": null,
+    "second_value": 46,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "mineralocorticoid receptor antagonists 423 [84%] vs 231 [46%]",
+    "location_hint": "Findings, up-titration"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Adverse events by 90 days, high-intensity vs usual care",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 41,
+    "second_label": null,
+    "second_value": 29,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "More adverse events by 90 days occurred in the high-intensity care group (223 [41%] of 542) than in the usual care group (158 [29%] of 536)",
+    "location_hint": "Findings, safety"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Serious adverse events by 90 days, high-intensity vs usual care",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 16,
+    "second_label": null,
+    "second_value": 17,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "serious adverse events (88 [16%] vs 92 [17%])",
+    "location_hint": "Findings, safety"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "Intensive, rapid up-titration of guideline-directed therapy with close early follow-up after an acute heart failure admission significantly reduced readmission or death compared with usual care.",
+  "designCaution": "The trial was open-label, was stopped early for larger-than-expected benefit, and had a protocol amendment to the primary endpoint with down-weighting of earlier patients, all of which can inflate effect estimates.",
+  "relevance": "Outside your vascular north stars, but a Lancet RCT worth knowing for conference discussion and as a model of intensive post-discharge optimization that could inform your limb preservation and atherosclerosis prevention programs.",
+  "score": 42,
+  "tier": 1,
+  "check": {
+   "verdict": "refuted",
+   "reason": "The snippet states the study was stopped early and provides no complete efficacy findings for the primary endpoint (readmission or death); the text cuts off mid-sentence at 'by day 90, a higher proportion of patients in the high-intensity care group had b' without reporting the primary outcome, so the claim of significant reduction in readmission or death cannot be verified as supported."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly confirms the trial was open-label, was stopped early per the data and safety monitoring board for greater-than-expected between-group differences, and had a protocol amendment to the primary endpoint with down-weighting of earlier patients, all of which are documented design and conduct factors that can inflate effect estimates."
+  }
+ }
+}

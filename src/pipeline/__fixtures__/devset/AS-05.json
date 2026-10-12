@@ -1,0 +1,136 @@
+{
+ "row_id": "AS-05",
+ "pmid": "28304219",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Surgical or Transcatheter Aortic-Valve Replacement in Intermediate-Risk \nPatients.\n\nBACKGROUND: Although transcatheter aortic-valve replacement (TAVR) is an \naccepted alternative to surgery in patients with severe aortic stenosis who are \nat high surgical risk, less is known about comparative outcomes among patients \nwith aortic stenosis who are at intermediate surgical risk.\nMETHODS: We evaluated the clinical outcomes in intermediate-risk patients with \nsevere, symptomatic aortic stenosis in a randomized trial comparing TAVR \n(performed with the use of a self-expanding prosthesis) with surgical \naortic-valve replacement. The primary end point was a composite of death from \nany cause or disabling stroke at 24 months in patients undergoing attempted \naortic-valve replacement. We used Bayesian analytical methods (with a margin of \n0.07) to evaluate the noninferiority of TAVR as compared with surgical valve \nreplacement.\nRESULTS: A total of 1746 patients underwent randomization at 87 centers. Of \nthese patients, 1660 underwent an attempted TAVR or surgical procedure. The mean \n(±SD) age of the patients was 79.8±6.2 years, and all were at intermediate risk \nfor surgery (Society of Thoracic Surgeons Predicted Risk of Mortality, \n4.5±1.6%). At 24 months, the estimated incidence of the primary end point was \n12.6% in the TAVR group and 14.0% in the surgery group (95% credible interval \n[Bayesian analysis] for difference, -5.2 to 2.3%; posterior probability of \nnoninferiority, >0.999). Surgery was associated with higher rates of acute \nkidney injury, atrial fibrillation, and transfusion requirements, whereas TAVR \nhad higher rates of residual aortic regurgitation and need for pacemaker \nimplantation. TAVR resulted in lower mean gradients and larger aortic-valve \nareas than surgery. Structural valve deterioration at 24 months did not occur in \neither group.\nCONCLUSIONS: TAVR was a noninferior alternative to surgery in patients with \nsevere aortic stenosis at intermediate surgical risk, with a different pattern \nof adverse events associated with each procedure. (Funded by Medtronic; SURTAVI \nClinicalTrials.gov number, NCT01586910 .).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "24-month primary endpoint (death from any cause or disabling stroke), TAVR vs surgery",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "TAVR group",
+    "first_value": 12.6,
+    "second_label": "surgery group",
+    "second_value": 14,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "At 24 months, the estimated incidence of the primary end point was 12.6% in the TAVR group and 14.0% in the surgery group",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "24-month primary endpoint, 95% credible interval for difference (TAVR minus surgery)",
+    "quantity_type": "range",
+    "value": null,
+    "range_low": -5.2,
+    "range_high": 2.3,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "95% credible interval [Bayesian analysis] for difference, -5.2 to 2.3%",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Posterior probability of noninferiority of TAVR vs surgery",
+    "quantity_type": "single",
+    "value": 0.999,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "posterior probability of noninferiority, >0.999",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Patients randomized",
+    "quantity_type": "single",
+    "value": 1746,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "patients",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "A total of 1746 patients underwent randomization at 87 centers.",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In intermediate-risk patients with severe aortic stenosis, TAVR was noninferior to surgical valve replacement for death or disabling stroke at two years, with a different adverse event profile for each approach.",
+  "designCaution": "This was an industry-funded noninferiority trial using Bayesian methods with a prespecified margin, so conclusions apply to the self-expanding prosthesis studied and the intermediate-risk population enrolled.",
+  "relevance": "High-quality NEJM RCT, but cardiac valve disease sits outside your vascular north stars; useful mainly as a model of Bayesian noninferiority design and endovascular-versus-open trial reporting.",
+  "score": 22,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet directly states that TAVR was noninferior to surgery for the primary endpoint (death or disabling stroke at 24 months) with posterior probability >0.999, and explicitly describes a different pattern of adverse events associated with each procedure."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms the trial was funded by Medtronic (industry), used Bayesian analytical methods with a prespecified noninferiority margin of 0.07, studied a self-expanding prosthesis specifically, and enrolled only intermediate-risk patients (STS risk 4.5±1.6%), supporting the design caution that conclusions are limited to these specific conditions."
+  }
+ }
+}

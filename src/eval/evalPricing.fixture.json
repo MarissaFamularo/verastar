@@ -1,0 +1,18 @@
+{
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "modelSource": "https://platform.claude.com/docs/en/models/haiku-5-5/overview",
+  "effortSource": "https://platform.claude.com/docs/en/build-with-claude/effort",
+  "accessed": "2026-10-10",
+  "note": "USD per million tokens, transcribed from the official Model pricing table and the Claude Haiku 5.5 overview on the access date. Evaluation harness only: this model is not in the shared sponsored price table. Long context pricing: 'A request's prompt length counts all of its input tokens, including cache reads and cache writes'; a request over the threshold pays the higher prices in every category. Standard global non-batch rates. Batch (50% off) and US-only inference (1.1x) are not modelled. Effort page: default effort medium; thinking {type: disabled} accepted at high effort or below, 400 at xhigh or max.",
+  "rows": {
+    "claude-haiku-5-5": {
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "promptTierThresholdTokens": 100000,
+      "defaultEffort": "medium",
+      "thinkingDisabledAtEffort": ["low", "medium", "high"],
+      "standard": { "input": 0.10, "cacheWrite5m": 0.125, "cacheWrite1h": 0.20, "cacheRead": 0.01, "output": 0.50 },
+      "long": { "input": 0.50, "cacheWrite5m": 0.625, "cacheWrite1h": 1, "cacheRead": 0.05, "output": 2.50 }
+    }
+  }
+}

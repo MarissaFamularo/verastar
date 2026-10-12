@@ -8,11 +8,19 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-04.estimates-v6'
+export const VERIFICATION_VERSION = '2026-10-10.estimates-v8'
+// v8 only adds tuple-local rate ratio (RR) definitions. All v7 guarantees survive.
+export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-09.estimates-v7']
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
-export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1', '2026-09-24.estimates-v1', '2026-09-27.estimates-v2', '2026-09-30.estimates-v3', '2026-10-04.estimates-v4', '2026-10-04.estimates-v5']
+export const COMPATIBLE_VERIFICATION_VERSIONS = ['2026-09-11.relationships-v1', '2026-09-24.estimates-v1', '2026-09-27.estimates-v2', '2026-09-30.estimates-v3', '2026-10-04.estimates-v4', '2026-10-04.estimates-v5', '2026-10-04.estimates-v6']
+// …except in these tiers. estimates-v7 TIGHTENED P binding: a P followed by ", for
+// interaction" or "for trend" no longer binds. A pre-v7 estimate or comparison verdict
+// may have bound such a P, and the stamp alone cannot say whether it claimed one, so in
+// these tiers a compatible stamp is not enough; the verdict is re-derived from saved
+// source text where it exists, otherwise downgraded (lib/evidenceVersion.js).
+export const TIGHTENED_TIERS = ['verified-estimate', 'verified-comparison']
 
 export const TIERS = {
   REGISTRY: 'verified-registry',
@@ -328,6 +336,19 @@ const RATIO_GROUPS = [
   ['auc', 'auroc', 'roc-auc', 'c-statistic', 'c statistic', 'c-index', 'area under the curve'],
 ]
 const RATIO_NAMES = RATIO_GROUPS.flat().sort((a, b) => b.length - a.length)
+// An abbreviation defined INLINE on the very tuple being verified ("rate ratio (RR) 1.16
+// (95% CI ...)") may carry a source-specific meaning for RR. This is deliberately narrow:
+// only a spelled-out RATE-ratio name immediately followed by its own bracketed "RR" counts.
+// It is never applied from another sentence, paragraph, cited study or the rest of the
+// paper, and never makes risk ratio and rate ratio interchangeable.
+const INLINE_RATE_RATIO_MEASURES = ['rate ratio', 'incidence rate ratio', 'rate ratios', 'incidence rate ratios']
+const RATE_RATIO_UNITS = ['rate ratio', 'incidence rate ratio', 'rate ratios', 'incidence rate ratios', 'rr', 'rrs']
+function inlineDefinesRrAsRateRatio(measure, abbrev) {
+  if (!abbrev) return false
+  const m = String(measure || '').toLowerCase().replace(/\s+/g, ' ').trim()
+  const a = String(abbrev || '').toLowerCase().trim()
+  return (a === 'rr' || a === 'rrs') && INLINE_RATE_RATIO_MEASURES.includes(m)
+}
 const UNSIGNED = '(?<![\\d.])((?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d))'
 // "or" is an English word ("10% or 0.10 (95% CI ...)"), so a bare abbreviation must open a
 // bracket or follow "adjusted"; spelled-out names and the other abbreviations may stand
@@ -341,12 +362,58 @@ const ABBREV = `(?:\\s*[(\\[](${RATIO_NAMES.filter((n) => !n.includes(' ')).join
 // 1.81". It is captured so validateEstimate can refuse one that is not plain description
 // (another measure, a verb, a number, sentence punctuation) — see QUALIFIER_* below.
 const QUALIFIER = `\\s+(?:for|in|among|comparing|between|across|after|with)\\s+([^\\d;:=()\\[\\]<>.!?]{1,200}?)\\s+(?:was|were|is|are)`
+// The CI may sit in its own bracket with the P after it — "(aHR = 0.78 [95% CI:
+// 0.70-0.86]; P < 0.001)" (2026-10-06, Ann Vasc Surg). The opening and closing brackets
+// are captured so validateEstimate binds that P only when the bracket it steps over is the
+// one opened directly before the CI label; "(HR, 0.44; 95% CI, 0.34-0.55), P < .001
+// overall" closes the whole estimate instead, and its P stays unbound.
 const ESTIMATE_TUPLE = new RegExp(
   `(${MEASURE})(?![a-z])${ABBREV}(?:${QUALIFIER}|\\s*(?:[,:=]|\\s(?:was|were|of|is|are)))?\\s*${UNSIGNED}` +
-  `\\s*[(\\[,;]?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval(?:\\s*[(\\[]ci[)\\]])?)\\s*[,:=]?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
-  `(?:\\s*[,;]\\s*p\\s*(?:-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${UNSIGNED})?`,
+  `\\s*(?:([(\\[])|[,;])?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval(?:\\s*[(\\[]ci[)\\]])?)\\s*[,:=]?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
+  `(?:\\s*([)\\]])?\\s*[,;]\\s*p\\s*(?:-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${UNSIGNED})?`,
   'g',
 )
+const CLOSES = { '(': ')', '[': ']' }
+// A printed P binds only when it ends its own clause, judged on the FULL corpus after the
+// P so a quote truncated before a qualifier cannot hide it (2026-10-09). "P = 0.02, for
+// interaction", "P = 0.02; interaction test" and "P = 0.02 for trend" name a different
+// test. Accepted endings, and nothing else:
+//   - the end of the text, or a sentence end;
+//   - the next item of a list (NEXT_ITEM);
+//   - a closing bracket, then any number of cross-references ("(Table 2, and Fig. 1 in the
+//     Supplementary Appendix)" (CREST, NEJM 2010), "[12]"), then anything that is not a
+//     P-test qualifier. "(95% CI: 1.34-4.98, p = 0.004) for eGFR 30-< 45" binds: a
+//     population qualifies the whole estimate, which the tier reports as unchecked. "P =
+//     0.02) for interaction", "P = 0.02) (Table 2) for trend" and "P = 0.02) (Table 2; P for
+//     interaction)" do not: they name a different statistical test (Codex R2, 2026-10-09).
+// An unbound P withholds a claimed P; the tuple may still verify without it.
+const NEXT_BRACKET = /^\s*[,;:]?\s*[([]/
+// One bracketed cross-reference, captured whole so its content can be checked too.
+const CROSS_REFERENCE = /^\s*[,;:]?\s*[([]\s*((?:(?:supplementary\s+|e)?(?:table|fig(?:ure)?|appendix)|\d+\s*(?=[)\],–-])|refs?\.?\s*\d)[^()[\]]*)[)\]]/i
+// Words that make a P a different test. Read at the start of what follows the bracket, and
+// anywhere inside a cross-reference bracket.
+const P_TEST = '(?:p\\s*(?:-?\\s*values?)?\\s*(?:for|of)\\b|interactions?|trend|heterogeneity|non-?inferiority|superiority|equivalence|one-?sided|two-?sided|log-?rank|nominal|unadjusted|adjusted|bonferroni|corrected)'
+const P_TEST_INSIDE = new RegExp(`(?<![a-z])${P_TEST}(?![a-z])`, 'i')
+const P_TEST_NEXT = new RegExp(`^\\s*[,;:]?\\s*(?:(?:for|by|with|using)\\s+(?:the\\s+|a\\s+)?(?:linear\\s+)?)?${P_TEST}(?![a-z])`, 'i')
+// A list continues after the P: "(death, 0.7% vs. 0.3%; P = 0.18; stroke, 4.1% vs. 2.3%; P =
+// 0.01; …)" (CREST, NEJM 2010). The next segment names the next item in a few plain words
+// and then prints its own number; a segment carrying a P-qualifier word never counts.
+const NEXT_ITEM = /^\s*[,;]\s*([a-z][a-z' -]{0,40}?)\s*[,:]?\s*\d/
+const P_QUALIFIER_WORD = /(?<![a-z])(?:for|interaction|trend|heterogeneity|test|sided|one|two|log-?rank|adjusted|unadjusted|nominal|corrected|overall|p|and|or|respectively)(?![a-z])/
+function pEndsItsClause(corpus, end) {
+  const after = corpus.slice(end)
+  if (/^\s*$/.test(after) || /^\s*[.!?](?:\s|$)/.test(after)) return true
+  const next = after.match(NEXT_ITEM)
+  if (next) return !P_QUALIFIER_WORD.test(next[1])
+  const closer = after.match(/^\s*[)\]]/)
+  if (!closer) return false
+  let rest = after.slice(closer[0].length)
+  for (let ref = rest.match(CROSS_REFERENCE); ref; ref = rest.match(CROSS_REFERENCE)) {
+    if (P_TEST_INSIDE.test(ref[1])) return false
+    rest = rest.slice(ref[0].length)
+  }
+  return !NEXT_BRACKET.test(rest) && !P_TEST_NEXT.test(rest)
+}
 const CI_CLAUSE = /\d\s*%\s*(?:ci|confidence interval)\b/g
 // A qualifier must be plain description. A verb inside it means the lazy match spanned
 // a clause ("hazard ratio for death was similar and the rate was 1.2" would bind the
@@ -369,15 +436,31 @@ function validateEstimate(quantity, matched, corpus, declaredType) {
   const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
   if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
   if (!normalize(quantity.name)) return false
-  const [, measure, abbrev, qualifier, value, , ciLow, ciHigh, p] = tuples[0]
+  const [, measure, abbrev, qualifier, value, opener, , ciLow, ciHigh, closer, printedP] = tuples[0]
+  let p = printedP
+  if (p != null) {
+    // Across a closing bracket only when it closes the CI's own bracket; in every case only
+    // when the P ends its clause in the full source.
+    const end = matched.index + tuples[0].index + tuples[0][0].length
+    if ((closer != null && CLOSES[opener] !== closer) || !pEndsItsClause(corpus, end)) p = null
+  }
   if (qualifier != null && (QUALIFIER_VERB.test(qualifier) || QUALIFIER_MEASURE.test(qualifier))) return false
   const familyOf = (name) => RATIO_GROUPS.find((names) => names.includes(normalize(name).replace(/\s+/g, ' ')))
   // "hazard ratio [OR] 1.2" names two measures; the tuple's role is then ambiguous.
-  if (abbrev && familyOf(abbrev) !== familyOf(measure)) return false
+  // The one exception is an explicit local definition: "rate ratio (RR) 1.16 (...)" where
+  // the printed abbreviation RR is declared, on this tuple, to mean the printed rate ratio.
+  const localRrDefinition = inlineDefinesRrAsRateRatio(measure, abbrev)
+  if (abbrev && !localRrDefinition && familyOf(abbrev) !== familyOf(measure)) return false
   const unit = normalize(quantity.unit)
   if (unit) {
-    const group = RATIO_GROUPS.find((names) => names.includes(normalize(measure).replace(/\s+/g, ' ')))
-    if (!group || !group.includes(unit)) return false
+    if (localRrDefinition) {
+      // Only rate-ratio spellings (or the locally defined RR) may be declared here; an
+      // explicit "risk ratio"/"relative risk" unit contradicts the inline definition.
+      if (!RATE_RATIO_UNITS.includes(unit.replace(/\s+/g, ' '))) return false
+    } else {
+      const group = RATIO_GROUPS.find((names) => names.includes(normalize(measure).replace(/\s+/g, ' ')))
+      if (!group || !group.includes(unit)) return false
+    }
   }
   const fields = [[quantity.value, value], [quantity.ci_low, ciLow], [quantity.ci_high, ciHigh]]
   if (!fields.every(([mine, printed]) => Number.isFinite(mine) && numbersEqual(mine, Number(printed)))) return false
@@ -426,6 +509,7 @@ function validateComparison(quantity, matched, corpus, declaredType) {
   const [, first, second, printedP] = pairs[0]
   if (!numbersEqual(quantity.first_value, Number(first)) || !numbersEqual(quantity.second_value, Number(second))) return false
   if (quantity.p_value != null && !(printedP != null && numbersEqual(quantity.p_value, Number(printedP)))) return false
+  if (quantity.p_value != null && !pEndsItsClause(corpus, matched.index + pairs[0].index + pairs[0][0].length)) return false
   return true
 }
 
@@ -734,7 +818,7 @@ export function verify(quantity, source, opts = {}) {
   } else if (estimateValidated) {
     tier = TIERS.ESTIMATE
     const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'
-    reason = `Estimate, confidence interval and P value verified as printed together in ${where}. Which endpoint and comparison they belong to is not checked — read the quote.`
+    reason = `Estimate, confidence interval${quantity.p_value != null ? ' and P value' : ''} verified as printed together in ${where}. Which endpoint and comparison they belong to is not checked — read the quote.`
   } else if (comparisonValidated) {
     tier = TIERS.COMPARISON
     const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'

@@ -1,0 +1,163 @@
+{
+ "row_id": "HF-10",
+ "pmid": "30280640",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Transcatheter Mitral-Valve Repair in Patients with Heart Failure.\n\nBACKGROUND: Among patients with heart failure who have mitral regurgitation due \nto left ventricular dysfunction, the prognosis is poor. Transcatheter \nmitral-valve repair may improve their clinical outcomes.\nMETHODS: At 78 sites in the United States and Canada, we enrolled patients with \nheart failure and moderate-to-severe or severe secondary mitral regurgitation \nwho remained symptomatic despite the use of maximal doses of guideline-directed \nmedical therapy. Patients were randomly assigned to transcatheter mitral-valve \nrepair plus medical therapy (device group) or medical therapy alone (control \ngroup). The primary effectiveness end point was all hospitalizations for heart \nfailure within 24 months of follow-up. The primary safety end point was freedom \nfrom device-related complications at 12 months; the rate for this end point was \ncompared with a prespecified objective performance goal of 88.0%.\nRESULTS: Of the 614 patients who were enrolled in the trial, 302 were assigned \nto the device group and 312 to the control group. The annualized rate of all \nhospitalizations for heart failure within 24 months was 35.8% per patient-year \nin the device group as compared with 67.9% per patient-year in the control group \n(hazard ratio, 0.53; 95% confidence interval [CI], 0.40 to 0.70; P<0.001). The \nrate of freedom from device-related complications at 12 months was 96.6% (lower \n95% confidence limit, 94.8%; P<0.001 for comparison with the performance goal). \nDeath from any cause within 24 months occurred in 29.1% of the patients in the \ndevice group as compared with 46.1% in the control group (hazard ratio, 0.62; \n95% CI, 0.46 to 0.82; P<0.001).\nCONCLUSIONS: Among patients with heart failure and moderate-to-severe or severe \nsecondary mitral regurgitation who remained symptomatic despite the use of \nmaximal doses of guideline-directed medical therapy, transcatheter mitral-valve \nrepair resulted in a lower rate of hospitalization for heart failure and lower \nall-cause mortality within 24 months of follow-up than medical therapy alone. \nThe rate of freedom from device-related complications exceeded a prespecified \nsafety threshold. (Funded by Abbott; COAPT ClinicalTrials.gov number, \nNCT01626079 .).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Annualized rate of all heart failure hospitalizations within 24 months, device vs control (per patient-year)",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "device group",
+    "first_value": 35.8,
+    "second_label": "control group",
+    "second_value": 67.9,
+    "unit": "% per patient-year",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The annualized rate of all hospitalizations for heart failure within 24 months was 35.8% per patient-year in the device group as compared with 67.9% per patient-year in the control group",
+    "location_hint": "Results, primary effectiveness end point"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Hazard ratio for all heart failure hospitalizations within 24 months, device vs control",
+    "quantity_type": "single",
+    "value": 0.53,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.4,
+    "ci_high": 0.7,
+    "p_value": 0.001,
+    "source_quote": "(hazard ratio, 0.53; 95% confidence interval [CI], 0.40 to 0.70; P<0.001)",
+    "location_hint": "Results, primary effectiveness end point"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Freedom from device-related complications at 12 months (primary safety end point)",
+    "quantity_type": "single",
+    "value": 96.6,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "The rate of freedom from device-related complications at 12 months was 96.6% (lower 95% confidence limit, 94.8%; P<0.001 for comparison with the performance goal)",
+    "location_hint": "Results, primary safety end point"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "All-cause death within 24 months, device vs control",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "device group",
+    "first_value": 29.1,
+    "second_label": "control group",
+    "second_value": 46.1,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "Death from any cause within 24 months occurred in 29.1% of the patients in the device group as compared with 46.1% in the control group",
+    "location_hint": "Results, secondary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Hazard ratio for all-cause death within 24 months, device vs control",
+    "quantity_type": "single",
+    "value": 0.62,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.46,
+    "ci_high": 0.82,
+    "p_value": 0.001,
+    "source_quote": "(hazard ratio, 0.62; \n95% CI, 0.46 to 0.82; P<0.001)",
+    "location_hint": "Results, secondary outcome"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In symptomatic heart failure with secondary mitral regurgitation, adding transcatheter mitral-valve repair to medical therapy substantially reduced heart failure hospitalizations and deaths over two years compared with medical therapy alone.",
+  "designCaution": "The trial was industry-funded and unblinded with a device-versus-medical-therapy comparison, and the benefit applies only to the carefully selected symptomatic patients on maximal guideline-directed therapy.",
+  "relevance": "High-quality NEJM RCT worth knowing for general practice-changing discussion, but cardiac structural intervention sits outside your vascular north stars and active projects.",
+  "score": 30,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet reports that transcatheter mitral-valve repair reduced annualized hospitalization rate from 67.9% to 35.8% (HR 0.53, P<0.001) and all-cause mortality from 46.1% to 29.1% (HR 0.62, P<0.001) over 24 months in symptomatic heart failure patients with secondary mitral regurgitation on maximal medical therapy, directly supporting the claim of substantial reduction in both outcomes."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the trial was funded by Abbott (industry-funded), describes the design as device group versus control group without mentioning blinding (unblinded), specifies the population as 'patients with heart failure and moderate-to-severe or severe secondary mitral regurgitation who remained symptomatic despite the use of maximal doses of guideline-directed medical therapy' (carefully selected), all accurately reflected in the design caution claim."
+  }
+ }
+}

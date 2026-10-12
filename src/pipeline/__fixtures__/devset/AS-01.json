@@ -1,0 +1,217 @@
+{
+ "row_id": "AS-01",
+ "pmid": "20961243",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Transcatheter aortic-valve implantation for aortic stenosis in patients who \ncannot undergo surgery.\n\nBACKGROUND: Many patients with severe aortic stenosis and coexisting conditions \nare not candidates for surgical replacement of the aortic valve. Recently, \ntranscatheter aortic-valve implantation (TAVI) has been suggested as a less \ninvasive treatment for high-risk patients with aortic stenosis.\nMETHODS: We randomly assigned patients with severe aortic stenosis, whom \nsurgeons considered not to be suitable candidates for surgery, to standard \ntherapy (including balloon aortic valvuloplasty) or transfemoral transcatheter \nimplantation of a balloon-expandable bovine pericardial valve. The primary end \npoint was the rate of death from any cause.\nRESULTS: A total of 358 patients with aortic stenosis who were not considered to \nbe suitable candidates for surgery underwent randomization at 21 centers (17 in \nthe United States). At 1 year, the rate of death from any cause (Kaplan–Meier \nanalysis) was 30.7% with TAVI, as compared with 50.7% with standard therapy \n(hazard ratio with TAVI, 0.55; 95% confidence interval [CI], 0.40 to 0.74; \nP<0.001). The rate of the composite end point of death from any cause or repeat \nhospitalization was 42.5% with TAVI as compared with 71.6% with standard therapy \n(hazard ratio, 0.46; 95% CI, 0.35 to 0.59; P<0.001). Among survivors at 1 year, \nthe rate of cardiac symptoms (New York Heart Association class III or IV) was \nlower among patients who had undergone TAVI than among those who had received \nstandard therapy (25.2% vs. 58.0%, P<0.001). At 30 days, TAVI, as compared with \nstandard therapy, was associated with a higher incidence of major strokes (5.0% \nvs. 1.1%, P=0.06) and major vascular complications (16.2% vs. 1.1%, P<0.001). In \nthe year after TAVI, there was no deterioration in the functioning of the \nbioprosthetic valve, as assessed by evidence of stenosis or regurgitation on an \nechocardiogram.\nCONCLUSIONS: In patients with severe aortic stenosis who were not suitable \ncandidates for surgery, TAVI, as compared with standard therapy, significantly \nreduced the rates of death from any cause, the composite end point of death from \nany cause or repeat hospitalization, and cardiac symptoms, despite the higher \nincidence of major strokes and major vascular events. (Funded by Edwards \nLifesciences; ClinicalTrials.gov number, NCT00530894.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "1-year death from any cause, TAVI vs standard therapy",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "TAVI",
+    "first_value": 30.7,
+    "second_label": "standard therapy",
+    "second_value": 50.7,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "At 1 year, the rate of death from any cause (Kaplan\\u2013Meier analysis) was 30.7% with TAVI, as compared with 50.7% with standard therapy",
+    "location_hint": "Abstract, Results, primary end point"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": false,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote not found in source text."
+   }
+  },
+  {
+   "quantity": {
+    "name": "1-year death from any cause, hazard ratio TAVI vs standard therapy",
+    "quantity_type": "single",
+    "value": 0.55,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.4,
+    "ci_high": 0.74,
+    "p_value": 0.001,
+    "source_quote": "hazard ratio with TAVI, 0.55; 95% confidence interval [CI], 0.40 to 0.74; P<0.001",
+    "location_hint": "Abstract, Results, primary end point"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Composite of death from any cause or repeat hospitalization, TAVI vs standard therapy",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "TAVI",
+    "first_value": 42.5,
+    "second_label": "standard therapy",
+    "second_value": 71.6,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The rate of the composite end point of death from any cause or repeat hospitalization was 42.5% with TAVI as compared with 71.6% with standard therapy",
+    "location_hint": "Abstract, Results, composite end point"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Composite of death or repeat hospitalization, hazard ratio TAVI vs standard therapy",
+    "quantity_type": "single",
+    "value": 0.46,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.35,
+    "ci_high": 0.59,
+    "p_value": 0.001,
+    "source_quote": "hazard ratio, 0.46; 95% CI, 0.35 to 0.59; P<0.001",
+    "location_hint": "Abstract, Results, composite end point"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "1-year NYHA class III or IV symptoms among survivors, TAVI vs standard therapy",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 25.2,
+    "second_label": null,
+    "second_value": 58,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "(25.2% vs. 58.0%, P<0.001)",
+    "location_hint": "Abstract, Results, cardiac symptoms"
+   },
+   "verdict": {
+    "tier": "verified-comparison",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "comparison-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Both values and the P value verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day major strokes, TAVI vs standard therapy",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 5,
+    "second_label": null,
+    "second_value": 1.1,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.06,
+    "source_quote": "major strokes (5.0% vs. 1.1%, P=0.06)",
+    "location_hint": "Abstract, Results, 30-day safety"
+   },
+   "verdict": {
+    "tier": "verified-comparison",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "comparison-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Both values and the P value verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day major vascular complications, TAVI vs standard therapy",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 16.2,
+    "second_label": null,
+    "second_value": 1.1,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "major vascular complications (16.2% vs. 1.1%, P<0.001)",
+    "location_hint": "Abstract, Results, 30-day safety"
+   },
+   "verdict": {
+    "tier": "verified-comparison",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "comparison-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Both values and the P value verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In patients with severe aortic stenosis unsuitable for surgery, TAVI reduced the composite of death or repeat hospitalization (HR 0.46, CI 0.35–0.59, P<0.001) and cardiac symptoms (NYHA III/IV 25.2% versus 58.0%, P<0.001) versus standard therapy, at the cost of more major vascular complications (16.2% versus 1.1%, P<0.001).",
+  "designCaution": "The trial was industry-funded, open-label, and enrolled only inoperable patients, so findings do not extend to operable or lower-risk populations, and the higher stroke and vascular complication rates temper the net benefit.",
+  "relevance": "Landmark RCT of transfemoral large-bore access and vascular complications that is a classic NEJM paper, but only peripherally connected to your core CLTI, carotid, and aortic projects.",
+  "score": 42,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly reports all four stated outcomes with matching numbers, directions, and p-values: composite endpoint HR 0.46 (95% CI 0.35–0.59, P<0.001), cardiac symptoms 25.2% vs 58.0% (P<0.001), and major vascular complications 16.2% vs 1.1% (P<0.001), with acknowledgment of the trade-off in the conclusions."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms industry funding (Edwards Lifesciences), supports the open-label design by stating patients were 'randomly assigned' without mention of blinding, explicitly limits enrollment to patients 'not considered to be suitable candidates for surgery,' and the conclusions explicitly note that despite reduced mortality and symptoms, TAVI was 'associated with a higher incidence of major strokes and major vascular complications,' supporting the caution about generalizability and net benefit trade-offs."
+  }
+ }
+}

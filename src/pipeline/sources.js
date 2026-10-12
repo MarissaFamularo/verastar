@@ -7,6 +7,7 @@
 
 import { getNcbiKey, getNcbiEmail } from '../lib/anthropic.js'
 import { hasRetractedPublicationType } from './retractions.js'
+import { sectionKind } from './evidenceWindow.js'
 
 const EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 const CROSSREF = 'https://api.crossref.org/works'
@@ -206,6 +207,19 @@ export async function fetchAbstractsByPmid(pmids) {
   return out
 }
 
+// The DOI from an esummary record. PubMed lists it in `articleids` (idtype 'doi') for
+// nearly every DOI-bearing article; `elocationid` is often empty (2026-10-11 dev set: 8 of
+// 12 papers had a DOI only in articleids). articleids first, elocationid as fallback; null
+// when PubMed has none — never guessed.
+export function citationDoi(rec) {
+  const fromIds = (Array.isArray(rec?.articleids) ? rec.articleids : []).find(
+    (a) => String(a?.idtype || '').toLowerCase() === 'doi' && /^10\.\S+/.test(String(a?.value || '').trim())
+  )
+  if (fromIds) return String(fromIds.value).trim()
+  const m = String(rec?.elocationid || '').match(/10\.\S+/)
+  return m ? m[0] : null
+}
+
 // Fetch citation metadata for a PMID via esummary. The mere fact that PubMed returns a
 // record IS the "citation is real, not hallucinated" check — the single most common AI
 // digest failure. PubMed publication types also carry the authoritative retraction marker.
@@ -224,10 +238,10 @@ export async function fetchCitation(pmid) {
     const author = authors.length > 1 ? `${first} et al.` : first
     const year = (rec.pubdate || '').split(' ')[0] || ''
     const journal = rec.source || rec.fulljournalname || ''
-    const doiMatch = (rec.elocationid || '').match(/10\.\S+/)
+    const doi = citationDoi(rec)
     const pubtypes = Array.isArray(rec.pubtype) ? rec.pubtype : []
     return {
-      pmid, url, author, year, journal, title: rec.title || '', doi: doiMatch ? doiMatch[0] : null,
+      pmid, url, author, year, journal, title: rec.title || '', doi,
       pubtypes, retracted: hasRetractedPublicationType(pubtypes), verified: true,
     }
   } catch {
@@ -329,15 +343,55 @@ function flattenTable(tableWrap) {
   return label ? `${label}\n${body}` : body
 }
 
+// The single, deterministic assembly of the extraction/verification corpus for a PMC
+// full-text source. Production extraction (pipeline.js), the single-paper harness and the
+// stored `sourceDoc` all use this so the model, the verifier and later rechecks/source
+// viewers see exactly the same material.
+//   corpusText   = [PUBLISHER ABSTRACT block] + body prose  (what the verifier reads as `text`)
+//   tables       = flattened tables (verifier's `tables`)
+//   modelText    = corpusText + "\n\nTABLES:\n" + tables   (what the model reads)
+// The abstract is the main publisher abstract only (graphical/teaser abstracts are excluded
+// by pmcAbstractParts). Exact text and section labels are kept; nothing is invented from
+// figure images. With no abstract parts this is byte-identical to the previous
+// body + TABLES input. Extraction-version changes can still invalidate old cache keys.
+export const ABSTRACT_BLOCK_HEADER = 'PUBLISHER ABSTRACT:'
+export function assembleExtractionSource({ text = '', tables = '', abstractParts = [], tier = 'full_text' } = {}) {
+  const parts = (Array.isArray(abstractParts) ? abstractParts : []).filter((p) => p && String(p.text || '').trim())
+  // Tier semantics: for an abstract_only source `text` IS the abstract (there is no body),
+  // so it must be reported as abstract coverage, never as body coverage.
+  const abstractOnly = tier === 'abstract_only'
+  const abstractBlock = parts.length
+    ? `${ABSTRACT_BLOCK_HEADER}\n${parts.map((p) => (p.label ? `${p.label}: ${p.text}` : p.text)).join('\n')}`
+    : ''
+  const corpusText = abstractBlock ? (text ? `${abstractBlock}\n\n${text}` : abstractBlock) : text
+  const modelText = tables ? `${corpusText}\n\nTABLES:\n${tables}` : corpusText
+  return {
+    corpusText,
+    tables,
+    modelText,
+    coverage: {
+      abstractPresent: abstractOnly ? !!text : !!abstractBlock,
+      bodyPresent: abstractOnly ? false : !!text,
+      tablesPresent: !!tables,
+      figureImageTextExtracted: false,
+    },
+  }
+}
+
 // Fetch and parse a PMC OA full-text record. Returns:
-//   { hasBody, text, tables, tier }
+//   { hasBody, text, tables, tier, sections, abstractParts }
 // where `text` is body prose (table content removed), `tables` is flattened <table-wrap>
 // cell text, and `tier` is 'full_text' when a <body> exists, else 'abstract_only'.
 // No <body> => not in the OA subset => the caller should fall back to the abstract.
 export async function fetchPmcFullText(pmcid) {
   const numeric = String(pmcid).replace(/^PMC/i, '')
   const url = withKey(`${EUTILS}/efetch.fcgi?db=pmc&id=${numeric}&rettype=xml&retmode=xml`)
-  const xml = await getText(url)
+  return parsePmcFullText(await getText(url))
+}
+
+// The parse half of fetchPmcFullText, pure over the XML string, so a saved record can be
+// read offline exactly as the app reads it (the single-paper evaluation harness does).
+export function parsePmcFullText(xml) {
   const doc = new DOMParser().parseFromString(xml, 'text/xml')
 
   const body = doc.querySelector('body')
@@ -354,7 +408,57 @@ export async function fetchPmcFullText(pmcid) {
   clone.querySelectorAll('table-wrap').forEach((n) => n.remove())
   const text = nodeText(clone)
 
-  return { hasBody: true, text, tables, tier: 'full_text' }
+  // Structure for the ranking evidence window only (evidenceWindow.js). `text` and
+  // `tables` above stay exactly as before: they are the verifier's corpus and the
+  // extraction input, and the extraction cache is keyed by their hash.
+  // `text` stays body-only (ranking window, section structure). The shared extraction/
+  // verification corpus, including the publisher abstract, is built from these same parts
+  // by assembleExtractionSource.
+  const abstractParts = pmcAbstractParts(doc)
+  return { hasBody: true, text, tables, tier: 'full_text', sections: pmcSections(clone), abstractParts, abstract: abstractParts.map((p) => [p.label, p.text].filter(Boolean).join(' ')).join(' ') }
+}
+
+const childElements = (node, name) => Array.from(node?.childNodes || []).filter((c) => c.nodeType === 1 && (c.localName || c.nodeName) === name)
+
+// A <sec>'s own text without its <title>.
+function secText(sec) {
+  const titled = sec.cloneNode(true)
+  childElements(titled, 'title').forEach((t) => t.remove())
+  return nodeText(titled)
+}
+
+// PMC body sections for the evidence window: every <sec> with its title, kind, depth and
+// parent (index into the returned list, -1 at the top).
+// A Results <sec> counts only when no enclosing <sec> is Introduction, Discussion,
+// Conclusions or already Results — "Comparison with previous results" inside the
+// Discussion is not the paper's Results, and a Results subsection is already inside its
+// parent's text. Pure over a parsed (table-stripped) <body>, so tests can use linkedom.
+export function pmcSections(body) {
+  const out = []
+  const walk = (node, depth, ancestors, parent) => {
+    for (const sec of childElements(node, 'sec')) {
+      const label = nodeText(childElements(sec, 'title')[0])
+      const kind = sectionKind(label, sec.getAttribute?.('sec-type') || '')
+      const blocked = ancestors.some((k) => k === 'background' || k === 'discussion' || k === 'conclusions' || k === 'results')
+      out.push({ label, kind: kind === 'results' && blocked ? 'other' : kind, depth, parent, text: secText(sec) })
+      walk(sec, depth + 1, [...ancestors, kind], out.length - 1)
+    }
+  }
+  walk(body, 0, [], -1)
+  return out
+}
+
+// The publisher abstract from PMC <front>: [{ label, text }] per <sec>, or one unlabelled
+// part. Graphical abstracts, teasers and highlights are skipped.
+export function pmcAbstractParts(doc) {
+  const abstracts = Array.from(doc?.querySelectorAll?.('article-meta abstract') || [])
+  const main = abstracts.find((a) => !a.getAttribute('abstract-type')) ||
+    abstracts.find((a) => !/graphical|teaser|highlight|toc/i.test(a.getAttribute('abstract-type') || ''))
+  if (!main) return []
+  const secs = childElements(main, 'sec')
+  if (secs.length) return secs.map((sec) => ({ label: nodeText(childElements(sec, 'title')[0]), text: secText(sec) })).filter((p) => p.text)
+  const text = secText(main)
+  return text ? [{ label: '', text }] : []
 }
 
 // --- Live swing: DOI -> PMID, with CrossRef fallback -------------------------

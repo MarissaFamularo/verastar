@@ -1,3 +1,4 @@
+import { digestCount, fitDigestPapers, PILOT_DIGEST_LIMIT, LEGACY_DIGEST_LIMIT_NOTE } from './digestLimit.js'
 // pipeline/dailyDigest.js — the daily digest as a headless run.
 //
 // SpineCheck.jsx drives the same loop interactively: search PubMed per topic → score the
@@ -21,6 +22,7 @@ import { saveDailyDigest, loadDailyDigest, saveSuccessfulScan, serializeDigest }
 import { digestProjects } from '../lib/trellis.js'
 import { runPaper, searchCandidates } from './pipeline.js'
 import { triage } from './triage.js'
+import { evidenceSummary } from './evidenceWindow.js'
 import {
   selectCandidates,
   capScoredByTopic,
@@ -35,7 +37,17 @@ import { profileTopics, profileSearchDays, profileTopicCap } from './topics.js'
 import { DEFAULT_SELECT_COUNT } from './onboard.js'
 import { isRelationshipValidated } from '../lib/evidenceVersion.js'
 import { fmtNum } from '../lib/format.js'
+import { findPrimary } from './primaryResult.js'
 import { isCapReached } from '../lib/anthropic.js'
+import { serverRunUnresolved } from '../lib/serverScope.js'
+
+// Returned (and stored on the record as server.held) when a paid attempt of this run was
+// dispatched and ended without a confirmed cost. The run stops where it is: the step is not
+// recorded as done or failed, the digest is not finished, and the database holds the account
+// (supabase/migrations/20261010130000_scheduler_hold.sql) until an operator reconciles the
+// attempt and recovers the run. Progress already saved stays, so a resumed run continues.
+export const HELD_REASON = 'unresolved_liability'
+export const HELD_NOTE = 'A paid step ended without a confirmed outcome; the run is held for operator review.'
 
 // Past this share of the budget, a tick that read papers hands ranking to the next tick.
 export const RANK_HANDOFF_FRACTION = 0.35
@@ -72,7 +84,7 @@ export function takesById(rankings) {
 
 // Run (or continue) the daily digest for the account the store is bound to.
 // Options: budgetMs (reading budget for this tick), now, log (fn), days (window override).
-// Resolves { phase: 'done' | 'reading' | 'rank' | 'empty' | 'capped', papers, read, note }.
+// Resolves { phase: 'done' | 'reading' | 'rank' | 'empty' | 'capped' | 'held', papers, read, note }.
 export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(), log = () => {}, days } = {}) {
   const startedAt = now()
   const profile = await getProfile()
@@ -85,9 +97,25 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
     ? { ...existing, selectedIds: new Set(existing.selectedIds) }
     : { results: [], processedResults: [], triaged: {}, candidates: [], preCapCandidates: [], searchContext: { counts: [], failed: [], days: null }, selectedIds: new Set(), openedAt: null, runBy: 'scheduler', ranAt: new Date(startedAt).toISOString(), server: { phase: 'search', startedAt: new Date(startedAt).toISOString() } }
 
+  if (state.processedResults.length > PILOT_DIGEST_LIMIT) {
+    return { phase: 'error', papers: state.results.length, read: 0, note: LEGACY_DIGEST_LIMIT_NOTE }
+  }
+
   const persist = async (patch = {}) => {
     state = { ...state, ...patch }
     await saveDailyDigest(state)
+  }
+  // A resumed run was released by an operator: the held marker no longer describes it.
+  if (resuming && state.server?.held) {
+    const server = { ...state.server }
+    delete server.held
+    state = { ...state, server }
+  }
+  // Stop on an unresolved paid attempt: keep the phase and everything saved, mark the record held.
+  const hold = async (read) => {
+    await persist({ server: { ...state.server, held: { reason: HELD_REASON, at: new Date(now()).toISOString() } } })
+    log('held: a paid attempt is unresolved; stopping without finishing')
+    return { phase: 'held', papers: state.results.length, read, note: HELD_NOTE }
   }
 
   // Phase 1: search + score. Once per digest.
@@ -127,7 +155,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
     const finalFloor = normalizeScoreFloor(profile?.rubric?.scoreFloor)
     const selection = applyScoreFloor(capped.candidates, {
       floor: preReadFloor(finalFloor),
-      count: profile?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT,
+      count: digestCount(profile?.rubric?.selectCount, DEFAULT_SELECT_COUNT),
     })
     const chosenIds = new Set(selection.picked.map((c) => c.id))
     const coverageIds = new Set(selection.picked.slice(0, selection.coveragePicked).map((c) => c.id))
@@ -153,13 +181,16 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
   // Phase 2: read and verify, one paper at a time, persisting after each, within budget.
   let read = 0
   if (state.server.phase === 'reading' || state.server.phase === 'fallback') {
-    const remaining = remainingToRead(state.candidates, state.selectedIds, state.processedResults)
+    const remaining = fitDigestPapers(remainingToRead(state.candidates, state.selectedIds, state.processedResults), state.processedResults)
     for (const paper of remaining) {
       if (now() - startedAt > budgetMs) {
         log(`budget: ${remaining.length - read} papers left for the next tick`)
         return { phase: 'reading', papers: state.results.length, read, note: 'Budget reached; will resume.' }
       }
       const res = await runPaper(paper)
+      // The read failed on an attempt whose cost is unknown: not a failed paper and not a
+      // finished one. It is not recorded as processed, so a released run reads it again.
+      if (res.error && serverRunUnresolved()) return hold(read)
       if (res.error && isCapReached(res.errorObject)) {
         await persist({ server: { ...state.server, phase: 'reading', capped: true } })
         return { phase: 'capped', papers: state.results.length, read, note: res.error }
@@ -170,6 +201,8 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
       // if the rank call fails they must not sit at the bottom of the digest unsummarized.
       const results = res.retracted || state.server.fallbackDone ? state.results : [...state.results, res]
       await persist({ processedResults: processed, results })
+      // The paper itself came back, but one of its attempts is unresolved: keep it, stop here.
+      if (serverRunUnresolved()) return hold(read)
     }
     await persist({ server: { ...state.server, phase: 'rank' } })
     // Ranking is one large model call over every paper read (full text each), routinely
@@ -189,21 +222,29 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
     let visible = state.results
     if (ok.length) {
       const projects = await digestProjects(profile)
-      const rankings = await triage({
-        northStars: profile?.northStars ?? [],
-        projects,
-        journalPreferences: profile?.journalPreferences,
-        rubric: profile?.rubric?.criteria ?? '',
-        candidates: ok.map((r) => ({
-          id: r.paper.id,
-          title: titleOf(r),
-          design: r.design,
-          topics: r.paper.topics,
-          topicSteering: r.paper.topicSteering,
-          summary: r.sourceDoc?.text || '',
-          verified: r.rows.filter((row) => isRelationshipValidated(row.verdict)).map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity), quote: row.quantity.source_quote })),
-        })),
-      })
+      let rankings
+      try {
+        rankings = await triage({
+          northStars: profile?.northStars ?? [],
+          projects,
+          journalPreferences: profile?.journalPreferences,
+          rubric: profile?.rubric?.criteria ?? '',
+          candidates: ok.map((r) => ({
+            id: r.paper.id,
+            title: titleOf(r),
+            design: r.design,
+            topics: r.paper.topics,
+            topicSteering: r.paper.topicSteering,
+            summary: evidenceSummary(r),
+            primary: findPrimary(r.rows, (row) => isRelationshipValidated(row.verdict)),
+            verified: r.rows.filter((row) => isRelationshipValidated(row.verdict)).map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity), quote: row.quantity.source_quote })),
+          })),
+        })
+      } catch (err) {
+        // The ranking attempt was dispatched and its cost is unknown: hold, do not finish.
+        if (serverRunUnresolved()) return hold(read)
+        throw err
+      }
       triaged = takesById(rankings)
       const post = applyPostReadFloor(state.processedResults, triaged, profile?.rubric?.scoreFloor)
       visible = post.kept
@@ -219,6 +260,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
           floor: post.floor,
           counts: state.searchContext?.counts,
         })
+        fallback.candidates = fitDigestPapers(fallback.candidates, state.processedResults)
         if (fallback.candidates.length) {
           log(`fallback: reading ${fallback.candidates.length} more for ${fallback.rescuedTopics.length} topics`)
           const selectedIds = new Set([...state.selectedIds, ...fallback.candidates.map((c) => c.id)])
@@ -232,7 +274,9 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
 
     // Seen ledger LAST, and only for what actually ran or was passed over.
     const outcomes = state.processedResults.map((r) => ({ id: r.paper.id, error: r.error }))
-    const ids = stampableIds(state.candidates, outcomes)
+    const attempted = new Set(outcomes.map((o) => String(o.id)))
+    const eligiblePool = attempted.size >= PILOT_DIGEST_LIMIT ? state.candidates.filter((p) => attempted.has(String(p.id))) : state.candidates
+    const ids = stampableIds(eligiblePool, outcomes)
     if (ids.length) {
       try {
         const ledger = await store.get('seen', SEEN_KEY)

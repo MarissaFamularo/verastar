@@ -1,0 +1,163 @@
+{
+ "row_id": "AAA-13",
+ "pmid": "23549424",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Endovascular repair versus open repair of ruptured abdominal aortic aneurysms: a \nmulticenter randomized controlled trial.\n\nOBJECTIVE: Randomized comparison of endovascular repair (EVAR) with open repair \n(OR) in patients with a ruptured abdominal aortic aneurysm (RAAA).\nBACKGROUND: Despite advances in operative technique and perioperative management \nRAAA remains fraught with a high rate of death and complications. Outcome may \nimprove with a minimally invasive surgical technique: EVAR.\nMETHODS: All patients with a RAAA in the larger Amsterdam area were identified. \nLogistics for RAAA patients was changed with centralization of care in 3 trial \ncenters. Patients both fit for EVAR and for OR were randomized to either of the \ntreatments. Nonrandomized patients were followed in a prospective cohort. \nPrimary endpoint of the study was the composite of death and severe \ncomplications at 30 days.\nRESULTS: Between April 2004 and February 2011, we identified 520 patients with a \nRAAA of which 116 could be randomized. The primary endpoint rate for EVAR was \n42% and for OR was 47% [absolute risk reduction (ARR) = 5.4%; 95% confidence \ninterval (CI): -13% to +23%]. The 30-day mortality was 21% in patients assigned \nto EVAR compared with 25% for OR (ARR = 4.4% 95% CI: -11% to +20%). The \nmortality of all surgically treated patients in the nonrandomized cohort was 30% \n(95% CI: 26%-35%) and 26% (95% CI: 20% to 32%) in patients with unfavorable \nanatomy for EVAR, treated by OR at trial centers.\nCONCLUSIONS: This trial did not show a significant difference in combined death \nand severe complications between EVAR and OR. Mortality for OR both in \nrandomized patients and in cohort patients was lower than anticipated, which may \nbe explained by optimization of logistics, preoperative CT imaging, and \ncentralization of care in centers of expertise.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "30-day composite of death and severe complications (primary endpoint), EVAR vs OR",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "EVAR",
+    "first_value": 42,
+    "second_label": "OR",
+    "second_value": 47,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The primary endpoint rate for EVAR was 42% and for OR was 47%",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Absolute risk reduction in primary endpoint (EVAR vs OR)",
+    "quantity_type": "single",
+    "value": 5.4,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "%",
+    "ci_low": -13,
+    "ci_high": 23,
+    "p_value": null,
+    "source_quote": "absolute risk reduction (ARR) = 5.4%; 95% confidence interval (CI): -13% to +23%",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day mortality, EVAR vs OR",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "EVAR",
+    "first_value": 21,
+    "second_label": "OR",
+    "second_value": 25,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The 30-day mortality was 21% in patients assigned to EVAR compared with 25% for OR",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Absolute risk reduction in 30-day mortality (EVAR vs OR)",
+    "quantity_type": "single",
+    "value": 4.4,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "%",
+    "ci_low": -11,
+    "ci_high": 20,
+    "p_value": null,
+    "source_quote": "ARR = 4.4% 95% CI: -11% to +20%",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Mortality of all surgically treated patients in the nonrandomized cohort",
+    "quantity_type": "single",
+    "value": 30,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "%",
+    "ci_low": 26,
+    "ci_high": 35,
+    "p_value": null,
+    "source_quote": "The mortality of all surgically treated patients in the nonrandomized cohort was 30% (95% CI: 26%-35%)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote located, but 35 is not present in it — the value does not match the source."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "This randomized trial found no statistically clear difference between endovascular and open repair of ruptured AAA for the combined outcome of death and severe complications at days.",
+  "designCaution": "Only a minority of identified ruptured AAA patients were anatomically and clinically eligible for randomization, so the trial was underpowered and its findings apply to a selected, EVAR-suitable population treated in centralized centers.",
+  "relevance": "Core to your AAA/TAAA outcomes north star, with centralization-of-care lessons relevant to program-level thinking.",
+  "score": 72,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the primary endpoint rate was 42% for EVAR versus 47% for OR with a 95% CI crossing zero (-13% to +23%), and concludes 'This trial did not show a significant difference in combined death and severe complications between EVAR and OR,' directly supporting the claim of no statistically clear difference."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet clearly documents that of 520 identified RAAA patients, only 116 could be randomized (22%), describes the selection criterion as 'Patients both fit for EVAR and for OR,' notes follow-up of 'Nonrandomized patients,' and explicitly discusses centralization in 3 trial centers, all supporting the claim that only a selected, EVAR-suitable minority was randomized and findings apply to centralized centers."
+  }
+ }
+}

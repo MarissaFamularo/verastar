@@ -1,3 +1,4 @@
+import { PILOT_DIGEST_LIMIT, DIGEST_LIMIT_NOTE, fitDigestPapers } from '../pipeline/digestLimit.js'
 import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion.js'
 import { linkFindingNumbers, rowsInFinding } from '../lib/claimCheck.js'
 import { ClaimCheckMark } from './ClaimCheckMark.jsx'
@@ -8,7 +9,7 @@ import { ClaimCheckMark } from './ClaimCheckMark.jsx'
 // flags. This is the "cool to watch" 45s of the demo video.
 
 import { useEffect, useRef, useState } from 'react'
-import { hasModelAccess, isCapReached } from '../lib/anthropic.js'
+import { hasModelAccess } from '../lib/anthropic.js'
 import { CAP_MESSAGE } from '../lib/sponsor.js'
 import { canSchedule, runScheduledDigestNow } from '../lib/digestSchedule.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
@@ -18,29 +19,29 @@ import {
   clearDailyDigest,
   saveSuccessfulScan,
   loadSuccessfulScan,
-  withOaLinks,
   digestGaps,
   restoreNote,
   isDigestFromToday,
   sameDayNote,
   markDigestOpened,
+  scheduledDigestStatus,
+  isHeldRun,
+  HELD_DIGEST_NOTE,
+  frozenDigestState,
+  digestControlPolicy,
 } from '../lib/digestStore.js'
-import { digestProjects } from '../lib/trellis.js'
+import { createContinuationTickets } from '../lib/continuationTicket.js'
+import { runAndRankDigest } from '../lib/digestRunAndRank.js'
+import { scoreCandidatePool, rescorePool } from '../lib/digestScorePool.js'
+import { createReloadGuard, reloadIfCurrent } from '../lib/reloadGuard.js'
 import { wakeLock } from '../lib/wakeLock.js'
 import { checkSavedRetractions } from '../lib/retractionWatch.js'
 import { verify } from '../pipeline/verify.js'
-import { DEMO_PAPERS, runPaper, corruptAndReverify, searchCandidates } from '../pipeline/pipeline.js'
-import { triage } from '../pipeline/triage.js'
+import { DEMO_PAPERS, searchCandidates } from '../pipeline/pipeline.js'
 import {
-  selectCandidates,
-  capScoredByTopic,
-  applyScoreFloor,
-  applyPostReadFloor,
   planCoverageFallbacks,
   topicAssignmentReconciliation,
   normalizeScoreFloor,
-  preReadFloor,
-  coverageSelectionSummary,
   readFitLabel,
   belowFloorNote,
 } from '../pipeline/select.js'
@@ -55,7 +56,6 @@ import {
   searchFailedNote,
   topicReportRows,
 } from '../pipeline/topics.js'
-import { DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { savePaper, setPaperNote } from '../pipeline/save.js'
 import { setPaperFavorite } from '../lib/favorites.js'
 import { logEvent } from '../lib/events.js'
@@ -96,14 +96,14 @@ const KEYLESS_EXAMPLES = (() => {
   const specs = [
     { paper: DEMO_PAPERS[0], sourceTier: 'verified-full-text', name: 'Amputation-free survival', quantity: { value: 0.84, unit: 'HR', ci_low: 0.61, ci_high: 1.16, p_value: 0.22, source_quote: 'HR 0.84 (97.5% CI 0.61–1.16, P=0.22)', location_hint: 'Published reference result' } },
     { paper: DEMO_PAPERS[1], sourceTier: 'verified-registry', name: 'TcPO2 difference', quantity: { value: 11.2, unit: 'mmHg', ci_low: 8.0, ci_high: 14.5, p_value: 0.001, source_quote: 'TcPO2 diff 11.2 mmHg (95% CI 8.0–14.5, P<0.001)', location_hint: 'Published reference result' } },
-    { paper: DEMO_PAPERS[2], sourceTier: 'verified-full-text', name: 'Procedural risk', quantity: { value: 1.16, unit: 'RR', ci_low: 0.86, ci_high: 1.57, p_value: 0.33, source_quote: 'RR 1.16 (95% CI 0.86–1.57, p=0.33)', location_hint: 'Published reference result' } },
+    { paper: DEMO_PAPERS[2], sourceTier: 'verified-full-text', name: 'Any non-procedural stroke over 5 years (allocated CAS versus CEA)', quantity: { value: 1.16, unit: 'RR', ci_low: 0.86, ci_high: 1.57, p_value: 0.33, source_quote: 'RR 1.16 (95% CI 0.86–1.57, p=0.33)', location_hint: 'Published reference result' } },
   ]
-  const results = specs.map(({ paper, sourceTier, name, quantity }, index) => ({
+  const results = specs.map(({ paper, sourceTier, name, quantity }) => ({
     paper,
     citation: { pmid: paper.pmid, url: `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`, title: paper.title, verified: true },
-    design: index === 0 ? 'RCT' : index === 1 ? 'RCT' : 'meta_analysis',
+    design: 'RCT',
     source: { tier: sourceTier, hasBody: sourceTier === 'verified-full-text', pmcid: paper.pmcid },
-    sourceDoc: { text: quantity.source_quote, tables: '' },
+    sourceDoc: { text: quantity.source_quote, tables: '', illustrative: true },
     rows: [{ quantity: { name, ...quantity }, verdict: verify({ name, ...quantity }, quantity.source_quote) }],
   }))
   results[0].corrupt = {
@@ -263,6 +263,33 @@ export function ScanDetails({ candidates = 0, digest = 0, open = false, onToggle
   )
 }
 
+// The "Finish this digest" block: the amber note for a restore that came back short, and the
+// button that finishes it. Not rendered at all for a held or stopped server digest (the policy's
+// showFinish is false), so the delay / stopped message is never shown beside an offer to continue.
+export function DigestContinuation({ show = false, note = '', state = 'incomplete', busy = false, keySet = false, onFinish = () => {} }) {
+  if (!show) return null
+  return (
+    <div style={{ margin: '12px 0 0' }}>
+      {note && (
+        <p data-digest-state={state} style={{ margin: 0, fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-abstract)' }}>
+          {note}
+        </p>
+      )}
+      {/* Finish rather than restart: the papers already verified are in `results` and
+          runAndRank (via resumeDigest) skips re-extracting them — only what never ran
+          gets fetched, then the whole set is (re-)ranked. */}
+      <button
+        onClick={onFinish}
+        disabled={!keySet || busy}
+        className="cursor-pointer"
+        style={{ marginTop: 8, borderRadius: 999, border: '1px solid rgba(239,143,91,.4)', background: 'transparent', color: 'var(--color-accent)', padding: '6px 14px', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
+      >
+        {busy ? 'Finishing…' : 'Finish this digest'}
+      </button>
+    </div>
+  )
+}
+
 export function failedDigestResults(results = []) {
   return (Array.isArray(results) ? results : []).filter((result) => result?.error && !result?.retracted)
 }
@@ -356,6 +383,8 @@ function CandidatePool({
   onRescore,
   selecting,
   running,
+  // A held or stopped server digest: its pool can be read, not run, added to or re-scored.
+  locked = false,
 }) {
   const hasDigest = digestedIds.size > 0
   const chosen = candidates.filter((c) => selectedIds.has(c.id)).length
@@ -387,17 +416,17 @@ function CandidatePool({
             {open ? '▾ Hide list' : `▸ Show all ${candidates.length}`}
           </button>
           {open && (
-            <button onClick={onRescore} disabled={selecting || running} title="Re-score this same pool against your current rubric — no new search" style={{ ...ghostBtn, opacity: selecting || running ? 0.5 : 1 }}>
+            <button onClick={onRescore} disabled={locked || selecting || running} title="Re-score this same pool against your current rubric — no new search" style={{ ...ghostBtn, opacity: locked || selecting || running ? 0.5 : 1 }}>
               {selecting ? 'Re-ranking…' : 'Re-rank with current rubric'}
             </button>
           )}
           {open &&
             (hasDigest ? (
-              <button onClick={onAddToDigest} disabled={!pending || selecting || running} style={{ ...accentBtn, opacity: !pending || selecting || running ? 0.5 : 1 }}>
+              <button onClick={onAddToDigest} disabled={locked || !pending || selecting || running} style={{ ...accentBtn, opacity: locked || !pending || selecting || running ? 0.5 : 1 }}>
                 {running ? 'Adding…' : pending ? `Add ${pending} to digest` : 'Add to digest'}
               </button>
             ) : (
-              <button onClick={onRunDigest} disabled={!chosen || selecting || running} style={{ ...accentBtn, opacity: !chosen || selecting || running ? 0.5 : 1 }}>
+              <button onClick={onRunDigest} disabled={locked || !chosen || selecting || running} style={{ ...accentBtn, opacity: locked || !chosen || selecting || running ? 0.5 : 1 }}>
                 {running ? 'Running…' : `Run digest on ${chosen} selected`}
               </button>
             ))}
@@ -558,6 +587,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // Honest non-failures — "nothing new since yesterday", "4 of 38 cleared your bar".
   // Kept apart from scanError so a legitimate short day never renders in the error red.
   const [scanNote, setScanNote] = useState('')
+  // A save the database refused (see onSaveRefused). Its own state, shown outside the scan
+  // receipt: scanNote lives inside that collapsed panel, where this would never be seen.
+  const [saveNote, setSaveNote] = useState('')
   // What the search actually did — topics searched, window, and any topic whose query
   // failed. Kept separate from scanNote because scanNote is claimed by the scoring funnel.
   const [searchNote, setSearchNote] = useState('')
@@ -603,6 +635,12 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // A server run still in progress is never written from here at all: the screen holds a
   // partial copy, and writing it back would erase the server's progress marker.
   const originRef = useRef({ runBy: 'user', server: null })
+  // Set while the digest on screen is a held or stopped server digest: every path that would
+  // continue THAT digest checks it (lib/digestStore.js, createContinuationGate). A run already
+  // under way also holds a ticket from it, which goes stale for good when the digest is found
+  // held or stopped, a different digest is shown, or a new scan starts (lib/continuationTicket.js).
+  const continuation = useRef(null)
+  if (!continuation.current) continuation.current = createContinuationTickets()
   // A server run started from this screen (sponsored accounts; see startServerRun).
   const [serverRunning, setServerRunning] = useState(false)
   const serverRunRef = useRef(false)
@@ -626,7 +664,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // per-paper persist inside runAndRank, which exists precisely so an interrupted run keeps
   // what it already paid for. The `running` state can't serve as this guard either — it goes
   // false the instant the paper loop ends, while triage hasn't been called yet.
-  const runInFlight = useRef(false)
+  const runInFlight = useRef(0)
 
   // Screen wake lock spans a whole run (search through ranking) so the run survives the
   // phone's auto-lock — see lib/wakeLock.js. Destroy rather than merely end() on unmount:
@@ -647,7 +685,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     const stamp = ranAtRef.current
     // Anything this screen writes is on screen, so it has been opened.
     if (!openedAtRef.current) openedAtRef.current = new Date().toISOString()
-    saveDailyDigestIfCurrent({ ...digestRef.current, ...origin, ...overrides, ranAt: stamp, openedAt: openedAtRef.current }).catch(console.warn)
+    saveDailyDigestIfCurrent({ ...digestRef.current, ...origin, ...overrides, ranAt: stamp, openedAt: openedAtRef.current })
+      .then((saved) => { if (saved === false) latest.current.onSaveRefused?.() })
+      .catch(console.warn)
     setDigestSavedAt(stamp)
     onDigestDate(stamp)
   }
@@ -705,6 +745,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   function showSaved(saved) {
     if (!saved) return
     if (!saved.results.length && !saved.candidates.length) return
+    reloadGuard.current.supersede() // the screen now shows this; an earlier pending reload is stale
+    continuation.current.invalidate() // and a run started on what it replaced must not write over it
     setResults(saved.results)
     setProcessedResults(saved.processedResults)
     setTriaged(saved.triaged)
@@ -720,14 +762,22 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     const gaps = digestGaps(saved)
     // A scheduled run leaves the digest here for the morning; a scheduler mid-run is
     // still being written on the server and reads as incomplete until it finishes.
-    const scheduledPending = saved.runBy === 'scheduler' && saved.server?.phase && saved.server.phase !== 'done'
+    // A held run is paused on an unresolved step, and an abandoned one was stopped by an
+    // operator: both say so (lib/digestStore.js) instead of reading as prepared or finished.
+    const scheduled = scheduledDigestStatus(saved)
+    const scheduledPending = !!scheduled?.pending
+    // A run the server refused as held leaves no marker on a digest whose worker died. While the
+    // same unfinished scan is on screen it stays held here; only the server saying otherwise
+    // (startServerRun) or a different record lifts it.
+    const stillHeld = continuation.current.state() === 'held' && scheduledPending && (saved.ranAt ?? null) === ranAtRef.current
+    const frozen = frozenDigestState(scheduled) || (stillHeld ? 'held' : null)
+    continuation.current.freeze(frozen)
     setRestored({
-      note: scheduledPending
-        ? 'Your digest is still being prepared on the server. It keeps going if you close the app; check back in a few minutes.'
-        : saved.runBy === 'scheduler'
-          ? (saved.ranAt && new Date(saved.ranAt).getHours() < 8 ? 'Your morning digest, prepared while you slept.' : 'Your digest, prepared on the server.')
-          : restoreNote(gaps),
-      incomplete: !gaps.complete && !scheduledPending,
+      note: frozen === 'held' ? HELD_DIGEST_NOTE : scheduled ? scheduled.note : restoreNote(gaps),
+      // A held or stopped digest is never offered as something to finish from here.
+      incomplete: !gaps.complete && !scheduledPending && !frozen,
+      delayed: !!frozen,
+      state: frozen || (scheduledPending ? 'pending' : 'ready'),
     })
     ranAtRef.current = saved.ranAt ?? null
     openedAtRef.current = saved.openedAt ?? (saved.results.length ? new Date().toISOString() : null)
@@ -735,14 +785,37 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     onDigestDate(saved.ranAt ?? null)
     originRef.current = { runBy: saved.runBy || 'user', server: saved.server ?? null }
     // The one signal the scheduler waits for: this digest has been seen.
-    if (saved.results.length && !saved.openedAt) markDigestOpened().then((did) => { if (did) logEvent('digest_opened', { runBy: saved.runBy || 'user', papers: saved.results.length }) })
+    if (saved.results.length && !saved.openedAt) markDigestOpened(undefined, { ranAt: saved.ranAt ?? null }).then((did) => { if (did) logEvent('digest_opened', { runBy: saved.runBy || 'user', papers: saved.results.length }) })
+  }
+
+  // A save that was refused did not happen: a newer digest replaced the one on screen, or
+  // the server is preparing one (lib/digestStore.js). Say so, and when nothing is running
+  // here show the digest that is actually stored instead of the copy that could not be saved.
+  // The read takes time, so it is applied only if it is still wanted when it resolves: not
+  // after a scan has started (running or already finished), not over something shown since,
+  // not after a later reload, and not after this screen is gone (lib/reloadGuard.js).
+  const reloadGuard = useRef(null)
+  if (!reloadGuard.current) reloadGuard.current = createReloadGuard()
+  useEffect(() => {
+    const guard = reloadGuard.current
+    guard.mount()
+    return () => guard.dispose()
+  }, [])
+  function onSaveRefused() {
+    setSaveNote('A newer digest is on the server, so the last change on this screen was not saved.')
+    reloadIfCurrent({
+      guard: reloadGuard.current,
+      load: loadDailyDigest,
+      apply: (saved) => latest.current.showSaved(saved),
+      isBusy: () => latest.current.busy,
+    }).catch(console.warn)
   }
 
   // The async handlers below outlive the render that created them; they call through this
   // so they always reach the current showSaved / startServerRun and the current busy flag.
   const latest = useRef({})
   useEffect(() => {
-    latest.current = { showSaved, startServerRun, busy }
+    latest.current = { showSaved, startServerRun, busy, onSaveRefused }
   })
 
   useEffect(() => {
@@ -765,7 +838,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           if (!saved) return
           const pending = saved.runBy === 'scheduler' && saved.server?.phase && saved.server.phase !== 'done'
           if (pending || (saved.ranAt && saved.ranAt !== ranAtRef.current)) latest.current.showSaved(saved)
-          if (pending) latest.current.startServerRun({ continuing: true })
+          // A held run cannot be moved along from here; asking again is only refused.
+          if (pending && !saved.server?.held) latest.current.startServerRun({ continuing: true })
         })
         .catch(console.warn)
     }
@@ -882,6 +956,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     const corpusText = corpusLabel === 'tables' ? sourceDoc.tables : sourceDoc.text
     setViewer({
       title: paperTitle,
+      illustrative: sourceDoc.illustrative === true,
       corpusLabel,
       corpusText,
       quote: quantity.source_quote,
@@ -901,197 +976,35 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // The wrapper exists only to hold the in-flight flag across the whole thing — papers and
   // ranking both — so no background write can snapshot the half-built digest.
   async function runList(papers, options = {}) {
-    runInFlight.current = true
+    // A count, not a flag: a stale run finishing late must not clear it under a newer run.
+    runInFlight.current += 1
     try {
       return await runAndRank(papers, options)
     } finally {
-      runInFlight.current = false
+      runInFlight.current -= 1
     }
   }
 
-  async function runAndRank(papers, {
-    injectCorrupt = false,
-    append = false,
-    forceIncludeIds = new Set(),
-    baseSnapshot = null,
-    suppressRunEvent = false,
-  } = {}) {
-    setRunning(true)
-    ranRef.current = true
-    setRestored(null)
-    const base = append ? (baseSnapshot?.processedResults ?? processedResults) : []
-    const baseVisible = append ? (baseSnapshot?.results ?? results) : []
-    if (!append) {
-      setResults([])
-      setProcessedResults([])
-      setStages({})
-      setTriaged({})
-      setExpanded({})
-    }
-    const onStage = (id, stage) => setStages((prev) => ({ ...prev, [id]: stage }))
-
-    const existingIds = new Set(base.map((r) => r.paper.id))
-    const toRun = papers.filter((p) => !existingIds.has(p.id))
-    const collected = [...base]
-    const processed = [...base]
-    // What actually landed in triage — fresh runs cleared it, appends keep the old map
-    // until the combined re-rank replaces it. Declared before the loop: each paper's
-    // incremental persist below needs it too, so a digest already showing summaries for
-    // the base papers doesn't restore looking blanker than it is.
-    let triagedNow = append ? (baseSnapshot?.triaged ?? triaged) : {}
-    let visible = append ? [...baseVisible] : collected
-    setCapNotice('')
-    for (const paper of toRun) {
-      const res = await runPaper(paper, { onStage })
-      if (res.error && isCapReached(res.errorObject)) {
-        logEvent('cap_reached', { surface: 'digest', remaining: toRun.length - processed.length })
-        setCapNotice(res.error)
-        setStages((prev) => ({ ...prev, [paper.id]: undefined }))
-        break
-      }
-      processed.push(res)
-      // Showcase only: prove the gate rejects a corrupted value on the first clean paper.
-      if (injectCorrupt && !res.error && collected.every((r) => !r.corrupt)) {
-        const corrupt = corruptAndReverify(res, res.sourceDoc)
-        if (corrupt) res.corrupt = corrupt
-      }
-      // A retraction is exclusion, not a red error card. Keep it in the outcome ledger so
-      // the run accounting is honest, but never place it in the visible/persisted digest.
-      if (res.retracted) continue
-      collected.push(res)
-      setProcessedResults([...collected])
-      // During an append (the coverage fallback, or adding more) the new papers stay out of
-      // the digest until the combined re-rank below scores them against her bar. They are
-      // the weaker candidates by construction; if the summary call fails they must not
-      // land at the bottom of the digest unsummarized. They are kept in processedResults,
-      // so "Finish this digest" can still rank them without reading them again. A paper
-      // that failed to read needs no ranking and shows its error card right away.
-      if (!append) visible = [...collected]
-      else if (res.error) visible = [...visible, res]
-      setResults([...visible])
-      // Persist after EVERY paper, not just at the end of the whole run. Each extraction is
-      // a paid Claude call, and a run is minutes long — if the screen sleeps mid-loop (the
-      // wake lock is advisory and can fail to hold) the papers already verified must not be
-      // lost. `collected` is the source of truth here, NOT `digestRef.current` / `results`
-      // state — setState is async and lags a render behind, so persisting through the
-      // spread in persistDigest() would silently drop the paper that just finished. Triage
-      // hasn't run for anything newly fetched this loop, so this snapshot is honestly
-      // incomplete — digestGaps/restoreNote already know how to say that on restore, and
-      // the seen ledger is untouched either way (recordSeen only ever runs after the whole
-      // run finishes).
-      persistDigest({
-        results: withOaLinks(visible, oaResolved.current),
-        processedResults: withOaLinks(collected, oaResolved.current),
-        triaged: triagedNow,
-      })
-    }
-    setRunning(false)
-
-    // Reasoning channel: one cheap call ranks the papers and writes the tier + finding +
-    // relevance. Every fetched paper gets a blurb — even ones with no verified numbers
-    // (reviews, methods pieces) still belong in the digest. A failure here never touches
-    // the proven facts.
-    const ok = collected.filter((r) => !r.error)
-    let postNow = null
-    if (ok.length) {
-      setRanking(true)
-      try {
-        const profile = await getProfile()
-        const rankings = await triage({
-          northStars: profile?.northStars ?? [],
-          projects: await digestProjects(profile),
-          journalPreferences: profile?.journalPreferences,
-          rubric: profile?.rubric?.criteria ?? '',
-          candidates: ok.map((r) => ({
-            id: r.paper.id,
-            title: titleOf(r),
-            design: r.design,
-            topics: r.paper.topics,
-            topicSteering: r.paper.topicSteering,
-            summary: r.sourceDoc?.text || '',
-            // The finding is written only from values the app verified.
-            verified: r.rows
-              .filter((row) => isRelationshipValidated(row.verdict))
-              .map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity), quote: row.quantity.source_quote })),
-          })),
-        })
-        const byId = {}
-        for (const rk of rankings) {
-          byId[rk.id] = {
-            score: rk.score,
-            tier: rk.tier,
-            finding: rk.finding,
-            designCaution: rk.designCaution,
-            relevance: rk.relevance,
-            check: rk.check,
-            cautionCheck: rk.cautionCheck,
-          }
-        }
-        setTriaged(byId)
-        triagedNow = byId
-
-        // The user's minimum is a digest admission rule, not merely a pre-read cost
-        // control. Reading can overturn the abstract screen; when it does, enforce the
-        // better-informed score. Failed papers remain visible as failures, but a successful
-        // paper below the bar is not padding in the digest.
-        if (!injectCorrupt) {
-          const post = applyPostReadFloor(collected, byId, profile?.rubric?.scoreFloor)
-          postNow = post
-          const bar = post.floor
-          const forced = collected.filter((r) => forceIncludeIds.has(r.paper.id) && !r.error && !r.retracted)
-          const visibleById = new Map([...post.kept, ...forced].map((r) => [r.paper.id, r]))
-          visible = [...visibleById.values()]
-          setResults([...visible])
-          setProcessedResults([...collected])
-          setSelectedIds(new Set(visible.map((r) => r.paper.id)))
-          setScoreFloor(bar)
-          const postRead = post.total === 0
-            ? ''
-            : post.cleared === post.total
-              ? `After reading, all ${post.total} cleared your bar of ${bar}.`
-              : post.cleared
-                ? `After reading, ${post.cleared} of ${post.total} cleared your bar of ${bar}; ${post.excluded} ${post.excluded === 1 ? 'paper was' : 'papers were'} excluded.`
-                : `After reading, nothing cleared your bar of ${bar}. The digest is empty; ${post.total} ${post.total === 1 ? 'paper was' : 'papers were'} excluded.`
-          if (postRead) setScanNote((prev) => prev ? `${prev} ${postRead}` : postRead)
-        }
-      } catch (err) {
-        console.warn('Triage failed (facts unaffected):', err.message)
-        setScanError(
-          append
-            ? `The ${toRun.length} added paper${toRun.length === 1 ? ' was' : 's were'} read but Claude could not score and summarize ${toRun.length === 1 ? 'it' : 'them'}: ${err.message}. ` +
-              'They were left out of the digest rather than shown unsummarized; use “Finish this digest” to retry without reading them again.'
-            : `The papers were read and verified, but Claude could not finish their summaries: ${err.message}. ` +
-              'Your completed reading was saved; use “Finish this digest” to retry the summaries without reading the papers again.',
-        )
-      }
-      setRanking(false)
-    }
-    // Persist so a tab switch (which unmounts this component) never costs a re-run. This is the
-    // ONE write a run makes, so `collected` has to carry the open-access links that resolved
-    // while it was building — it predates those patches, hence the merge.
-    persistDigest({
-      results: withOaLinks(visible, oaResolved.current),
-      processedResults: withOaLinks(collected, oaResolved.current),
-      triaged: triagedNow,
+  // The orchestration lives in lib/digestRunAndRank.js. It holds a continuation ticket for
+  // the whole run and shows it after every await, so a run that was invalidated (the digest
+  // found held or stopped, another digest shown, a new scan started) sends nothing more and
+  // applies nothing more.
+  function runAndRank(papers, options = {}) {
+    return runAndRankDigest(papers, options, {
+      tickets: continuation.current,
+      snapshot: { results, processedResults, triaged },
+      ui: {
+        setRunning, setRanking, setRestored, setResults, setProcessedResults, setStages, setTriaged,
+        setExpanded, setCapNotice, setSelectedIds, setScoreFloor, setScanNote, setScanError,
+      },
+      onBegin: () => {
+        reloadGuard.current.supersede() // reading papers replaces the screen state
+        ranRef.current = true
+      },
+      persistDigest,
+      oaResolved: () => oaResolved.current,
+      titleOf,
     })
-    // Adoption telemetry: one row per completed run. `showcase` marks the keyless demo
-    // trials, `append` the add-more path — both would otherwise inflate real-run counts.
-    if (!suppressRunEvent) {
-      logEvent('digest_run', {
-        papers: visible.length,
-        processed: processed.length,
-        errors: collected.filter((r) => r.error).length,
-        append: !!append,
-        showcase: !!injectCorrupt,
-      })
-    }
-    return {
-      outcomes: processed.map((r) => ({ id: r.paper.id, error: r.error })),
-      results: visible,
-      processedResults: collected,
-      triaged: triagedNow,
-      post: postNow,
-    }
   }
 
   async function runWithCoverageFallback(chosen, pool, counts) {
@@ -1104,6 +1017,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       floor: initial.post?.floor ?? scoreFloor,
       counts,
     })
+    // Found held, stopped or replaced part-way: no fallback read, and nothing recorded as a run.
+    if (initial.blocked) return initial
+    fallback.candidates = fitDigestPapers(fallback.candidates, initial.processedResults)
     let final = initial
     if (fallback.candidates.length) {
       const topicCount = fallback.rescuedTopics.length
@@ -1113,6 +1029,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         baseSnapshot: initial,
         suppressRunEvent: true,
       })
+      if (final.blocked) return final
     }
     logEvent('digest_run', {
       papers: final.results.length,
@@ -1126,64 +1043,15 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   }
 
   // Score a candidate pool against the current rubric and pre-check the ones that EARNED a
-  // slot. Shared by the initial scan and the re-rank button. `pool` is candidate stubs;
-  // selection fetches their abstracts before scoring. Floor first, then the count cap — a thin day yields a short digest,
-  // never ten slots padded out with whatever scored highest among the mediocre.
-  async function scorePool(pool, context = searchContext) {
-    const profile = await getProfile()
-    const wideScored = await selectCandidates({
-      rubric: profile?.rubric?.criteria ?? '',
-      northStars: profile?.northStars ?? [],
-      projects: await digestProjects(profile),
-      journalPreferences: profile?.journalPreferences,
-      candidates: pool,
+  // slot. Shared by the initial scan and the re-rank button; the orchestration lives in
+  // lib/digestScorePool.js. A new scan calls it as is. A re-score passes a continuation
+  // ticket through `extra`, and stops without applying anything once that ticket is stale.
+  function scorePool(pool, context = searchContext, extra = {}) {
+    return scoreCandidatePool(pool, context, {
+      ui: { setPreCapCandidates, setSearchContext, setTopicReport, setCandidates, setSelectedIds, setScoreFloor, setScanNote },
+      persistDigest,
+      ...extra,
     })
-    const capped = capScoredByTopic(wideScored, {
-      cap: profileTopicCap(profile),
-      counts: context?.counts,
-    })
-    const scored = capped.candidates
-    const nextContext = { ...(context || {}), counts: capped.counts }
-    setPreCapCandidates(wideScored)
-    setSearchContext(nextContext)
-    setTopicReport(topicReportRows(capped.counts, context?.failed))
-    const finalFloor = normalizeScoreFloor(profile?.rubric?.scoreFloor)
-    const screeningFloor = preReadFloor(finalFloor)
-    const selection = applyScoreFloor(scored, {
-      floor: screeningFloor,
-      count: profile?.rubric?.selectCount ?? DEFAULT_SELECT_COUNT,
-    })
-    const { picked, cleared, total } = selection
-    const chosenIds = new Set(picked.map((c) => c.id))
-    const coverageIds = new Set(picked.slice(0, selection.coveragePicked).map((c) => c.id))
-    const ranked = scored.map((candidate) => ({
-      ...candidate,
-      selectionRole: chosenIds.has(candidate.id) ? (coverageIds.has(candidate.id) ? 'coverage' : 'score') : '',
-    }))
-    setCandidates(ranked)
-    setSelectedIds(chosenIds)
-    setScoreFloor(finalFloor) // the post-read admission bar; screening gets a 20-point allowance
-    const slate = picked.length < cleared ? ` ${coverageSelectionSummary({ picked: picked.length, ...selection })}` : ''
-    const screened = cleared
-      ? `On title, abstract, and journal, ${cleared} of ${total} came within 20 points of your final bar of ${finalFloor}.${slate}`
-      : `On title, abstract, and journal, nothing came within 20 points of your final bar of ${finalFloor} today.`
-    setScanNote(screened)
-    // The pool + picks survive a tab switch even before any digest runs.
-    persistDigest({
-      candidates: ranked,
-      preCapCandidates: wideScored,
-      searchContext: nextContext,
-      selectedIds: chosenIds,
-    })
-    return {
-      scored: ranked,
-      chosenIds,
-      cleared,
-      floor: finalFloor,
-      screeningFloor,
-      prescored: capped.prescored,
-      counts: capped.counts,
-    }
   }
 
   // Stamp a pool as shown. Called ONLY after a digest run has finished — an orphan stamp
@@ -1194,7 +1062,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // ledger that didn't save means a day of repeats, and that must never surface as a
   // digest failure.
   async function recordSeen(pool, outcomes) {
-    const ids = stampableIds(pool, outcomes)
+    const attempted = new Set(outcomes.map((o) => String(o.id)))
+    const eligiblePool = attempted.size >= PILOT_DIGEST_LIMIT ? pool.filter((p) => attempted.has(String(p.id))) : pool
+    const ids = stampableIds(eligiblePool, outcomes)
     if (!ids.length) return
     try {
       const ledger = await store.get('seen', SEEN_KEY)
@@ -1217,13 +1087,26 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // tick; while she stays on this screen the next tick is requested at once, and if she
   // leaves, the 5-minute cron ticks finish it. `continuing` resumes a run already underway
   // (from the visibility handler), which the same-day lock must not block.
+  // The server said this run is held: say so, and close every way of continuing it from here.
+  function markHeld() {
+    continuation.current.freeze('held')
+    setRestored((r) => ({ ...(r || {}), note: HELD_DIGEST_NOTE, incomplete: false, delayed: true, state: 'held' }))
+  }
+
   async function startServerRun({ days, continuing = false } = {}) {
     if (serverRunRef.current) return
     if (lockedToday && !continuing) {
       setScanError(sameDayNote())
       return
     }
+    // Starting it again cannot help while it is held. (Coming back to the app may still ask the
+    // server once, which is how a released run is picked up.)
+    if (continuation.current.state() === 'held' && !continuing) return
+    // A new run, deliberately started, is not a continuation of a stopped digest.
+    if (!continuing) continuation.current.clear()
     serverRunRef.current = true
+    reloadGuard.current.supersede() // a run is starting: a pending reload must not land on it
+    setSaveNote('')
     setServerRunning(true)
     setScanError('')
     setScanNote('')
@@ -1241,6 +1124,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           break
         }
         const saved = await loadDailyDigest().catch(() => null)
+        // The server took the run: whatever held it has been released.
+        if (out?.ran && !isHeldRun(out)) continuation.current.clear()
         showSaved(saved)
         if (!out?.ran) {
           if (out?.reason === 'already running') {
@@ -1249,10 +1134,16 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             continue
           }
           if (out?.reason === 'cap reached') setScanError(CAP_MESSAGE)
+          // Held for review: say it is delayed, once, and do not suggest trying again.
+          else if (isHeldRun(out)) markHeld()
           else if (out?.reason !== "today's digest already exists") setScanError('The digest server did not start a run. Try again in a minute.')
           break
         }
         if (out.phase === 'done') break
+        if (isHeldRun(out)) {
+          markHeld()
+          break
+        }
         if (out.phase === 'capped') {
           setScanError(CAP_MESSAGE)
           break
@@ -1303,11 +1194,17 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       setScanError(sameDayNote())
       return
     }
+    if (continuation.current.state() === 'held') return // no run control is shown; refuse a stale entry point too
+    continuation.current.clear() // a new scan, deliberately started, is not a continuation
+    continuation.current.invalidate() // and whatever an earlier run still brings back is not this scan's
+    continuation.current.begin() // this scan is now the latest operation: it owns the busy flags
     // Acquire as the very first statement — this is the button's own onClick, the direct
     // user-gesture call stack the Wake Lock API wants, and the lock has to span the search
     // and scoring below, not just the paper loop runList wraps. finally releases it on
     // every exit — the empty-window return, either catch, and the normal end.
     wakeLock.start()
+    reloadGuard.current.supersede() // a scan is starting: a pending reload must not land on it
+    setSaveNote('')
     try {
       setScanError('')
       setScanNote('')
@@ -1440,8 +1337,17 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       }
       // Papers are about to be read and written as today's digest: now the old snapshot
       // goes, so closing mid-read can't resurrect it over this run's partial results.
-      await clearDailyDigest().catch(console.warn)
-      const { outcomes } = await runWithCoverageFallback(chosen, scored, scoredCounts)
+      const cleared = await clearDailyDigest().catch((err) => { console.warn(err); return true })
+      if (cleared === false) {
+        // The server is writing this account's digest right now. Reading papers here would
+        // pay for a run whose results could not be saved over it.
+        setScanError('Your digest is being prepared on the server right now, so this scan stopped before reading any papers. It will be here in a few minutes.')
+        await restorePrevious()
+        return
+      }
+      const { outcomes, blocked } = await runWithCoverageFallback(chosen, scored, scoredCounts)
+      // The digest was found held, stopped or replaced meanwhile: this scan has nothing to report.
+      if (blocked) return
       setScanDetailsOpen(false)
       const completed = outcomes.filter((outcome) => !outcome.error).length
       if (!completed) {
@@ -1476,29 +1382,32 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
 
   // Live re-rank: re-score the SAME cached pool against the (edited) rubric — no re-fetch,
   // no extraction. This is the cheap rubric-swing: edit the rubric above, watch it re-order.
-  async function rescore() {
-    if (!candidates.length || selecting) return
-    setSelecting(true)
-    setScanError('')
-    setScanNote('')
-    try {
-      const source = preCapCandidates.length ? preCapCandidates : candidates
-      await scorePool(source.map(({ score, reason, selectionRole, retainedTopics, ...c }) => c))
-    } catch (err) {
-      setScanError(`Re-rank failed: ${err.message}`)
-    }
-    setSelecting(false)
+  // It continues the digest on screen, so it holds a continuation ticket for the whole call
+  // (lib/digestScorePool.js): found held, stopped or replaced meanwhile, it sends nothing
+  // more and shows nothing.
+  function rescore() {
+    return rescorePool({
+      tickets: continuation.current,
+      snapshot: { candidates, preCapCandidates, searchContext, selecting },
+      ui: {
+        setSelecting, setScanError, setScanNote,
+        setPreCapCandidates, setSearchContext, setTopicReport, setCandidates, setSelectedIds, setScoreFloor,
+      },
+      persistDigest,
+    })
   }
 
   // The product loop, step 2: run the verify pipeline on ONLY the selected candidates,
   // then rank + summarize them. This is where the (expensive) extraction happens. Once it's
   // done the funnel collapses so the digest itself is the centerpiece.
   async function runDigest() {
+    if (continuation.current.blocked()) return
     const chosen = candidates.filter((c) => selectedIds.has(c.id))
     if (!chosen.length) return
     wakeLock.start()
     try {
-      const { outcomes } = await runWithCoverageFallback(chosen, candidates, searchContext?.counts)
+      const { outcomes, blocked } = await runWithCoverageFallback(chosen, candidates, searchContext?.counts)
+      if (blocked) return
       setPoolOpen(false)
       setScanDetailsOpen(false)
       // The whole pool is offered up, not just the papers she ran: she saw the rest in the
@@ -1514,6 +1423,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // Top up an existing digest: run ONLY the newly-checked candidates and append them, then
   // re-rank the combined set. The papers already in the digest are never re-run.
   async function addToDigest() {
+    if (continuation.current.blocked()) return
     const digested = new Set(results.map((r) => r.paper.id))
     const additions = candidates.filter((c) => selectedIds.has(c.id) && !digested.has(c.id))
     if (!additions.length) return
@@ -1534,10 +1444,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     try {
       // Append mode returns outcomes for the WHOLE digest, so a paper that errored on an
       // earlier run stays excluded here too — it still hasn't been shown to her.
-      const { outcomes } = await runList(additions, {
+      const { outcomes, blocked } = await runList(additions, {
         append: true,
         forceIncludeIds: new Set(additions.map((c) => c.id)),
       })
+      if (blocked) return
       setScanDetailsOpen(false)
       // mergeSeen keeps first-seen stamps, so re-stamping the pool on every top-up is a no-op.
       await recordSeen(candidates, outcomes)
@@ -1558,11 +1469,13 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // then comes back empty too — that's only a true no-op when there is also nothing
   // restored to re-rank; otherwise this still falls through to the ranking-only path.
   async function resumeDigest() {
+    if (continuation.current.blocked()) return
     const chosen = candidates.filter((c) => selectedIds.has(c.id))
     if (!chosen.length && !results.length) return
     wakeLock.start()
     try {
-      const { outcomes } = await runList(chosen, { append: true })
+      const { outcomes, blocked } = await runList(chosen, { append: true })
+      if (blocked) return
       setScanDetailsOpen(false)
       await recordSeen(candidates, outcomes)
     } finally {
@@ -1573,6 +1486,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // A retry is not a new scan. It preserves the successful cards, cached reads, candidate
   // pool, search receipt, and seen ledger, then runs only the paper cards that failed.
   async function retryFailedPapers() {
+    if (continuation.current.blocked()) return
     const failed = failedDigestResults(results)
     if (!failed.length) return
     const baseSnapshot = retryBaseSnapshot({ results, processedResults, triaged })
@@ -1584,6 +1498,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     wakeLock.start()
     try {
       const retried = await runList(papers, { append: true, baseSnapshot })
+      if (retried.blocked) return
       const retryOutcomes = retried.outcomes.filter((outcome) => baseSnapshot.failedIds.has(String(outcome.id)))
       const stillFailed = retryOutcomes.filter((outcome) => outcome.error).length
       if (stillFailed) {
@@ -1603,6 +1518,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   function toggleCandidate(id) {
     // Papers already in the digest are locked in — you add more, you don't uncheck done work.
     if (results.some((r) => r.paper.id === id)) return
+    const occupied = new Set([...selectedIds, ...processedResults.map((r) => r.paper.id)])
+    if (!selectedIds.has(id) && occupied.size >= PILOT_DIGEST_LIMIT) {
+      setCapNotice(DIGEST_LIMIT_NOTE)
+      return
+    }
     setSelectedIds((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
@@ -1658,6 +1578,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   const busy = running || searching || selecting || ranking || retrying || serverRunning
   // Read-but-unranked papers in THIS session (a failed ranking call), not only on restore.
   const liveGaps = digestGaps({ results, processedResults, triaged })
+  // One decision for every control on this screen (lib/digestStore.js).
+  const controls = digestControlPolicy({
+    frozen: restored?.state === 'held' || restored?.state === 'abandoned' ? restored.state : null,
+    incomplete: !!restored?.incomplete, missing: liveGaps.missing, failedCount: failedResults.length, busy, lockedToday,
+  })
   const primaryLabel = serverRunning
     ? 'Preparing your digest…'
     : searching
@@ -1670,10 +1595,10 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             ? 'Writing summaries…'
             : "Run today's digest"
   const showEmpty =
-    !serverRunning && !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote
+    !serverRunning && !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote && !restored?.delayed
   const hasExistingScan = !!(results.length || candidates.length || searchNote || scanNote)
   const hasScanDetails = !demo && !!(
-    searchNote || topicReport.length || scanNote || candidates.length || (restored && !restored.incomplete)
+    searchNote || topicReport.length || scanNote || candidates.length || (restored && !restored.incomplete && !restored.delayed)
   )
 
   return (
@@ -1688,9 +1613,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       <div className="flex flex-col items-center" style={{ gap: 12, marginTop: demo ? 12 : 6 }}>
         {!demo && (
           <DigestRunControls
-            failedCount={failedResults.length}
+            // A held or stopped server digest offers no retry, and a held one no run control at
+            // all: another start is only refused, and the message already says nothing needs doing.
+            failedCount={controls.failedCount}
             hasExistingScan={hasExistingScan}
-            lockedToday={lockedToday}
+            lockedToday={controls.lockedToday}
             busy={busy}
             retrying={retrying}
             keySet={keySet}
@@ -1751,6 +1678,12 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed — one query per topic…</p>}
       {selecting && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is scoring every candidate against your rubric…</p>}
       {scanError && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{scanError}</p>}
+      {saveNote && <p role="status" style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>{saveNote}</p>}
+      {/* A held or stopped server digest is said here, in the open: the quiet restore line
+          lives inside the collapsed scan details, where a delay would go unseen. */}
+      {restored?.delayed && !restored.incomplete && (
+        <p role="status" data-digest-state={restored.state} style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-abstract)' }}>{restored.note}</p>
+      )}
       {/* The ONLY way the window ever gets wider. An empty morning is a true fact about a
           3-day window; quietly re-running it at 30 days to fill the page would make the one
           line she trusts the one line that's false. So she asks — and because the wider run
@@ -1780,26 +1713,14 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       {/* A restore that came back short says so, in amber — same treatment as a withheld
           summary, because it's the same kind of fact: the app is telling her what it does
           NOT have. A whole restore keeps the quiet muted line. */}
-      {(restored?.incomplete || (!busy && liveGaps.missing > 0)) && (
-        <div style={{ margin: '12px 0 0' }}>
-          {restored?.incomplete && (
-            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-abstract)' }}>
-              {restored.note}
-            </p>
-          )}
-          {/* Finish rather than restart: the papers already verified are in `results` and
-              runAndRank (via resumeDigest) skips re-extracting them — only what never ran
-              gets fetched, then the whole set is (re-)ranked. */}
-          <button
-            onClick={resumeDigest}
-            disabled={!keySet || busy}
-            className="cursor-pointer"
-            style={{ marginTop: 8, borderRadius: 999, border: '1px solid rgba(239,143,91,.4)', background: 'transparent', color: 'var(--color-accent)', padding: '6px 14px', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', opacity: !keySet || busy ? 0.5 : 1 }}
-          >
-            {busy ? 'Finishing…' : 'Finish this digest'}
-          </button>
-        </div>
-      )}
+      <DigestContinuation
+        show={controls.showFinish}
+        note={restored?.incomplete ? restored.note : ''}
+        state={restored?.state || 'incomplete'}
+        busy={busy}
+        keySet={keySet}
+        onFinish={resumeDigest}
+      />
       {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
       {showEmpty && (
         <p style={{ margin: '16px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)', lineHeight: 1.6, maxWidth: 620 }}>
@@ -1851,7 +1772,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             </div>
           )}
           {scanNote && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: 'var(--color-fg-dim)', lineHeight: 1.55, maxWidth: 620 }}>{scanNote}</p>}
-          {restored && !restored.incomplete && <p style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-fg-muted)' }}>{restored.note}</p>}
+          {restored && !restored.incomplete && !restored.delayed && <p data-digest-state={restored.state || 'ready'} style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-fg-muted)' }}>{restored.note}</p>}
           {candidates.length > 0 && (
             <CandidatePool
               candidates={candidates}
@@ -1865,6 +1786,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
               onRunDigest={runDigest}
               onAddToDigest={addToDigest}
               onRescore={rescore}
+              locked={controls.poolLocked}
               selecting={selecting}
               running={running}
             />
@@ -2103,6 +2025,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         open={viewer !== null}
         onClose={() => setViewer(null)}
         title={viewer?.title}
+        illustrative={viewer?.illustrative}
         corpusLabel={viewer?.corpusLabel}
         corpusText={viewer?.corpusText}
         quote={viewer?.quote}
@@ -2111,4 +2034,3 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
     </section>
   )
 }
-

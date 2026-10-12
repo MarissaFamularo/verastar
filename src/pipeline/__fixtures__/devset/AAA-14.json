@@ -1,0 +1,136 @@
+{
+ "row_id": "AAA-14",
+ "pmid": "32453369",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Effect of Doxycycline on Aneurysm Growth Among Patients With Small Infrarenal \nAbdominal Aortic Aneurysms: A Randomized Clinical Trial.\n\nIMPORTANCE: Abdominal aortic aneurysms affect more than 3% of US older adults.\nOBJECTIVE: To test whether doxycycline reduces the growth of abdominal aortic \naneurysm over 2 years as measured by maximum transverse diameter.\nDESIGN, SETTING, AND PARTICIPANTS: Parallel, 2-group, randomized clinical trial \nthat was conducted at 22 US clinical centers between May 2013 and January 2017, \nand enrolled patients 50 years or older with small (3.5-5.0 cm for men, 3.5-4.5 \ncm for women) infrarenal aneurysms. The final date of follow-up was July 31, \n2018.\nINTERVENTIONS: Patients were randomized to receive twice daily for 2 years \ndoxycycline 100 mg orally (as capsules) (n = 133) or placebo (n = 128).\nMAIN OUTCOMES AND MEASURES: The primary outcome was change in abdominal aortic \naneurysm maximum transverse diameter measured from CT images at baseline and \nfollow-up at 2 years. Patients were assigned ranks based on the maximum \ntransverse diameter (measured or imputed) of the aorta and also if they \nunderwent aneurysm repair or died. The ranks were converted to scores having a \nnormal distribution to facilitate the primary analysis (\"normal scores\").\nRESULTS: Of 261 patients randomized, no follow-up CT scans were obtained on 7 \n(3%), leaving a final analysis set of 129 patients assigned to doxycycline and \n125 to placebo (mean [SD] age, 71.0 years [7.4 years], 35 women [14%]). The \noutcome normal scores used in the primary analysis were based on maximum \ntransverse diameter (measured or imputed) in 113 patients (88%) in the \ndoxycycline group and 112 patients (90%) in the placebo group; aneurysm repair \nin 13 (10%) and 9 (7%), and death in 3 (2%) and 4 (3%), respectively. The \nprimary outcome, normal scores reflecting change in aortic diameter, did not \ndiffer significantly between the 2 groups, mean change in normal scores, 0.0262 \nvs -0.0258 (1-sided P = .71). Mean (SD) baseline maximum transverse diameter was \n4.3 cm (0.4 cm) for doxycycline and 4.3 cm (0.4 cm) for placebo. At the 2-year \nfollow-up, the change in measured maximum transverse diameter was 0.36 cm (95% \nCI, 0.31 to 0.40 cm) for 96 patients in the doxycycline group vs 0.36 cm (95% \nCI, 0.30 to 0.41 cm) for 101 patients in the placebo group (difference, 0.0; 95% \nCI, -0.07 to 0.07 cm; 2-sided P = .93). No patients were withdrawn from the \nstudy because of adverse effects. Joint pain occurred in 84 of 129 patients \n(65%) with doxycycline and 79 of 125 (63%) with placebo.\nCONCLUSIONS AND RELEVANCE: Among patients with small infrarenal abdominal aortic \naneurysms, doxycycline compared with placebo did not significantly reduce \naneurysm growth at 2 years. These findings do not support the use of doxycycline \nfor reducing the growth of small abdominal aortic aneurysms.\nTRIAL REGISTRATION: ClinicalTrials.gov Identifier: NCT01756833.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Primary outcome: mean change in normal scores of aortic diameter, doxycycline vs placebo",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 0.0262,
+    "second_label": null,
+    "second_value": -0.0258,
+    "unit": "normal score",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.71,
+    "source_quote": "mean change in normal scores, 0.0262 vs -0.0258 (1-sided P = .71)",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "2-year change in measured maximum transverse diameter, doxycycline vs placebo",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 0.36,
+    "second_label": null,
+    "second_value": 0.36,
+    "unit": "cm",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "the change in measured maximum transverse diameter was 0.36 cm (95% \nCI, 0.31 to 0.40 cm) for 96 patients in the doxycycline group vs 0.36 cm (95% \nCI, 0.30 to 0.41 cm) for 101 patients in the placebo group",
+    "location_hint": "Results, secondary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "2-year difference in measured maximum transverse diameter change, doxycycline vs placebo",
+    "quantity_type": "single",
+    "value": 0,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "cm",
+    "ci_low": -0.07,
+    "ci_high": 0.07,
+    "p_value": 0.93,
+    "source_quote": "difference, 0.0; 95% \nCI, -0.07 to 0.07 cm; 2-sided P = .93",
+    "location_hint": "Results, secondary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Joint pain, doxycycline vs placebo",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 65,
+    "second_label": null,
+    "second_value": 63,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "Joint pain occurred in 84 of 129 patients \n(65%) with doxycycline and 79 of 125 (63%) with placebo.",
+    "location_hint": "Results, adverse events"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "Doxycycline did not reduce abdominal aortic aneurysm growth over years in this multicenter randomized trial, with the aortic diameter outcome not differing significantly from placebo.",
+  "designCaution": "Follow-up imaging was incomplete for some patients so diameters were partly imputed, and the primary outcome was a composite rank score that blends diameter change with repair and death, which complicates direct clinical interpretation.",
+  "relevance": "Negative RCT on medical therapy for small AAA, squarely within your AAA/TAAA outcomes north star and worth discussing at conference.",
+  "score": 72,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the primary outcome 'did not differ significantly between the 2 groups' with P=.71, and confirms equal measured diameter changes (0.36 cm in both groups, P=.93), directly supporting the claim that doxycycline did not reduce aneurysm growth compared to placebo."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms incomplete follow-up (7 of 261 patients had no CT scans), describes imputation of maximum transverse diameter, details the composite primary outcome using 'normal scores' based on diameter/repair/death rankings, and acknowledges this ranking approach was used to 'facilitate the primary analysis,' all supporting the stated methodological limitations."
+  }
+ }
+}

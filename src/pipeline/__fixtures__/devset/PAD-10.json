@@ -1,0 +1,136 @@
+{
+ "row_id": "PAD-10",
+ "pmid": "36342173",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Surgery or Endovascular Therapy for Chronic Limb-Threatening Ischemia.\n\nBACKGROUND: Patients with chronic limb-threatening ischemia (CLTI) require \nrevascularization to improve limb perfusion and thereby limit the risk of \namputation. It is uncertain whether an initial strategy of endovascular therapy \nor surgical revascularization for CLTI is superior for improving limb outcomes.\nMETHODS: In this international, randomized trial, we enrolled 1830 patients with \nCLTI and infrainguinal peripheral artery disease in two parallel-cohort trials. \nPatients who had a single segment of great saphenous vein that could be used for \nsurgery were assigned to cohort 1. Patients who needed an alternative bypass \nconduit were assigned to cohort 2. The primary outcome was a composite of a \nmajor adverse limb event - which was defined as amputation above the ankle or a \nmajor limb reintervention (a new bypass graft or graft revision, thrombectomy, \nor thrombolysis) - or death from any cause.\nRESULTS: In cohort 1, after a median follow-up of 2.7 years, a primary-outcome \nevent occurred in 302 of 709 patients (42.6%) in the surgical group and in 408 \nof 711 patients (57.4%) in the endovascular group (hazard ratio, 0.68; 95% \nconfidence interval [CI], 0.59 to 0.79; P<0.001). In cohort 2, a primary-outcome \nevent occurred in 83 of 194 patients (42.8%) in the surgical group and in 95 of \n199 patients (47.7%) in the endovascular group (hazard ratio, 0.79; 95% CI, 0.58 \nto 1.06; P = 0.12) after a median follow-up of 1.6 years. The incidence of \nadverse events was similar in the two groups in the two cohorts.\nCONCLUSIONS: Among patients with CLTI who had an adequate great saphenous vein \nfor surgical revascularization (cohort 1), the incidence of a major adverse limb \nevent or death was significantly lower in the surgical group than in the \nendovascular group. Among the patients who lacked an adequate saphenous vein \nconduit (cohort 2), the outcomes in the two groups were similar. (Funded by the \nNational Heart, Lung, and Blood Institute; BEST-CLI ClinicalTrials.gov number, \nNCT02060630.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Cohort 1 primary outcome (MALE or death), surgical vs endovascular, hazard ratio",
+    "quantity_type": "single",
+    "value": 0.68,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.59,
+    "ci_high": 0.79,
+    "p_value": 0.001,
+    "source_quote": "(hazard ratio, 0.68; 95% confidence interval [CI], 0.59 to 0.79; P<0.001)",
+    "location_hint": "Abstract, Results, cohort 1"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Cohort 2 primary outcome (MALE or death), surgical vs endovascular, hazard ratio",
+    "quantity_type": "single",
+    "value": 0.79,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.58,
+    "ci_high": 1.06,
+    "p_value": 0.12,
+    "source_quote": "(hazard ratio, 0.79; 95% CI, 0.58 \nto 1.06; P = 0.12)",
+    "location_hint": "Abstract, Results, cohort 2"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Cohort 1 primary-outcome events, surgical vs endovascular group",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "surgical group",
+    "first_value": 42.6,
+    "second_label": "endovascular group",
+    "second_value": 57.4,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "a primary-outcome event occurred in 302 of 709 patients (42.6%) in the surgical group and in 408 \nof 711 patients (57.4%) in the endovascular group",
+    "location_hint": "Abstract, Results, cohort 1"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Cohort 2 primary-outcome events, surgical vs endovascular group",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "surgical group",
+    "first_value": 42.8,
+    "second_label": "endovascular group",
+    "second_value": 47.7,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "a primary-outcome \nevent occurred in 83 of 194 patients (42.8%) in the surgical group and in 95 of 199 patients (47.7%) in the endovascular group",
+    "location_hint": "Abstract, Results, cohort 2"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "With an adequate saphenous vein, initial surgical bypass significantly lowered the risk of major limb events or death compared with endovascular therapy; without adequate vein, there was no statistically clear difference between strategies.",
+  "designCaution": "The composite endpoint mixes amputation, reintervention, and death, and cohort had fewer patients and shorter follow-up, so the null result there may reflect limited power rather than true equivalence.",
+  "relevance": "Directly central to your CLTI limb preservation work and Limb Preservation Program revascularization decision-making.",
+  "score": 97,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states that in cohort 1 (with adequate saphenous vein) surgical group had significantly lower primary-outcome events (42.6% vs 57.4%, HR 0.68, P<0.001), and in cohort 2 (without adequate vein) there was no statistically significant difference (42.8% vs 47.7%, HR 0.79, P=0.12), matching the claim's direction and population distinctions."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet defines the primary outcome as a composite of major adverse limb event (amputation or major reintervention) or death, and cohort 2 indeed has smaller sample size (194 vs 711 and 199 vs 711 for surgery and endovascular respectively) and shorter follow-up (1.6 vs 2.7 years), supporting the caution that limited power rather than true equivalence may explain the null finding."
+  }
+ }
+}

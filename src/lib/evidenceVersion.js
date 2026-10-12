@@ -1,10 +1,12 @@
-import { verify, VERIFICATION_VERSION, COMPATIBLE_VERIFICATION_VERSIONS } from '../pipeline/verify.js'
+import { verify, VERIFICATION_VERSION, COMPATIBLE_VERIFICATION_VERSIONS, FULLY_COMPATIBLE_VERIFICATION_VERSIONS, TIGHTENED_TIERS } from '../pipeline/verify.js'
 export { VERIFICATION_VERSION }
 
 // Read-time policy only: old persisted source, annotations and provenance remain intact.
-// Missing/older verdict stamps never inherit the new relationship guarantee.
+// Missing/older verdict stamps never inherit the new relationship guarantee, and an older
+// stamp in a tier the current rules tightened is not a subset of them.
 export function evidenceVerdict(verdict) {
-  if (verdict?.verificationVersion === VERIFICATION_VERSION || COMPATIBLE_VERIFICATION_VERSIONS.includes(verdict?.verificationVersion)) return verdict
+  if (verdict?.verificationVersion === VERIFICATION_VERSION || FULLY_COMPATIBLE_VERIFICATION_VERSIONS.includes(verdict?.verificationVersion)) return verdict
+  if (COMPATIBLE_VERIFICATION_VERSIONS.includes(verdict?.verificationVersion) && !TIGHTENED_TIERS.includes(verdict?.tier)) return verdict
   return {
     ...verdict,
     originalTier: verdict?.originalTier || verdict?.tier || null,
@@ -13,7 +15,9 @@ export function evidenceVerdict(verdict) {
     flagged: true,
     relationshipValidated: false,
     relationshipStatus: 'unchecked',
-    reason: 'Earlier verification checked source tokens only. Claim relationships have not been checked under the current rules; inspect the saved source before use.',
+    reason: COMPATIBLE_VERIFICATION_VERSIONS.includes(verdict?.verificationVersion)
+      ? 'Verified under an earlier rule that could bind a qualified P value ("for interaction", "for trend"). Not re-checked under the current rules; inspect the saved source before use.'
+      : 'Earlier verification checked source tokens only. Claim relationships have not been checked under the current rules; inspect the saved source before use.',
     warnings: (verdict?.warnings || []).map((warning) => ({ ...warning, status: 'unverified', message: String(warning?.message || '').replace(/^Verified as printed, but/, 'Unverified extraction; additionally,') })),
   }
 }
@@ -50,9 +54,9 @@ export function hasValidatedPaperEvidence(paper) {
 }
 
 // App-owned provenance for the extraction that created a paper's structured evidence.
-// Bump this whenever the extraction model, prompt, or schema changes in a way that could
+// Bump this whenever the extraction model, prompt, schema, or source-assembly contract changes in a way that could
 // alter saved quantities. A missing stamp is intentionally legacy, never assumed current.
-export const CURRENT_EXTRACTION_VERSION = '2026-10-04.sonnet-5-5-v2'
+export const CURRENT_EXTRACTION_VERSION = '2026-10-10.sonnet-5-5-v5'
 
 export function extractionVersionStatus(record) {
   const version = String(record?.extractionVersion || '').trim()

@@ -1,193 +1,78 @@
-// supabase/functions/digest-run/index.ts — the scheduled morning digest.
+// supabase/functions/digest-run/index.ts — the scheduled morning digest (Deno entry).
 //
-// Invoked by pg_cron every few minutes (docs/SPONSORED_ACCESS_DEPLOY.md). Each tick picks
-// at most ONE due sponsored account and runs, or continues, its daily digest with the
-// headless runner in src/pipeline/dailyDigest.js, bound to that account's rows under the
-// service role. The runner persists after every paper and carries a phase marker, so a
-// tick that runs out of budget hands the rest to the next tick.
-//
-// Due means: schedule enabled, the account is sponsored and active, the local hour is at or
-// past the chosen hour (or a scheduler run is mid-flight), no run has completed today in the
-// account's timezone,
-// no other tick holds a fresh claim, the last digest was opened (docs: "a digest nobody
-// opened is never replaced by another one nobody will open"), and today's spend is under
-// the daily cap.
-//
-// The rule itself is digestGate in ../model/logic.js, where it is unit-tested.
-//
-// Callable two ways: from cron with `x-cron-secret`, or by a signed-in sponsored user
-// ("run mine now"), which ignores the hour and the opened gate but keeps the cap check and
-// the claim. A manual call may pass { days } to widen the search window of a fresh run.
+// Invoked by pg_cron every few minutes (docs/SPONSORED_ACCESS_DEPLOY.md) or by a signed-in
+// user's "run mine now". All behavior lives in ./handler.js (tested under vitest); this
+// file binds it to the platform:
+//   - the app's own pipeline modules come from ./app.bundle.js, generated from the local
+//     reviewed source by `npm run bundle:functions` and deployed WITH this function (the
+//     CLI bundles the whole module graph). No remote URL, no commit pin.
+//   - each account's run executes inside an AsyncLocalStorage scope that carries its store,
+//     model client and cache writer (src/lib/serverScope.js); nothing account-specific is
+//     a module global, so overlapping requests in one isolate cannot exchange them.
+//   - the model client's fetch is the guarded reserve/settle boundary
+//     (../_shared/spending.js), the same contract as the browser proxy.
 //
 // Secrets: ANTHROPIC_API_KEY, DIGEST_CRON_SECRET; SUPABASE_* injected by the platform.
 
 import { createClient } from '@supabase/supabase-js'
+import Anthropic from '@anthropic-ai/sdk'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { DOMParser } from 'linkedom'
-import { accountActive, capReached, effectiveCaps, costUsd, windows, localClock, digestGate } from '../model/logic.js'
-// The app's own modules, bundled by `npm run bundle:functions` into public/server/ and
-// committed. The edge runtime resolves remote modules when the function is deployed and
-// only from an allowlist of hosts (Netlify is not one; jsDelivr is), so the import is the
-// committed bundle on jsDelivr, pinned to a commit. A pipeline change reaches the
-// scheduler by rebuilding the bundle, committing, updating this pin, and redeploying.
-import {
-  configureServerClient,
-  configureServerStore,
-  makeSupabaseStore,
-  configureEvidenceCacheServer,
-  schedulerMayRun,
-  runDailyDigest,
-} from 'https://cdn.jsdelivr.net/gh/MarissaFamularo/verastar@c9574cd427328fbe39976217c93ac852c26d2f0f/public/server/app.bundle.js'
+import * as app from './app.bundle.js'
+import manifest from './app.bundle.manifest.js'
+import { handleDigestRun } from './handler.js'
+import { anthropicDispatch, makeRpcLedger, resolveProviderUrl } from '../_shared/spending.js'
+import { SERVER_CLIENT_TIMEOUT_MS } from '../_shared/timeouts.js'
 
 // sources.js parses PMC and PubMed XML with the browser's DOMParser; linkedom provides the
-// same surface (querySelector, cloneNode, textContent, getAttribute) on Deno.
+// same surface on Deno.
 ;(globalThis as any).DOMParser = DOMParser
 
-// Reading budget per tick. The edge runtime's wall clock is about 150 s; reading stops here
-// so persistence and the handoff still fit, and ranking gets its own tick.
-const BUDGET_MS = 75_000
-// A claim only guards a tick that is still running. Ticks are five minutes apart and a
-// tick cannot outlive the wall clock, so a claim older than this is a dead tick's.
-const CLAIM_STALE_MS = 4 * 60 * 1000
+// Fail closed unless the loaded bundle was built from the source set its manifest names
+// (BUNDLE_SOURCE_SHA256 is compiled into the bundle) and carries the manifest's versions
+// and models. This is source-set identity checked at cold start; it does not hash the
+// deployed bytes. Byte identity (manifest.bundleSha256) is checked offline and against the
+// downloaded deployed function at release.
+const bundleMismatch =
+  app.BUNDLE_SOURCE_SHA256 !== manifest.sourceSha256 ||
+  manifest.extractionVersion !== app.CURRENT_EXTRACTION_VERSION ||
+  manifest.verificationVersion !== app.VERIFICATION_VERSION ||
+  JSON.stringify(manifest.models) !== JSON.stringify(app.MODELS)
 
-// The browser's "Run now" calls this cross-origin; cron does not care, the browser does.
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-cron-secret',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+const scopes = new AsyncLocalStorage()
+app.installServerScope(() => scopes.getStore() ?? null)
 
-function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
-}
-
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-  if (req.method !== 'POST') return json(405, { error: 'POST only' })
+Deno.serve((req) => {
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const cronSecret = Deno.env.get('DIGEST_CRON_SECRET')
-  if (!anthropicKey || !supabaseUrl || !anonKey || !serviceKey) return json(500, { error: 'not configured' })
+  const fail = (error: string) => new Response(JSON.stringify({ error }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+  if (!anthropicKey || !supabaseUrl || !anonKey || !serviceKey) return fail('not configured')
+  if (bundleMismatch) return fail('app bundle source identity or versions do not match its manifest')
+  const provider = resolveProviderUrl(Deno.env.toObject())
+  if (!provider.ok) return fail(provider.error || 'provider override refused')
 
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
-  const now = new Date()
-
-  // Who asked: cron, or a user running their own digest now.
-  let targetUserId: string | null = null
-  let manual = false
-  if (cronSecret && req.headers.get('x-cron-secret') === cronSecret) {
-    manual = false
-  } else {
-    const auth = req.headers.get('authorization') || ''
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: auth } } })
-    const { data } = await userClient.auth.getUser()
-    if (!data?.user) return json(401, { error: 'unauthorized' })
-    targetUserId = data.user.id
-    manual = true
-  }
-  // A manual run may widen a fresh search (the app's catch-up prompt). Resumes ignore it.
-  let days: number | undefined
-  if (manual) {
-    const body = await req.json().catch(() => ({}))
-    const n = Number(body?.days)
-    if (Number.isFinite(n) && n > 0) days = n
-  }
-
-  const { data: config } = await admin.from('sponsor_config').select('*').eq('id', true).maybeSingle()
-  if (!config) return json(500, { error: 'sponsor config missing' })
-
-  // Candidate rows.
-  let q = admin.from('digest_schedules').select('*').eq('enabled', true)
-  if (targetUserId) q = q.eq('user_id', targetUserId)
-  const { data: rows } = await q
-  const { data: accounts } = await admin.from('sponsored_accounts').select('*')
-  const accountById = new Map((accounts || []).map((a: any) => [a.user_id, a]))
-
-  let picked: any = null
-  let reason = 'nothing due'
-  for (const row of rows || []) {
-    const account = accountById.get(row.user_id)
-    if (!accountActive(account, now)) continue
-    const { hour, day } = localClock(now, row.timezone)
-    const ranToday = row.last_run_at && localClock(new Date(row.last_run_at), row.timezone).day === day
-    const claimedFresh = !!row.claimed_at && now.getTime() - new Date(row.claimed_at).getTime() < CLAIM_STALE_MS
-    if (claimedFresh) { reason = 'already running'; continue }
-
-    const { data: kv } = await admin.from('kv').select('value').eq('user_id', row.user_id).eq('collection', 'digests').eq('key', 'daily:latest').maybeSingle()
-    const record = kv?.value || null
-    const midFlight = record?.runBy === 'scheduler' && record?.server?.phase && record.server.phase !== 'done'
-    // A digest from today, whoever ran it, is never replaced: the seen ledger already
-    // retired its papers, so a rerun would discard what the reader may be reading. The
-    // app enforces the same rule behind an explicit confirm; the server has no confirm.
-    const hasPapers = Array.isArray(record?.results) && record.results.length > 0
-    // ranAt, not savedAt: savedAt moves whenever the reader hearts or saves a paper.
-    const ranAt = record?.ranAt ?? record?.savedAt
-    const savedToday = hasPapers && ranAt && localClock(new Date(ranAt), row.timezone).day === day
-    const gate = digestGate({ manual, hour, hourLocal: row.hour_local, ranToday: !!ranToday, midFlight: !!midFlight, savedToday: !!savedToday, mayRun: schedulerMayRun(record) })
-    if (!gate.run) { reason = gate.reason; continue }
-
-    // Caps: same rule as the proxy, checked before any spend.
-    const { dayStart, monthStart } = windows(now)
-    const sum = async (since: string, uid: string | null) => {
-      let s = admin.from('model_spend').select('usd').gte('ts', since)
-      if (uid) s = s.eq('user_id', uid)
-      const { data } = await s
-      return (data || []).reduce((acc: number, r: any) => acc + Number(r.usd || 0), 0)
-    }
-    const [spentToday, spentMonth, spentGlobalMonth] = await Promise.all([sum(dayStart, row.user_id), sum(monthStart, row.user_id), sum(monthStart, null)])
-    if (capReached({ spentToday, spentMonth, spentGlobalMonth }, effectiveCaps(account, config))) {
-      reason = 'cap reached'
-      await admin.from('digest_schedules').update({ last_result: 'skipped: cap reached', updated_at: now.toISOString() }).eq('user_id', row.user_id)
-      continue
-    }
-    picked = { row, account }
-    break
-  }
-  if (!picked) return json(200, { ran: false, reason })
-
-  const userId = picked.row.user_id
-  await admin.from('digest_schedules').update({ claimed_at: now.toISOString(), updated_at: now.toISOString() }).eq('user_id', userId)
-
-  // Bind the app's modules to this account. Spend is recorded from the usage the client
-  // module reports on every model response; the ledger is the same one the proxy writes.
-  const pendingSpend: Promise<unknown>[] = []
-  configureServerClient({
-    apiKey: anthropicKey,
-    onUsage: (model: string, usage: any) => {
-      pendingSpend.push(admin.from('model_spend').insert({
-        user_id: userId,
-        model,
-        purpose: 'scheduled-digest',
-        input_tokens: Number(usage?.input_tokens || 0) + Number(usage?.cache_creation_input_tokens || 0),
-        cached_tokens: Number(usage?.cache_read_input_tokens || 0),
-        output_tokens: Number(usage?.output_tokens || 0),
-        usd: costUsd(model, usage),
-        cache_hit: false,
-      }).then(() => undefined))
+  return handleDigestRun(req, {
+    cronSecret,
+    admin,
+    app,
+    ledger: makeRpcLedger(admin),
+    dispatch: anthropicDispatch(anthropicKey, fetch, provider.url),
+    // The SDK's own key header is ignored: the guarded fetch dispatches with only the
+    // headers the API needs. Refusals and post-dispatch errors carry x-should-retry: false,
+    // so the SDK does not stack retries on an unresolved liability. The explicit timeout
+    // is longer than the boundary's provider timeout and shorter than the claim lease.
+    makeClient: (fetch: typeof globalThis.fetch) => new Anthropic({ apiKey: 'sponsor-guarded', fetch, maxRetries: 2, timeout: SERVER_CLIENT_TIMEOUT_MS }),
+    // Server-owned provenance stamped on every trusted cache write.
+    provenance: { writer: 'digest-run', bundle_source_sha256: manifest.sourceSha256, manifest_bundle_sha256: manifest.bundleSha256 },
+    runInScope: (scope: unknown, fn: () => Promise<unknown>) => scopes.run(scope, fn),
+    getUser: async (authHeader: string) => {
+      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } })
+      const { data, error } = await userClient.auth.getUser()
+      return error ? null : data?.user ?? null
     },
   })
-  configureServerStore(makeSupabaseStore({ client: admin, userId }))
-  configureEvidenceCacheServer({ client: admin, userId })
-
-  const log: string[] = []
-  let result: any
-  try {
-    result = await runDailyDigest({ budgetMs: BUDGET_MS, days, log: (line: string) => log.push(line) })
-  } catch (err) {
-    result = { phase: 'error', note: (err as Error)?.message || String(err) }
-  }
-  await Promise.allSettled(pendingSpend)
-
-  const finished = result.phase === 'done' || result.phase === 'empty'
-  await admin.from('digest_schedules').update({
-    // The tick is over, whatever phase it reached; the next tick may resume at once.
-    claimed_at: null,
-    last_run_at: finished ? now.toISOString() : picked.row.last_run_at,
-    last_result: `${result.phase}: ${result.papers ?? 0} papers, read ${result.read ?? 0}${result.note ? `; ${result.note}` : ''}`.slice(0, 200),
-    updated_at: now.toISOString(),
-  }).eq('user_id', userId)
-  await admin.from('events').insert({ user_id: userId, type: 'digest_scheduled_run', payload: { phase: result.phase, papers: result.papers ?? 0, read: result.read ?? 0, manual } })
-
-  return json(200, { ran: true, user_id: userId, ...result, log })
 })

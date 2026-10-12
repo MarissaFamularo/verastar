@@ -1,0 +1,136 @@
+{
+ "row_id": "AS-04",
+ "pmid": "27040324",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Transcatheter or Surgical Aortic-Valve Replacement in Intermediate-Risk \nPatients.\n\nBACKGROUND: Previous trials have shown that among high-risk patients with aortic \nstenosis, survival rates are similar with transcatheter aortic-valve replacement \n(TAVR) and surgical aortic-valve replacement. We evaluated the two procedures in \na randomized trial involving intermediate-risk patients.\nMETHODS: We randomly assigned 2032 intermediate-risk patients with severe aortic \nstenosis, at 57 centers, to undergo either TAVR or surgical replacement. The \nprimary end point was death from any cause or disabling stroke at 2 years. The \nprimary hypothesis was that TAVR would not be inferior to surgical replacement. \nBefore randomization, patients were entered into one of two cohorts on the basis \nof clinical and imaging findings; 76.3% of the patients were included in the \ntransfemoral-access cohort and 23.7% in the transthoracic-access cohort.\nRESULTS: The rate of death from any cause or disabling stroke was similar in the \nTAVR group and the surgery group (P=0.001 for noninferiority). At 2 years, the \nKaplan-Meier event rates were 19.3% in the TAVR group and 21.1% in the surgery \ngroup (hazard ratio in the TAVR group, 0.89; 95% confidence interval [CI], 0.73 \nto 1.09; P=0.25). In the transfemoral-access cohort, TAVR resulted in a lower \nrate of death or disabling stroke than surgery (hazard ratio, 0.79; 95% CI, 0.62 \nto 1.00; P=0.05), whereas in the transthoracic-access cohort, outcomes were \nsimilar in the two groups. TAVR resulted in larger aortic-valve areas than did \nsurgery and also resulted in lower rates of acute kidney injury, severe \nbleeding, and new-onset atrial fibrillation; surgery resulted in fewer major \nvascular complications and less paravalvular aortic regurgitation.\nCONCLUSIONS: In intermediate-risk patients, TAVR was similar to surgical \naortic-valve replacement with respect to the primary end point of death or \ndisabling stroke. (Funded by Edwards Lifesciences; PARTNER 2 ClinicalTrials.gov \nnumber, NCT01314313.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "2-year death from any cause or disabling stroke, TAVR vs surgery (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.89,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.73,
+    "ci_high": 1.09,
+    "p_value": 0.25,
+    "source_quote": "hazard ratio in the TAVR group, 0.89; 95% confidence interval [CI], 0.73 to 1.09; P=0.25",
+    "location_hint": "Abstract, Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "2-year Kaplan-Meier event rate of death or disabling stroke, TAVR vs surgery",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "TAVR group",
+    "first_value": 19.3,
+    "second_label": "surgery group",
+    "second_value": 21.1,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "At 2 years, the Kaplan-Meier event rates were 19.3% in the TAVR group and 21.1% in the surgery group",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Noninferiority of TAVR vs surgery for death or disabling stroke",
+    "quantity_type": "single",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "The rate of death from any cause or disabling stroke was similar in the TAVR group and the surgery group (P=0.001 for noninferiority)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Death or disabling stroke in transfemoral-access cohort, TAVR vs surgery (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.79,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.62,
+    "ci_high": 1,
+    "p_value": 0.05,
+    "source_quote": "hazard ratio, 0.79; 95% CI, 0.62 to 1.00; P=0.05",
+    "location_hint": "Abstract, Results, transfemoral-access cohort"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In intermediate-risk patients with severe aortic stenosis, TAVR was non-inferior to surgical valve replacement for death or disabling stroke, with a signal of lower events in the transfemoral-access cohort (hazard ratio 0.79 hazard ratio (CI 0.62\\u20131.00), P=0.05).",
+  "designCaution": "The transfemoral advantage comes from a prespecified cohort split with a borderline significance level and should be treated as hypothesis-generating, and the trial was industry-funded.",
+  "relevance": "Landmark NEJM RCT of an endovascular-versus-open strategy that is conference-worthy and a useful template for non-inferiority design, though structural heart rather than any of your core vascular north stars.",
+  "score": 38,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet confirms TAVR was non-inferior to surgery for the primary endpoint in intermediate-risk patients overall (P=0.001 for noninferiority), and reports the exact hazard ratio (0.79, CI 0.62-1.00, P=0.05) for the transfemoral-access cohort showing lower event rates, with the claim appropriately qualified as a 'signal.'"
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states patients were 'entered into one of two cohorts on the basis of clinical and imaging findings' before randomization (prespecified cohort assignment), the transfemoral result has P=0.05 (borderline significance), and the trial was industry-funded by Edwards Lifesciences, supporting the caution that this finding should be treated as hypothesis-generating."
+  }
+ }
+}

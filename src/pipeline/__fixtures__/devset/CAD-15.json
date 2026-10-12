@@ -1,0 +1,136 @@
+{
+ "row_id": "CAD-15",
+ "pmid": "40888726",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Early Discontinuation of Aspirin after PCI in Low-Risk Acute Myocardial \nInfarction.\n\nBACKGROUND: An appropriate duration of dual antiplatelet therapy after \npercutaneous coronary intervention for acute myocardial infarction that has been \ntreated with guideline-recommended complete revascularization and a contemporary \ndrug-eluting stent remains unclear.\nMETHODS: We conducted a multicenter, open-label, randomized trial at 40 European \nsites. Adults with acute myocardial infarction who had undergone successful \ncomplete revascularization within 7 days after the infarction and had \nsubsequently completed 1 month of dual antiplatelet therapy with no ischemic or \nmajor bleeding events were randomly assigned to transition to a P2Y12 inhibitor \nas monotherapy or to continue dual antiplatelet therapy for an additional 11 \nmonths. The primary outcome was a composite of death from any cause, myocardial \ninfarction, stent thrombosis, stroke, or major bleeding (defined by the Bleeding \nAcademic Research Consortium [BARC] as a bleeding event of type 3 or 5) at 11 \nmonths after randomization (tested for noninferiority with a margin of 1.25 \npercentage points). The main secondary outcome was BARC type 2, 3, or 5 bleeding \n(clinically relevant bleeding) at 11 months after randomization (tested for \nsuperiority).\nRESULTS: Among the 2246 enrolled patients, 1942 underwent randomization: 961 to \nreceive P2Y12-inhibitor monotherapy and 981 to continue dual antiplatelet \ntherapy. A primary-outcome event occurred in 20 patients (2.1%) in the \nP2Y12-inhibitor monotherapy group and in 21 patients (2.2%) in the dual \nantiplatelet therapy group (difference, -0.09 percentage points; 95% confidence \ninterval [CI], -1.39 to 1.20; P = 0.02 for noninferiority). BARC type 2, 3, or 5 \nbleeding occurred in 2.6% of the patients in the P2Y12-inhibitor monotherapy \ngroup and in 5.6% of those in the dual antiplatelet therapy group (hazard ratio, \n0.46; 95% CI, 0.29 to 0.75; P = 0.002 for superiority). Stent thrombosis was \ninfrequent, and the incidence was similar in the two groups. The incidence of \nserious adverse events appeared to be similar in the two groups.\nCONCLUSIONS: Among low-risk patients with acute myocardial infarction who had \nundergone early complete revascularization and had completed 1 month of dual \nantiplatelet therapy without complications, P2Y12-inhibitor monotherapy was \nnoninferior to continued dual antiplatelet therapy with respect to the \noccurrence of adverse cardiovascular and cerebrovascular events and resulted in \na lower incidence of bleeding events. (Funded by MicroPort [France]; \nTARGET-FIRST ClinicalTrials.gov number, NCT04753749.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Primary composite outcome at 11 months, P2Y12-inhibitor monotherapy vs DAPT (risk difference)",
+    "quantity_type": "single",
+    "value": -0.09,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "percentage points",
+    "ci_low": -1.39,
+    "ci_high": 1.2,
+    "p_value": 0.02,
+    "source_quote": "difference, -0.09 percentage points; 95% confidence interval [CI], -1.39 to 1.20; P = 0.02 for noninferiority",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary-outcome event rate at 11 months, P2Y12-inhibitor monotherapy vs DAPT",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "P2Y12-inhibitor monotherapy group",
+    "first_value": 2.1,
+    "second_label": "dual antiplatelet therapy group",
+    "second_value": 2.2,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "A primary-outcome event occurred in 20 patients (2.1%) in the P2Y12-inhibitor monotherapy group and in 21 patients (2.2%) in the dual antiplatelet therapy group",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "BARC type 2, 3, or 5 bleeding at 11 months, P2Y12-inhibitor monotherapy vs DAPT (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.46,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.29,
+    "ci_high": 0.75,
+    "p_value": 0.002,
+    "source_quote": "hazard ratio, 0.46; 95% CI, 0.29 to 0.75; P = 0.002 for superiority",
+    "location_hint": "Results, main secondary outcome"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "BARC type 2, 3, or 5 bleeding rate, P2Y12-inhibitor monotherapy vs DAPT",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "P2Y12-inhibitor monotherapy group",
+    "first_value": 2.6,
+    "second_label": "dual antiplatelet therapy group",
+    "second_value": 5.6,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "BARC type 2, 3, or 5 bleeding occurred in 2.6% of the patients in the P2Y12-inhibitor monotherapy group and in 5.6% of those in the dual antiplatelet therapy group",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In low-risk post-MI patients who tolerated one month of dual antiplatelet therapy, switching to a single P2Y12 inhibitor was noninferior for ischemic and major bleeding events and substantially reduced clinically relevant bleeding.",
+  "designCaution": "The trial was open-label and enrolled only carefully selected low-risk patients who were event-free after early complete revascularization, so the findings do not extend to higher-risk coronary patients or to peripheral arterial disease populations.",
+  "relevance": "Tangential to your atherosclerosis prevention north star; antiplatelet de-escalation logic may inform post-revascularization regimens in CLTI limb preservation, though this is a coronary population.",
+  "score": 50,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet confirms noninferiority for the primary composite outcome (including ischemic events and major bleeding) with P=0.02, and shows P2Y12 monotherapy reduced clinically relevant bleeding from 5.6% to 2.6% (HR 0.46, P=0.002), supporting both noninferiority and substantial reduction in bleeding."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the trial was 'open-label' and enrolled only patients who 'had undergone successful complete revascularization' and 'had subsequently completed 1 month of dual antiplatelet therapy with no ischemic or major bleeding events,' establishing the carefully selected low-risk population limitation noted in the claim."
+  }
+ }
+}

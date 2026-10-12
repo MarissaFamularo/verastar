@@ -1,0 +1,136 @@
+{
+ "row_id": "CAR-01",
+ "pmid": "1852179",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Beneficial effect of carotid endarterectomy in symptomatic patients with \nhigh-grade carotid stenosis.\n\nBACKGROUND: Without strong evidence of benefit, the use of carotid \nendarterectomy for prophylaxis against stroke rose dramatically until the \nmid-1980s, then declined. Our investigation sought to determine whether carotid \nendarterectomy reduces the risk of stroke among patients with a recent adverse \ncerebrovascular event and ipsilateral carotid stenosis.\nMETHODS: We conducted a randomized trial at 50 clinical centers throughout the \nUnited States and Canada, in patients in two predetermined strata based on the \nseverity of carotid stenosis--30 to 69 percent and 70 to 99 percent. We report \nhere the results in the 659 patients in the latter stratum, who had had a \nhemispheric or retinal transient ischemic attack or a nondisabling stroke within \nthe 120 days before entry and had stenosis of 70 to 99 percent in the \nsymptomatic carotid artery. All patients received optimal medical care, \nincluding antiplatelet therapy. Those assigned to surgical treatment underwent \ncarotid endarterectomy performed by neurosurgeons or vascular surgeons. All \npatients were examined by neurologists 1, 3, 6, 9, and 12 months after entry and \nthen every 4 months. End points were assessed by blinded, independent case \nreview. No patient was lost to follow-up.\nRESULTS: Life-table estimates of the cumulative risk of any ipsilateral stroke \nat two years were 26 percent in the 331 medical patients and 9 percent in the \n328 surgical patients--an absolute risk reduction (+/- SE) 17 +/- 3.5 percent (P \nless than 0.001). For a major or fatal ipsilateral stroke, the corresponding \nestimates were 13.1 percent and 2.5 percent--an absolute risk reduction of 10.6 \n+/- 2.6 percent (P less than 0.001). Carotid endarterectomy was still found to \nbe beneficial when all strokes and deaths were included in the analysis (P less \nthan 0.001).\nCONCLUSIONS: Carotid endarterectomy is highly beneficial to patients with recent \nhemispheric and retinal transient ischemic attacks or nondisabling strokes and \nipsilateral high-grade stenosis (70 to 99 percent) of the internal carotid \nartery.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "2-year cumulative risk of any ipsilateral stroke, medical vs surgical (NASCET 70-99% stenosis)",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "medical patients",
+    "first_value": 26,
+    "second_label": "surgical patients",
+    "second_value": 9,
+    "unit": "percent",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "Life-table estimates of the cumulative risk of any ipsilateral stroke at two years were 26 percent in the 331 medical patients and 9 percent in the 328 surgical patients",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Absolute risk reduction in any ipsilateral stroke at 2 years",
+    "quantity_type": "single",
+    "value": 17,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "percent",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "an absolute risk reduction (+/- SE) 17 +/- 3.5 percent (P less than 0.001)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "2-year cumulative risk of major or fatal ipsilateral stroke, medical vs surgical",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 13.1,
+    "second_label": null,
+    "second_value": 2.5,
+    "unit": "percent",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "For a major or fatal ipsilateral stroke, the corresponding estimates were 13.1 percent and 2.5 percent",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Absolute risk reduction in major or fatal ipsilateral stroke at 2 years",
+    "quantity_type": "single",
+    "value": 10.6,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "percent",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "an absolute risk reduction of 10.6 +/- 2.6 percent (P less than 0.001)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In symptomatic patients with high-grade ipsilateral carotid stenosis receiving optimal medical care, carotid endarterectomy significantly reduced the two-year risk of ipsilateral stroke, including major or fatal stroke, compared with medical therapy alone.",
+  "designCaution": "This is a landmark trial from an era of limited medical therapy, so the size of benefit may not transfer directly to current best medical management with modern statins and dual antiplatelet strategies.",
+  "relevance": "Foundational evidence for your carotid stenosis management north star and a baseline against which to frame the Carotid Stenosis Stroke Prediction project.",
+  "score": 55,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet reports that carotid endarterectomy reduced ipsilateral stroke risk at two years (26% medical vs 9% surgical, P<0.001) and major/fatal ipsilateral stroke (13.1% vs 2.5%, P<0.001) in symptomatic patients with 70-99% stenosis receiving optimal medical care including antiplatelet therapy."
+  },
+  "cautionCheck": {
+   "verdict": "refuted",
+   "reason": "The snippet does not discuss the era of medical therapy, compare it to modern therapies, or state any limitations regarding transferability to current statin or dual antiplatelet strategies; this caution is introduced by the claim rather than supported by the source text."
+  }
+ }
+}

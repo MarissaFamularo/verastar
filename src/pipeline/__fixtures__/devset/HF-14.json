@@ -1,0 +1,217 @@
+{
+ "row_id": "HF-14",
+ "pmid": "21463150",
+ "trial": "",
+ "design": "RCT",
+ "tier": "full_text",
+ "sourceDoc": {
+  "text": "It is estimated that 5.8 million patients in the United States1 and 15 million in Europe2 have heart failure. Coronary artery disease is the most common substrate for heart failure in industrialized nations.3 However, the role of coronary-artery bypass grafting (CABG) in the treatment of patients with coronary artery disease and heart failure has not been clearly established.In three landmark clinical trials in the 1970s, a total of 2234 patients with chronic stable angina were randomly assigned to undergo CABG or receive medical therapy alone.4–6 The findings from these trials led to recommendations supporting the use of CABG to relieve disabling symptoms of angina, particularly among high-risk subgroups with extensive coronary artery disease.7,8 These trials excluded patients with severe left ventricular dysfunction (patients with an ejection fraction of <35%). A meta-analysis of the trials showed that 7.2% of the patients who underwent randomization had an ejection fraction of 40% or less, and only 4.0% had primary symptoms of heart failure rather than angina.9 Furthermore, these trials predate the major developments in medical therapy and cardiac surgery that have led to the current guidelines.10–13 More recently, observational analyses supporting a benefit of CABG14 and the proliferation of contemporary evidence-based medical and device-associated therapies have led to substantial clinical uncertainty regarding the incremental benefits of CABG relative to its risks in patients with ischemic cardiomyopathy.15,16We designed the Surgical Treatment for Ischemic Heart Failure (STICH) trial to evaluate the role of cardiac surgery in the treatment of patients with coronary artery disease and left ventricular systolic dysfunction. A major hypothesis of the trial was that CABG plus intensive medical therapy based on current guidelines, as compared with medical therapy alone, would reduce mortality.METHODSSTUDY DESIGNThe design of the STICH trial has been described previously.17,18 We conducted a multicenter, non-blinded, randomized study at 127 clinical sites in 26 countries. The trial protocol (available with the full text of this article at NEJM.org) was designed by several of the authors and was approved by the principal investigator and the ethics committee at each participating center. The trial was sponsored by the National Heart, Lung, and Blood Institute (NHLBI). Additional support was provided by Abbott Laboratories, which had no role in the conduct or reporting of the trial. An executive committee met weekly and monitored the daily conduct of the trial. An independent data and safety monitoring committee was appointed by the NHLBI. The Duke Clinical Research Institute coordinated all aspects of global trial operations, site management and monitoring, data collection, statistical analyses, and reporting. The authors reviewed the data, participated in the analyses and wrote the manuscript, and assume responsibility for the completeness and accuracy of the data and the analyses and for the fidelity of the study to the trial protocol.STUDY PATIENTSEligible patients had coronary artery disease that was amenable to CABG and an ejection fraction of 35% or less, as determined at each enrolling site. Details of the enrollment criteria are provided in Table 1 in the Supplementary Appendix, available at NEJM.org. All patients provided written informed consent, as approved by the local institutional review board.After initial determination of overall eligibility for the trial, patients were assessed to determine whether they were potential candidates for any of three possible therapeutic options: medical therapy alone, medical therapy plus CABG, or medical therapy plus CABG and surgical ventricular reconstruction. Patients were eligible for medical therapy alone if they did not have a stenotic lesion leading to loss of 50% or more of the diameter of the left main coronary artery and if they did not have Canadian Cardiovascular Society class III or IV angina while receiving medical therapy. (The Canadian Cardiovascular Society angina classification ranges from class 0, which indicates no symptoms, to class IV, which indicates angina at any level of physical exertion.) Patients were eligible for surgical ventricular reconstruction if they had dominant anterior left ventricular akinesia or dyskinesia. As noted above, all patients were eligible for CABG.On the basis of these eligibility criteria, patients were assigned by the enrolling physician to one of three trial strata. Stratum A included patients who were eligible for either medical therapy alone or medical therapy plus CABG, stratum B included patients who were eligible for any of the three treatment options, and stratum C included patients who were eligible for either medical therapy plus CABG or medical therapy plus CABG and surgical ventricular reconstruction (Fig. 1 in the Supplementary Appendix). Patients were then randomly assigned to one of the treatment options for which they were eligible. As a result, all the patients in stratum A and some of the patients in stratum B were randomly assigned to either medical therapy alone or medical therapy plus CABG (the hypothesis 1 component of the STICH trial). All the patients in stratum C and some of the patients in stratum B were randomly assigned to either medical therapy plus CABG or medical therapy plus CABG and surgical ventricular reconstruction (the hypothesis 2 component of the STICH trial). The results of the hypothesis 2 comparison have been reported previously.19 The results of the hypothesis 1 comparison are reported here.STUDY PROCEDURESDuring the initial evaluation, information was obtained on demographic factors and on clinical characteristics, including current medications and prior diagnostic and other cardiovascular procedures, and a physical examination was performed. Patients were randomly assigned to medical therapy alone or to medical therapy plus CABG by means of an investigator-initiated telephone call to an interactive voice-response system.A lead cardiologist at each center was responsible for recommending the most appropriate medications and devices for the treatment of heart failure and coronary artery disease on the basis of current guidelines. Adherence to treatment guidelines was emphasized in the care of all patients and was monitored by a medical therapy committee. Cardiac surgery was performed by surgeons who had provided data on at least 25 patients with an ejection fraction of 40% or less in whom they had performed CABG and among whom the operative death rate was 5% or less. CABG was to be performed within 14 days after randomization. A surgical therapy committee monitored the conduct of surgery during the enrollment period. All patients underwent follow-up evaluations at the time of discharge or at 30 days, every 4 months for the first year, and every 6 months thereafter.STUDY OUTCOMESThe primary outcome was the rate of death from any cause. Prespecified secondary outcomes included the rate of death from cardiovascular causes and the rate of death from any cause or hospitalization for cardiovascular causes. The causes of death and of selected secondary outcomes were adjudicated according to prespecified criteria by an independent clinical events committee whose members were unaware of the treatment assignments (see the definition of events in the Supplementary Appendix).STATISTICAL ANALYSISWe originally estimated that with a sample of 2000 patients who would be followed for an average of approximately 3 years, the study would have 90% power to detect a 25% reduction in mortality with CABG as compared with medical therapy alone, assuming a 3-year mortality of 25% in the medical-therapy group. Because enrollment was slower than expected, we modified the design so that the sample size was reduced and the duration of the follow-up period was increased correspondingly. The final study design specified that a sufficient number of patients had to be enrolled and the follow-up period had to be long enough that 400 deaths would occur; given this requirement, we estimated that we would need to enroll approximately 1200 patients, with an average follow-up period of 5 years. These numbers allowed for as much as a 20% treatment crossover from medical therapy to CABG without reducing the study's power to an unacceptable level. Randomization was performed with the use of permuted blocks and was stratified according to clinical site and stratum (A or B, as described above).All major comparisons between the treatment groups were performed according to the intention-to-treat principle. Two-sided significance testing was used for all statistical tests. Cumulative event rates were calculated according to the Kaplan-Meier method,20 with all event or censoring times measured from the time of randomization. The significance of differences in mortality between the treatment groups was assessed with the use of the log-rank test, with adjustment for randomization stratum. Relative risks were expressed as hazard ratios with associated confidence intervals and were derived from the Cox proportional-hazards model.21,22 To characterize the time-dependent nature of the relative risks of the groups according to the treatment to which they had been randomly assigned, hazard ratios (and confidence intervals) were examined within time intervals of clinical importance: randomization through 30 days, 31 through 365 days, 366 days through 2 years, and any time after 2 years. As prespecified in the study protocol, comparisons of the treatment groups were also performed with adjustment for key baseline factors (in addition to randomization stratum). The Cox model was also used to assess the consistency of treatment effects by testing for interactions between treatment and prespecified baseline characteristics.To aid in an assessment of the effect of treatment crossovers, secondary as-treated and per-protocol analyses were also performed. The as-treated comparison was analyzed with the Cox model in which CABG was treated as a time-dependent covariate.Ten interim analyses of the data were performed and were reviewed by the independent data and safety monitoring committee. Interim treatment comparisons for the primary outcome were monitored with the use of two-sided symmetric O'Brien-Fleming boundaries generated with the Lan-DeMets alpha-spending-function approach to group-sequential testing.23,24 A significance level of 0.04 was required for the primary outcome at the final analysis to adjust for the interim analyses. The final clinical assessment for each patient was performed in the 4-month period leading up to November 30, 2010, which was the cutoff date for analyses of all reported outcomes.RESULTSSTUDY POPULATIONBetween July 24, 2002, and May 5, 2007, a total of 2136 patients were enrolled in the overall STICH program; 1212 of these patients at 99 centers in 22 countries were enrolled in the hypothesis 1 component of the trial and were randomly assigned to receive medical therapy alone (602 patients) or medical therapy plus CABG (610 patients). Baseline demographic characteristics, clinical characteristics including details of ventricular function and coronary anatomy, and medication use were well balanced between the two groups (Table 1, and Tables 2 and 3 in the Supplementary Appendix).STUDY TREATMENTSOf the 610 patients randomly assigned to CABG, 555 (91%) underwent CABG before the end of the study; the median time to the CABG procedure was 10 days (interquartile range, 5 to 16), with a maximum of 177 days. The surgery was performed electively in 529 of these patients (95%) and with urgency in 26 patients (5%). The median time in the intensive care unit was 52.4 hours (interquartile range, 40.8 to 94.6), the median duration of intubation was 16.5 hours (interquartile range, 11.1 to 22.4), and the median length of stay in the hospital was 9.0 days (interquartile range, 7.0 to 13.0). A concurrent mitral-valve operation was performed in 63 patients (11%). Of the 553 patients in the CABG group who underwent CABG and for whom data on arterial and venous conduits were available, 505 (91%) received at least one arterial conduit and 473 (86%) received one or more venous conduits. Overall, 484 patients (87%) in the CABG group who underwent CABG had two or more distal anastomoses placed during surgery.Of the 602 patients randomly assigned to medical therapy alone, 100 (17%) underwent CABG before the end of the follow-up period. The median time to the CABG procedure was 142 days (interquartile range, 19 to 576), with a maximum of 2402 days. The most common indication for crossover to CABG was progressive symptoms (40%), followed by acute decompensation (27%), patient's or family's decision (28%), and physician's decision (5%).Adherence to guideline-based use of medications was high throughout the study period, without significant differences between the treatment groups (Table 3 in the Supplementary Appendix). Postrandomization procedures are summarized in Table 4 in the Supplementary Appendix.FOLLOW-UPFinal follow-up status was ascertained between August 1, 2010, and November 30, 2010, for 1207 of the 1212 patients (99.6%) who underwent randomization. During this last follow-up period, 5 patients could not be evaluated; the median time from randomization to the date of the last contact for these 5 patients, which was the date on which follow-up data were censored, was 40 months. The median length of follow-up was 56 months (interquartile range, 48 to 68), with a minimum of 12 months and a maximum of 100 months.OUTCOMESThe primary outcome occurred in 244 of the 602 patients (41%) assigned to medical therapy alone and in 218 of the 610 patients (36%) assigned to CABG (hazard ratio with CABG, 0.86; 95% confidence interval [CI], 0.72 to 1.04; P = 0.12) (Table 2 and Fig. 1). A total of 201 patients (33%) assigned to medical therapy and 168 (28%) assigned to CABG died from a cardiovascular cause (hazard ratio with CABG, 0.81; 95% CI, 0.66 to 1.00; P = 0.05) (Table 2 and Fig. 2A). Death from any cause or hospitalization for cardiovascular causes occurred in 411 patients (68%) in the medical-therapy group and 351 (58%) in the CABG group (hazard ratio with CABG, 0.74; 95% CI, 0.64 to 0.85; P<0.001) (Table 2 and Fig. 2B). The results with respect to all other secondary clinical outcomes also favored CABG, except for 30-day mortality (Table 2). The results of models adjusted for covariates, including those with CABG as a time-dependent covariate, are shown in Table 5 in the Supplementary Appendix.We performed an as-treated analysis comparing the 592 patients who were treated with medical therapy throughout the first year after randomization and the 620 patients who underwent CABG either because they were randomly assigned to CABG or because they crossed over to CABG during year 1 of the follow-up period; the hazard ratio for the primary outcome with CABG was 0.70 (95% CI, 0.58 to 0.84; P<0.001) (Table 5 and Fig. 2 in the Supplementary Appendix). We also performed a per-protocol comparison of the 537 patients randomly assigned to medical therapy who did not cross over to CABG during the first year of follow-up and the 555 patients assigned to CABG who actually underwent CABG; the hazard ratio for the primary outcome with CABG was 0.76 (95% CI, 0.62 to 0.92; P = 0.005) (Table 5 and Fig. 3 in the Supplementary Appendix).SUBGROUP ANALYSESThere were no significant interactions between treatment assignment and baseline characteristics of interest with respect to the primary outcome, as shown in the hazard-ratio plots in Figure 3. A nominally significant interaction with trial stratum was noted, but it is likely that this represents a chance finding.DISCUSSIONWe compared the strategy of medical therapy alone with that of medical therapy plus CABG in patients with coronary artery disease and left ventricular dysfunction. The intention-to-treat analysis showed that there was no significant difference between the two trial groups with respect to the primary outcome, the rate of death from any cause. Between-group differences in favor of CABG were seen with respect to the rate of death from cardiovascular causes and the rate of death from any cause or hospitalization for cardiovascular causes in the intention-to-treat analysis. The results of analyses performed according to whether patients actually underwent surgery, with and without adjustment for baseline variables, also favored CABG.Although the randomization strategy specified in our statistical plan was adhered to, clinical circumstances led to crossover in the case of 17% of patients who had been randomly assigned to medical therapy and 9% who had been randomly assigned to CABG. Per-treatment analyses suggest that this imbalance in crossover rates between groups modified the results of the primary intention-to-treat analysis by diminishing the treatment effect of CABG relative to medical therapy. Although we believe that these results are informative, since they mirror real-world clinical decision making, in which the choice of CABG is not influenced by randomization, these per-treatment analyses must be interpreted conservatively.As anticipated, CABG was associated with an early risk of death from any cause among all patients who underwent the procedure. When patients are treated with CABG and intensive medical therapy for coronary artery disease and left ventricular dysfunction, they are exposed to an early risk as a result of the surgical intervention. The total number of deaths was higher in the surgical group than in the medical-therapy group for more than 2 years after randomization.Our study had several limitations. First, when the analysis in any trial fails to detect a significant difference between treatment groups with respect to the primary outcome, analyses of secondary outcomes showing a benefit must inevitably be considered to be somewhat provisional. Second, the between-group difference with respect to death from cardiovascular causes, which is presumably the mortality outcome most likely to be influenced by CABG, had a P value of 0.05, which would not have been significant if it had been adjusted for multiple testing. Given the results of other secondary analyses, we believe that the lack of an unequivocally significant between-group difference in the outcome of death from any given cause was more likely to have been due to limited power and limited duration of follow-up than to a true lack of benefit of CABG. Finally, since the trial was not blinded (and could not realistically have been blinded), the nonfatal outcomes (e.g., hospitalization due to various causes) could have been influenced by the clinician's knowledge of the treatment the patient received.Clinical decision making for patients with coronary artery disease associated with left ventricular dysfunction has been constrained by the absence of randomized, comparative data on revascularization. In fact, small subgroup analyses of the previous randomized trials of CABG involving patients with chronic stable angina dissuaded many clinicians from pursuing diagnostic assessments for coronary artery disease or revascularization in patients presenting with heart failure.8,9 This approach continues to be supported by guidelines.10–13 In the absence of direct evidence, attention has shifted toward the detection of acutely and chronically underperfused but viable myocardium (i.e., myocardium that exhibits stunning or hibernation), a condition for which functional recovery may be achieved with reperfusion.25 Imaging strategies15,26 and clinical factors are routinely used to select patients who have the highest likelihood of functional recovery, as well as those in whom CABG should be avoided. In another report in this issue of the Journal, STICH investigators provide additional information on the interaction between viable myocardium and treatment effect.27In summary, the STICH trial compared medical therapy alone with medical therapy plus CABG in patients with coronary artery disease and left ventricular dysfunction. There was no significant difference between the two study groups with respect to the primary end point of the rate of death from any cause. The rates of death from cardiovascular causes and of death from any cause or hospitalization for cardiac causes were lower among patients assigned to CABG than among those assigned to medical therapy.Supplementary MaterialSupplement1",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Primary outcome: all-cause death, CABG vs medical therapy alone (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.86,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.72,
+    "ci_high": 1.04,
+    "p_value": 0.12,
+    "source_quote": "hazard ratio with CABG, 0.86; 95% confidence interval [CI], 0.72 to 1.04; P = 0.12",
+    "location_hint": "Results, Outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary outcome: all-cause death, proportion of patients, medical therapy alone vs CABG",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "medical therapy alone",
+    "first_value": 41,
+    "second_label": "CABG",
+    "second_value": 36,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The primary outcome occurred in 244 of the 602 patients (41%) assigned to medical therapy alone and in 218 of the 610 patients (36%) assigned to CABG",
+    "location_hint": "Results, Outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Death from cardiovascular causes, CABG vs medical therapy (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.81,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.66,
+    "ci_high": 1,
+    "p_value": 0.05,
+    "source_quote": "hazard ratio with CABG, 0.81; 95% CI, 0.66 to 1.00; P = 0.05",
+    "location_hint": "Results, Outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Death from any cause or cardiovascular hospitalization, CABG vs medical therapy (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.74,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.64,
+    "ci_high": 0.85,
+    "p_value": 0.001,
+    "source_quote": "hazard ratio with CABG, 0.74; 95% CI, 0.64 to 0.85; P<0.001",
+    "location_hint": "Results, Outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Death from cardiovascular causes, proportion of patients, medical therapy vs CABG",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "medical therapy",
+    "first_value": 33,
+    "second_label": "CABG",
+    "second_value": 28,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "A total of 201 patients (33%) assigned to medical therapy and 168 (28%) assigned to CABG died from a cardiovascular cause",
+    "location_hint": "Results, Outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "As-treated analysis: primary outcome, CABG (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.7,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.58,
+    "ci_high": 0.84,
+    "p_value": 0.001,
+    "source_quote": "the hazard ratio for the primary outcome with CABG was 0.70 (95% CI, 0.58 to 0.84; P<0.001)",
+    "location_hint": "Results, Outcomes"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "full_text",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the full text. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Per-protocol analysis: primary outcome, CABG (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.76,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.62,
+    "ci_high": 0.92,
+    "p_value": 0.005,
+    "source_quote": "the hazard ratio for the primary outcome with CABG was 0.76 (95% CI, 0.62 to 0.92; P = 0.005)",
+    "location_hint": "Results, Outcomes"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "full_text",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the full text. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In the STICH trial of ischemic cardiomyopathy, CABG plus medical therapy was associated with lower risk of the primary outcome than medical therapy alone in as-treated (HR 0.70, CI 0.58–0.84, P<0.001) and per-protocol (HR 0.76, CI 0.62–0.92, P=0.005) analyses.",
+  "designCaution": "These as-treated and per-protocol results abandon randomized comparison and are vulnerable to crossover and selection bias, so they are less reliable than the intention-to-treat analysis, and the open-label design adds further bias risk.",
+  "relevance": "Landmark NEJM RCT, but cardiac surgery for ventricular dysfunction sits outside your CLTI, carotid, aortic and pelvic venous work; mainly useful as a trial-design reference for crossover handling.",
+  "score": 22,
+  "tier": 1,
+  "check": {
+   "verdict": "refuted",
+   "reason": "The snippet provided describes only the trial design, hypothesis, and methodology; it does not contain any results regarding CABG efficacy, HR values, confidence intervals, or P-values for the primary outcome in any analysis."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms the trial was non-blinded (open-label) and randomized, supporting the design caution that as-treated and per-protocol analyses deviate from randomized comparison and that the open-label design introduces bias risk relative to intention-to-treat analysis."
+  }
+ }
+}

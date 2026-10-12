@@ -44,3 +44,37 @@ describe('library paper evidence counts', () => {
     expect(hasValidatedPaperEvidence({ quantities: [null] })).toBe(false)
   })
 })
+
+// estimates-v7 (2026-10-09) tightened P binding, so an older stamp is no longer a subset
+// in the two tiers that bind a P. Every other compatible tier still displays as stamped.
+describe('compatible stamps in tightened tiers', () => {
+  const v6 = '2026-10-04.estimates-v6'
+  for (const tier of ['verified-estimate', 'verified-comparison']) {
+    it(`downgrades a pre-v7 ${tier} verdict with an accurate reason`, () => {
+      const old = { verificationVersion: v6, tier, relationshipValidated: true, flagged: false }
+      const shown = evidenceVerdict(old)
+      expect(shown.tier).toBe('legacy-unchecked')
+      expect(shown.originalTier).toBe(tier)
+      expect(shown.reason).toMatch(/qualified P value/)
+      expect(isRelationshipValidated(old)).toBe(false)
+    })
+  }
+  for (const tier of ['abstract-only', 'verified-full-text', 'verified-proportion', 'verified-heterogeneity', 'source-located']) {
+    it(`keeps a pre-v7 ${tier} verdict as stamped`, () => {
+      const old = { verificationVersion: v6, tier, relationshipValidated: tier !== 'source-located', flagged: tier === 'source-located' }
+      expect(evidenceVerdict(old)).toBe(old)
+    })
+  }
+  it('a current-stamp estimate verdict is untouched', () => {
+    const now = { verificationVersion: VERIFICATION_VERSION, tier: 'verified-estimate', relationshipValidated: true, flagged: false }
+    expect(evidenceVerdict(now)).toBe(now)
+  })
+})
+
+// v8 expands supported inline definitions; v7 did not have weaker guarantees.
+it('preserves v7 verdicts without undoing the pre-v7 qualified-P downgrade', () => {
+  for (const tier of ['verified-estimate', 'verified-comparison', 'source-located']) {
+    const old = { verificationVersion: '2026-10-09.estimates-v7', tier, flagged: tier === 'source-located' }
+    expect(evidenceVerdict(old)).toBe(old)
+  }
+})

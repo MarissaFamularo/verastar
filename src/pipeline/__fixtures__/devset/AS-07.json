@@ -1,0 +1,136 @@
+{
+ "row_id": "AS-07",
+ "pmid": "37874020",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Transcatheter Aortic-Valve Replacement in Low-Risk Patients at Five Years.\n\nBACKGROUND: A previous analysis in this trial showed that among patients with \nsevere, symptomatic aortic stenosis who were at low surgical risk, the rate of \nthe composite end point of death, stroke, or rehospitalization at 1 year was \nsignificantly lower with transcatheter aortic-valve replacement (TAVR) than with \nsurgical aortic-valve replacement. Longer-term outcomes are unknown.\nMETHODS: We randomly assigned patients with severe, symptomatic aortic stenosis \nand low surgical risk to undergo either TAVR or surgery. The first primary end \npoint was a composite of death, stroke, or rehospitalization related to the \nvalve, the procedure, or heart failure. The second primary end point was a \nhierarchical composite that included death, disabling stroke, nondisabling \nstroke, and the number of rehospitalization days, analyzed with the use of a win \nratio analysis. Clinical, echocardiographic, and health-status outcomes were \nassessed through 5 years.\nRESULTS: A total of 1000 patients underwent randomization: 503 patients were \nassigned to undergo TAVR, and 497 to undergo surgery. A component of the first \nprimary end point occurred in 111 of 496 patients in the TAVR group and in 117 \nof 454 patients in the surgery group (Kaplan-Meier estimates, 22.8% in the TAVR \ngroup and 27.2% in the surgery group; difference, -4.3 percentage points; 95% \nconfidence interval [CI], -9.9 to 1.3; P = 0.07). The win ratio for the second \nprimary end point was 1.17 (95% CI, 0.90 to 1.51; P = 0.25). The Kaplan-Meier \nestimates for the components of the first primary end point were as follows: \ndeath, 10.0% in the TAVR group and 8.2% in the surgery group; stroke, 5.8% and \n6.4%, respectively; and rehospitalization, 13.7% and 17.4%. The hemodynamic \nperformance of the valve, assessed according to the mean (±SD) valve gradient, \nwas 12.8±6.5 mm Hg in the TAVR group and 11.7±5.6 mm Hg in the surgery group. \nBioprosthetic-valve failure occurred in 3.3% of the patients in the TAVR group \nand in 3.8% of those in the surgery group.\nCONCLUSIONS: Among low-risk patients with severe, symptomatic aortic stenosis \nwho underwent TAVR or surgery, there was no significant between-group difference \nin the two primary composite outcomes. (Funded by Edwards Lifesciences; PARTNER \n3 ClinicalTrials.gov number, NCT02675114.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "First primary end point (death, stroke, or rehospitalization) at 5 years, TAVR vs surgery",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "TAVR group",
+    "first_value": 22.8,
+    "second_label": "surgery group",
+    "second_value": 27.2,
+    "unit": "%",
+    "ci_low": -9.9,
+    "ci_high": 1.3,
+    "p_value": 0.07,
+    "source_quote": "Kaplan-Meier estimates, 22.8% in the TAVR group and 27.2% in the surgery group; difference, -4.3 percentage points; 95% \nconfidence interval [CI], -9.9 to 1.3; P = 0.07",
+    "location_hint": "Abstract, Results, first primary end point"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Second primary end point, hierarchical composite win ratio, TAVR vs surgery",
+    "quantity_type": "single",
+    "value": 1.17,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "win ratio",
+    "ci_low": 0.9,
+    "ci_high": 1.51,
+    "p_value": 0.25,
+    "source_quote": "The win ratio for the second \nprimary end point was 1.17 (95% CI, 0.90 to 1.51; P = 0.25)",
+    "location_hint": "Abstract, Results, second primary end point"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Bioprosthetic-valve failure at 5 years, TAVR vs surgery",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "TAVR group",
+    "first_value": 3.3,
+    "second_label": "surgery group",
+    "second_value": 3.8,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "Bioprosthetic-valve failure occurred in 3.3% of the patients in the TAVR group \nand in 3.8% of those in the surgery group.",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Mean valve gradient at 5 years, TAVR vs surgery",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "TAVR group",
+    "first_value": 12.8,
+    "second_label": "surgery group",
+    "second_value": 11.7,
+    "unit": "mm Hg",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "was 12.8±6.5 mm Hg in the TAVR group and 11.7±5.6 mm Hg in the surgery group",
+    "location_hint": "Abstract, Results, hemodynamic performance"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In low-risk patients with severe symptomatic aortic stenosis, TAVR and surgical valve replacement showed no statistically significant difference in either primary composite outcome at five years.",
+  "designCaution": "The trial was industry-funded, and the five-year analysis was not powered to establish equivalence, so the absence of a significant difference should not be read as proof the two approaches perform the same.",
+  "relevance": "A tier-1 NEJM RCT on an endovascular-versus-open question, but cardiac rather than vascular, so only loosely adjacent to your AAA/TAAA and carotid north stars.",
+  "score": 38,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states 'there was no significant between-group difference in the two primary composite outcomes' at 5 years, with P=0.07 for the first primary endpoint and P=0.25 for the second, confirming no statistically significant difference in either outcome."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms industry funding ('Funded by Edwards Lifesciences') and the results show non-significant differences (P=0.07 and P=0.25) without evidence the trial was powered for equivalence testing, supporting the caution that absence of significant difference should not be interpreted as proof of equivalence."
+  }
+ }
+}

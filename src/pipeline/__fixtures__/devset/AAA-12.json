@@ -1,0 +1,163 @@
+{
+ "row_id": "AAA-12",
+ "pmid": "24418950",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Endovascular or open repair strategy for ruptured abdominal aortic aneurysm: 30 \nday outcomes from IMPROVE randomised trial.\n\nOBJECTIVE: To assess whether a strategy of endovascular repair (if aortic \nmorphology is suitable, open repair if not) versus open repair reduces early \nmortality for patients with suspected ruptured abdominal aortic aneurysm.\nDESIGN: Randomised controlled trial.\nSETTING: 30 vascular centres (29 UK, 1 Canadian), 2009-13.\nPARTICIPANTS: 613 eligible patients (480 men) with a clinical diagnosis of \nruptured aneurysm.\nINTERVENTIONS: 316 patients were randomised to the endovascular strategy (275 \nconfirmed ruptures, 174 anatomically suitable for endovascular repair) and 297 \nto open repair (261 confirmed ruptures).\nMAIN OUTCOME MEASURES: 30 day mortality, with 24 hour and in-hospital mortality, \ncosts, and time and place of discharge as secondary outcomes.\nRESULTS: 30 day mortality was 35.4% (112/316) in the endovascular strategy group \nand 37.4% (111/297) in the open repair group: odds ratio 0.92 (95% confidence \ninterval 0.66 to 1.28; P=0.62); odds ratio after adjustment for age, sex, and \nHardman index 0.94 (0.67 to 1.33). Women may benefit more than men (interaction \ntest P=0.02) from the endovascular strategy: odds ratio 0.44 (0.22 to 0.91) \nversus 1.18 (0.80 to 1.75). 30 day mortality for patients with confirmed rupture \nwas 36.4% (100/275) in the endovascular strategy group and 40.6% (106/261) in \nthe open repair group (P=0.31). More patients in the endovascular strategy than \nin the open repair group were discharged directly to home (189/201 (94%) v \n141/183 (77%); P<0.001). Average 30 day costs were similar between the \nrandomised groups, with an incremental cost saving for the endovascular strategy \nversus open repair of £1186 (€1420; $1939) (95% confidence interval -£625 to \n£2997).\nCONCLUSIONS: A strategy of endovascular repair was not associated with \nsignificant reduction in either 30 day mortality or cost. Longer term cost \neffectiveness evaluations are needed to assess the full effects of the \nendovascular strategy in both men and women.\nTRIAL REGISTRATION: Current Controlled Trials ISRCTN48334791.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "30-day mortality, endovascular strategy vs open repair",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "endovascular strategy group",
+    "first_value": 35.4,
+    "second_label": "open repair group",
+    "second_value": 37.4,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "30 day mortality was 35.4% (112/316) in the endovascular strategy group and 37.4% (111/297) in the open repair group",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day mortality odds ratio, endovascular strategy vs open repair (unadjusted)",
+    "quantity_type": "single",
+    "value": 0.92,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "odds ratio",
+    "ci_low": 0.66,
+    "ci_high": 1.28,
+    "p_value": 0.62,
+    "source_quote": "odds ratio 0.92 (95% confidence interval 0.66 to 1.28; P=0.62)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day mortality in patients with confirmed rupture, endovascular strategy vs open repair",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "endovascular strategy group",
+    "first_value": 36.4,
+    "second_label": "open repair group",
+    "second_value": 40.6,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.31,
+    "source_quote": "30 day mortality for patients with confirmed rupture was 36.4% (100/275) in the endovascular strategy group and 40.6% (106/261) in the open repair group (P=0.31)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Discharge directly to home, endovascular strategy vs open repair",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "endovascular strategy",
+    "first_value": 94,
+    "second_label": "open repair",
+    "second_value": 77,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "More patients in the endovascular strategy than in the open repair group were discharged directly to home (189/201 (94%) v 141/183 (77%); P<0.001)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Incremental 30-day cost saving, endovascular strategy vs open repair",
+    "quantity_type": "single",
+    "value": 1186,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "GBP",
+    "ci_low": -625,
+    "ci_high": 2997,
+    "p_value": null,
+    "source_quote": "an incremental cost saving for the endovascular strategy versus open repair of £1186 (€1420; $1939) (95% confidence interval -£625 to £2997)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote located, but -625 is not present in it — the value does not match the source."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "An endovascular-first strategy for suspected ruptured AAA showed no statistically clear difference in day mortality compared with open repair.",
+  "designCaution": "This is a strategy trial in which only part of the endovascular arm was anatomically suitable for endovascular repair, so it does not isolate the effect of the device itself, and the apparent benefit in women comes from a subgroup interaction that is hypothesis-generating at best.",
+  "relevance": "A landmark RCT directly informing your AAA/TAAA outcomes north star, with a useful pragmatic strategy-trial design for rupture pathways.",
+  "score": 72,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet reports 30-day mortality of 35.4% vs 37.4% with P=0.62 and odds ratio including 1.0, explicitly stating 'no significant reduction,' which matches the claim of no statistically clear difference."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms this was a strategy trial (endovascular 'if suitable, open repair if not'), reports only 174 of 316 endovascular patients were anatomically suitable, and explicitly notes the female benefit came from an interaction test (P=0.02) without claiming clinical significance, supporting both design limitations stated in the claim."
+  }
+ }
+}

@@ -196,3 +196,16 @@ describe('runDailyDigest', () => {
     expect(mem.get('digests/daily:latest').server.empty).toBe(true)
   })
 })
+
+it('pilot: old selections and fallback reads cannot exceed twenty; surplus stays unseen', async () => {
+  const candidates = Array.from({ length: 25 }, (_, i) => ({ id: String(i), pmid: String(i), title: 'Paper', score: 90 }))
+  vi.mocked(runPaper).mockImplementation(async (paper) => ({ paper, rows: [], sourceDoc: { text: '' } }))
+  vi.mocked(planCoverageFallbacks).mockReturnValueOnce({ candidates: candidates.slice(20), rescuedTopics: ['topic'] })
+  mem.set('digests/daily:latest', { kind: 'daily', runBy: 'scheduler', ranAt: '2026-10-12T10:00:00Z', server: { phase: 'reading' }, candidates, selectedIds: candidates.map((p) => p.id), results: [], processedResults: [], triaged: {} })
+  const out = await runDailyDigest({ budgetMs: 100000, now: () => 0 })
+  expect(out.phase).toBe('done')
+  expect(runPaper).toHaveBeenCalledTimes(20)
+  expect(mem.get('digests/daily:latest').processedResults).toHaveLength(20)
+  expect(Object.keys(mem.get('seen/pmids').ids)).toHaveLength(20)
+  expect(mem.get('seen/pmids').ids['20']).toBeUndefined()
+})

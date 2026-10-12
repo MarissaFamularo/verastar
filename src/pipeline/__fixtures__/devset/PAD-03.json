@@ -1,0 +1,109 @@
+{
+ "row_id": "PAD-03",
+ "pmid": "25095886",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Improved quality of life after 1 year with an invasive versus a noninvasive \ntreatment strategy in claudicants: one-year results of the Invasive \nRevascularization or Not in Intermittent Claudication (IRONIC) Trial.\n\nBACKGROUND: The quality of evidence for invasive revascularization in \nintermittent claudication is low or very low. This prospective, randomized, \ncontrolled study tested the hypothesis that an invasive treatment strategy \nversus continued noninvasive treatment improves health-related quality of life \nafter 1 year in unselected patients with intermittent claudication.\nMETHODS AND RESULTS: After clinical and duplex ultrasound assessment, unselected \npatients with intermittent claudication requesting treatment for claudication \nwere randomly assigned to invasive (n=79) or noninvasive (n=79) treatment \ngroups. Primary end point was health-related quality of life after 1 year, \nassessed with Medical Outcomes Study Short Form 36 version 1 and Vascular \nQuality of Life Questionnaire, and secondary end points included walking \ndistances on a graded treadmill. The Medical Outcomes Study Short Form 36 \nversion 1 physical component summary (P<0.001) and 2 Medical Outcomes Study \nShort Form 36 version 1 physical subscales improved significantly more in the \ninvasive versus the noninvasive treatment group. Overall, Vascular Quality of \nLife Questionnaire score (P<0.01) and 3 of 5 domain scores improved \nsignificantly more in the invasive versus the noninvasive treatment group. \nIntermittent claudication distance improved significantly in the invasive (+124 \nm) versus the noninvasive (+50 m) group (P=0.003), whereas the change in maximum \nwalking distance was not significantly different between groups.\nCONCLUSIONS: An invasive treatment strategy improves health-related quality of \nlife and intermittent claudication distance after 1 year in patients with stable \nlifestyle-limiting claudication receiving current medical management. Long-term \nfollow-up data and health-economic assessments are warranted to further \nestablish the role for revascularization in intermittent claudication.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Intermittent claudication distance change at 1 year, invasive vs noninvasive",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "invasive",
+    "first_value": 124,
+    "second_label": "noninvasive",
+    "second_value": 50,
+    "unit": "m",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.003,
+    "source_quote": "Intermittent claudication distance improved significantly in the invasive (+124 \nm) versus the noninvasive (+50 m) group (P=0.003)",
+    "location_hint": "Abstract, Methods and Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "SF-36 physical component summary improvement, invasive vs noninvasive",
+    "quantity_type": "single",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "The Medical Outcomes Study Short Form 36 \nversion 1 physical component summary (P<0.001)",
+    "location_hint": "Abstract, Methods and Results"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Vascular Quality of Life Questionnaire overall score improvement, invasive vs noninvasive",
+    "quantity_type": "single",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.01,
+    "source_quote": "Overall, Vascular \nQuality of Life Questionnaire score (P<0.01)",
+    "location_hint": "Abstract, Methods and Results"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "An invasive revascularization strategy improved health-related quality of life and claudication distance at one year compared with continued noninvasive treatment, but maximum walking distance did not differ significantly.",
+  "designCaution": "This is a modest-sized randomized trial with unblinded patient-reported primary outcomes and only one year of follow-up, so durability, cost-effectiveness, and any long-term harms of revascularization remain unestablished.",
+  "relevance": "Peripheral to your CLTI limb preservation work, but informs the claudication end of the PAD spectrum and the evidence base for early intervention.",
+  "score": 55,
+  "tier": 2,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states that invasive strategy improved health-related quality of life (multiple QoL measures with P<0.001 and P<0.01) and claudication distance (+124m vs +50m, P=0.003) compared to noninvasive treatment, and confirms maximum walking distance showed no significant difference between groups."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms this is a randomized controlled trial (prospective, randomized design stated in METHODS), involves patient-reported outcomes (Medical Outcomes Study Short Form 36 and Vascular Quality of Life Questionnaire are self-report instruments), has one-year follow-up only, and the CONCLUSIONS explicitly state that long-term follow-up data and health-economic assessments are warranted, supporting the caution about unestablished durability, cost-effectiveness, and long-term harms."
+  }
+ }
+}

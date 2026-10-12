@@ -1,0 +1,136 @@
+{
+ "row_id": "PAD-15",
+ "pmid": "40902614",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Paclitaxel-coated versus uncoated devices for infrainguinal endovascular \nrevascularisation in patients with intermittent claudication (SWEDEPAD 2): a \nmulticentre, participant-masked, registry-based, randomised controlled trial.\n\nBACKGROUND: Drug-coated devices are widely used to reduce restenosis after lower \nlimb revascularisation in patients with peripheral artery disease, but their \neffect on patient-centred outcomes remains unclear. We assessed the effect of \npaclitaxel-coated devices on clinically important outcomes in patients with \nintermittent claudication undergoing infrainguinal endovascular \nrevascularisation.\nMETHODS: The Swedish Drug-Elution Trial in Peripheral Arterial Disease 2 \n(SWEDEPAD 2) was a pragmatic, nationwide, multicentre, participant-masked, \nregistry-based, randomised controlled trial conducted at 22 Swedish vascular \ncentres. Adults 18 years or older with intermittent claudication (Rutherford \ncategories 1-3) undergoing infrainguinal endovascular treatment and with no \nacute thromboembolic disease of the lower limb or infrainguinal aneurysmal \ndisease were eligible for inclusion. Participants were randomly assigned in a \n1:1 ratio after successful guidewire crossing to receive either \npaclitaxel-coated devices or uncoated balloons or stents. Randomisation was \nstratified by centre and performed using a computer-generated sequence with \nallocation concealment via a secure, registry-embedded web system. The primary \nefficacy endpoint was the between-group difference in quality of life at 1 year, \nassessed with the six-item Vascular Quality of Life Questionnaire (VascuQoL-6), \na peripheral artery disease-specific quality of life instrument. The trial is \nregistered at ClinicalTrials.gov (NCT02051088) and the primary analysis is \ncomplete; further analyses are ongoing.\nFINDINGS: Between Nov 5, 2014, and Sept 27, 2023, a total of 1155 patients were \nenrolled and randomly assigned across 22 vascular centres in Sweden, of whom \n1136 (98·3%) had follow-up data available for analysis. 577 patients were \nrandomly assigned to paclitaxel-coated devices and 578 to uncoated devices, of \nwhom 565 (97·9%) and 571 (98·7%) were included in the intention-to-treat \npopulation, respectively. The median age in the analysed cohort was 73·0 years \n(IQR 68·0-78·0). Of the 1136 patients, 612 (53·9%) were male and 524 (46·1%) \nwere female; and 382 (33·7%) of 1135 had preoperative diabetes (one participant \nin the paclitaxel-coated device group was missing data). Most patients (677 \n[59·6%] of 1135) presented with severe claudication (Rutherford category 3). \nFemoropopliteal interventions were performed in 1092 patients (96·1%). At 1 \nyear, VascuQoL-6 scores did not differ between groups (mean difference -0·02 \n[95% CI -0·66 to 0·62]; p=0·96). All-cause mortality did not differ over a \nmedian 7·1 years (IQR 3·9-8·2); hazard ratio (HR) 1·18 (95% CI 0·94-1·48); \np=0·16, although 5-year mortality incidence was higher in patients randomly \nassigned to the paclitaxel-coated devices group (4·57 vs 3·28 per 100 \nperson-years; HR 1·47 [95% CI 1·09-1·98]; p=0·010).\nINTERPRETATION: In patients with Rutherford stage 1-3 peripheral artery disease \nundergoing infrainguinal endovascular revascularisation, paclitaxel-coated \ndevices did not improve disease-specific quality of life at 1 year compared with \nuncoated devices. All-cause mortality was not different over the total follow-up \ntime, but significantly higher over 5 years. These findings do not support \nroutine use of paclitaxel-coated devices in this patient population.\nFUNDING: The Swedish Research Council, the Swedish Heart Lung Foundation, the \nSwedish state under the agreement between the Swedish Government and the county \ncouncils.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "1-year VascuQoL-6 mean difference, paclitaxel-coated vs uncoated devices (primary endpoint)",
+    "quantity_type": "single",
+    "value": -0.02,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "VascuQoL-6 points",
+    "ci_low": -0.66,
+    "ci_high": 0.62,
+    "p_value": 0.96,
+    "source_quote": "At 1 year, VascuQoL-6 scores did not differ between groups (mean difference -0·02 [95% CI -0·66 to 0·62]; p=0·96).",
+    "location_hint": "Findings"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "All-cause mortality over median 7.1 years, paclitaxel-coated vs uncoated devices (HR)",
+    "quantity_type": "single",
+    "value": 1.18,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.94,
+    "ci_high": 1.48,
+    "p_value": 0.16,
+    "source_quote": "hazard ratio (HR) 1·18 (95% CI 0·94-1·48); p=0·16",
+    "location_hint": "Findings, all-cause mortality"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "5-year mortality HR, paclitaxel-coated vs uncoated devices",
+    "quantity_type": "single",
+    "value": 1.47,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 1.09,
+    "ci_high": 1.98,
+    "p_value": 0.01,
+    "source_quote": "HR 1·47 [95% CI 1·09-1·98]; p=0·010",
+    "location_hint": "Findings, 5-year mortality"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "5-year mortality incidence per 100 person-years, paclitaxel-coated vs uncoated devices",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 4.57,
+    "second_label": null,
+    "second_value": 3.28,
+    "unit": "per 100 person-years",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "4·57 vs 3·28 per 100 person-years",
+    "location_hint": "Findings, 5-year mortality"
+   },
+   "verdict": {
+    "tier": "verified-comparison",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "comparison-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Both values verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In this large Swedish randomized trial of paclitaxel-coated versus uncoated devices for claudication, long-term mortality was numerically higher with coated devices, reviving the paclitaxel safety concern, though the available summary does not establish whether the difference was statistically clear.",
+  "designCaution": "The snippet reports a mortality rate comparison without a confidence interval or P value, and the primary endpoint was quality of life, so the mortality signal should be treated as a secondary finding that needs the full report before it informs practice.",
+  "relevance": "Directly bears on endovascular strategy and drug-coated device safety in your Limb Preservation Program and CLTI limb preservation work.",
+  "score": 88,
+  "tier": 1,
+  "check": {
+   "verdict": "refuted",
+   "reason": "The snippet does not provide any mortality data, rates, or comparisons between paclitaxel-coated and uncoated devices, so the claim about numerical mortality difference cannot be verified from this excerpt."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms the primary endpoint was quality of life (VascuQoL-6 at 1 year) and does not present mortality statistics, supporting the characterization that mortality would be a secondary finding requiring the full report for proper interpretation."
+  }
+ }
+}

@@ -1,0 +1,217 @@
+{
+ "row_id": "CAR-03",
+ "pmid": "15043958",
+ "trial": "",
+ "design": "meta_analysis",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Endarterectomy for symptomatic carotid stenosis in relation to clinical \nsubgroups and timing of surgery.\n\nBACKGROUND: Carotid endarterectomy reduces the risk of stroke in patients with \nrecently symptomatic stenosis. Benefit depends on the degree of stenosis, and we \naimed to see whether it might also depend on other clinical and angiographic \ncharacteristics, and on the timing of surgery.\nMETHODS: We analysed pooled data from the European Carotid Surgery Trial and \nNorth American Symptomatic Carotid Endarterectomy Trial. The risk of ipsilateral \nischaemic stroke for patients on medical treatment, the perioperative risk of \nstroke and death, and the overall benefit from surgery were determined in \nrelation to seven predefined and seven post hoc subgroups.\nRESULTS: 5893 patients with 33000 patient-years of follow-up were analysed. Sex \n(p=0.003), age (p=0.03), and time from the last symptomatic event to \nrandomisation (p=0.009) modified the effectiveness of surgery. Benefit from \nsurgery was greatest in men, patients aged 75 years or older, and those \nrandomised within 2 weeks after their last ischaemic event, and fell rapidly \nwith increasing delay. For patients with 50% or higher stenosis, the number of \npatients needed to undergo surgery (ie, number needed to treat) to prevent one \nipsilateral stroke in 5 years was nine for men versus 36 for women, five for age \n75 years or older versus 18 for younger than 65 years, and five for those \nrandomised within 2 weeks after their last ischaemic event, versus 125 for \npatients randomised after more than 12 weeks. These results were consistent \nacross the individual trials.\nINTERPRETATION: Benefit from endarterectomy depends not only on the degree of \ncarotid stenosis, but also on several other clinical characteristics such as \ndelay to surgery after the presenting event. Ideally, the procedure should be \ndone within 2 weeks of the patient's last symptoms.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Number needed to treat to prevent one ipsilateral stroke in 5 years (stenosis \\u226550%), men vs women",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "men",
+    "first_value": 9,
+    "second_label": "women",
+    "second_value": 36,
+    "unit": "patients",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "nine for men versus 36 for women",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote located; 9 is written out in words there, not printed as a numeral, so it is not verified. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Number needed to treat to prevent one ipsilateral stroke in 5 years (stenosis \\u226550%), age \\u226575 vs <65 years",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "age 75 years or older",
+    "first_value": 5,
+    "second_label": "younger than 65 years",
+    "second_value": 18,
+    "unit": "patients",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "five for age 75 years or older versus 18 for younger than 65 years",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote located; 5 is written out in words there, not printed as a numeral, so it is not verified. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Number needed to treat to prevent one ipsilateral stroke in 5 years (stenosis \\u226550%), randomised within 2 weeks vs after more than 12 weeks",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "within 2 weeks",
+    "first_value": 5,
+    "second_label": "after more than 12 weeks",
+    "second_value": 125,
+    "unit": "patients",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "five for those randomised within 2 weeks after their last ischaemic event, versus 125 for patients randomised after more than 12 weeks",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote located; 5 is written out in words there, not printed as a numeral, so it is not verified. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Effect modification of surgery effectiveness by time from last symptomatic event to randomisation",
+    "quantity_type": "single",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.009,
+    "source_quote": "time from the last symptomatic event to randomisation (p=0.009)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Effect modification of surgery effectiveness by sex",
+    "quantity_type": "single",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.003,
+    "source_quote": "Sex (p=0.003)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Effect modification of surgery effectiveness by age",
+    "quantity_type": "single",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.03,
+    "source_quote": "age (p=0.03)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Number of patients analysed",
+    "quantity_type": "single",
+    "value": 5893,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "patients",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "5893 patients with 33000 patient-years of follow-up were analysed",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "Pooled ECST and NASCET data showed that benefit from endarterectomy for symptomatic carotid stenosis depends on sex, age, and delay to surgery, with greatest benefit when surgery is done within weeks of the last ischaemic event and falling rapidly with delay.",
+  "designCaution": "This is a pooled subgroup analysis of older trials, many subgroups were post hoc, and the data predate modern intensive medical therapy, so absolute benefit estimates may not translate to current practice.",
+  "relevance": "Foundational evidence for your carotid stenosis stroke prediction work, particularly on timing and risk-modifying clinical features.",
+  "score": 72,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states that sex, age, and time from last symptomatic event modified surgery effectiveness, with greatest benefit within 2 weeks and rapid decline with delay, matching the claim's direction and populations."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms pooled data from two older trials (ECST and NASCET), explicitly mentions seven post hoc subgroups alongside predefined ones, and the historical nature of the data supports the caution that absolute estimates may not apply to current practice with modern medical therapy."
+  }
+ }
+}

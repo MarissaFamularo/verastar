@@ -14,10 +14,14 @@
 // opt-out at the call sites.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
+import { sectionKind } from './evidenceWindow.js'
+import { EVIDENCE_CHARS } from './evidenceContext.js'
 
 // The evidence window, shared with triage's writer prompt so the skeptic judges the
 // claim against EXACTLY the text the writer saw: more text could "support" a claim the
-// writer never had evidence for; less would manufacture refutes.
+// writer never had evidence for; less would manufacture refutes. WHICH text fills it is
+// chosen by pipeline/evidenceWindow.js (Results/abstract, never a full-text body prefix);
+// this is only the budget.
 //
 // Sized to hold a WHOLE structured abstract, because a window that stops short of the
 // results section makes both jobs impossible: the writer summarizes a paper it has only
@@ -26,7 +30,13 @@ import { extractStructured, MODELS } from '../lib/anthropic.js'
 // window on author affiliations: RESULTS at 874 and 1,350 chars, CONCLUSIONS at 1,516 and
 // 2,107, whole cleaned abstracts 1,883 and 2,363. 900 reached neither paper's results.
 // The cost of the larger window is a few hundred tokens per paper on two cheap models.
-export const SNIPPET_CHARS = 2600
+//
+// 2026-10-11: callers now pass a results-aware evidence context (evidenceContext.js) —
+// the abstract plus verbatim windows around every extracted result's source quote — instead
+// of the first characters of the PMC body, which held only background and methods for
+// full-text papers. The window grew to fit it (EVIDENCE_CHARS); SNIPPET_CHARS stays as the
+// shared name for existing callers and is the same value.
+export const SNIPPET_CHARS = EVIDENCE_CHARS
 
 export const CHECK_SCHEMA = {
   type: 'object',
@@ -53,19 +63,40 @@ const SYSTEM = `You are a skeptical peer reviewer auditing one-sentence claims a
 - the direction of effect (improved / reduced / no significant difference / non-inferior / increased risk)
 - what is compared to what, in which population, with which intervention
 - the strength of the language (a null or non-significant result stated as a benefit is unsupported; the snippet's "may" stated as "does" is overstated)
+- every factual clause and modifier must be supported independently; partial support is unsupported. If your reason says a detail is not stated or supported by the snippet, return supported=false, even if the rest of the sentence is correct. In particular, do not infer blinding status from a trial design or from quality-of-life outcomes.
 - for a design caution, whether the named design, selection mechanism, matching method, exposure identification, setting, endpoint limitation, or causal constraint is supported by the snippet rather than invented
-Numeric values in the claim were already verified against the source by a separate deterministic gate — do NOT judge the numbers themselves, only the prose claim around them. A claim that is vaguer or more cautious than the snippet is supported. Refute (supported=false) when the claim reverses or overstates the direction, asserts an outcome the snippet does not state, or misattributes the population, intervention, or comparator. When genuinely uncertain whether the snippet supports the claim, refute — an unsupported claim shown to a clinician is worse than a supported one withheld. Return a verdict for EVERY item id you were given, each with a one-clause reason.`
+- the analysis and hypothesis: a claim that headlines a secondary, subgroup, per-protocol, or as-treated result as the study's main result, presents it as the randomized comparison, or omits or contradicts the PRIMARY result named in the item's CONTEXT line is unsupported; a noninferiority result stated as superiority (or the reverse), or a result at one timepoint or endpoint stated as another, is unsupported
+- composite endpoint fidelity: the claim must not broaden, narrow, or re-define a composite endpoint's components or time window beyond what the snippet states. Refute a claim that treats any stroke as ipsilateral stroke, early-only (e.g. periprocedural or 30-day) death as death over all follow-up, or names components the snippet does not list, and refute a claim that states a definition of the primary endpoint when the snippet does not contain that definition (a claim that says only "the reported primary composite endpoint" is acceptable). Judge the claim AS RENDERED, including the meaning of any timepoint or component it names.
+Numeric values in the claim were already verified against the source by a separate deterministic gate — do NOT judge the numbers themselves, only the prose claim around them. But number verification does NOT establish that the sentence means what the source means: still check which endpoint, component, population, and time window the numbers are attached to. A claim that is vaguer or more cautious than the snippet is supported. Refute (supported=false) when the claim reverses or overstates the direction, asserts an outcome the snippet does not state, or misattributes the population, intervention, or comparator. When genuinely uncertain whether the snippet supports the claim, refute — an unsupported claim shown to a clinician is worse than a supported one withheld. Return a verdict for EVERY item id you were given, each with a one-clause reason.`
 
 // Audit findings against their source snippets. `items` is [{ id, finding, snippet }].
 // Returns a Map of String(id) -> { verdict: 'supported'|'refuted'|'unchecked', reason }.
 // Items with no finding or no snippet are 'unchecked' (nothing to audit / nothing to
 // audit against) and are never sent to the model. One structured call on the cheap model.
-export async function checkFindings({ items, model = MODELS.fast, maxTokens = 2048 }) {
+export const NO_RESULTS_REASON = 'Not checked: the supplied evidence window has no identifiable Results text.'
+
+// Managed windows explicitly label their selected sections. Primary-result metadata
+// is not source evidence. Design cautions can still be checked against Methods.
+function missingResults(item) {
+  if (item.claimType === 'design-caution') return false
+  if (item.hasResults === false) return true
+  const snippet = String(item.snippet || '').slice(0, SNIPPET_CHARS)
+  if (!snippet.startsWith('[Evidence window:')) return false
+  const body = snippet.slice(snippet.indexOf('\n') + 1)
+  // Full-text subsection labels can contain a hierarchy separator.
+  return !body.split('\n').some((line) => {
+    const colon = line.indexOf(':')
+    return colon > 0 && line.slice(colon + 1).trim() &&
+      sectionKind(line.slice(0, colon).split('›')[0]) === 'results'
+  })
+}
+
+export async function checkFindings({ items, model = MODELS.fast, maxTokens }) {
   const out = new Map(
-    (items || []).map((i) => [String(i.id), { verdict: 'unchecked', reason: '' }])
+    (items || []).map((i) => [String(i.id), { verdict: 'unchecked', reason: missingResults(i) ? NO_RESULTS_REASON : '' }])
   )
   const checkable = (items || []).filter(
-    (i) => String(i.finding || '').trim() && String(i.snippet || '').trim()
+    (i) => String(i.finding || '').trim() && String(i.snippet || '').trim() && !missingResults(i)
   )
   if (!checkable.length) return out
 
@@ -88,20 +119,63 @@ export async function checkFindings({ items, model = MODELS.fast, maxTokens = 20
     `Items (${checkable.length}) across ${groups.length} source${groups.length === 1 ? '' : 's'}:\n\n` +
     groups.map((group) =>
       `SNIPPET:\n${group.snippet}\nCLAIMS:\n` +
-      group.claims.map((i) => `[${i.id}] CLAIM: ${String(i.finding).trim()}`).join('\n')
+      group.claims.map((i) => {
+        const context = String(i.context || '').trim()
+        return `[${i.id}] CLAIM: ${String(i.finding).trim()}${context ? `\n  CONTEXT: ${context}` : ''}`
+      }).join('\n')
     ).join('\n\n')
 
-  const result = await extractStructured({ model, system: SYSTEM, content, schema: CHECK_SCHEMA, maxTokens })
+  const result = await extractStructured({ model, system: SYSTEM, content, schema: CHECK_SCHEMA, maxTokens: maxTokens ?? Math.min(8192, Math.max(2048, checkable.length * 128)) })
 
+  // Match each returned verdict to a claim id. Models echo ids with decoration ("[123]",
+  // "CLAIM 123", "id: 123", quotes, stray spaces); normalizing that is bookkeeping, not
+  // judgment. A verdict that still matches nothing is dropped — but now LOGGED, and every
+  // claim left without a verdict says so in its reason instead of rendering silently
+  // unchecked (2026-10-11 dev set: CAR-12 came back unchecked with no reason).
+  const wanted = new Map(checkable.map((i) => [normalizeClaimId(i.id), String(i.id)]))
+  const matched = new Set()
+  const unmatched = []
   for (const v of result.verdicts || []) {
-    const key = String(v?.id)
-    // An id the model invented is dropped; an id it omitted stays 'unchecked'.
-    if (out.has(key)) {
-      out.set(key, {
-        verdict: v.supported ? 'supported' : 'refuted',
-        reason: String(v.reason || '').trim(),
-      })
+    const raw = String(v?.id ?? '')
+    const key = wanted.get(normalizeClaimId(raw))
+    if (!key || matched.has(key)) {
+      unmatched.push(raw)
+      continue
     }
+    matched.add(key)
+    out.set(key, {
+      verdict: v.supported === true && !reasonAdmitsMissingEvidence(v.reason) ? 'supported' : 'refuted',
+      reason: String(v.reason || '').trim(),
+    })
+  }
+  const missing = checkable.map((i) => String(i.id)).filter((id) => !matched.has(id))
+  for (const id of missing) out.set(id, { verdict: 'unchecked', reason: NO_VERDICT_REASON })
+  if (unmatched.length || missing.length) {
+    console.warn(
+      `Prose check: ${unmatched.length} verdict id(s) matched no claim [${unmatched.join(', ')}]; ` +
+        `${missing.length} claim(s) got no verdict [${missing.join(', ')}] and render unchecked.`
+    )
   }
   return out
+}
+
+// A positive boolean cannot override the checker's own admission of missing evidence.
+// This is a conservative contradiction guard, not an independent source verifier.
+// Scope negative reporting verbs to the source so "does not reduce mortality" and
+// "the claim does not overstate" remain valid reasons for a supported null finding.
+export function reasonAdmitsMissingEvidence(reason) {
+  const text = String(reason || '').replace(/[’‘]/g, "'").replace(/\s+/g, ' ')
+  return /\b(?:snippet|source|abstract|text|excerpt|passage|evidence)\s+(?:(?:does|do)\s+not|doesn't|don't|cannot|can't|fails?\s+to)\s+(?:explicitly\s+|directly\s+|clearly\s+)?(?:state|say|mention|report|describe|specify|establish|support|confirm|show|demonstrate|provide|contain)\b/i.test(text) ||
+    /\b(?:not|never)\s+(?:explicitly\s+|directly\s+|clearly\s+)?(?:stated|mentioned|reported|described|specified|established|supported|confirmed|shown|provided|contained)\s+(?:in|by)\s+(?:the\s+)?(?:supplied\s+|provided\s+)?(?:snippet|source|abstract|text|excerpt|passage|evidence)\b/i.test(text)
+}
+
+export const NO_VERDICT_REASON = 'Not checked: the source checker returned no verdict for this claim.'
+
+export function normalizeClaimId(id) {
+  return String(id ?? '')
+    .trim()
+    .replace(/^[\s"'`[(]+|[\s"'`\])]+$/g, '')
+    .replace(/^(?:claim|id|item|pmid)\s*(?:id)?\s*[:#=]?\s*/i, '')
+    .replace(/^[\s"'`[(]+|[\s"'`\])]+$/g, '')
+    .toLowerCase()
 }

@@ -10,6 +10,7 @@
 
 import {
   fetchPmcFullText,
+  assembleExtractionSource,
   fetchAbstracts,
   fetchRegistry,
   parseRegistryOutcomes,
@@ -26,6 +27,7 @@ import { sha256Hex, cacheKeyHeader, lookupCachedExtraction, storeCachedExtractio
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 import { citationIndicatesRetraction } from './retractions.js'
 import { verify, normalize, extractNumbers, numbersEqual } from './verify.js'
+import { selectEvidenceWindow } from './evidenceWindow.js'
 import {
   profileTopics,
   normalizeSearchDays,
@@ -233,8 +235,11 @@ export async function runPaper(paper, { onStage, userText = null, cacheOnly = fa
     }
 
     notify('extracting')
-    // The model sees prose + flattened tables so it can cite table values.
-    const sourceText = source.tables ? `${source.text}\n\nTABLES:\n${source.tables}` : source.text
+    // One shared assembly (sources.js): publisher abstract (when available) + body prose +
+    // flattened tables. The model, the verifier and the stored sourceDoc all use exactly this
+    // corpus. `source.text` stays body-only for the ranking evidence window below.
+    const assembled = assembleExtractionSource(source)
+    const sourceText = assembled.modelText
     // The cache is keyed by the exact text the model would read. A hit replays that
     // proposal; verification below runs on it regardless, in this session.
     const sourceHash = await sha256Hex(sourceText)
@@ -257,7 +262,7 @@ export async function runPaper(paper, { onStage, userText = null, cacheOnly = fa
     notify('verifying')
     const rows = extracted.quantities.map(dropUnprovenLabels).map((quantity) => ({
       quantity,
-      verdict: verify(quantity, { text: source.text, tables: source.tables }, {
+      verdict: verify(quantity, { text: assembled.corpusText, tables: assembled.tables }, {
         sourceTier: source.tier,
         registry,
       }),
@@ -276,7 +281,13 @@ export async function runPaper(paper, { onStage, userText = null, cacheOnly = fa
         hash: sourceHash,
         ...(userText ? { userSupplied: true, fileName: userText.fileName || null, fileHash: userText.hash || null } : {}),
       },
-      sourceDoc: { text: source.text, tables: source.tables }, // kept for corrupt-reverify
+      // Same corpus the model read and the verifier checked (abstract block + body, tables
+      // separate), kept for corrupt-reverify, rechecks and the source viewer.
+      sourceDoc: { text: assembled.corpusText, tables: assembled.tables },
+      sourceCoverage: assembled.coverage,
+      // The bounded ranking/prose-check window, chosen from the source's structure. Ranking
+      // input only — sourceDoc above stays the complete verification corpus.
+      evidenceWindow: selectEvidenceWindow(source),
       rows,
       cache,
     }

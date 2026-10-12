@@ -2,7 +2,7 @@
 // her real digest. Each new rule is narrow: positive controls are the real sentences, and
 // every other case is a [false-verify guard]. Zero false verifies outranks any coverage.
 import { describe, it, expect } from 'vitest'
-import { verify, TIERS, VERIFICATION_VERSION, COMPATIBLE_VERIFICATION_VERSIONS } from './verify.js'
+import { verify, TIERS, VERIFICATION_VERSION, COMPATIBLE_VERIFICATION_VERSIONS, TIGHTENED_TIERS } from './verify.js'
 import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion.js'
 
 const base = { quantity_type: 'single', range_low: null, range_high: null, first_label: null, first_value: null, second_label: null, second_value: null, ci_low: null, ci_high: null, p_value: null, unit: null, location_hint: 'Results' }
@@ -162,10 +162,16 @@ describe('heterogeneity I² (frailty meta-analysis)', () => {
 })
 
 describe('version', () => {
-  it('bumps, and keeps the previous stamps readable — new rules only add coverage', () => {
-    expect(VERIFICATION_VERSION).toBe('2026-10-04.estimates-v6')
-    expect(COMPATIBLE_VERIFICATION_VERSIONS).toEqual(expect.arrayContaining(['2026-09-30.estimates-v3', '2026-10-04.estimates-v4', '2026-10-04.estimates-v5']))
+  it('bumps, and keeps the previous stamps readable outside the tiers v7 tightened', () => {
+    expect(VERIFICATION_VERSION).toBe('2026-10-10.estimates-v8')
+    expect(COMPATIBLE_VERIFICATION_VERSIONS).toEqual(expect.arrayContaining(['2026-09-30.estimates-v3', '2026-10-04.estimates-v4', '2026-10-04.estimates-v5', '2026-10-04.estimates-v6']))
     const old = { ...verify(q({ name: 'x', unit: 'HR', value: 0.84, ci_low: 0.61, ci_high: 1.16, source_quote: 'HR 0.84 (95% CI 0.61-1.16)' }), 'Results: HR 0.84 (95% CI 0.61-1.16).'), verificationVersion: '2026-09-30.estimates-v3' }
-    expect(evidenceVerdict(old).tier).toBe(old.tier)
+    // An estimate verdict is in a tier v7 tightened (P binding), so an old stamp there is
+    // no longer a subset and is downgraded; the read paths re-derive it from saved source.
+    expect(old.tier).toBe(TIERS.ESTIMATE)
+    expect(TIGHTENED_TIERS).toEqual([TIERS.ESTIMATE, TIERS.COMPARISON])
+    expect(evidenceVerdict(old).tier).toBe('legacy-unchecked')
+    const sentence = { ...old, tier: TIERS.ABSTRACT, relationshipStatus: 'validated' }
+    expect(evidenceVerdict(sentence)).toBe(sentence)
   })
 })

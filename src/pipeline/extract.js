@@ -103,6 +103,19 @@ Non-negotiable rules:
   the groups in name instead ("12-month primary patency, RA+DCB vs DCB alone").
   A reported estimate range is NOT a confidence interval. Keep ci_low/ci_high for a CI
   explicitly identified as such by the source.
+- ci_low/ci_high belong ONLY to a single quantity, and only when the source prints that
+  interval for the estimate you put in value. Never fill ci_low/ci_high on a comparison,
+  change or range: an interval printed after two group values is the interval of the
+  effect estimate beside it, not of the group values. In "(8.1% vs. 6.2%; hazard ratio,
+  1.31; 95% CI, 0.84 to 2.04)" the interval belongs to the hazard ratio 1.31. If you
+  extract both results, emit two separate quantities that may share the quote: a
+  comparison (8.1, 6.2) with ci_low/ci_high null, and a single (value 1.31) with the
+  interval. If you extract only the group values, leave ci_low/ci_high null. Never
+  compute or infer an estimate the source does not print.
+- A P value is never a quantity on its own. Fill p_value only beside an estimate the
+  same quote prints (value, a range, or a first/second pair). When the source reports
+  only a P value with no estimate ("an interaction was detected (P = 0.02)"), omit it.
+  Never put a P value in value.
 - Preserve the source's printed precision in source_quote. For example, copy "1.00" and
   "P=0.00" exactly even though the numeric schema fields necessarily encode them as 1
   and 0. A downstream formatter recovers the display spelling from this verbatim quote.
@@ -116,14 +129,30 @@ Non-negotiable rules:
   non-significant one ("67.3% vs. 50%, p = 0.16"): a clinician needs the headline result
   whether or not it reached significance, and a significant secondary finding is never
   a substitute for it.
+- Beyond the primary result, also cover clinically key outcomes the CURRENT study reports
+  separately and prints with their own numbers: principal benefit and harm/safety outcomes
+  (e.g. death, major bleeding, major adverse events), and the individually printed
+  components of a composite primary endpoint. Prefer the current study's own results over
+  background, literature or pooled prior work, and keep populations and timepoints
+  distinct (e.g. ITT vs per-protocol, 30-day vs 12-month) in name. Only extract what is
+  actually printed: never derive a value (a sentence saying an event occurred "equally in
+  both groups" prints no two numbers), and do not try to extract every table row. When the
+  same result is printed in several places, prefer one self-contained verbatim passage that
+  spells out the measure and group labels over an abbreviated table cell or fragment;
+  never rewrite source text to make it fit.
 - Order quantities by importance: the PRIMARY / headline effect estimate FIRST, then key
   secondary outcomes. The first item should be the number a clinician would quote.
+  Extra coverage must never come at the expense of the quote, CI and P rules above.
 - design is your best classification of the study design.
 - Do not silently repair statistically implausible results. Extract what the source
   prints verbatim; a deterministic downstream plausibility pass will warn separately.
 
 A downstream verifier will re-check every quote and number against the source text and
 flag anything it cannot prove. Precision beats recall.`
+
+// Exported read-only so the offline single-paper evaluation harness (src/eval/) sends the
+// exact request extractQuantities sends.
+export const EXTRACTION_SYSTEM = SYSTEM
 
 // Extract quantities from source text. Returns the parsed object matching
 // EXTRACTION_SCHEMA. Callers pass the result straight into verify.js — nothing here is

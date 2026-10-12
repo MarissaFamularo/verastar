@@ -1,0 +1,298 @@
+{
+ "row_id": "CAD-01",
+ "pmid": "32227755",
+ "trial": "",
+ "design": "RCT",
+ "tier": "full_text",
+ "sourceDoc": {
+  "text": "THE GOALS OF TREATING PATIENTS WITH stable coronary disease are to reduce their risk of death and ischemic events and to improve their quality of life. All patients with coronary disease should be treated with guide-line-based medical therapy (hereafter, medical therapy) to achieve these objectives.1,2 Before the widespread availability of drug-eluting stents, strategy trials that tested the incremental effect of revascularization added to medical therapy did not show a reduction in the incidence of death or myocardial infarction.3,4 In one trial, fractional flow reserve–guided percutaneous coronary intervention (PCI) with drug-eluting stents, added to medical therapy, decreased the incidence of urgent revascularization but not the incidence of death from any cause or myocardial infarction at a mean of 7 months,5 whereas the 5-year follow-up showed marginal evidence of a decrease in the incidence of myocardial infarction.6Several theories have been advanced to explain why previous strategy trials involving patients with stable coronary disease have not shown a decrease in death or myocardial infarction with revascularization. In trials requiring angiographic evidence of obstructive coronary disease, patients with high-risk anatomical features may have been excluded and knowledge of the anatomy may have led to revascularization in patients who were randomly assigned to a conservative strategy. Previous studies allowed the enrollment of patients with any level of ischemia, which resulted in a minority of patients with moderate or severe ischemia for whom an invasive strategy might have been most beneficial. In a single-center observational study involving 10,627 patients, the incidence of death from cardiac causes was lower among those with at least 10% ischemia on myocardial perfusion imaging who underwent early revascularization than among those who did not undergo revascularization.7 We designed the International Study of Comparative Health Effectiveness with Medical and Invasive Approaches (ISCHEMIA) to determine the effect of adding cardiac catheterization (hereafter, angiography) and revascularization when feasible to medical therapy in patients with stable coronary disease and moderate or severe ischemia.8,9METHODSTRIAL POPULATIONThe trial design and baseline characteristics of the patients have been described previously.8,10 Patients with stable coronary disease were enrolled at clinical sites that met certain quality metrics (see the Methods section in the Supplementary Appendix, available with the full text of this article at NEJM.org) after clinically indicated stress testing showed moderate or severe reversible ischemia on imaging tests or severe ischemia on exercise tests without imaging (Fig. S1 and S2 in the Supplementary Appendix). The option of exercise-stress testing without imaging was added as a protocol addendum in 2014 to improve recruitment and generalizability of the trial results.11 Key exclusion criteria were an estimated glomerular filtration rate below 30 ml per minute per 1.73 m2 of body-surface area, a recent acute coronary syndrome, unprotected left main stenosis of at least 50%, a left ventricular ejection fraction of less than 35%, New York Heart Association class III or IV heart failure, and unacceptable angina despite the use of medical therapy at maximum acceptable doses.Most enrolled trial patients underwent coronary computed tomographic (CT) angiography to rule out left main coronary disease and nonobstructive coronary disease. The primary exceptions to the use of CT angiography were renal dysfunction that would preclude such testing or known coronary anatomy. Patients underwent randomization if protocol-indicated clinical, ischemia-based, and anatomical eligibility criteria (based on blinded CT angiography) had been met (Tables S1 and S2). Although sites determined whether stress-testing results met eligibility criteria for ischemia severity, all stress tests were reviewed by independent core laboratories.TREATMENT STRATEGIESEligible patients were randomly assigned, in a 1:1 ratio, to an initial invasive strategy of medical therapy, angiography, and revascularization when feasible or to an initial conservative strategy of medical therapy alone, with angiography reserved for failure of medical therapy. Randomization was performed with an interactive voice–response or Web-based response system with the use of randomly permuted blocks of varying sizes, with stratification according to enrollment site.Patients who were assigned to the invasive strategy were to undergo angiography within 30 days after randomization and complete revascularization of all ischemic territories if feasible. Sites were provided with guidelines for performing revascularization, including the use of fractional flow reserve measurements when available and appropriate (Fig. S3a and S3b and the Supplementary Methods section). Decisions about the type of revascularization — PCI or coronary-artery bypass grafting (CABG) — were deferred to the local heart team. An independent angiographic core laboratory analyzed all protocol-assigned angiographic and PCI procedures. Medical therapy consisted of intensive secondary prevention with lifestyle and pharmacologic interventions applied equally in both groups with the use of treat-to-target algorithms (Table S3). Patients were followed at 1.5, 3, 6, and 12 months after randomization and every 6 months thereafter.OUTCOME ASSESSMENTThe primary outcome was the composite of death from cardiovascular causes, myocardial infarction, or hospitalization for unstable angina, heart failure, or resuscitated cardiac arrest. The key secondary outcomes were the composite of death from cardiovascular causes or myocardial infarction and angina-related quality of life. Clinical outcomes were adjudicated by an independent clinical-event committee whose members were unaware of the trial-group assignments.The primary definition of nonprocedural infarction was based on the Third Universal Definition of Myocardial Infarction types 1, 2, 4b, and 4c.12 For procedural infarctions, we required higher biomarker thresholds for confirmation8 because data showed that this more stringent definition carried greater prognostic significance than the universal definition types 4a and 5.13,14 We developed a secondary definition for procedural infarctions that used biomarker thresholds that were similar to those of the universal definition but with additional criteria based on elevations of biomarker levels alone without additional findings. Definitions of all trial outcomes, including both the primary and the secondary definitions of procedural infarction, are provided in the Supplementary Methods section.TRIAL ORGANIZATION AND OVERSIGHTThe trial was designed by the executive committee and sponsored by the National Heart, Lung, and Blood Institute, with additional support from industry sponsors (Table S4). An independent data and safety monitoring board approved the trial protocol (available at NEJM.org) and monitored patient safety. The protocol was approved by the institutional review board at New York University Grossman School of Medicine (the clinical coordinating center) and by the institutional review board and ethics committee at each participating site (see the Supplementary Appendix). All the patients provided written informed consent.The industry sponsors did not have access to the data during the trial and did not participate in the trial design, data analysis, or manuscript preparation. The statistical and data coordinating center at Duke Clinical Research Institute monitored data collection and quality and performed statistical analyses. The first author prepared the first draft of the manuscript. The first and second authors had full access to the data and were responsible for editing subsequent drafts as well as for the decision to submit the final manuscript for publication. All the authors vouch for the accuracy and completeness of the data and adherence of the trial to the protocol.STATISTICAL ANALYSISThe original trial design specified that 8000 patients would undergo randomization with 4 years of follow-up for the five-component primary composite outcome reported in this article.15 Before the trial launch, the National Heart, Lung, and Blood Institute and the data and safety monitoring board approved changing the primary outcome to a composite of death from cardiovascular causes or myocardial infarction, with a protocol-defined procedure to revert to the five-component primary outcome if needed to preserve statistical power. Slow recruitment and lower-than-expected aggregated event rates triggered this prespecified contingency plan and other changes, as described previously.8,11Power calculations performed in 2015 determined that a trial with 5000 patients would have at least 83% power to detect an 18% relative reduction in the 4-year rate of the primary outcome, assuming a 4-year rate of 20% in the conservative-strategy group. When power was reestimated with the use of updated event-rate assumptions derived from blinded trial data in 2018, the final sample size was estimated to provide at least 83% power to detect an 18.5% relative reduction in the primary outcome, assuming average follow-up of approximately 3 years and an aggregate 4-year cumulative incidence of 14%.Detailed statistical methods are provided in the Supplementary Methods section. Group comparisons were performed according to the intention-to-treat principle based on time-to-first-event analyses. Cumulative event probabilities were estimated with the use of the Kaplan–Meier method for outcomes that were not subject to competing risks (e.g., death from any cause) and by a nonparametric cumulative-incidence function estimator for outcomes that were subject to competing risks (e.g., the primary outcome, for which death from noncardiovascular causes is a competing risk).16 The prespecified primary analysis was a covariate-adjusted Cox proportional-hazards model. However, the proportional-hazards assumption underlying the Cox model was not met for the primary outcome (P<0.001 for time-by-treatment interaction) and several secondary outcomes. We report these results for the primary outcome and do not report them for any other outcomes that show nonproportionality.The statistical analysis plan specified that presentation of the results would emphasize nonparametric cumulative event-rate estimates if the proportional-hazards assumption was violated. Differences in these estimates for the invasive-strategy group as compared with the conservative-strategy group at 6 months and at yearly time points were tabulated and presented with 95% confidence intervals. The confidence intervals have not been adjusted for multiple comparisons, so these intervals should not be used to infer definitive treatment effects. In a post hoc analysis, we used kernel smoothing to estimate hazard-rate functions over time for the two treatment groups.17 We also estimated the difference in restricted mean event-free time over 5 years.18,19 This quantity is derived from the nonparametric cumulative event-rate curves and is interpreted as the average number of event-free days per patient over the period between randomization and 5 years. Supporting analyses using a Bayesian statistical framework were prespecified to permit the primary clinical results to be expressed in terms of the posterior (post-trial) probability of a small or large effect size in light of the current trial data. We implemented the Bayesian approach using a flexible piecewise-exponential nonproportional-hazards model (see the Supplementary Methods section). Analyses were performed with the use of SAS software (version 9.4), WinBUGS software (version 1.4), and R software (version 3.6).RESULTSBASEUNE CHARACTERISTICS AND MEDICAL THERAPYFrom July 26, 2012, through January 31, 2018, a total of 8518 patients were enrolled and 5179 underwent randomization at 320 sites in 37 countries (Section II in the Supplementary Appendix and Fig. 1). The baseline characteristics of the patients were well balanced between the two groups (Table 1 and Table S5). Baseline risk-factor control and medication use were similar in the groups (Table S6). The median low-density lipoprotein cholesterol level was 83 mg per deciliter (2.2 mmol per liter) at baseline and 64 mg per deciliter (1.7 mmol per liter) at the last visit. Medication use at baseline and during follow-up is shown in Figures S4 and S5.USE OF INVASIVE PROCEDURES AND FOLLOW UPAmong patients in the invasive-strategy group, 96% underwent angiography and 79% underwent revascularization (PCI in 74% and CABG in 26%) (Table S7a and Fig. S6). Angiographic characteristics of patients in the invasive-strategy group and procedural data are provided in Table S8. In the conservative-strategy group, 26% of the patients underwent angiography and 21% underwent revascularization; 19% underwent angiography and 15% underwent revascularization before the occurrence of a primary outcome event. The total numbers of invasive procedures, including repeat procedures, that were performed in each group were 5337 in the invasive-strategy group and 1506 in the conservative-strategy group (Table S9). Patients were followed until June 30, 2019; the median duration of follow-up was 3.2 years.PRIMARY OUTCOMEThe primary outcome occurred in 318 patients in the invasive-strategy group and in 352 patients in the conservative-strategy group (Table 2 and Fig. 2). In prespecified covariate-adjusted Cox model analysis, the estimated hazard ratio with the invasive strategy as compared with the conservative strategy was 0.93 (95% confidence interval [CI], 0.80 to 1.08; P = 0.34). However, the underlying proportional-hazards assumption was violated. At 6 months, the estimated cumulative event rate was 5.3% in the invasive-strategy group and 3.4% in the conservative-strategy group (difference, 1.9 percentage points; 95% CI, 0.8 to 3.0). At 5 years, the estimated cumulative event rate was 16.4% in the invasive-strategy group and 18.2% in the conservative-strategy group (difference, −1.8 percentage points; 95% CI, −4.7 to 1.0). The estimated hazard rates over time are shown in Figure S7. We did not find evidence of a difference in the 5-year restricted mean event-free time between the groups (9.5 days longer in the invasive-strategy group; 95% CI, −17.8 to 36.9).SECONDARY OUTCOMESThere were 276 deaths from cardiovascular causes or myocardial infarctions in the invasive-strategy group and 314 in the conservative-strategy group (Table 2 and Fig. 2). At 6 months, the estimated event rate was 4.8% in the invasive-strategy group and 2.9% the conservative-strategy group (difference, 1.9 percentage points; 95% CI, 0.9 to 3.0). At 5 years, the estimated cumulative event rate was 14.2% in the invasive-strategy group and 16.5% in the conservative-strategy group (difference, −2.3 percentage points; 95% CI, −5.0 to 0.4). The restricted mean time free from death from cardiovascular causes or infarction over 5 years was similar in the two groups (9.4 days longer in the invasive-strategy group; 95% CI, −16.5 to 35.2). Other outcomes according to treatment group are shown in Table 2, Table S10, and Figure S8. There were more hospitalizations for heart failure and fewer hospitalizations for unstable angina with the invasive strategy. There were 145 deaths in the invasive-strategy group and 144 deaths in the conservative-strategy group (hazard ratio, 1.05; 95% CI, 0.83 to 1.32).The early increased risk of the primary and major secondary outcomes in the invasive-strategy group was attributable to more procedural infarctions in early follow-up. This early hazard difference was increased when the secondary definition of infarction, which increased the number of adjudicated procedural infarctions, was used. With the use of the secondary definition of myocardial infarction, the estimated cumulative event rate at 6 months for the primary outcome was 10.2% in the invasive-strategy group and 3.7% in the conservative-strategy group (difference, 6.5 percentage points; 95% CI, 5.2 to 7.9), and the estimated cumulative event rate at 5 years was 21.2% in the invasive-strategy group and 19.0% in the conservative-strategy group (difference, 2.2 percentage points; 95% CI, −0.7 to 5.2). The greater number of procedural infarctions according to the secondary definition is reflected in all composite outcomes that include infarctions (Table S11 and Fig. S9).HETEROGENEITY OF TREATMENT EFFECTNo evidence of a differential treatment effect on the primary outcome was found for five prespecified covariates or the degree of ischemia (Fig. 3). Likewise, there was no evidence of a differential treatment effect on the primary outcome with respect to other baseline characteristics, including the type of stress test, baseline left ventricular ejection fraction, estimated glomerular filtration rate, and age.BAYESIAN ANALYSISIn the Bayesian analysis, the post-trial probability that the difference in group-specific 5-year cumulative rates of the primary outcome is greater than 3 absolute percentage points was estimated to be 24.5% for a difference favoring the invasive strategy and less than 0.1% for a difference favoring the conservative strategy; results were similar for the key secondary outcome (Fig. S10 and Table S12). The probability that the difference in the 5-year rate of death from any cause is greater than 1 absolute percentage point was estimated to be 10.7% for a difference favoring the invasive strategy and 32.1% for a difference favoring the conservative strategy.DISCUSSIONOver a median of 3.2 years of follow-up, among patients with stable coronary disease who had moderate or severe ischemia on stress testing, an initial invasive strategy, as compared with an initial conservative strategy, did not reduce the rates of the primary or key secondary composite outcomes. Patients in the invasive-strategy group had more procedural infarctions, and they had fewer nonprocedural infarctions during follow-up. The incidence of death from any cause was low and similar in the two groups.The opposing trends in procedural and nonprocedural infarctions drove the lack of proportionality for the primary and key secondary outcomes. The rate of early cardiovascular events was higher and the rate of late cardiovascular events was lower among patients in the invasive-strategy group than among those in the conservative-strategy group. Differences in event rates between the groups in early follow-up were greater when the secondary definition of procedural infarction was used; this showed the sensitivity of rates of procedural infarctions to the definition used. The invasive strategy was associated with fewer nonprocedural infarctions when either definition was used. When the secondary definition of myocardial infarction was used, the primary outcome occurred more frequently in the invasive-strategy group than in the conservative-strategy group throughout the 5-year follow-up period.A preliminary analysis of ISCHEMIA data provides support for previous studies showing that spontaneous infarctions confer a higher risk of subsequent death than procedural infarctions.13,14 Despite pronounced differences in the frequency and timing of myocardial infarctions, there was no difference between the groups with respect to mortality. Longer-term follow-up with assessment of mortality is needed to fully understand the prognostic implications of more procedural and fewer nonprocedural infarctions with an invasive strategy.The results of ISCHEMIA should be interpreted in the context of certain limitations. Power was decreased by reducing the sample size from 8000 to 5179 patients, event rates were lower than expected, and the period of follow-up was modest. With a 3.2-year median follow-up, event-rate estimates past the median are subject to progressively greater uncertainty. The primary outcome was expanded, as prespecified, owing to slow recruitment, yet there was no difference between the results for the primary and key secondary outcomes. The findings do not apply to patients with acute coronary syndromes,18,19 clinically significant left main coronary artery disease,20,21 low ejection fraction,22 class III or IV heart failure, or those who are very symptomatic despite the use of medical therapy at maximum acceptable doses. Although the stress core laboratories did not confirm that the degree of ischemia was sufficient to qualify for the trial in 14% of the patients who underwent randomization, a subgroup analysis showed that inclusion of patients with less than moderate ischemia as determined by core laboratories had no effect on the trial findings. We have not yet analyzed the effect of the completeness23 or method24 of revascularization on outcomes. The clinical outcomes should be interpreted in the context of quality-of-life outcomes, which represent a different dimension of treatment effectiveness and are reported separately.25In conclusion, we compared an initial invasive strategy with an initial conservative strategy in patients with coronary disease and moderate or severe ischemia. We did not find evidence that the initial invasive strategy reduced the risk of ischemic cardiovascular events or death from any cause. The trial findings were sensitive to the definition of myocardial infarction used.Supplementary MaterialSupplement1",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Primary outcome, invasive vs conservative strategy, covariate-adjusted Cox hazard ratio",
+    "quantity_type": "single",
+    "value": 0.93,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.8,
+    "ci_high": 1.08,
+    "p_value": 0.34,
+    "source_quote": "the estimated hazard ratio with the invasive strategy as compared with the conservative strategy was 0.93 (95% confidence interval [CI], 0.80 to 1.08; P = 0.34)",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "full_text",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the full text. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary outcome, 5-year cumulative event rate difference, invasive vs conservative",
+    "quantity_type": "single",
+    "value": -1.8,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "percentage points",
+    "ci_low": -4.7,
+    "ci_high": 1,
+    "p_value": null,
+    "source_quote": "At 5 years, the estimated cumulative event rate was 16.4% in the invasive-strategy group and 18.2% in the conservative-strategy group (difference, −1.8 percentage points; 95% CI, −4.7 to 1.0).",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary outcome, 6-month cumulative event rate, invasive vs conservative",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "invasive-strategy group",
+    "first_value": 5.3,
+    "second_label": "conservative-strategy group",
+    "second_value": 3.4,
+    "unit": "%",
+    "ci_low": 0.8,
+    "ci_high": 3,
+    "p_value": null,
+    "source_quote": "At 6 months, the estimated cumulative event rate was 5.3% in the invasive-strategy group and 3.4% in the conservative-strategy group (difference, 1.9 percentage points; 95% CI, 0.8 to 3.0).",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary outcome, 5-year restricted mean event-free time difference, invasive vs conservative",
+    "quantity_type": "single",
+    "value": 9.5,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "days",
+    "ci_low": -17.8,
+    "ci_high": 36.9,
+    "p_value": null,
+    "source_quote": "We did not find evidence of a difference in the 5-year restricted mean event-free time between the groups (9.5 days longer in the invasive-strategy group; 95% CI, −17.8 to 36.9).",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Death from cardiovascular causes or myocardial infarction, 5-year cumulative event rate, invasive vs conservative",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "invasive-strategy group",
+    "first_value": 14.2,
+    "second_label": "conservative-strategy group",
+    "second_value": 16.5,
+    "unit": "%",
+    "ci_low": -5,
+    "ci_high": 0.4,
+    "p_value": null,
+    "source_quote": "At 5 years, the estimated cumulative event rate was 14.2% in the invasive-strategy group and 16.5% in the conservative-strategy group (difference, −2.3 percentage points; 95% CI, −5.0 to 0.4).",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Death from cardiovascular causes or myocardial infarction, 6-month event rate, invasive vs conservative",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "invasive-strategy group",
+    "first_value": 4.8,
+    "second_label": "conservative-strategy group",
+    "second_value": 2.9,
+    "unit": "%",
+    "ci_low": 0.9,
+    "ci_high": 3,
+    "p_value": null,
+    "source_quote": "At 6 months, the estimated event rate was 4.8% in the invasive-strategy group and 2.9% the conservative-strategy group (difference, 1.9 percentage points; 95% CI, 0.9 to 3.0).",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Death from any cause, invasive vs conservative, hazard ratio",
+    "quantity_type": "single",
+    "value": 1.05,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.83,
+    "ci_high": 1.32,
+    "p_value": null,
+    "source_quote": "There were 145 deaths in the invasive-strategy group and 144 deaths in the conservative-strategy group (hazard ratio, 1.05; 95% CI, 0.83 to 1.32).",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "full_text",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the full text. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary outcome with secondary MI definition, 6-month cumulative event rate, invasive vs conservative",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "invasive-strategy group",
+    "first_value": 10.2,
+    "second_label": "conservative-strategy group",
+    "second_value": 3.7,
+    "unit": "%",
+    "ci_low": 5.2,
+    "ci_high": 7.9,
+    "p_value": null,
+    "source_quote": "the estimated cumulative event rate at 6 months for the primary outcome was 10.2% in the invasive-strategy group and 3.7% in the conservative-strategy group (difference, 6.5 percentage points; 95% CI, 5.2 to 7.9)",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary outcome with secondary MI definition, 5-year cumulative event rate, invasive vs conservative",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "invasive-strategy group",
+    "first_value": 21.2,
+    "second_label": "conservative-strategy group",
+    "second_value": 19,
+    "unit": "%",
+    "ci_low": -0.7,
+    "ci_high": 5.2,
+    "p_value": null,
+    "source_quote": "the estimated cumulative event rate at 5 years was 21.2% in the invasive-strategy group and 19.0% in the conservative-strategy group (difference, 2.2 percentage points; 95% CI, −0.7 to 5.2)",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Median follow-up duration",
+    "quantity_type": "single",
+    "value": 3.2,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "years",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "the median duration of follow-up was 3.2 years",
+    "location_hint": "Results, use of invasive procedures and follow up"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In patients with stable coronary disease and moderate or severe ischemia, an initial invasive strategy added to medical therapy showed no statistically clear difference in the primary composite outcome (HR 0.93 hazard ratio (CI 0.80–1.08), P=0.34) or in death from any cause (HR 1.05 hazard ratio (CI 0.83–1.32)).",
+  "designCaution": "The trial tested a strategy of initial invasive management in a selected population and does not show that revascularization has no value for symptoms or for unselected or higher-risk anatomy.",
+  "relevance": "Landmark NEJM RCT on revascularization versus medical therapy, informing atherosclerosis prevention and the broader invasive-versus-conservative debate parallel to your CLTI and carotid decision-making.",
+  "score": 58,
+  "tier": 1,
+  "check": {
+   "verdict": "refuted",
+   "reason": "The snippet does not provide the specific hazard ratios, confidence intervals, or p-values cited in the claim; it only discusses prior trials' findings and the rationale for designing ISCHEMIA, without presenting the trial's own outcome results."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the trial enrolled 'patients with stable coronary disease and moderate or severe ischemia' and discusses how previous trials' limitations (including enrollment criteria and patient selection) motivated this study's design, supporting that ISCHEMIA tested a specific strategy in a selected population with particular ischemia levels."
+  }
+ }
+}

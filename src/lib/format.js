@@ -13,6 +13,16 @@ import { normalize, extractNumbersWithIndex, numbersEqual } from '../pipeline/ve
 // Post-NFKC operator characters the quote may state before a p-value. ⩽/⩾ (slanted
 // variants) are distinct code points NFKC does not fold, so they map here.
 const P_OPERATORS = { '=': '=', '<': '<', '>': '>', '≤': '≤', '≥': '≥', '⩽': '≤', '⩾': '≥' }
+// Older papers print the operator in words ("P less than 0.001"); same meaning, same symbol.
+const P_WORD_OPERATORS = {
+  'less than or equal to': '≤',
+  'less than': '<',
+  'greater than or equal to': '≥',
+  'greater than': '>',
+  'more than': '>',
+}
+const P_LOOKBEHIND = 40
+const P_LEAD_RE = /\bp(?:\s*[- ]?value)?\s*(?:(?:was|is|of)\s*)?(<=|>=|[=<>≤≥⩽⩾]|less\s+than\s+or\s+equal\s+to|less\s+than|greater\s+than\s+or\s+equal\s+to|greater\s+than|more\s+than)?\s*$/i
 
 // Numeric JSON deliberately loses spelling (1.00 -> 1, .02 -> 0.02). Display values
 // come back from the verbatim receipt instead. This tokenizer retains the exact source
@@ -41,8 +51,8 @@ function printedValue(quantity, field) {
   if (field === 'p_value') {
     const semantic = tokens.find((token) => {
       if (!numbersEqual(token.value, target)) return false
-      const before = text.slice(Math.max(0, token.start - 18), token.start)
-      return /\bp(?:\s*[- ]?value)?\s*(?:of\s*)?(?:<=|>=|[=<>≤≥⩽⩾])?\s*$/i.test(before)
+      const before = text.slice(Math.max(0, token.start - P_LOOKBEHIND), token.start)
+      return P_LEAD_RE.test(before)
     })
     return (semantic || tokens.find((t) => numbersEqual(t.value, target)))?.raw || String(target)
   }
@@ -56,7 +66,14 @@ function printedValue(quantity, field) {
     return high?.raw || String(target)
   }
 
-  return tokens.find((t) => numbersEqual(t.value, target))?.raw || String(target)
+  const token = tokens.find((t) => numbersEqual(t.value, target))
+  if (!token) return String(target)
+  // A comparator printed directly before the value is part of the value (">0.999" is not
+  // "0.999"). Symbols only, glued or space-separated; never inferred.
+  // A P-labelled token is the P value's operator, rendered separately by pOperator.
+  const lead = text.slice(Math.max(0, token.start - 3), token.start).match(/([<>≤≥⩽⩾])\s*$/)
+  const isP = P_LEAD_RE.test(text.slice(Math.max(0, token.start - P_LOOKBEHIND), token.start))
+  return lead && !isP ? `${P_OPERATORS[lead[1]] || lead[1]}${token.raw}` : token.raw
 }
 
 // Recover both printed endpoints and the source's separator for a reported estimate
@@ -89,16 +106,123 @@ export function pOperator(quantity) {
   if (quantity == null || quantity.p_value == null) return null
   const quote = normalize(quantity.source_quote || '')
   if (!quote) return null
+  const hit = pToken(quote, quantity.p_value)
+  return hit ? hit.op : null
+}
+
+// The first P-labelled token in the normalized quote equal to p, with its operator.
+// Returns { start, end, op } or null.
+function pToken(quote, p) {
   for (const token of extractNumbersWithIndex(quote)) {
-    if (!numbersEqual(token.value, quantity.p_value)) continue
-    const before = quote.slice(Math.max(0, token.start - 18), token.start)
-    const match = before.match(/\bp(?:\s*[- ]?value)?\s*(?:of\s*)?(<=|>=|[=<>≤≥⩽⩾])?\s*$/i)
+    if (!numbersEqual(token.value, p)) continue
+    const before = quote.slice(Math.max(0, token.start - P_LOOKBEHIND), token.start)
+    const match = before.match(P_LEAD_RE)
     if (!match) continue
-    if (match[1] === '<=') return '≤'
-    if (match[1] === '>=') return '≥'
-    return P_OPERATORS[match[1]] || null
+    const word = (match[1] || '').toLowerCase().replace(/\s+/g, ' ')
+    const op = word === '<=' ? '≤' : word === '>=' ? '≥' : P_WORD_OPERATORS[word] || P_OPERATORS[match[1]] || null
+    return { start: token.start - before.length + match.index, end: token.end, op }
   }
   return null
+}
+
+// A confidence interval describes uncertainty around ONE estimate, so it is rendered only
+// beside a single estimate (`value`). A comparison, change or range has no slot for the
+// estimate its CI would belong to: when such a row carries ci_low/ci_high, the interval
+// belongs to something else in the quote — typically a hazard ratio printed after the two
+// rates ("6.7% vs. 5.4%; hazard ratio, 1.26; 95% CI, 0.81 to 1.96"). Rendering it would
+// state uncertainty around the percentages that the source never reported. This is a
+// shape rule, not a statistical parser: it does not try to work out which estimate the
+// interval belongs to, it only refuses to attach it to a pair or range. The row itself is
+// left as extracted — verify.js still sees the CI fields and keeps such a row out of the
+// verified tiers — and the receipt quote still shows the interval in context.
+export function ciBelongsToEstimate(q) {
+  if (q == null || q.ci_low == null || q.ci_high == null) return false
+  if (q.value == null) return false
+  if (q.first_value != null || q.second_value != null || q.range_low != null || q.range_high != null) return false
+  return q.quantity_type == null || q.quantity_type === 'single'
+}
+
+// What the P value tests, when the quote says so next to it: sidedness printed before the
+// P ("1-sided P = .71") and the hypothesis or comparison printed after it ("P = 0.44 for
+// noninferiority", "P<0.001 for comparison with the performance goal"). Returned in WORDS
+// ("one-sided", "for noninferiority") so the rendered string adds no digits. null when the
+// quote states neither. Deterministic and quote-derived, like the operator.
+export function pQualifier(quantity) {
+  if (quantity == null || quantity.p_value == null) return null
+  const quote = normalize(quantity.source_quote || '')
+  const hit = quote && pToken(quote, quantity.p_value)
+  if (!hit) return null
+  const lead = quote.slice(Math.max(0, hit.start - 16), hit.start).match(/\b(one|two|1|2)[- ]sided\s*$/)
+  const sided = lead ? (lead[1] === 'one' || lead[1] === '1' ? 'one-sided' : 'two-sided') : null
+  const tail = quote.slice(hit.end, hit.end + 70).match(
+    /^\s*\)?\s*[,;]?\s*for\s+(?:the\s+)?(non-?inferiority|superiority|equivalence|interaction|trend|heterogeneity|(?:the\s+)?comparison with (?:the\s+)?performance goal)\b/
+  )
+  const test = tail ? `for ${tail[1].replace(/^non-inferiority$/, 'noninferiority')}` : null
+  return sided || test ? { sided, test } : null
+}
+
+// The interval's printed level and kind. A 95% confidence interval renders as "CI" (as
+// before); any other level or a Bayesian credible interval says so, because "CI" alone reads
+// as 95%. The level is rendered from the quote, never assumed.
+//
+// REV2 (gap 2): the level and kind are BOUND to this quantity's own interval. A quote can
+// print several intervals ("HR 0.80 (95% CI, 0.70 to 0.90); difference 1.5 (90% CI, 1.0 to
+// 2.0)"), and the first marker in the quote may belong to another result. The interval is
+// located by its own printed bounds; the marker must sit directly before it (only words,
+// commas, brackets, or "for <effect>" in between — never a ";" or ")" closing another
+// result) or directly after it inside the same bracket. No bound marker → plain "CI", as
+// when the quote prints no level at all.
+const INTERVAL_MARKER = /(?:(\d{2}(?:\.\d+)?)\s*%\s*(?:\(\s*|\[\s*)?)?(bayesian\s+)?(confidence\s+(?:interval|limits?)|credible\s+interval|\bCrI\b|\bCI\b)/gi
+const MARKER_GAP_MAX = 45
+
+// A length-preserving cleanup of the quote (dashes and middle-dot decimals only), so token
+// offsets index straight back into the text that is searched for markers and effect words.
+const lightQuote = (quantity) =>
+  String(quantity?.source_quote || '').normalize('NFKC').replace(/[‐‑‒–—−－]/g, '-').replace(/(\d)[·‧⋅∙•](\d)/g, '$1.$2')
+
+// { start, end } of this quantity's interval (its ci_low token followed by its ci_high token).
+function intervalSpan(quantity, text) {
+  if (quantity?.ci_low == null || quantity?.ci_high == null) return null
+  const tokens = extractNumbersWithIndex(text)
+  for (let i = 0; i + 1 < tokens.length; i++) {
+    const lo = tokens[i]
+    const hi = tokens[i + 1]
+    if (!numbersEqual(lo.value, quantity.ci_low)) continue
+    const join = text.slice(lo.end, hi.start)
+    const highOk = numbersEqual(hi.value, quantity.ci_high) ||
+      (join === '' && hi.value < 0 && numbersEqual(-hi.value, quantity.ci_high)) // "60-505"
+    // join: "-", "to", ",", "and", optionally after a percent sign ("-1.89% to 2.91%")
+    if (highOk && /^\s*%?\s*(?:-|to|,|and)?\s*$/i.test(join)) return { start: lo.start, end: hi.end }
+  }
+  return null
+}
+
+function boundMarker(quantity) {
+  const text = lightQuote(quantity)
+  const span = intervalSpan(quantity, text)
+  if (!span) return null
+  const markers = [...text.matchAll(INTERVAL_MARKER)].map((m) => ({
+    start: m.index, end: m.index + m[0].length, level: m[1] || null,
+    credible: /credible|cri/i.test(m[3]) || Boolean(m[2]),
+  }))
+  // Directly before the interval: the nearest marker, with no other result's closing in between.
+  const before = markers.filter((m) => m.end <= span.start).pop()
+  if (before) {
+    const gap = text.slice(before.end, span.start)
+    if (gap.length <= MARKER_GAP_MAX && !/[;)]/.test(gap) && !/\d/.test(gap.replace(/\[\s*CI\s*\]/gi, ''))) return { ...before, span, text }
+  }
+  // Directly after it, inside the same bracket: "(0.70 to 0.90, 95% CI)".
+  const after = markers.find((m) => m.start >= span.end)
+  if (after && /^\s*[,;]?\s*$/.test(text.slice(span.end, after.start))) return { ...after, span, text }
+  return { level: null, credible: false, span, text, unbound: true }
+}
+
+export function ciLabel(quantity) {
+  const m = boundMarker(quantity)
+  if (!m || m.unbound) return 'CI'
+  if (m.credible) return `${m.level ? `${m.level}% ` : ''}credible interval`
+  if (m.level && m.level !== '95') return `${m.level}% CI`
+  return 'CI'
 }
 
 // One verified quantity as a scannable value string: value, unit, CI, and P when present.
@@ -108,7 +232,9 @@ export function pOperator(quantity) {
 export function fmtNum(q) {
   const hasPair = q.first_value != null && q.second_value != null
   const hasRange = q.range_low != null && q.range_high != null
-  if (q.value == null && !hasRange && !hasPair) return ''
+  // A P-value-only result ("SF-36 physical component summary (P<0.001)") renders its P
+  // rather than nothing; verification still decides whether it is asserted anywhere.
+  if (q.value == null && !hasRange && !hasPair) return q.p_value != null ? fmtP(q) : ''
   let s
   // "%" is glued to every value it describes ("67.3% versus 50%"); a word unit is said
   // once, after the values ("144.3 versus 341.8 minutes"). Before 2026-10-04 "%" rendered
@@ -132,13 +258,19 @@ export function fmtNum(q) {
     s = hasRange ? printedRange(q) + (pct ? '%' : '') : v('value')
   }
   if (q.unit && !pct) s += ` ${q.unit}`
-  if (q.ci_low != null && q.ci_high != null) {
-    s += ` (CI ${printedValue(q, 'ci_low')}–${printedValue(q, 'ci_high')})`
+  if (ciBelongsToEstimate(q)) {
+    s += ` (${ciLabel(q)} ${printedValue(q, 'ci_low')}–${printedValue(q, 'ci_high')})`
   }
-  if (q.p_value != null) {
-    const op = pOperator(q)
-    const p = printedValue(q, 'p_value')
-    s += op ? `, P${op}${p}` : `, P ${p}`
-  }
+  if (q.p_value != null) s += `, ${fmtP(q)}`
   return s
+}
+
+// "P<0.001", "one-sided P=.71", "P=0.44 for noninferiority" — operator and qualifiers only
+// when the quote prints them.
+function fmtP(q) {
+  const op = pOperator(q)
+  const p = printedValue(q, 'p_value')
+  const qual = pQualifier(q)
+  const core = op ? `P${op}${p}` : `P ${p}`
+  return `${qual?.sided ? `${qual.sided} ` : ''}${core}${qual?.test ? ` ${qual.test}` : ''}`
 }

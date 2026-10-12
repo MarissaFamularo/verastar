@@ -91,7 +91,28 @@ describe('quote rule ↔ verifier contract', () => {
   })
 })
 
-describe('dropUnprovenLabels — a group label the quote does not print cannot be proven', () => {
+describe('CI and P-value binding rules in the prompt', () => {
+  const system = async () => {
+    await extractQuantities({ studyId: '1', sourceText: 'x' })
+    return vi.mocked(extractStructured).mock.calls[0][0].system.replace(/\s+/g, ' ')
+  }
+  it('ties a CI to the single estimate it is printed for, never to a pair', async () => {
+    const s = await system()
+    expect(s).toMatch(/ci_low\/ci_high belong ONLY to a single quantity/)
+    expect(s).toMatch(/Never fill ci_low\/ci_high on a comparison, change or range/)
+    expect(s).toMatch(/two separate quantities/)
+  })
+  it('omits a P value reported without an estimate', async () => {
+    const s = await system()
+    expect(s).toMatch(/A P value is never a quantity on its own/)
+    expect(s).toMatch(/Never put a P value in value/)
+  })
+  it('leaves the schema unchanged: no P-only shape', () => {
+    expect(EXTRACTION_SCHEMA.properties.quantities.items.properties.quantity_type.enum).toEqual(['single', 'range', 'change', 'comparison'])
+  })
+})
+
+describe('dropUnprovenLabels —a group label the quote does not print cannot be proven', () => {
   const base = { name: '12-month primary patency, RA+DCB vs DCB alone', quantity_type: 'comparison', first_value: 67.3, second_value: 50, unit: '%', p_value: 0.16, source_quote: 'At 12 months, primary patency (67.3% vs. 50%, p = 0.16)' }
   const SRC = 'At 12 months, primary patency (67.3% vs. 50%, p = 0.16) and freedom from TLR (70.2% vs. 54.2%, p = 0.26) did not differ.'
 

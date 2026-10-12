@@ -12,9 +12,15 @@
 import { normalize, extractNumbers, extractNumbersWithIndex, numbersEqual } from '../pipeline/verify.js'
 import { fmtNum } from './format.js'
 
-// The label after a finding or design caution. null = say nothing (unchecked, as before
-// the gate existed). Refuted claims are withheld upstream and never reach this.
+// The label after a finding or design caution. null = say nothing (unchecked with no
+// recorded reason, as before the gate existed). An unchecked claim WITH a reason — the
+// checker failed, or returned no verdict for it (2026-10-11 fix 6) — says so in muted
+// words, so a silently dropped check is visible. Refuted claims are withheld upstream and
+// never reach this.
 export function claimCheckLabel(check) {
+  if (check?.verdict === 'unchecked' && String(check.reason || '').trim()) {
+    return { text: 'claim not checked', title: String(check.reason).trim(), tone: 'muted' }
+  }
   if (check?.verdict !== 'supported') return null
   return {
     text: '✓ claim checked by a model',

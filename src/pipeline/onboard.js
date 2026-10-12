@@ -1,3 +1,4 @@
+import { digestCount } from './digestLimit.js'
 // pipeline/onboard.js — the steering-profile drafter.
 //
 // The onboarding quiz asks a clinician a few free-text questions, then ONE structured
@@ -107,7 +108,7 @@ export async function draftProfile({ answers, model = MODELS.interview, maxToken
     journalPreferences: normalizeJournalPreferences(draft.journalPreferences),
     rubric: {
       criteria: (draft.rubric || DEFAULT_RUBRIC).trim(),
-      selectCount: Number(draft.selectCount) > 0 ? Math.round(draft.selectCount) : DEFAULT_SELECT_COUNT,
+      selectCount: digestCount(draft.selectCount, DEFAULT_SELECT_COUNT),
       scoreFloor: DEFAULT_SCORE_FLOOR,
     },
   }

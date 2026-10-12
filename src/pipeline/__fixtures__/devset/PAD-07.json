@@ -1,0 +1,136 @@
+{
+ "row_id": "PAD-07",
+ "pmid": "27959717",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Ticagrelor versus Clopidogrel in Symptomatic Peripheral Artery Disease.\n\nBACKGROUND: Peripheral artery disease is considered to be a manifestation of \nsystemic atherosclerosis with associated adverse cardiovascular and limb events. \nData from previous trials have suggested that patients receiving clopidogrel \nmonotherapy had a lower risk of cardiovascular events than those receiving \naspirin. We wanted to compare clopidogrel with ticagrelor, a potent antiplatelet \nagent, in patients with peripheral artery disease.\nMETHODS: In this double-blind, event-driven trial, we randomly assigned 13,885 \npatients with symptomatic peripheral artery disease to receive monotherapy with \nticagrelor (90 mg twice daily) or clopidogrel (75 mg once daily). Patients were \neligible if they had an ankle-brachial index (ABI) of 0.80 or less or had \nundergone previous revascularization of the lower limbs. The primary efficacy \nend point was a composite of adjudicated cardiovascular death, myocardial \ninfarction, or ischemic stroke. The primary safety end point was major bleeding. \nThe median follow-up was 30 months.\nRESULTS: The median age of the patients was 66 years, and 72% were men; 43% were \nenrolled on the basis of the ABI and 57% on the basis of previous \nrevascularization. The mean baseline ABI in all patients was 0.71, 76.6% of the \npatients had claudication, and 4.6% had critical limb ischemia. The primary \nefficacy end point occurred in 751 of 6930 patients (10.8%) receiving ticagrelor \nand in 740 of 6955 (10.6%) receiving clopidogrel (hazard ratio, 1.02; 95% \nconfidence interval [CI], 0.92 to 1.13; P=0.65). In each group, acute limb \nischemia occurred in 1.7% of the patients (hazard ratio, 1.03; 95% CI, 0.79 to \n1.33; P=0.85) and major bleeding in 1.6% (hazard ratio, 1.10; 95% CI, 0.84 to \n1.43; P=0.49).\nCONCLUSIONS: In patients with symptomatic peripheral artery disease, ticagrelor \nwas not shown to be superior to clopidogrel for the reduction of cardiovascular \nevents. Major bleeding occurred at similar rates among the patients in the two \ntrial groups. (Funded by AstraZeneca; EUCLID ClinicalTrials.gov number, \nNCT01732822 .).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Primary efficacy end point (CV death, MI, or ischemic stroke), ticagrelor vs clopidogrel, hazard ratio",
+    "quantity_type": "single",
+    "value": 1.02,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.92,
+    "ci_high": 1.13,
+    "p_value": 0.65,
+    "source_quote": "(hazard ratio, 1.02; 95% \nconfidence interval [CI], 0.92 to 1.13; P=0.65)",
+    "location_hint": "Results, primary efficacy end point"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary efficacy end point incidence, ticagrelor vs clopidogrel",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "ticagrelor",
+    "first_value": 10.8,
+    "second_label": "clopidogrel",
+    "second_value": 10.6,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "in 751 of 6930 patients (10.8%) receiving ticagrelor \nand in 740 of 6955 (10.6%) receiving clopidogrel",
+    "location_hint": "Results, primary efficacy end point"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Acute limb ischemia, ticagrelor vs clopidogrel, hazard ratio",
+    "quantity_type": "single",
+    "value": 1.03,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.79,
+    "ci_high": 1.33,
+    "p_value": 0.85,
+    "source_quote": "(hazard ratio, 1.03; 95% CI, 0.79 to \n1.33; P=0.85)",
+    "location_hint": "Results, acute limb ischemia"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Major bleeding (primary safety end point), ticagrelor vs clopidogrel, hazard ratio",
+    "quantity_type": "single",
+    "value": 1.1,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.84,
+    "ci_high": 1.43,
+    "p_value": 0.49,
+    "source_quote": "(hazard ratio, 1.10; 95% CI, 0.84 to \n1.43; P=0.49)",
+    "location_hint": "Results, major bleeding"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "Ticagrelor monotherapy was not shown to be superior to clopidogrel for the composite of cardiovascular death, MI, or ischemic stroke (HR 1.02 hazard ratio (CI 0.92–1.13), P=0.65), with no statistically clear difference in acute limb ischemia or major bleeding.",
+  "designCaution": "Only a small minority of enrolled patients had critical limb ischemia, so the neutral result may not extend to CLTI populations, and the trial was industry-funded.",
+  "relevance": "Informs antithrombotic strategy for PAD/atherosclerosis prevention and the medical therapy backbone of your limb preservation program.",
+  "score": 72,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The claim accurately summarizes the primary efficacy endpoint results (HR 1.02, CI 0.92-1.13, P=0.65 showing non-superiority), and correctly characterizes the acute limb ischemia (HR 1.03, CI 0.79-1.33, P=0.85) and major bleeding (HR 1.10, CI 0.84-1.43, P=0.49) as showing no statistically significant differences between groups."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states that only 4.6% of enrolled patients had critical limb ischemia, supporting the claim that this was a small minority; the snippet also confirms the trial was industry-funded (AstraZeneca), and the neutral result in predominantly claudication patients could reasonably not extend to CLTI populations as a design limitation."
+  }
+ }
+}

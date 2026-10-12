@@ -24,3 +24,9 @@ build/
 # Machine-local Claude Code settings (keep launch.json, ignore local overrides)
 .claude/settings.local.json
 .netlify
+
+# Supabase CLI linked-project metadata (machine-local, never publish)
+supabase/.temp/
+
+# /brag launch-video output (rendered ad, composition, bundled music)
+brag-output/

@@ -31,6 +31,25 @@ A claimed P is accepted only when the span labels exactly one P as the heterogen
 qualifies. τ² never matches. Which pooled analysis it describes is not checked. Tests in
 the same file (3 controls, 8 guards); v4 stays readable.
 
+**`2026-10-09.estimates-v7`** (candidate `2026-10-06`, repaired before integration): the
+estimate tier binds a P printed after the CI's own bracket — "(aHR = 0.78 [95% CI:
+0.70-0.86]; P < 0.001)". The bracket the P steps over must be the one opened directly before
+the CI label. "(HR, 0.44; 95% CI, 0.34-0.55), P < .001 overall" still leaves its P unbound.
+v7 also TIGHTENS every P binding, in the estimate and the "A vs B, P" comparison grammar: a
+P binds only when it ends its clause in the full source — end of text, sentence end, or a
+closing bracket not followed by another bracket, unless that bracket is a cross-reference
+("(Table 2)", "[12]", "(Fig. 2A)"). "P = 0.02, for interaction", "P = 0.02;
+interaction test", "P = 0.02 for trend" and "P = 0.02) (interaction test)" leave the P
+unbound, and a quote truncated before the qualifier cannot hide it. v1–v6 bound several of
+these. After a closing bracket and any cross-references, an explicit P-test qualifier
+("…; P = 0.02) for interaction", "…) (Table 2) for trend", "…) (Table 2; P for
+interaction)", "…) one-sided") leaves the P unbound, while a population qualifier ("(95% CI
+1.34-4.98, p = 0.004) for eGFR 30-< 45") still binds, with the endpoint/population unchecked
+as before (Codex R2 repair, same stamp — v7 was never deployed). Because this is a
+tightening, older stamps stay readable only outside `TIGHTENED_TIERS` (verified-estimate,
+verified-comparison): there they are re-derived from saved source text, or else shown as
+legacy-unchecked. Tests: `src/pipeline/estimateBracketP.test.js`, `src/lib/evidencePolicy.test.js`.
+
 Tests:
 `src/pipeline/verifyGaps.test.js` (5 controls, 17 false-verify guards). `estimates-v3`
 verdicts remain readable as stamped (a subset). PaperTrellis's copy of the verifier was

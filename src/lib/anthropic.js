@@ -17,6 +17,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase, supabaseConfigured } from './supabase.js'
 import { isSponsored, CAP_MESSAGE } from './sponsor.js'
+import { currentServerScope } from './serverScope.js'
+import { isSupportedModel, priceUsage, microToUsd } from '../../supabase/functions/_shared/pricing.js'
+import { BYOK_CLIENT_TIMEOUT_MS, SPONSORED_CLIENT_TIMEOUT_MS } from '../../supabase/functions/_shared/timeouts.js'
 
 const KEY_STORAGE = 'verastar.anthropic_key'
 const NCBI_KEY_STORAGE = 'verastar.ncbi_key'
@@ -38,6 +41,9 @@ export const MODELS = {
 // including a response whose JSON is later rejected, so record it before parsing. Prices
 // are USD per million tokens. Sonnet 5's $2/$10 launch rate became its standard price; the
 // scheduled 2026-09-01 rise to $3/$15 was cancelled (Anthropic pricing page, checked 2026-10-04).
+// Display only, and only for models the shared price table does not list (a BYOK reader's
+// own key may call others). Every model the sponsor pays for is priced by
+// supabase/functions/_shared/pricing.js, the same table the backend settles with.
 export function modelRates(model) {
   if (String(model).includes('haiku-4-5')) return { input: 1, output: 5 }
   if (String(model).includes('sonnet-5')) {
@@ -57,17 +63,30 @@ function readUsage() {
   }
 }
 
+// Exported for tests: the displayed cost of one response. Supported models use the shared
+// table (so a display matches the backend's settlement exactly); others use the fallback.
+export function displayCostUsd(model, usage) {
+  if (isSupportedModel(model)) {
+    const priced = priceUsage(model, usage)
+    if (priced.ok) return microToUsd(priced.micro)
+  }
+  const input = Number(usage?.input_tokens || 0) + Number(usage?.cache_creation_input_tokens || 0)
+  const cached = Number(usage?.cache_read_input_tokens || 0)
+  const output = Number(usage?.output_tokens || 0)
+  const rates = modelRates(model)
+  return ((input * rates.input) + (cached * rates.input * 0.1) + (output * rates.output)) / 1_000_000
+}
+
 export function recordUsage(model, usage, now = new Date()) {
-  if (_serverUsage) { try { _serverUsage(model, usage) } catch { /* never breaks a call */ } }
   // The ledger is "spend on your own key". A sponsored call is not that,
-  // and a sponsored user never sees a dollar figure anyway. A server run has no ledger.
+  // and a sponsored user never sees a dollar figure anyway. A server run has no ledger:
+  // its spend is settled by the guarded fetch it was given (supabase/functions/_shared/spending.js).
   const mode = accessMode()
   if (mode === 'sponsored' || mode === 'server') return readUsage()
   const input = Number(usage?.input_tokens || 0) + Number(usage?.cache_creation_input_tokens || 0)
   const cached = Number(usage?.cache_read_input_tokens || 0)
   const output = Number(usage?.output_tokens || 0)
-  const rates = modelRates(model, now)
-  const cost = ((input * rates.input) + (cached * rates.input * 0.1) + (output * rates.output)) / 1_000_000
+  const cost = displayCostUsd(model, usage)
   const prev = readUsage()
   const next = {
     calls: Number(prev.calls || 0) + 1,
@@ -132,7 +151,7 @@ export function hasApiKey() {
 // sponsored reader is never quietly moved onto her own key. A saved key takes over when the
 // sponsorship ends or she is signed out.
 export function accessMode() {
-  if (_serverClient) return 'server'
+  if (currentServerScope() || _serverClient) return 'server'
   if (isSponsored()) return 'sponsored'
   if (hasApiKey()) return 'byok'
   return 'none'
@@ -206,20 +225,24 @@ let _clientKey = null
 let _sponsoredClient = null
 let _serverClient = null
 
-// Server runtime only (the digest edge function): bind the sponsor key directly. There is
-// no browser, no storage, and no proxy hop; caps are enforced by the caller before it
-// starts a run, and spend is recorded by the caller from the usage this module reports.
-export function configureServerClient({ apiKey, onUsage } = {}) {
-  _serverClient = apiKey ? new Anthropic({ apiKey }) : null
-  _serverUsage = typeof onUsage === 'function' ? onUsage : null
+// Tests and tools only: bind one process-wide server client. The digest edge function does
+// NOT use this; it runs each account inside a request scope (lib/serverScope.js) whose
+// client routes every attempt through the reserve/settle boundary. With a scope runtime
+// installed, the scope always wins and this global is never consulted.
+export function configureServerClient({ apiKey, client } = {}) {
+  _serverClient = client || (apiKey ? new Anthropic({ apiKey }) : null)
 }
-let _serverUsage = null
 
 // Returns a memoized Anthropic client for the current lane. BYOK binds to the browser-held
 // key and talks to Anthropic directly. Sponsored points the same SDK at the `model` edge
 // function, which swaps the Supabase JWT for the sponsor key server-side, so every call
 // site stays identical. Throws when neither lane is open — callers gate on hasModelAccess().
 export function getClient() {
+  const scope = currentServerScope()
+  if (scope) {
+    if (!scope.client) throw new Error('This server run has no model client.')
+    return scope.client
+  }
   if (_serverClient) return _serverClient
   if (isSponsored()) return getSponsoredClient()
   const apiKey = getApiKey()
@@ -227,7 +250,9 @@ export function getClient() {
     throw new Error('No Anthropic API key set. Add your key in Setup.')
   }
   if (!_client || _clientKey !== apiKey) {
-    _client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
+    // An explicit timeout (the SDK's own 10-minute default) keeps large non-streaming calls
+    // such as triage over 30+ candidates from being refused by the SDK before sending.
+    _client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, timeout: BYOK_CLIENT_TIMEOUT_MS })
     _clientKey = apiKey
   }
   return _client
@@ -241,6 +266,9 @@ function getSponsoredClient() {
     apiKey: 'sponsored', // discarded by the proxy; the SDK insists on a value
     baseURL: `${base}/functions/v1/model`,
     dangerouslyAllowBrowser: true,
+    // The proxy gives up on the provider at 140 s and the platform at 150 s; waiting longer
+    // is pointless. Explicit, so the SDK does not refuse large non-streaming calls.
+    timeout: SPONSORED_CLIENT_TIMEOUT_MS,
     // Inject a fresh JWT per request: supabase-js refreshes tokens in the background,
     // so reading the session at call time is the only way to never send a stale one.
     fetch: async (url, init = {}) => {
@@ -255,6 +283,9 @@ function getSponsoredClient() {
       for (const name of [...headers.keys()]) {
         if (name.toLowerCase().startsWith('x-stainless-')) headers.delete(name)
       }
+      // One id per HTTP attempt (an SDK retry is a new attempt): the proxy binds it to this
+      // account and request body, so a replayed attempt is never dispatched twice.
+      headers.set('x-verastar-request-id', globalThis.crypto.randomUUID())
       headers.set('Authorization', `Bearer ${token}`)
       headers.set('apikey', import.meta.env.VITE_SUPABASE_ANON_KEY)
       return fetch(url, { ...init, headers })

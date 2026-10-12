@@ -39,9 +39,12 @@ describe('comparison tier — positive controls', () => {
     const src = 'Zone 2 TEVAR had more adverse events than zone 2 TBE (32.6% vs 12.5%, P = .028).'
     expect(verify(cmp({ first_label: 'Zone 2 TEVAR', second_label: 'zone 2 TBE', first_value: 32.6, second_value: 12.5, p_value: 0.028, source_quote: src }), src).tier).toBe(TIERS.COMPARISON)
   })
-  it('reads a 2026-09-27 verdict as stamped', () => {
+  // estimates-v7 tightened P binding in this tier, so the old stamp is no longer a subset
+  // (lib/evidenceVersion.js); read paths with saved source re-derive it instead.
+  it('downgrades a 2026-09-27 verdict in a tier v7 tightened', () => {
     const old = { verificationVersion: '2026-09-27.estimates-v2', tier: 'verified-estimate', flagged: false, relationshipValidated: true }
-    expect(evidenceVerdict(old).tier).toBe('verified-estimate')
+    expect(evidenceVerdict(old).tier).toBe('legacy-unchecked')
+    expect(evidenceVerdict(old).originalTier).toBe('verified-estimate')
   })
 })
 

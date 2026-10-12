@@ -1,0 +1,82 @@
+{
+ "row_id": "CAR-04",
+ "pmid": "7723155",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Endarterectomy for asymptomatic carotid artery stenosis. Executive Committee for \nthe Asymptomatic Carotid Atherosclerosis Study.\n\n[No authors listed]\n\nOBJECTIVE: To determine whether the addition of carotid endarterectomy to \naggressive medical management can reduce the incidence of cerebral infarction in \npatients with asymptomatic carotid artery stenosis.\nDESIGN: Prospective, randomized, multicenter trial.\nSETTING: Thirty-nine clinical sites across the United States and Canada.\nPATIENTS: Between December 1987 and December 1993, a total of 1662 patients with \nasymptomatic carotid artery stenosis of 60% or greater reduction in diameter \nwere randomized; follow-up data are available on 1659. At baseline, recognized \nrisk factors for stroke were similar between the two treatment groups.\nINTERVENTION: Daily aspirin administration and medical risk factor management \nfor all patients; carotid endarterectomy for patients randomized to receive \nsurgery.\nMAIN OUTCOME MEASURES: Initially, transient ischemic attack or cerebral \ninfarction occurring in the distribution of the study artery and any transient \nischemic attack, stroke, or death occurring in the perioperative period. In \nMarch 1993, the primary outcome measures were changed to cerebral infarction \noccurring in the distribution of the study artery or any stroke or death \noccurring in the perioperative period.\nRESULTS: After a median follow-up of 2.7 years, with 4657 patient-years of \nobservation, the aggregate risk over 5 years for ipsilateral stroke and any \nperioperative stroke or death was estimated to be 5.1% for surgical patients and \n11.0% for patients treated medically (aggregate risk reduction of 53% [95% \nconfidence interval, 22% to 72%]).\nCONCLUSION: Patients with asymptomatic carotid artery stenosis of 60% or greater \nreduction in diameter and whose general health makes them good candidates for \nelective surgery will have a reduced 5-year risk of ipsilateral stroke if \ncarotid endarterectomy performed with less than 3% perioperative morbidity and \nmortality is added to aggressive management of modifiable risk factors.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "5-year aggregate risk of ipsilateral stroke and any perioperative stroke or death, surgical vs medical patients",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "surgical patients",
+    "first_value": 5.1,
+    "second_label": "patients treated medically",
+    "second_value": 11,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "the aggregate risk over 5 years for ipsilateral stroke and any perioperative stroke or death was estimated to be 5.1% for surgical patients and 11.0% for patients treated medically",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Aggregate risk reduction (5-year ipsilateral stroke and perioperative stroke or death), surgery vs medical",
+    "quantity_type": "single",
+    "value": 53,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "%",
+    "ci_low": 22,
+    "ci_high": 72,
+    "p_value": null,
+    "source_quote": "aggregate risk reduction of 53% [95% \nconfidence interval, 22% to 72%]",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "Adding carotid endarterectomy to aggressive medical management reduced the year risk of ipsilateral stroke and perioperative stroke or death in patients with asymptomatic high-grade carotid stenosis, provided perioperative morbidity and mortality stayed low.",
+  "designCaution": "This landmark trial reflects s-1990s medical therapy, so the benefit of surgery over today's best medical management is uncertain, and the primary outcome definition was changed mid-trial.",
+  "relevance": "Foundational evidence for your carotid stenosis management north star and stroke prediction project, framing the baseline against which modern medical therapy and risk stratification should be judged.",
+  "score": 62,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet reports that surgical patients had 5.1% aggregate 5-year risk versus 11.0% for medical management (53% reduction), and the conclusion explicitly states reduced 5-year risk of ipsilateral stroke when surgery is performed with <3% perioperative morbidity/mortality added to aggressive medical management."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms the primary outcome definition was changed in March 1993 mid-trial, and enrollment occurred between December 1987 and December 1993, establishing the 1990s medical therapy context; the claim appropriately notes uncertainty about benefit over modern medical management as a design caution."
+  }
+ }
+}

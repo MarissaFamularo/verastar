@@ -1,0 +1,24 @@
+{
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "modelsSource": "https://platform.claude.com/docs/en/about-claude/models/overview",
+  "accessed": "2026-10-09",
+  "note": "USD per million tokens, transcribed from the official Model pricing table on the access date. Long context: Claude 4.6+ models except Haiku 5.5 use standard pricing across the full context window; Haiku 4.5 has no prompt-length row. Cache hits: 0.05x base input on Sonnet 5.5, standard 0.1x on Haiku 4.5. Data residency (inference_geo: us) is 1.1x and fast mode is premium; both are rejected by the proxy, not priced. maxOutputTokens: Sonnet 5.5 from the models overview (128K); Haiku 4.5's 64K was not re-read on the access date and is inert here because the proxy's own ceiling is 32,000.",
+  "rows": {
+    "claude-sonnet-5-5": {
+      "input": 2,
+      "cacheWrite5m": 2.5,
+      "cacheWrite1h": 4,
+      "cacheRead": 0.1,
+      "output": 10,
+      "maxOutputTokens": 128000
+    },
+    "claude-haiku-4-5-20251001": {
+      "input": 1,
+      "cacheWrite5m": 1.25,
+      "cacheWrite1h": 2,
+      "cacheRead": 0.1,
+      "output": 5,
+      "maxOutputTokens": 64000
+    }
+  }
+}

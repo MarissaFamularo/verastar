@@ -27,7 +27,7 @@ export function findQuoteSpan(corpus, quote) {
   return null
 }
 
-export default function SourceViewer({ open, onClose, title, corpusLabel, corpusText, quote, valueLabel }) {
+export default function SourceViewer({ open, onClose, title, corpusLabel, corpusText, quote, valueLabel, illustrative = false }) {
   const markRef = useRef(null)
 
   const parts = useMemo(() => {
@@ -65,12 +65,12 @@ export default function SourceViewer({ open, onClose, title, corpusLabel, corpus
         >
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Source · {corpusLabel === 'tables' ? 'table' : 'full text'}
+              {illustrative ? 'Precomputed example · excerpt' : `Source · ${corpusLabel === 'tables' ? 'table' : 'full text'}`}
             </p>
             <h2 className="truncate text-base font-semibold">{title}</h2>
             {valueLabel && (
               <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
-                Proving: <span className="tabular-nums font-medium">{valueLabel}</span>
+                {illustrative ? 'Example: ' : 'Proving: '}<span className="tabular-nums font-medium">{valueLabel}</span>
               </p>
             )}
           </div>
@@ -85,7 +85,7 @@ export default function SourceViewer({ open, onClose, title, corpusLabel, corpus
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {!parts.found && (
             <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-              Couldn't align the highlight, but the quote was verified against this text.
+              {illustrative ? "Couldn't align the highlight in this example." : "Couldn't align the highlight, but the quote was verified against this text."}
             </p>
           )}
           <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700 dark:text-slate-300">
@@ -103,7 +103,9 @@ export default function SourceViewer({ open, onClose, title, corpusLabel, corpus
         </div>
 
         <footer className="border-t border-slate-200 px-6 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-          Highlighted text is matched by the app against the fetched source — the model never asserted it.
+          {illustrative
+            ? 'This precomputed excerpt illustrates the interface. The full paper was not fetched for this example; inspect the original source before use.'
+            : 'Highlighted text is matched by the app against the fetched source — the model never asserted it.'}
         </footer>
       </div>
     </div>

@@ -17,10 +17,12 @@ import { logEvent } from '../lib/events.js'
 import { runPaper } from '../pipeline/pipeline.js'
 import { resolvePmid } from '../pipeline/sources.js'
 import { triage } from '../pipeline/triage.js'
+import { evidenceSummary } from '../pipeline/evidenceWindow.js'
 import { savePaper, setPaperNote } from '../pipeline/save.js'
 import { extractPdfText } from '../pipeline/pdfText.js'
 import { WhyPrompt } from './SpineCheck.jsx'
 import { fmtNum } from '../lib/format.js'
+import { findPrimary } from '../pipeline/primaryResult.js'
 
 const STAGE_LABEL = {
   resolving: 'Finding the paper…',
@@ -112,7 +114,8 @@ export default function AddPaper({ onAdded }) {
             id: pmid,
             title: res.paper.title || res.citation?.title || `PMID ${pmid}`,
             design: res.design,
-            summary: res.sourceDoc?.text || '',
+            summary: evidenceSummary(res),
+            primary: findPrimary(res.error ? [] : res.rows, (row) => !row.verdict.flagged),
             verified: res.error
               ? []
               : res.rows

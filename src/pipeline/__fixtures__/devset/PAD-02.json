@@ -1,0 +1,163 @@
+{
+ "row_id": "PAD-02",
+ "pmid": "22090168",
+ "trial": "",
+ "design": "RCT",
+ "tier": "full_text",
+ "sourceDoc": {
+  "text": "BackgroundClaudication is the most frequent symptom of peripheral artery disease (PAD) (1), and is experienced by an estimated 2 million Americans. Claudication profoundly limits physical functioning (2;3) and results in a sedentary lifestyle (4), self-perceived ambulatory dysfunction (5) and poor health-related quality of life (6). Prior prospective randomized clinical trials have demonstrated the efficacy of cilostazol pharmacotherapy (7), supervised exercise rehabilitation (7;8) and endovascular revascularization (9;10) to improve objective measures of walking performance and quality of life in patients with claudication due to peripheral artery disease.Although current guidelines suggest that pharmacotherapy, supervised exercise rehabilitation and lower extremity revascularization are effective therapies for patients with claudication (11), the relative benefits of these distinct strategies of care is not known, as there have been no multicenter clinical trials directly comparing these three strategies. In this context, the Institute of Medicine ranked study of the comparative effectiveness of claudication treatment strategies within the top 50 of all American health challenges (12). Although studies comparing supervised exercise with endovascular revascularization have been performed (13;14), they have not included an optimal medical therapy group, have combined patients with aortoiliac artery and femoropopliteal artery PAD, and have either shown similar exercise performance between treatment groups (13) or shown supervised exercise to be superior to revascularization (14;15).Nonetheless, there are important differences between patients with aortoiliac (i.e., proximal) arterial stenoses and more distal disease that may limit the value of these comparisons. For example, individuals with aortoiliac PAD have more ischemic muscle mass with walking, are often more symptomatic than those with more distal obstruction (16), and might experience less improvement with exercise training. Moreover, there is considerably more experience with stent revascularization in the aortoiliac segment (17), and the results more predictable and durable than those observed in the femoropopliteal artery segment (18–21). Therefore, we designed a randomized clinical trial to compare the benefits of optimal medical therapy, structured exercise, and stent revascularization on both walking outcomes and measures of QOL in patients with claudication due to aortoiliac PAD.MethodsStudy designThe CLEVER Study was an observer-blinded randomized multicenter clinical trial conducted at 22 sites in the U.S. and Canada (see Appendix). The study was approved by the institutional review boards (IRB) at all participating institutions and by the U.S. Food and Drug Administration. The study has been registered on www.clinicaltrials.gov since August 19, 2005 (ClinicalTrials.gov Identifier: NCT00132743). Study methods have been published(22;23).Patient SelectionThe study population consisted of individuals with symptoms of moderate to severe intermittent claudication (defined as ability to walk at least 2, but not more than 11, minutes on a graded treadmill test using the Gardner protocol) (24) and objective evidence of a hemodynamically significant aortoiliac arterial stenosis. Individuals with critical limb ischemia or who had comorbid conditions that limited their walking ability were excluded. Two treadmill tests were completed at baseline to confirm reproducibility of results; those who deviated more than 25% were excluded. Evidence of aortoiliac stenosis involving the most symptomatic limb was established by either noninvasive vascular testing (ABI <0.9, thigh-brachial index <1.1, common femoral artery systolic acceleration time >140 msec (25;26)) (N=41); duplex ultrasound (doubling of peak systolic velocity in the aortoiliac segment, combined with an ABI <0.9) (N=26); or computed tomographic angiography (N=28) or magnetic resonance angiography (N=5) confirming at least a 60% stenosis by cross-sectional imaging test, combined with Doppler ultrasound waveform analysis (showing biphasic common femoral artery waveform (26)); or catheter angiography (≥50% stenosis in the aorta or iliac arteries) (N=19). Individuals meeting symptom and testing criteria were allowed in the study without regard to extent of aortoiliac obstruction or the presence of femoropopliteal PAD, except that patients with total aortoiliac occlusion from the level of the renal arteries to the inguinal ligaments were excluded.Baseline evaluationParticipants were evaluated at baseline and 6 months. Demographic data were collected, and anthropomorphic and physiologic variables (body mass index, waist circumference, blood pressure); atherosclerosis risk factors (lipid profile, HbA1c); and inflammatory biomarkers were also assessed (plasma fibrinogen, C-reactive protein). Participants were asked to wear pedometers during all waking hours for a seven-day period between the two baseline treadmill tests, and to log compliance. Participants completed generic (i.e., not disease-specific) and disease-specific quality of life surveys (SF-12 (27), Walking Impairment Questionnaire (5), and Peripheral Artery Questionnaire (28)).Randomization and InterventionsThis study evaluated distinct strategies of care in three treatment groups: (i) optimal medical care (OMC), (ii) supervised exercise rehabilitation (SE), and (iii) stent revascularization (ST). A fourth treatment group that combined ST and SE was dropped after enrolling 8 participants upon the recommendation of the Data Safety and Monitoring Board (DSMB) in order to enhance enrollment in treatment groups that were part of the primary endpoint. Randomization was performed using a real-time web-based randomization system in a 2:2:1 ratio (ST:SE:OMC) (half as many enrolled in OMC because the treatment effect between the other groups and OMC was assumed to be much larger than between SE and ST). Randomization was stratified by geographic region and cilostazol use at baseline.Optimal medical care was established via active promotion of the standards established by the intersocietal 2005 ACC-AHA Guidelines for the Management of Patients with Peripheral Artery Disease in order to promote best practices for risk factor management; use of antiplatelet therapy; and use of claudication pharmacotherapy. All study participants received cilostazol (Pletal™, Otsuka America, Inc., San Francisco, CA) 100 mg by mouth twice daily as tolerated. In addition, OMC included advice about the use of home exercise and diet in the form of standardized verbal instructions as well as printed material (Krames Staywell, San Bruno, CA). Cardiovascular risk factor data were collected and feedback provided to the sites by a central risk factor committee. Risk factors were then managed directly by the local study site.Supervised exercise consisted of 26 weeks of exercise, three times a week, for an hour at a time. Sites were trained to provide SE using a common protocol and progress of each participant was monitored by an oversight committee (23).Stent revascularization was done to relieve all hemodynamically significant stenoses (>50% by diameter) in the aorta and iliac arteries using FDA-approved self-expanding or balloon-expandable stents. The protocol allowed for femoropopliteal endovascular revascularization to treat any additional focal lesions, but this was not done for any study participant. Intra- or post-procedure oral antiplatelet medication use was at the discretion of the operator.Follow-UpParticipants were called monthly to inquire about adverse events; at three months to refill their cilostazol medication; and at six months to undergo the same testing as at baseline, except that the treadmill test was performed only once at the six month outcome evaluation. Any recurrence of claudication symptoms would initiate an evaluation for significant restenosis. Pedometers were worn for seven consecutive days immediately prior to the 6 month treadmill test.EndpointsThe study primary endpoint was the change from baseline to 6 months in the peak walking time (PWT) on a graded treadmill test (Gardner protocol). PWT has been considered the most objective and reliable endpoint to evaluate improvements in functional status for patients with claudication evaluated in clinical trials (29). Secondary endpoints included changes in the following parameters: claudication onset time (COT), change in community-based walking as assessed by pedometer measurements over 7 consecutive days, self-reported walking and quality of life, and biomarkers of cardiovascular disease risk.DefinitionsClaudication onset time (COT) was defined as the treadmill time when calf muscle discomfort was first noticed by a study participant on the graded treadmill test. For those individuals who did not experience any claudication symptoms during follow-up testing, COT was considered to be the same as the peak walking time (PWT). Community-based step activity was measured using pedometers (Omron Healthcare Inc., Lake Forest, IL). Pedometers recorded cumulatively 7 days of step activity and required no interaction from study participants. Since the purpose was to measure unstructured walking, participants in the SE group were instructed to not wear their pedometers during supervised exercise training sessions, and steps were normalized per hour of free-living daily activity as recorded by participants. Body mass and height were measured using medical stadiometers and converted to body mass index (BMI) using the formula {BMI=mass (kg)/height (m2)}. Waist circumference was measured using a flexible tape measure under clothing on a horizontal plane at the level of the upper iliac crest. Biochemistry tests were done by the core laboratory at the University of Minnesota. Cilostazol compliance was assessed by pill counts performed at quarterly visits.Symptoms and Quality of LifePatient-reported symptoms, functional status, and health-related quality of life (QOL) were assessed using three validated questionnaires, each administered at baseline and 6 months. The Medical Outcomes Study 12-Item Short form survey (SF-12) was used to assess generic QOL (27). Physical and mental summary scores from the SF-12 correlate highly with those obtained from the SF-36 (27) and are scaled to a U.S. population mean of 50 and standard deviation of 10 (higher scores are better). Multiple groups have suggested minimal clinically important changes in SF-12 summary scores to be greater than 2–2.5 points, and moderate changes to be greater than 5 points (2;3).Claudication-related symptoms and functional impairment were assessed using two questionnaires designed for and validated in patients with PAD: the Walking Impairment Questionnaire (WIQ) (5) and the Peripheral Artery Questionnaire (PAQ) (28). The WIQ grades symptom severity as well as patient ratings of their walking distance, walking speed, and ability to climb stairs on 0–100 scales, with higher scores indicating lesser symptoms and greater functional capacity. The PAQ assesses PAD-related physical limitation, symptoms, quality of life, social function and treatment satisfaction, also on 0–100 scales; higher scores are better. For the PAQ summary scale, a difference of 8 points has been proposed as clinically important (6). The minimum clinically important difference has not been established for the WIQ.Statistical MethodsBaseline characteristics were compared using chi square for categorical variables and one-way ANOVA for continuous variables. The primary endpoint was assessed using sequential pairwise analysis of covariance adjusting for clinical site, baseline PWT, and cilostazol use (adjustments done to increase precision of the statistical comparison). The second baseline treadmill test was used for the comparison. Separate pairwise models were fit using the given two groups being compared. First, supervised exercise and stenting were each compared with optimal medical therapy with a one-sided 0.025 level of significance. Given significance of both comparisons, supervised exercise and stenting were then compared with a 2-sided 0.05 level of significance.The secondary endpoints of change in free-living daily step activity measured by pedometer use, biomarkers, and quality of life indicators were assessed by pairwise analysis of covariance, adjusting for baseline cilostazol use and study center but with a two-sided significance level of 0.05 for each comparison without adjustment for multiple comparisons. Pedometer activity was normalized to steps per hour to account for differences in hours of pedometer use during the assessment period. All analyses were conducted according to intention-to-treat. Results are based on available data. Multiple imputation of missing primary endpoint data was also performed.We estimated the PWT would improve by 60% in OMC, 125% in SE, and 164% for ST, based on published data (7;9;30). Given baseline mean (SD) PWT estimate of 5.0 (3.8) minutes, with 63 evaluable participants in both the ST and SE groups, or 158 participants total between ST, SE, and OMC, the study had 80% power to detect the difference between SE and ST, >99% power for ST vs. OMC comparison, and 98% power for SE vs. OMC. Allowing for 30% premature withdrawal and inclusion of an exploratory arm of ST plus SE, a sample size of 252 was planned. The sample size was adjusted to 217 after removal of the ST plus SE arm due to slow enrollment. Although the study did not meet conservative pre-specified stopping rules, recruitment was stopped early on recommendations of the DSMB due to slow enrollment after review of interim results.ResultsStudy PopulationBetween April 2007 and January 2011, there were 119 study participants randomized (Figure 1). The final population of 119 reflects the sample size after enrollment was terminated by the DSMB. At baseline, the study population age was 64.0±9.5 years, 61.3% were male, 53.8% were current smokers, and 23.1% had diabetes. All three groups were well-matched in terms of baseline demographics and performance variables, except for a higher prevalence of male gender and prior stroke in the SE group (Table 1). Similarly, baseline anthropomorphic, physiologic, and biochemical characteristics were also similar at baseline across the treatment groups (Table 2).Treatment DeliveryThere were no cross-overs during the 6 month follow-up period. Of the 43 patients assigned to the SE group, 2 withdrew prior to beginning treatment, and 29 of the remaining 41 (71%) attended at least 70% of their scheduled 78 supervised exercise training sessions.For patients assigned to the ST group, all stent procedures were technically successful. There were 19 right common iliac arteries treated, 8 right external iliac arteries, 20 left common iliac arteries, and 7 left external iliac arteries treated. One patient underwent aortic stenting and no patients underwent a concomitant femoropopliteal artery endovascular procedure. The mean lesion length was 3.9±3.4 cm, and the mean stenosis pre-procedure was 83±19%. The population was similar in terms of disease severity as other uncontrolled case series that have been published (17), with 14/37 (38%) of ST patients who received the ST treatment having total occlusions. Post-procedure the mean stenosis was 5±8%. The mean ankle-brachial index (ABI) was 0.66±0.2 at baseline and improved by 0.29±0.33 at six months. The average number of stents used per participant was 1.8±1.2. An evaluation for restenosis was not indicated by recurrent leg symptoms during follow-up in any study participant.Adherence to cilostazol was >90% and similar across all 3 treatment groups. Similarly, there were no differences in the use of statin medications or rates of current smoking across treatment groups (see table 1).Primary EndpointCompared with baseline, the primary endpoint (PWT) improved by 1.2±2.6 minutes with OMC alone, 5.8±4.6 minutes with SE, and 3.7±4.9 minutes with ST. When compared with OMC alone, SE led to a greater mean improvement in PWT by 4.6 minutes (95% CI, 2.7 to 6.5 minutes, p<0.001), whereas ST had a somewhat smaller relative improvement in PWT of 2.5 minutes (95% CI, 0.6 to 4.4 minutes, p=0.022). The direct comparison of SE vs. ST demonstrated a greater improvement in PWT with SE by a mean of 2.1 minutes (95% CI, 0.0 to 4.2 minutes, p=0.04). Similar results were observed when the analysis was repeated using non-parametric analyses (Table 3). Analyses were repeated without inclusion of individuals with a stroke history in the SE group and were similar to those for the entire cohort.Secondary EndpointsAt 6 month follow-up, there were no statistically significant changes in ABI measurements compared to baseline in either the OMC and SE treatment group, whereas the resting ABI improved by ABI 0.29±0.33 in the ST group (p<0.0001) (Table 3). For COT, both SE and ST demonstrated significantly greater improvement as compared with OMC, but no significant difference was observed between ST and SE participants. Patients assigned to both SE and ST had greater increases in community-based step activity than OMC participants, but this was not statistically significant (Table 3).Atherosclerosis risk factors demonstrated a greater improvement in HDL-cholesterol among individuals in the SE group compared with ST, and a trend for HDL-cholesterol improvement in the OMC group compared with ST patients. There was also a statistically significant greater decrease in plasma fibrinogen levels in the SE group compared with OMC (Table 3).Symptoms and Quality of LifeThe SF-12 physical summary score and disease-specific measures of symptoms, physical limitation and walking ability were low at baseline, with no differences between treatment groups (Table 4) (3–6). In particular, the SF-12 physical summary scores were nearly 2 standard deviations below the U.S. population average.At 6 months, the ST group improved more than the OMC group for every QOL measure except the SF-12 mental summary scale, which was normal at baseline, and the WIQ stair climbing scale (Table 4). SE improved more than OMC for every scale except SF-12 mental, WIQ-pain, WIQ-stair climbing, PAQ-symptom stability, and PAQ-treatment satisfaction. Compared with SE, ST was associated with significantly greater benefit across most of the disease-specific QOL measures but not for the generic scales. The difference between ST and SE for the PAQ overall summary score (14.78 points) exceeded the 8-point difference that has been considered clinically meaningful (31). At 6 months, more patients in the ST group (17/40, 42.5%) than the SE group (8/38, 21%) reported no claudication symptoms on the WIQ.Multivariable regression analysis demonstrated a significant interaction between treatment group and PWT for the association with QOL measures [PAQ-physical limitation (p=0.025) and WIQ-distance (p=0.01)]. For the ST group, the degree of improvement in PWT was highly correlated with improvement in both the PAQ-physical limitation score as well as the WIQ distance domain (a one minute improvement in PWT leads to an average improvement in PAQ of 4.1 and in WIQ of 5.9; Pearson correlation r versus PWT is 0.65 for PAQ and 0.69 for WIQ, respectively; both p<0.001). On the other hand, for the SE group, the PWT improvement was more weakly correlated with the WIQ distance domain (a one minute improvement in PWT leads to an average improvement in WIQ of 2.0; r=0.33; p=0.05) and there was no significant correlation with the PAQ-physical limitation score (r=0.24; p=0.19). This distinction was less apparent for COT, which correlated strongly with both the PAQ-physical limitation and WIQ-distance scores (one minute improvement in COT leads to an average improvement in PAQ of 3.9 and in WIQ of 5.6; r versus COT is 0.62 for PAQ and 0.66 for WIQ, respectively; both p<0.001) with no significant interaction with treatment group (p=0.26).SafetyOverall, there were four serious adverse events (SAE) within 30 days of the stent procedure. These included one arterial perforation managed with a stent graft without sequelae, one participant who required a transfusion (the same one who had the perforation), and 2 localized dissections noted. On follow-up there were no SAEs associated with use of supervised exercise and cilostazol was well tolerated.DiscussionThis study represents the first multicenter randomized controlled trial that examines the relative benefit of SE, ST and OMC, and the first conducted exclusively on patients with aortoiliac PAD, long considered ideal for stent revascularization. The population had relatively severe PAD, with 38% of the ST group having total occlusions in the aortoiliac segment, with low ABIs, poor treadmill test performance, and poor QOL throughout all treatment groups at baseline.Prior randomized trials comparing supervised exercise and percutaneous revascularization pooled patients with aortoiliac and femoropopliteal PAD, and have shown supervised exercise to provide superior treadmill test walking at 6 months (13;14;32;33). It has been questioned whether such studies that showed the benefits of supervised exercise vis-à-vis endovascular revascularization were generalizable to patients with aortoiliac PAD, long considered the ideal population for stent placement (13). This study shows that for a population with advanced aortoiliac PAD, changes in PWT over 6 months were greater among those who received supervised exercise therapy than those revascularized with stents.It is noted that improvements in treadmill measures of functional status were not observed in the pedometer-derived measurements of community walking. This has been observed in other clinical trials of exercise for PAD, as use of SE has been shown to increase 6 minute walk and treadmill walking outcomes, but not pedometer-based measures of community walking. It is possible that improved leg function may, even with an associated improvement in claudication symptoms, not consistently lead to an increase in a patient's ambulatory behavior (34).Both SE and ST demonstrated improvements in PWT and QOL. Although SE showed more improvement in PWT, considered the standard endpoint for claudication research (29), the greatest improvements in self-reported QOL were observed in the ST cohort. This study was not designed to determine the cause of differential objective PWT and subjective QOL outcomes from patients provided these distinct strategies of care. Superior treadmill-defined benefits from the SE group could be derived from the “specificity-of-training” effect or from improved cardiorespiratory fitness, as the use of SE is known to be associated with physiologic improvement in systemic and limb function. This study also did not evaluate the exact mechanism(s) by which SE improved exercise performance, which can include multiple physiologic adaptive effects and treadmill use familiarity. Eighteen month results, obtained a year after completion of treadmill training, should provide valuable additional information.This study demonstrated adequate adherence to supervised exercise in a community treatment setting using a centrally administered program; risk factor control achieved via use of a structured patient informational program; SE and ST benefit in the context of an active claudication medication; that both SE and ST interventions were safe; and that SE is an efficacious intervention for patients with PAD in the aortoiliac segment.In summary, these results indicate both treatments are superior to OMC and provide widened choices for all patients. The selection of the ideal treatment will depend on the patient's preference. At the very least, the CLEVER 6 month results suggests that SE is a reasonable strategy compared with stenting and that efforts be made to develop SE programs that are available and affordable to patients.LimitationsThese 6-month results are relatively short-term, and the 6-month endpoint coincided with the completion of supervised exercise therapy when exercise benefits are expected to be their greatest. The longer term 18-month benefit and harm of exercise and stenting, and health economic impact of these approaches to claudication treatment is under evaluation in this study. However, in a study of a chronic disease whose treatments are directed at symptom relief, near-term outcomes are clinically relevant. The efficacy of these strategies of care for individuals with claudication due to femoropopliteal PAD anatomy is not known. However, there is much controversy surrounding methods of revascularization for the femoropopliteal segment, in contrast to the aortoiliac segment, where stent revascularization has a proven track record. Indeed, the results of this study are generalizable to those with aortoiliac PAD, a large population, with or without concomitant femoropopliteal artery PAD. Finally, the study has a smaller sample size than originally planned, partly due to slow enrollment. Slow enrollment has been a hallmark of most comparative effectiveness clinical trials, in which recruitment is typically hampered by clinician bias in favor of one treatment strategy or a reimbursement bias that is not comparable across the tested interventions.ConclusionThis study demonstrates that for patients with claudication, supervised exercise provides a superior improvement in treadmill walking performance compared to both primary aortoiliac stenting and optimal medical care (home walking and cilostazol) over six months. This benefit is associated with an improvement in self-reported walking distance, an increase in HDL and decrease of fibrinogen. Secondary measures of treatment efficacy favored primary stenting, with greater improvements in self-reported physical function.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Change in peak walking time from baseline to 6 months, SE vs OMC (mean difference)",
+    "quantity_type": "single",
+    "value": 4.6,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "minutes",
+    "ci_low": 2.7,
+    "ci_high": 6.5,
+    "p_value": 0.001,
+    "source_quote": "When compared with OMC alone, SE led to a greater mean improvement in PWT by 4.6 minutes (95% CI, 2.7 to 6.5 minutes, p<0.001)",
+    "location_hint": "Results, Primary Endpoint"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Change in peak walking time from baseline to 6 months, ST vs OMC (mean difference)",
+    "quantity_type": "single",
+    "value": 2.5,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "minutes",
+    "ci_low": 0.6,
+    "ci_high": 4.4,
+    "p_value": 0.022,
+    "source_quote": "whereas ST had a somewhat smaller relative improvement in PWT of 2.5 minutes (95% CI, 0.6 to 4.4 minutes, p=0.022)",
+    "location_hint": "Results, Primary Endpoint"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Change in peak walking time from baseline to 6 months, SE vs ST (mean difference)",
+    "quantity_type": "single",
+    "value": 2.1,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "minutes",
+    "ci_low": 0,
+    "ci_high": 4.2,
+    "p_value": 0.04,
+    "source_quote": "The direct comparison of SE vs. ST demonstrated a greater improvement in PWT with SE by a mean of 2.1 minutes (95% CI, 0.0 to 4.2 minutes, p=0.04).",
+    "location_hint": "Results, Primary Endpoint"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "6-month patients reporting no claudication symptoms on WIQ, ST vs SE",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "ST group (17/40, 42.5%)",
+    "first_value": 42.5,
+    "second_label": "SE group (8/38, 21%)",
+    "second_value": 21,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "At 6 months, more patients in the ST group (17/40, 42.5%) than the SE group (8/38, 21%) reported no claudication symptoms on the WIQ.",
+    "location_hint": "Results, Symptoms and Quality of Life"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Difference between ST and SE in PAQ overall summary score",
+    "quantity_type": "single",
+    "value": 14.78,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "points",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The difference between ST and SE for the PAQ overall summary score (14.78 points) exceeded the 8-point difference that has been considered clinically meaningful (31).",
+    "location_hint": "Results, Symptoms and Quality of Life"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "full_text",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "CLEVER, a multicenter observer-blinded randomized trial, compared optimal medical therapy, supervised exercise, and aortoiliac stenting for claudication, but the supplied snippet reports no outcome results.",
+  "designCaution": "The snippet covers only background and design with no results, and this is a six-month report limited to aortoiliac disease, so durability and applicability to femoropopliteal disease cannot be inferred.",
+  "relevance": "Foundational RCT for the claudication revascularization-versus-exercise question that frames upstream decisions before the CLTI limb preservation pathway, though not CLTI itself.",
+  "score": 38,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly describes CLEVER as a multicenter observer-blinded randomized trial comparing optimal medical therapy, structured exercise, and stent revascularization for claudication due to aortoiliac PAD, and the provided text ends mid-Methods section with no outcome results presented."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet contains only background and study design information with no results, and explicitly discusses differences between aortoiliac and femoropopliteal disease as a limitation of prior studies, supporting that findings limited to aortoiliac disease cannot be automatically generalized to femoropopliteal disease."
+  }
+ }
+}

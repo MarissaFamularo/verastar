@@ -1,0 +1,136 @@
+{
+ "row_id": "AAA-04",
+ "pmid": "9853436",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Mortality results for randomised controlled trial of early elective surgery or \nultrasonographic surveillance for small abdominal aortic aneurysms. The UK Small \nAneurysm Trial Participants.\n\n[No authors listed]\n\nBACKGROUND: Early elective surgery may prevent rupture of abdominal aortic \naneurysms, but mortality is 5-6%. The risk of rupture seems to be low for \naneurysms smaller than 5 cm. We investigated whether prophylactic open surgery \ndecreased long-term mortality risks for small aneurysms.\nMETHODS: We randomly assigned 1090 patients aged 60-76 years, with symptomless \nabdominal aortic aneurysms 4.0-5.5 cm in diameter to undergo early elective open \nsurgery (n=563) or ultrasonographic surveillance (n=527). Patients were followed \nup for a mean of 4.6 years. If the diameter of aneurysms in the surveillance \ngroup exceeded 5.5 cm, surgical repair was recommended. The primary endpoint was \ndeath. Mortality analyses were done by intention to treat.\nFINDINGS: The two groups had similar cardiovascular risk factors at baseline. \n93% of patients adhered to the assigned treatment. 309 patients died during \nfollow-up. The overall hazard ratio for all-cause mortality in the early-surgery \ngroup compared with the surveillance group was 0.94 (95% CI 0.75-1.17, p=0.56). \nThe 30-day operative mortality in the early-surgery group was 5.8%, which led to \na survival disadvantage for these patients early in the trial. Mortality did not \ndiffer significantly between groups at 2 years, 4 years, or 6 years. Age, sex, \nor initial aneurysm size did not modify the overall hazard ratio.\nINTERPRETATION: Ultrasonographic surveillance for small abdominal aortic \naneurysms is safe, and early surgery does not provide a long-term survival \nadvantage. Our results do not support a policy of open surgical repair for \nabdominal aortic aneurysms of 4.0-5.5 cm in diameter.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "All-cause mortality, early surgery vs ultrasonographic surveillance (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.94,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.75,
+    "ci_high": 1.17,
+    "p_value": 0.56,
+    "source_quote": "The overall hazard ratio for all-cause mortality in the early-surgery group compared with the surveillance group was 0.94 (95% CI 0.75-1.17, p=0.56).",
+    "location_hint": "Abstract, Findings"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day operative mortality, early-surgery group",
+    "quantity_type": "single",
+    "value": 5.8,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The 30-day operative mortality in the early-surgery group was 5.8%",
+    "location_hint": "Abstract, Findings"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Number of deaths during follow-up",
+    "quantity_type": "single",
+    "value": 309,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "patients",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "309 patients died during \nfollow-up.",
+    "location_hint": "Abstract, Findings"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Adherence to assigned treatment",
+    "quantity_type": "single",
+    "value": 93,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "93% of patients adhered to the assigned treatment.",
+    "location_hint": "Abstract, Findings"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "Early open surgery for small aneurysms showed no statistically clear mortality benefit over ultrasound surveillance, supporting surveillance for aneurysms in the to cm range.",
+  "designCaution": "This is a landmark trial of open repair from an earlier era, so its results may not transfer directly to modern endovascular repair, current medical therapy, or contemporary operative mortality.",
+  "relevance": "Foundational evidence for your AAA/TAAA outcomes north star and the surveillance-versus-repair threshold debate.",
+  "score": 62,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet reports a hazard ratio of 0.94 (95% CI 0.75-1.17, p=0.56) for all-cause mortality showing no significant difference, and explicitly states early surgery 'does not provide a long-term survival advantage' and results 'do not support a policy of open surgical repair' for the 4.0-5.5 cm range, matching the claim's core finding and conclusion."
+  },
+  "cautionCheck": {
+   "verdict": "refuted",
+   "reason": "The snippet describes a randomized controlled trial of early elective surgery versus surveillance for small aneurysms but does not mention the era or date of the trial, does not discuss limitations regarding transferability to endovascular repair, modern medical therapy, or contemporary operative mortality, and does not characterize itself as being from an earlier era—these cautions are not supported by the text provided."
+  }
+ }
+}

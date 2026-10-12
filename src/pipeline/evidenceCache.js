@@ -5,33 +5,61 @@
 // stores that proposal keyed by (pmid, extraction version, sha256 of the exact source
 // text). Two consequences worth stating plainly:
 //
-//   - A hit skips the MODEL CALL, never the PROOF. The verifier still runs in the reader's
-//     own session against the source text they fetched. The badge is proven locally.
+//   - A hit skips the MODEL CALL, not the verifier: the deterministic checks still run in
+//     the reader's session against the source text they fetched. Those checks have
+//     documented unchecked dimensions (arm, population, timepoint, surrounding claim), so a
+//     replayed proposal can still surface a wrong badge; that is why only proposals with
+//     server-owned provenance are shared.
 //   - The hash makes the key honest. PMC XML, an abstract, and a user-supplied PDF of the
 //     same paper are three different texts and get three different keys; a cached
 //     proposal is only ever replayed against the text it came from.
 //
-// Reads go straight to the table (RLS: any signed-in user). Writes happen only inside the
-// sponsored proxy, which stores the model's response after a miss. Signed-out or
-// unconfigured, every function here is a silent no-op.
+// Trusted boundary (2026-10-09 review): reads and writes use evidence_cache_trusted only.
+// Rows there are written by the scheduled digest, which fetched and hashed the source
+// itself and ran the bundled extraction prompt/schema at CURRENT_EXTRACTION_VERSION, and
+// each carries server-owned provenance (writer, bundle source hash). The legacy
+// evidence_cache table, populated by the proxy from client-supplied keys, is preserved
+// untouched and never read: a row without provenance is a miss. The browser never writes.
+// Signed-out or unconfigured, every function here is a silent no-op.
 
 import { supabase, supabaseConfigured, isSignedIn } from '../lib/supabase.js'
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
+import { currentServerScope } from '../lib/serverScope.js'
 
-// Server runtime only: a service-role client that may also WRITE the cache, and the user
-// the run is for. In the browser these stay null and writes never happen client-side.
+export const TRUSTED_CACHE_TABLE = 'evidence_cache_trusted'
+export const TRUSTED_WRITER = 'digest-run'
+
+// Tests only: a process-wide service-role writer. The digest edge function binds its
+// writer through the request scope ({ cache: { client, userId, provenance } }) instead.
 let _serverClient = null
 let _serverUserId = null
-export function configureEvidenceCacheServer({ client, userId } = {}) {
+let _serverProvenance = null
+export function configureEvidenceCacheServer({ client, userId, provenance } = {}) {
   _serverClient = client || null
   _serverUserId = userId || null
+  _serverProvenance = provenance || null
+}
+
+function serverWriter() {
+  const scope = currentServerScope()
+  if (scope) return scope.cache?.client ? scope.cache : null
+  return _serverClient ? { client: _serverClient, userId: _serverUserId, provenance: _serverProvenance } : null
+}
+
+// Provenance the server attaches; never accepted from a client.
+export function isTrustedProvenance(p) {
+  return !!p && typeof p === 'object' && p.writer === TRUSTED_WRITER && /^[0-9a-f]{64}$/.test(String(p.bundle_source_sha256 || ''))
 }
 
 function readClient() {
-  if (_serverClient) return _serverClient
+  const writer = serverWriter()
+  if (writer) return writer.client
   if (supabaseConfigured && isSignedIn()) return supabase
   return null
 }
+
+// Only source text the server fetched itself may populate the shared cache.
+export const TRUSTED_WRITE_TIERS = ['full_text', 'abstract_only']
 
 export const SOURCE_TIERS = ['full_text', 'abstract_only', 'user_text']
 
@@ -55,25 +83,29 @@ export async function lookupCachedExtraction({ pmid, hash, version = CURRENT_EXT
   if (!client || !pmid || !hash) return null
   try {
     const { data, error } = await client
-      .from('evidence_cache')
-      .select('extraction, model, source_tier')
+      .from(TRUSTED_CACHE_TABLE)
+      .select('extraction, model, source_tier, provenance')
       .eq('pmid', String(pmid))
       .eq('extraction_version', version)
       .eq('source_hash', String(hash).toLowerCase())
       .maybeSingle()
-    if (error || !data?.extraction) return null
+    if (error || !data?.extraction || !isTrustedProvenance(data.provenance)) return null
     return data
   } catch {
     return null
   }
 }
 
-// Store a fresh extraction. Server runtime only: the browser never holds a client that may
-// write here (the sponsored proxy does it after a miss). No-op elsewhere; never throws.
+// Store a fresh extraction. Trusted server runtime only; a no-op elsewhere. Refuses
+// user-supplied text, any version other than the current extraction version, and a writer
+// without server provenance. Never throws; an existing row is never overwritten.
 export async function storeCachedExtraction({ pmid, hash, tier, extraction, model, citation = null, version = CURRENT_EXTRACTION_VERSION }) {
-  if (!_serverClient || !pmid || !hash || !extraction) return false
+  const writer = serverWriter()
+  if (!writer || !pmid || !hash || !extraction) return false
+  if (!TRUSTED_WRITE_TIERS.includes(tier) || version !== CURRENT_EXTRACTION_VERSION || !/^[0-9a-f]{64}$/i.test(String(hash))) return false
+  if (!isTrustedProvenance(writer.provenance)) return false
   try {
-    const { error } = await _serverClient.from('evidence_cache').upsert({
+    const { error } = await writer.client.from(TRUSTED_CACHE_TABLE).upsert({
       pmid: String(pmid),
       extraction_version: version,
       source_hash: String(hash).toLowerCase(),
@@ -81,7 +113,8 @@ export async function storeCachedExtraction({ pmid, hash, tier, extraction, mode
       citation,
       extraction,
       model: model || 'unknown',
-      created_by: _serverUserId,
+      provenance: { ...writer.provenance, extraction_version: version, source_tier: tier },
+      created_by: writer.userId || null,
     }, { onConflict: 'pmid,extraction_version,source_hash', ignoreDuplicates: true })
     return !error
   } catch {

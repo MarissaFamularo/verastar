@@ -1,0 +1,217 @@
+{
+ "row_id": "HF-04",
+ "pmid": "31475794",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Angiotensin-Neprilysin Inhibition in Heart Failure with Preserved Ejection \nFraction.\n\nBACKGROUND: The angiotensin receptor-neprilysin inhibitor sacubitril-valsartan \nled to a reduced risk of hospitalization for heart failure or death from \ncardiovascular causes among patients with heart failure and reduced ejection \nfraction. The effect of angiotensin receptor-neprilysin inhibition in patients \nwith heart failure with preserved ejection fraction is unclear.\nMETHODS: We randomly assigned 4822 patients with New York Heart Association \n(NYHA) class II to IV heart failure, ejection fraction of 45% or higher, \nelevated level of natriuretic peptides, and structural heart disease to receive \nsacubitril-valsartan (target dose, 97 mg of sacubitril with 103 mg of valsartan \ntwice daily) or valsartan (target dose, 160 mg twice daily). The primary outcome \nwas a composite of total hospitalizations for heart failure and death from \ncardiovascular causes. Primary outcome components, secondary outcomes (including \nNYHA class change, worsening renal function, and change in Kansas City \nCardiomyopathy Questionnaire [KCCQ] clinical summary score [scale, 0 to 100, \nwith higher scores indicating fewer symptoms and physical limitations]), and \nsafety were also assessed.\nRESULTS: There were 894 primary events in 526 patients in the \nsacubitril-valsartan group and 1009 primary events in 557 patients in the \nvalsartan group (rate ratio, 0.87; 95% confidence interval [CI], 0.75 to 1.01; \nP = 0.06). The incidence of death from cardiovascular causes was 8.5% in the \nsacubitril-valsartan group and 8.9% in the valsartan group (hazard ratio, 0.95; \n95% CI, 0.79 to 1.16); there were 690 and 797 total hospitalizations for heart \nfailure, respectively (rate ratio, 0.85; 95% CI, 0.72 to 1.00). NYHA class \nimproved in 15.0% of the patients in the sacubitril-valsartan group and in 12.6% \nof those in the valsartan group (odds ratio, 1.45; 95% CI, 1.13 to 1.86); renal \nfunction worsened in 1.4% and 2.7%, respectively (hazard ratio, 0.50; 95% CI, \n0.33 to 0.77). The mean change in the KCCQ clinical summary score at 8 months \nwas 1.0 point (95% CI, 0.0 to 2.1) higher in the sacubitril-valsartan group. \nPatients in the sacubitril-valsartan group had a higher incidence of hypotension \nand angioedema and a lower incidence of hyperkalemia. Among 12 prespecified \nsubgroups, there was suggestion of heterogeneity with possible benefit with \nsacubitril-valsartan in patients with lower ejection fraction and in women.\nCONCLUSIONS: Sacubitril-valsartan did not result in a significantly lower rate \nof total hospitalizations for heart failure and death from cardiovascular causes \namong patients with heart failure and an ejection fraction of 45% or higher. \n(Funded by Novartis; PARAGON-HF ClinicalTrials.gov number, NCT01920711.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Primary composite outcome (total HF hospitalizations and CV death), sacubitril-valsartan vs valsartan, rate ratio",
+    "quantity_type": "single",
+    "value": 0.87,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "rate ratio",
+    "ci_low": 0.75,
+    "ci_high": 1.01,
+    "p_value": 0.06,
+    "source_quote": "(rate ratio, 0.87; 95% confidence interval [CI], 0.75 to 1.01; P = 0.06)",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Death from cardiovascular causes, sacubitril-valsartan vs valsartan, hazard ratio",
+    "quantity_type": "single",
+    "value": 0.95,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.79,
+    "ci_high": 1.16,
+    "p_value": null,
+    "source_quote": "(hazard ratio, 0.95; 95% CI, 0.79 to 1.16)",
+    "location_hint": "Results, primary outcome components"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Incidence of death from cardiovascular causes, sacubitril-valsartan vs valsartan",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "sacubitril-valsartan group",
+    "first_value": 8.5,
+    "second_label": "valsartan group",
+    "second_value": 8.9,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The incidence of death from cardiovascular causes was 8.5% in the sacubitril-valsartan group and 8.9% in the valsartan group",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Total hospitalizations for heart failure, sacubitril-valsartan vs valsartan, rate ratio",
+    "quantity_type": "single",
+    "value": 0.85,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "rate ratio",
+    "ci_low": 0.72,
+    "ci_high": 1,
+    "p_value": null,
+    "source_quote": "(rate ratio, 0.85; 95% CI, 0.72 to 1.00)",
+    "location_hint": "Results, primary outcome components"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "NYHA class improvement, sacubitril-valsartan vs valsartan, odds ratio",
+    "quantity_type": "single",
+    "value": 1.45,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "odds ratio",
+    "ci_low": 1.13,
+    "ci_high": 1.86,
+    "p_value": null,
+    "source_quote": "(odds ratio, 1.45; 95% CI, 1.13 to 1.86)",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Worsening renal function, sacubitril-valsartan vs valsartan, hazard ratio",
+    "quantity_type": "single",
+    "value": 0.5,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.33,
+    "ci_high": 0.77,
+    "p_value": null,
+    "source_quote": "(hazard ratio, 0.50; 95% CI, \n0.33 to 0.77)",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Mean change in KCCQ clinical summary score at 8 months, higher in sacubitril-valsartan group",
+    "quantity_type": "single",
+    "value": 1,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "points",
+    "ci_low": 0,
+    "ci_high": 2.1,
+    "p_value": null,
+    "source_quote": "The mean change in the KCCQ clinical summary score at 8 months \nwas 1.0 point (95% CI, 0.0 to 2.1) higher in the sacubitril-valsartan group.",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "Sacubitril-valsartan did not significantly lower the composite of total heart failure hospitalizations and cardiovascular death versus valsartan in HFpEF (rate ratio 0.87 rate ratio (CI 0.75–1.01), P=0.06), though NYHA class improved more (odds ratio 1.45 odds ratio (CI 1.13–1.86)).",
+  "designCaution": "The primary endpoint was not met, so secondary and subgroup signals such as benefit in women and lower ejection fraction are hypothesis-generating rather than confirmatory.",
+  "relevance": "High-quality tier-1 NEJM RCT worth knowing for conference discussion, but outside your vascular north stars and active projects.",
+  "score": 35,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet states the primary outcome rate ratio was 0.87 (CI 0.75-1.01, P=0.06), which is not statistically significant, and reports NYHA class improved with odds ratio 1.45 (CI 1.13-1.86), matching the claim's direction and magnitude."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the primary outcome P-value was 0.06 (not significant), and then notes 'suggestion of heterogeneity with possible benefit' in subgroups, supporting the caution that these are post-hoc signals rather than confirmatory findings given the failed primary endpoint."
+  }
+ }
+}

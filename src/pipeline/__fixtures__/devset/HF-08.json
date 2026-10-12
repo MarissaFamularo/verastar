@@ -1,0 +1,217 @@
+{
+ "row_id": "HF-08",
+ "pmid": "39555826",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Tirzepatide for Heart Failure with Preserved Ejection Fraction and Obesity.\n\nBACKGROUND: Obesity increases the risk of heart failure with preserved ejection \nfraction. Tirzepatide, a long-acting agonist of glucose-dependent insulinotropic \npolypeptide and glucagon-like peptide-1 receptors, causes considerable weight \nloss, but data are lacking with respect to its effects on cardiovascular \noutcomes.\nMETHODS: In this international, double-blind, randomized, placebo-controlled \ntrial, we randomly assigned, in a 1:1 ratio, 731 patients with heart failure, an \nejection fraction of at least 50%, and a body-mass index (the weight in \nkilograms divided by the square of the height in meters) of at least 30 to \nreceive tirzepatide (up to 15 mg subcutaneously once per week) or placebo for at \nleast 52 weeks. The two primary end points were a composite of adjudicated death \nfrom cardiovascular causes or a worsening heart-failure event (assessed in a \ntime-to-first-event analysis) and the change from baseline to 52 weeks in the \nKansas City Cardiomyopathy Questionnaire clinical summary score (KCCQ-CSS; \nscores range from 0 to 100, with higher scores indicating better quality of \nlife).\nRESULTS: A total of 364 patients were assigned to the tirzepatide group and 367 \nto the placebo group; the median duration of follow-up was 104 weeks. \nAdjudicated death from cardiovascular causes or a worsening heart-failure event \noccurred in 36 patients (9.9%) in the tirzepatide group and in 56 patients \n(15.3%) in the placebo group (hazard ratio, 0.62; 95% confidence interval [CI], \n0.41 to 0.95; P = 0.026). Worsening heart-failure events occurred in 29 patients \n(8.0%) in the tirzepatide group and in 52 patients (14.2%) in the placebo group \n(hazard ratio, 0.54; 95% CI, 0.34 to 0.85), and adjudicated death from \ncardiovascular causes occurred in 8 patients (2.2%) and 5 patients (1.4%), \nrespectively (hazard ratio, 1.58; 95% CI, 0.52 to 4.83). At 52 weeks, the mean \n(±SD) change in the KCCQ-CSS was 19.5±1.2 in the tirzepatide group as compared \nwith 12.7±1.3 in the placebo group (between-group difference, 6.9; 95% CI, 3.3 \nto 10.6; P<0.001). Adverse events (mainly gastrointestinal) leading to \ndiscontinuation of the trial drug occurred in 23 patients (6.3%) in the \ntirzepatide group and in 5 patients (1.4%) in the placebo group.\nCONCLUSIONS: Treatment with tirzepatide led to a lower risk of a composite of \ndeath from cardiovascular causes or worsening heart failure than placebo and \nimproved health status in patients with heart failure with preserved ejection \nfraction and obesity. (Funded by Eli Lilly; SUMMIT ClinicalTrials.gov number, \nNCT04847557.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Composite of CV death or worsening heart-failure event, tirzepatide vs placebo (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.62,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.41,
+    "ci_high": 0.95,
+    "p_value": 0.026,
+    "source_quote": "(hazard ratio, 0.62; 95% confidence interval [CI], 0.41 to 0.95; P = 0.026)",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Composite of CV death or worsening heart-failure event, event rate tirzepatide vs placebo",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "tirzepatide group",
+    "first_value": 9.9,
+    "second_label": "placebo group",
+    "second_value": 15.3,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "occurred in 36 patients (9.9%) in the tirzepatide group and in 56 patients (15.3%) in the placebo group",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "52-week change in KCCQ-CSS, between-group difference tirzepatide vs placebo",
+    "quantity_type": "single",
+    "value": 6.9,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "points",
+    "ci_low": 3.3,
+    "ci_high": 10.6,
+    "p_value": 0.001,
+    "source_quote": "(between-group difference, 6.9; 95% CI, 3.3 to 10.6; P<0.001)",
+    "location_hint": "Results, primary outcome (KCCQ-CSS)"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "52-week mean change in KCCQ-CSS, tirzepatide vs placebo",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "tirzepatide group",
+    "first_value": 19.5,
+    "second_label": "placebo group",
+    "second_value": 12.7,
+    "unit": "points",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "the mean (±SD) change in the KCCQ-CSS was 19.5±1.2 in the tirzepatide group as compared with 12.7±1.3 in the placebo group",
+    "location_hint": "Results, primary outcome (KCCQ-CSS)"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Worsening heart-failure events, tirzepatide vs placebo (hazard ratio)",
+    "quantity_type": "single",
+    "value": 0.54,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.34,
+    "ci_high": 0.85,
+    "p_value": null,
+    "source_quote": "(hazard ratio, 0.54; 95% CI, 0.34 to 0.85)",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Death from cardiovascular causes, tirzepatide vs placebo (hazard ratio)",
+    "quantity_type": "single",
+    "value": 1.58,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.52,
+    "ci_high": 4.83,
+    "p_value": null,
+    "source_quote": "(hazard ratio, 1.58; 95% CI, 0.52 to 4.83)",
+    "location_hint": "Results, secondary outcomes"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Adverse events leading to discontinuation of trial drug, tirzepatide vs placebo",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "tirzepatide group",
+    "first_value": 6.3,
+    "second_label": "placebo group",
+    "second_value": 1.4,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "occurred in 23 patients (6.3%) in the tirzepatide group and in 5 patients (1.4%) in the placebo group",
+    "location_hint": "Results, safety"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In HFpEF with obesity, tirzepatide reduced the composite of cardiovascular death or worsening heart failure versus placebo (HR 0.62 hazard ratio (CI 0.41–0.95), P=0.026), driven by fewer worsening heart-failure events (HR 0.54 hazard ratio (CI 0.34–0.85)), while cardiovascular death alone showed no statistically clear difference (HR 1.58 hazard ratio (CI 0.52–4.83)).",
+  "designCaution": "The composite benefit was driven entirely by worsening heart-failure events with few deaths, so the trial cannot establish a mortality benefit, and more patients on tirzepatide stopped treatment because of adverse events.",
+  "relevance": "Top-tier NEJM RCT on obesity pharmacotherapy and cardiovascular risk, loosely adjacent to your atherosclerosis prevention interest but not to the CLTI or carotid projects directly.",
+  "score": 45,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet directly reports the hazard ratios for the composite outcome (HR 0.62, CI 0.41-0.95, P=0.026), worsening heart-failure events (HR 0.54, CI 0.34-0.85), and cardiovascular death alone (HR 1.58, CI 0.52-4.83 with confidence interval crossing 1), matching the claim's direction and numerical values exactly."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet supports that the composite benefit was driven by worsening heart-failure events (29 vs 52 patients) with very few deaths (8 vs 5 patients), that the CI for cardiovascular death crosses 1.0, and that discontinuations due to adverse events were higher in the tirzepatide group (6.3% vs 1.4%), supporting the design limitation that mortality benefit cannot be established from this trial."
+  }
+ }
+}

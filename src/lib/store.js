@@ -24,6 +24,7 @@
 
 import { supabase, initAuth } from './supabase.js'
 import { makeSupabaseStore } from './storeSupabase.js'
+import { currentServerScope } from './serverScope.js'
 
 const DB_NAME = 'verastar'
 const DB_VERSION = 4 // v4: + memos (v3: + seen, v2: + domains)
@@ -152,27 +153,38 @@ export async function initStore() {
   return user
 }
 
-// Server runtime only: bind the facade to one account's cloud rows under the service
-// role. No IndexedDB exists there, so device-local keys resolve to undefined.
+// Server runtime: the facade is bound to one account's rows by the request scope
+// (lib/serverScope.js), never by a global the next request could replace. No IndexedDB
+// exists there, so device-local keys resolve to undefined. configureServerStore is the
+// process-wide binding tests use; with a scope runtime installed it is never consulted.
 let _server = null
 export function configureServerStore(impl) {
   _server = impl || null
 }
 
+function serverBackend() {
+  const scope = currentServerScope()
+  if (scope) {
+    if (!scope.store) throw new Error('This server run has no store.')
+    return scope.store
+  }
+  return _server
+}
+
 function backend() {
-  return _server || _cloud || idbStore
+  return serverBackend() || _cloud || idbStore
 }
 
 export const store = {
   // Read one record by key. Resolves to the value or undefined.
   get(collection, key) {
-    if (isDeviceLocal(collection, key)) return _server ? Promise.resolve(undefined) : idbStore.get(collection, key)
+    if (isDeviceLocal(collection, key)) return serverBackend() ? Promise.resolve(undefined) : idbStore.get(collection, key)
     return backend().get(collection, key)
   },
 
   // Write one record under key.
   put(collection, key, value, options) {
-    if (isDeviceLocal(collection, key)) return _server ? Promise.resolve() : idbStore.put(collection, key, value)
+    if (isDeviceLocal(collection, key)) return serverBackend() ? Promise.resolve() : idbStore.put(collection, key, value)
     return backend().put(collection, key, value, options)
   },
 
@@ -185,7 +197,7 @@ export const store = {
 
   // Delete one record by key.
   delete(collection, key) {
-    if (isDeviceLocal(collection, key)) return _server ? Promise.resolve() : idbStore.delete(collection, key)
+    if (isDeviceLocal(collection, key)) return serverBackend() ? Promise.resolve() : idbStore.delete(collection, key)
     return backend().delete(collection, key)
   },
 

@@ -1,0 +1,136 @@
+{
+ "row_id": "HF-13",
+ "pmid": "36027563",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Percutaneous Revascularization for Ischemic Left Ventricular Dysfunction.\n\nBACKGROUND: Whether revascularization by percutaneous coronary intervention \n(PCI) can improve event-free survival and left ventricular function in patients \nwith severe ischemic left ventricular systolic dysfunction, as compared with \noptimal medical therapy (i.e., individually adjusted pharmacologic and device \ntherapy for heart failure) alone, is unknown.\nMETHODS: We randomly assigned patients with a left ventricular ejection fraction \nof 35% or less, extensive coronary artery disease amenable to PCI, and \ndemonstrable myocardial viability to a strategy of either PCI plus optimal \nmedical therapy (PCI group) or optimal medical therapy alone \n(optimal-medical-therapy group). The primary composite outcome was death from \nany cause or hospitalization for heart failure. Major secondary outcomes were \nleft ventricular ejection fraction at 6 and 12 months and quality-of-life \nscores.\nRESULTS: A total of 700 patients underwent randomization - 347 were assigned to \nthe PCI group and 353 to the optimal-medical-therapy group. Over a median of 41 \nmonths, a primary-outcome event occurred in 129 patients (37.2%) in the PCI \ngroup and in 134 patients (38.0%) in the optimal-medical-therapy group (hazard \nratio, 0.99; 95% confidence interval [CI], 0.78 to 1.27; P = 0.96). The left \nventricular ejection fraction was similar in the two groups at 6 months (mean \ndifference, -1.6 percentage points; 95% CI, -3.7 to 0.5) and at 12 months (mean \ndifference, 0.9 percentage points; 95% CI, -1.7 to 3.4). Quality-of-life scores \nat 6 and 12 months appeared to favor the PCI group, but the difference had \ndiminished at 24 months.\nCONCLUSIONS: Among patients with severe ischemic left ventricular systolic \ndysfunction who received optimal medical therapy, revascularization by PCI did \nnot result in a lower incidence of death from any cause or hospitalization for \nheart failure. (Funded by the National Institute for Health and Care Research \nHealth Technology Assessment Program; REVIVED-BCIS2 ClinicalTrials.gov number, \nNCT01920048.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Primary composite outcome (death from any cause or hospitalization for heart failure), PCI vs optimal medical therapy alone, hazard ratio",
+    "quantity_type": "single",
+    "value": 0.99,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.78,
+    "ci_high": 1.27,
+    "p_value": 0.96,
+    "source_quote": "(hazard ratio, 0.99; 95% confidence interval [CI], 0.78 to 1.27; P = 0.96)",
+    "location_hint": "Abstract, Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary-outcome event incidence over median 41 months, PCI vs optimal-medical-therapy group",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "PCI group",
+    "first_value": 37.2,
+    "second_label": "optimal-medical-therapy group",
+    "second_value": 38,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "a primary-outcome event occurred in 129 patients (37.2%) in the PCI group and in 134 patients (38.0%) in the optimal-medical-therapy group",
+    "location_hint": "Abstract, Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Left ventricular ejection fraction at 6 months, mean difference PCI vs optimal medical therapy",
+    "quantity_type": "single",
+    "value": -1.6,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "percentage points",
+    "ci_low": -3.7,
+    "ci_high": 0.5,
+    "p_value": null,
+    "source_quote": "at 6 months (mean \ndifference, -1.6 percentage points; 95% CI, -3.7 to 0.5)",
+    "location_hint": "Abstract, Results, secondary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Left ventricular ejection fraction at 12 months, mean difference PCI vs optimal medical therapy",
+    "quantity_type": "single",
+    "value": 0.9,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "percentage points",
+    "ci_low": -1.7,
+    "ci_high": 3.4,
+    "p_value": null,
+    "source_quote": "at 12 months (mean \ndifference, 0.9 percentage points; 95% CI, -1.7 to 3.4)",
+    "location_hint": "Abstract, Results, secondary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In patients with severe ischemic left ventricular dysfunction, PCI plus optimal medical therapy did not reduce death or heart failure hospitalization versus optimal medical therapy alone (HR 0.99 hazard ratio (CI 0.78–1.27), P=0.96).",
+  "designCaution": "The trial enrolled only patients with demonstrable viability and extensive coronary disease amenable to PCI, so the result may not extend to other ischemic cardiomyopathy populations, and quality-of-life findings were secondary.",
+  "relevance": "A high-quality coronary RCT outside the vascular north stars, but a useful practice-informing example of revascularization failing to beat optimal medical therapy, relevant to atherosclerosis management thinking.",
+  "score": 45,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet directly states the primary outcome (death from any cause or hospitalization for heart failure) occurred in 37.2% of PCI group vs 38.0% of optimal-medical-therapy group with HR 0.99 (95% CI 0.78-1.27, P=0.96), and concludes PCI 'did not result in a lower incidence' of these outcomes, precisely matching the claim's direction and statistics."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states patients were required to have 'demonstrable myocardial viability' and 'extensive coronary artery disease amenable to PCI,' supporting the selection criteria limitation; the snippet also identifies quality-of-life scores as 'major secondary outcomes' rather than primary, supporting the secondary endpoint characterization."
+  }
+ }
+}

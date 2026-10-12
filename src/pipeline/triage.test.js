@@ -153,18 +153,17 @@ describe('sanitizeRanking — the guard every ranking passes before it can rende
     expect(clean.finding).toBe('A narrative review of CLTI perfusion methods.')
   })
 
-  it('double violation (finding_plain also has digits) still renders zero unverified digits', () => {
+  it('double violation (finding_plain also has digits) is withheld, never hard-stripped', () => {
     const out = sanitizeRanking(
       rk({ finding: 'Reduced mortality by 12%.', finding_plain: 'Reduced mortality by 12 points.' }),
       V_PCT
     )
-    expect(out.finding).not.toMatch(/\d/)
-    expect(out.finding).toContain('Reduced mortality')
+    expect(out.finding).toBe('')
   })
 
-  it('empty finding_plain on a bad finding falls back to the hard strip — never a digit', () => {
+  it('empty finding_plain on a bad finding is withheld as empty — never a digit', () => {
     const out = sanitizeRanking(rk({ finding: 'Reduced mortality by 12%.', finding_plain: '' }), V_PCT)
-    expect(out.finding).not.toMatch(/\d/)
+    expect(out.finding).toBe('')
   })
 
   it('relevance is number-free by contract — a sneaked digit is stripped', () => {
@@ -179,7 +178,9 @@ describe('sanitizeRanking — the guard every ranking passes before it can rende
       design_caution: 'The 30-day observational analysis cannot establish causality.',
     }), V_PCT)
     expect(out.finding).toBe('Improved outcomes.')
-    expect(out.designCaution).toBe('The day observational analysis cannot establish causality.')
+    // 2026-10-11 fix 3: the number PHRASE goes ("30-day"), not just its digits — the old
+    // strip pinned the garbled 'The day observational analysis cannot establish causality.'
+    expect(out.designCaution).toBe('The observational analysis cannot establish causality.')
   })
 
   it('decimal edge: 0.84 in prose never satisfies a verified 0.847 (or vice versa)', () => {

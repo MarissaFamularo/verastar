@@ -1,0 +1,109 @@
+{
+ "row_id": "AS-06",
+ "pmid": "30883058",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Transcatheter Aortic-Valve Replacement with a Balloon-Expandable Valve in \nLow-Risk Patients.\n\nBACKGROUND: Among patients with aortic stenosis who are at intermediate or high \nrisk for death with surgery, major outcomes are similar with transcatheter \naortic-valve replacement (TAVR) and surgical aortic-valve replacement. There is \ninsufficient evidence regarding the comparison of the two procedures in patients \nwho are at low risk.\nMETHODS: We randomly assigned patients with severe aortic stenosis and low \nsurgical risk to undergo either TAVR with transfemoral placement of a \nballoon-expandable valve or surgery. The primary end point was a composite of \ndeath, stroke, or rehospitalization at 1 year. Both noninferiority testing (with \na prespecified margin of 6 percentage points) and superiority testing were \nperformed in the as-treated population.\nRESULTS: At 71 centers, 1000 patients underwent randomization. The mean age of \nthe patients was 73 years, and the mean Society of Thoracic Surgeons risk score \nwas 1.9% (with scores ranging from 0 to 100% and higher scores indicating a \ngreater risk of death within 30 days after the procedure). The Kaplan-Meier \nestimate of the rate of the primary composite end point at 1 year was \nsignificantly lower in the TAVR group than in the surgery group (8.5% vs. 15.1%; \nabsolute difference, -6.6 percentage points; 95% confidence interval [CI], -10.8 \nto -2.5; P<0.001 for noninferiority; hazard ratio, 0.54; 95% CI, 0.37 to 0.79; \nP = 0.001 for superiority). At 30 days, TAVR resulted in a lower rate of stroke \nthan surgery (P = 0.02) and in lower rates of death or stroke (P = 0.01) and \nnew-onset atrial fibrillation (P<0.001). TAVR also resulted in a shorter index \nhospitalization than surgery (P<0.001) and in a lower risk of a poor treatment \noutcome (death or a low Kansas City Cardiomyopathy Questionnaire score) at 30 \ndays (P<0.001). There were no significant between-group differences in major \nvascular complications, new permanent pacemaker insertions, or moderate or \nsevere paravalvular regurgitation.\nCONCLUSIONS: Among patients with severe aortic stenosis who were at low surgical \nrisk, the rate of the composite of death, stroke, or rehospitalization at 1 year \nwas significantly lower with TAVR than with surgery. (Funded by Edwards \nLifesciences; PARTNER 3 ClinicalTrials.gov number, NCT02675114.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "1-year primary composite end point (death, stroke, or rehospitalization), TAVR vs surgery",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "TAVR group",
+    "first_value": 8.5,
+    "second_label": "surgery group",
+    "second_value": 15.1,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The Kaplan-Meier estimate of the rate of the primary composite end point at 1 year was significantly lower in the TAVR group than in the surgery group (8.5% vs. 15.1%",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "verified-comparison",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "comparison-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Both values verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "1-year primary composite end point, absolute difference TAVR vs surgery",
+    "quantity_type": "single",
+    "value": -6.6,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "percentage points",
+    "ci_low": -10.8,
+    "ci_high": -2.5,
+    "p_value": 0.001,
+    "source_quote": "absolute difference, -6.6 percentage points; 95% confidence interval [CI], -10.8 to -2.5; P<0.001 for noninferiority",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "1-year primary composite end point, hazard ratio TAVR vs surgery",
+    "quantity_type": "single",
+    "value": 0.54,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.37,
+    "ci_high": 0.79,
+    "p_value": 0.001,
+    "source_quote": "hazard ratio, 0.54; 95% CI, 0.37 to 0.79; P = 0.001 for superiority",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In low-surgical-risk patients with severe aortic stenosis, transcatheter valve replacement significantly lowered the one-year combined risk of death, stroke, or rehospitalization compared with open surgery.",
+  "designCaution": "The trial was industry-funded, analyzed the as-treated population, and followed patients for only one year, so durability of the valve and long-term outcomes remain unestablished.",
+  "relevance": "High-quality NEJM RCT likely to spark conference discussion, but aortic valve disease sits outside your vascular north stars, so it is mainly a model of endovascular-versus-open trial design.",
+  "score": 38,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the Kaplan-Meier estimate of the primary composite endpoint at 1 year was significantly lower in TAVR vs surgery (8.5% vs 15.1%, P<0.001 for superiority), directly supporting the claim of significantly lowered combined risk."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms industry funding (Edwards Lifesciences), as-treated analysis, and one-year follow-up duration; the caution about durability and long-term outcomes remaining unestablished is a legitimate design limitation logically derived from these stated methodological features."
+  }
+ }
+}

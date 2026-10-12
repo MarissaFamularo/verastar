@@ -186,6 +186,83 @@ export function sameDayNote() {
   return "Today's digest is already here. A new one will be ready tomorrow."
 }
 
+// --- scheduled digests that did not simply finish ---------------------------------------------
+// HELD: a paid step of the server run ended without a confirmed outcome, so the run is paused
+// until an operator has checked it (supabase/migrations/20261010130000_scheduler_hold.sql).
+// Running it again cannot help and is refused, so the message must not invite a retry.
+export const HELD_DIGEST_NOTE = 'Your digest is delayed. One step did not finish cleanly, so it is paused while that is checked. You do not need to do anything, and starting it again will not speed it up. Everything already read is saved.'
+// ABANDONED: an operator closed an unfinished server run. What was read is kept, but this is
+// not a completed digest and must not read as one.
+export const ABANDONED_DIGEST_NOTE = 'This digest was stopped before it was finished. What was read is kept below, but it is not a complete digest.'
+const PREPARING_DIGEST_NOTE = 'Your digest is still being prepared on the server. It keeps going if you close the app; check back in a few minutes.'
+
+// Did the digest server refuse or stop a run because the account is held? True for a tick that
+// stopped on an unresolved step (phase 'held') and for a run that was not started for that
+// reason, by cron or by hand.
+export function isHeldRun(out) {
+  return out?.phase === 'held' || /unresolved_liability/.test(String(out?.reason ?? ''))
+}
+
+// What the restore line says about a digest the server prepared, and how to treat it.
+//   pending    the server run has not finished (includes held)
+//   held       it is paused on an unresolved step; do not start or continue it from here
+//   abandoned  an operator stopped it; shown as stopped, never as a finished digest
+// Returns null for a digest the reader ran in the browser (restoreNote covers those).
+export function scheduledDigestStatus(saved) {
+  if (!saved || saved.runBy !== 'scheduler') return null
+  const phase = saved.server?.phase
+  const pending = !!phase && phase !== 'done'
+  const held = pending && !!saved.server?.held
+  const abandoned = !pending && saved.server?.abandoned === true
+  const ran = saved.ranAt ? new Date(saved.ranAt) : null
+  const morning = ran && !Number.isNaN(ran.getTime()) && ran.getHours() < 8
+  const note = held ? HELD_DIGEST_NOTE
+    : pending ? PREPARING_DIGEST_NOTE
+      : abandoned ? ABANDONED_DIGEST_NOTE
+        : morning ? 'Your morning digest, prepared while you slept.' : 'Your digest, prepared on the server.'
+  return { note, pending, held, abandoned, delayed: held || abandoned }
+}
+
+// --- no continuing a held or stopped server digest from the reader's screen ----------------------
+// A held digest is paused for an operator; an abandoned one was closed by an operator. Either way
+// THAT digest is not finished, retried, topped up or auto-continued from the browser: the screen
+// says it is delayed or stopped, and offering "Finish" beside that would contradict it. This is
+// screen consistency only. It is not a spending rule (the database hold covers scheduler attempts
+// only, and browser-proxy policy is unchanged), and it says nothing about starting a NEW scan,
+// which keeps its own rules.
+export function frozenDigestState(status) {
+  return status?.held ? 'held' : status?.abandoned ? 'abandoned' : null
+}
+
+// One gate every continuation path checks: at the button, at the handler, and between the steps
+// of a run already in flight, so an action queued before the digest was found held stops too.
+export function createContinuationGate() {
+  let frozen = null
+  return {
+    freeze(state) { frozen = state === 'held' || state === 'abandoned' ? state : null },
+    clear() { frozen = null },
+    state: () => frozen,
+    blocked: () => frozen !== null,
+  }
+}
+
+// What the digest screen may offer, in one place so every control agrees.
+//   frozen       'held' | 'abandoned' | null   the digest on screen
+//   showFinish   the "Finish this digest" block (unranked or unread papers)
+//   failedCount  how many failed papers the retry control may offer
+//   lockedToday  no run control at all (today's digest is on screen, or the run is held)
+//   poolLocked   the candidate pool's run / add / re-score actions
+export function digestControlPolicy({ frozen = null, incomplete = false, missing = 0, failedCount = 0, busy = false, lockedToday = false } = {}) {
+  const stopped = frozen === 'held' || frozen === 'abandoned'
+  return {
+    frozen: stopped ? frozen : null,
+    showFinish: !stopped && (!!incomplete || (!busy && missing > 0)),
+    failedCount: stopped ? 0 : failedCount,
+    lockedToday: !!lockedToday || frozen === 'held',
+    poolLocked: stopped,
+  }
+}
+
 // Overwrites the single daily-digest slot. Callers fire-and-forget.
 export function saveDailyDigest(state) {
   return store.put(COLLECTION, KEY, serializeDigest(state))
@@ -201,23 +278,55 @@ export function mayOverwriteDigest(existing, incomingRanAt) {
   return new Date(existing.ranAt).getTime() <= new Date(incomingRanAt).getTime()
 }
 
-// The digest screen's save: skips (resolves false) when a newer digest has replaced the one
-// on screen. Callers fire-and-forget.
+// Signed in, the database also refuses a browser write that would destroy newer digest state
+// (supabase/migrations/20261010120000_digest_write_guard.sql): the read above a write and the
+// write itself are two requests, and the scheduler can save in between. The refusal arrives
+// as an error whose message carries `digest_stale:<rule>`. Returns the rule name, or null
+// for any other error. Signed out there is no such refusal and nothing here changes.
+export function staleDigestReason(err) {
+  const match = /digest_stale:([a-z_]+)/.exec(String(err?.message ?? err ?? ''))
+  return match ? match[1] : null
+}
+
+// The digest screen's save. Resolves true when the digest was written, and false when it
+// was NOT: a newer digest has replaced the one on screen, or a scheduled run owns the
+// record. The first check is local and cheap; the database makes the same decision
+// atomically for the write itself. A false is a save that did not happen, so callers that
+// show the change as kept must say so (SpineCheck's persistDigest does).
 export async function saveDailyDigestIfCurrent(state) {
   const existing = await store.get(COLLECTION, KEY)
   if (!mayOverwriteDigest(existing, state?.ranAt)) return false
-  await saveDailyDigest(state)
+  try {
+    await saveDailyDigest(state)
+  } catch (err) {
+    if (staleDigestReason(err)) return false
+    throw err
+  }
   return true
 }
 
 // Stamp the digest on screen as opened, once. Idempotent and best-effort: the stamp is
 // the scheduler's signal, never something the reader can see or lose the digest over.
-export async function markDigestOpened(now = new Date().toISOString()) {
+//
+// `ranAt` names the digest that was shown: if a different scan has replaced it, nothing is
+// stamped (a digest nobody saw must not read as opened). The write is the whole record read
+// a moment earlier plus the stamp. If the record changed in between, the database refuses
+// it rather than let it undo that change; the fresh record is then read and stamped, a few
+// times at most.
+export async function markDigestOpened(now = new Date().toISOString(), { ranAt = null } = {}) {
   try {
-    const record = await store.get(COLLECTION, KEY)
-    if (!record || record.kind !== 'daily' || record.openedAt) return false
-    await store.put(COLLECTION, KEY, { ...record, openedAt: now })
-    return true
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const record = await store.get(COLLECTION, KEY)
+      if (!record || record.kind !== 'daily' || record.openedAt) return false
+      if (ranAt && digestRanAt(record) !== ranAt) return false
+      try {
+        await store.put(COLLECTION, KEY, { ...record, openedAt: now })
+        return true
+      } catch (err) {
+        if (!staleDigestReason(err)) throw err
+      }
+    }
+    return false
   } catch {
     return false
   }
@@ -242,8 +351,16 @@ export async function loadDailyDigest() {
 }
 
 // A fresh scan clears this first so closing mid-scan can't resurrect stale results.
-export function clearDailyDigest() {
-  return store.delete(COLLECTION, KEY)
+// Resolves true when the slot is clear, and false when the database refused because a
+// scheduled run is writing the digest right now (the record is left as it is).
+export async function clearDailyDigest() {
+  try {
+    await store.delete(COLLECTION, KEY)
+    return true
+  } catch (err) {
+    if (staleDigestReason(err)) return false
+    throw err
+  }
 }
 
 // The coverage checkpoint is deliberately separate from `daily:latest`: a fresh scan

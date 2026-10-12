@@ -1,10 +1,12 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { digestControlPolicy, scheduledDigestStatus, frozenDigestState, HELD_DIGEST_NOTE, ABANDONED_DIGEST_NOTE } from '../lib/digestStore.js'
 import SpineCheck, {
   candidateDisplayScore,
   WhyPrompt,
   DigestRunControls,
+  DigestContinuation,
   failedDigestResults,
   retryBaseSnapshot,
   ScanDetails,
@@ -149,5 +151,50 @@ describe('WhyPrompt', () => {
     expect(html).toContain('Why this one?')
     expect(html).toContain('Skip')
     expect(html).toContain('maxLength="280"')
+  })
+})
+
+// Held and stopped server digests: the controls a reader is offered, rendered as the screen
+// renders them (the policy feeds the same two components). `keySet` true is the browser lane
+// with a key or a sponsored proxy; the policy does not depend on the lane.
+describe('controls for a held or stopped server digest', () => {
+  const html = (el) => renderToStaticMarkup(el)
+  const screen = ({ saved, missing = 0, failedCount = 0, incomplete = false, lockedToday = false, keySet = true }) => {
+    const frozen = frozenDigestState(scheduledDigestStatus(saved))
+    const controls = digestControlPolicy({ frozen, incomplete: incomplete && !frozen, missing, failedCount, lockedToday })
+    return html(React.createElement('div', null,
+      React.createElement(DigestRunControls, { failedCount: controls.failedCount, lockedToday: controls.lockedToday, keySet, busy: false }),
+      React.createElement(DigestContinuation, { show: controls.showFinish, note: incomplete && !frozen ? 'short restore' : '', keySet, busy: false })))
+  }
+  const held = { kind: 'daily', runBy: 'scheduler', results: [], server: { phase: 'rank', held: { reason: 'unresolved_liability' } } }
+  const abandoned = { kind: 'daily', runBy: 'scheduler', results: [], server: { phase: 'done', abandoned: true } }
+  const browser = { kind: 'daily', runBy: 'user', results: [], server: null }
+
+  for (const [lane, keySet] of [['sponsored lane', true], ['browser lane with a key', true], ['browser lane without a key', false]]) {
+    it(`held partial digest (${lane}): no Finish, no retry, no run control`, () => {
+      const out = screen({ saved: held, missing: 1, failedCount: 2, keySet })
+      expect(out).not.toMatch(/Finish this digest|Retry|Run today|Start a new scan/)
+    })
+    it(`abandoned partial digest (${lane}): no Finish and no retry; the separate new-run control is as before`, () => {
+      const out = screen({ saved: abandoned, missing: 1, failedCount: 2, keySet })
+      expect(out).not.toMatch(/Finish this digest|Retry/)
+      expect(out).toMatch(/Run today/) // starting a NEW scan is a different decision and is not redesigned here
+    })
+  }
+  it('an ordinary browser digest with unranked papers still offers Finish', () => {
+    expect(screen({ saved: browser, missing: 1 })).toMatch(/Finish this digest/)
+    expect(screen({ saved: browser, incomplete: true })).toMatch(/short restore[\s\S]*Finish this digest/)
+  })
+  it('an ordinary browser digest with failed papers still offers retry', () => {
+    expect(screen({ saved: browser, failedCount: 2 })).toMatch(/Retry 2 failed papers/)
+  })
+  it('an ordinary unfinished or finished server digest is not frozen', () => {
+    expect(screen({ saved: { ...held, server: { phase: 'rank' } }, missing: 1 })).toMatch(/Finish this digest/)
+    expect(screen({ saved: { ...held, server: { phase: 'done' } }, failedCount: 1 })).toMatch(/Retry 1 failed paper/)
+  })
+  it('the Finish block renders nothing when not shown, and the messages stay the existing ones', () => {
+    expect(html(React.createElement(DigestContinuation, { show: false, note: 'x' }))).toBe('')
+    expect(scheduledDigestStatus(held).note).toBe(HELD_DIGEST_NOTE)
+    expect(scheduledDigestStatus(abandoned).note).toBe(ABANDONED_DIGEST_NOTE)
   })
 })

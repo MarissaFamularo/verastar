@@ -1,0 +1,163 @@
+{
+ "row_id": "AAA-06",
+ "pmid": "15351191",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Comparison of endovascular aneurysm repair with open repair in patients with \nabdominal aortic aneurysm (EVAR trial 1), 30-day operative mortality results: \nrandomised controlled trial.\n\nBACKGROUND: Endovascular aneurysm repair (EVAR) is a new technology to treat \npatients with abdominal aortic aneurysm (AAA) when the anatomy is suitable. \nUncertainty exists about how endovascular repair compares with conventional open \nsurgery. EVAR trial 1 was instigated to compare these treatments in patients \njudged fit for open AAA repair.\nMETHODS: Between 1999 and 2003, 1082 elective (non-emergency) patients were \nrandomised to receive either EVAR (n=543) or open AAA repair (n=539). Patients \naged at least 60 years with aneurysms of diameter 5.5 cm or more, who were fit \nenough for open surgical repair (anaesthetically and medically well enough for \nthe procedure), were recruited for the study at 41 British hospitals proficient \nin the EVAR technique. The primary outcome measure is all-cause mortality and \nthese results will be released in 2005. The primary analysis presented here is \noperative mortality by intention to treat and a secondary analysis was done in \nper-protocol patients.\nFINDINGS: Patients (983 men, 99 women) had a mean age of 74 years (SD 6) and \nmean AAA diameter of 6.5 cm (SD 1). 1047 (97%) patients underwent AAA repair and \n1008 (93%) received their allocated treatment. 30-day mortality in the EVAR \ngroup was 1.7% (9/531) versus 4.7% (24/516) in the open repair group (odds ratio \n0.35 [95% CI 0.16-0.77], p=0.009). By per-protocol analysis, 30-day mortality \nfor EVAR was 1.6% (8/512) versus 4.6% (23/496) for open repair (0.33 \n[0.15-0.74], p=0.007). Secondary interventions were more common in patients \nallocated EVAR (9.8% vs 5.8%, p=0.02).\nINTERPRETATION: In patients with large AAAs, treatment by EVAR reduced the \n30-day operative mortality by two-thirds compared with open repair. Any change \nin clinical practice should await durability and longer term results.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "30-day operative mortality, EVAR vs open repair (intention to treat)",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "EVAR group",
+    "first_value": 1.7,
+    "second_label": "open repair group",
+    "second_value": 4.7,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "30-day mortality in the EVAR group was 1.7% (9/531) versus 4.7% (24/516) in the open repair group",
+    "location_hint": "Findings, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day mortality odds ratio, EVAR vs open repair (intention to treat)",
+    "quantity_type": "single",
+    "value": 0.35,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "odds ratio",
+    "ci_low": 0.16,
+    "ci_high": 0.77,
+    "p_value": 0.009,
+    "source_quote": "(odds ratio 0.35 [95% CI 0.16-0.77], p=0.009)",
+    "location_hint": "Findings, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day mortality, EVAR vs open repair (per-protocol)",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "EVAR",
+    "first_value": 1.6,
+    "second_label": "open repair",
+    "second_value": 4.6,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "30-day mortality for EVAR was 1.6% (8/512) versus 4.6% (23/496) for open repair",
+    "location_hint": "Findings, per-protocol analysis"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day mortality odds ratio, EVAR vs open repair (per-protocol)",
+    "quantity_type": "single",
+    "value": 0.33,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "odds ratio",
+    "ci_low": 0.15,
+    "ci_high": 0.74,
+    "p_value": 0.007,
+    "source_quote": "(0.33 [0.15-0.74], p=0.007)",
+    "location_hint": "Findings, per-protocol analysis"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Secondary interventions, EVAR vs open repair",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 9.8,
+    "second_label": null,
+    "second_value": 5.8,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.02,
+    "source_quote": "Secondary interventions were more common in patients allocated EVAR (9.8% vs 5.8%, p=0.02)",
+    "location_hint": "Findings, secondary outcome"
+   },
+   "verdict": {
+    "tier": "verified-comparison",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "comparison-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Both values and the P value verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In this large randomized trial, endovascular repair cut day operative mortality by roughly two-thirds compared with open AAA repair, but required significantly more secondary interventions.",
+  "designCaution": "This report covers only short-term operative mortality, and the authors themselves state that durability and longer-term outcomes must be established before practice changes.",
+  "relevance": "Foundational RCT behind the AAA/TAAA outcomes north star, useful as an evidence anchor for EVAR versus open repair discussions.",
+  "score": 62,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet reports 30-day mortality of 1.7% for EVAR versus 4.7% for open repair (odds ratio 0.35, p=0.009), which constitutes a reduction of roughly two-thirds; secondary interventions were more common in EVAR (9.8% vs 5.8%, p=0.02); and the trial was large (1082 randomized patients) and randomized."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the primary outcome is all-cause mortality with results to be released in 2005, confirms this analysis covers 30-day operative mortality only, and includes the authors' interpretation that 'Any change in clinical practice should await durability and longer term results,' directly supporting the caution about short-term scope and need for durability data."
+  }
+ }
+}

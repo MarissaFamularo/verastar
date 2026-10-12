@@ -1,0 +1,163 @@
+{
+ "row_id": "CAR-12",
+ "pmid": "17050890",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Endarterectomy versus stenting in patients with symptomatic severe carotid \nstenosis.\n\nBACKGROUND: Carotid stenting is less invasive than endarterectomy, but it is \nunclear whether it is as safe in patients with symptomatic carotid-artery \nstenosis.\nMETHODS: We conducted a multicenter, randomized, noninferiority trial to compare \nstenting with endarterectomy in patients with a symptomatic carotid stenosis of \nat least 60%. The primary end point was the incidence of any stroke or death \nwithin 30 days after treatment.\nRESULTS: The trial was stopped prematurely after the inclusion of 527 patients \nfor reasons of both safety and futility. The 30-day incidence of any stroke or \ndeath was 3.9% after endarterectomy (95% confidence interval [CI], 2.0 to 7.2) \nand 9.6% after stenting (95% CI, 6.4 to 14.0); the relative risk of any stroke \nor death after stenting as compared with endarterectomy was 2.5 (95% CI, 1.2 to \n5.1). The 30-day incidence of disabling stroke or death was 1.5% after \nendarterectomy (95% CI, 0.5 to 4.2) and 3.4% after stenting (95% CI, 1.7 to \n6.7); the relative risk was 2.2 (95% CI, 0.7 to 7.2). At 6 months, the incidence \nof any stroke or death was 6.1% after endarterectomy and 11.7% after stenting \n(P=0.02). There were more major local complications after stenting and more \nsystemic complications (mainly pulmonary) after endarterectomy, but the \ndifferences were not significant. Cranial-nerve injury was more common after \nendarterectomy than after stenting.\nCONCLUSIONS: In this study of patients with symptomatic carotid stenosis of 60% \nor more, the rates of death and stroke at 1 and 6 months were lower with \nendarterectomy than with stenting. (ClinicalTrials.gov number, NCT00190398 \n[ClinicalTrials.gov].).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "30-day any stroke or death, endarterectomy vs stenting",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "endarterectomy",
+    "first_value": 3.9,
+    "second_label": "stenting",
+    "second_value": 9.6,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The 30-day incidence of any stroke or death was 3.9% after endarterectomy (95% confidence interval [CI], 2.0 to 7.2) and 9.6% after stenting",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day any stroke or death, relative risk of stenting vs endarterectomy",
+    "quantity_type": "single",
+    "value": 2.5,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "relative risk",
+    "ci_low": 1.2,
+    "ci_high": 5.1,
+    "p_value": null,
+    "source_quote": "the relative risk of any stroke or death after stenting as compared with endarterectomy was 2.5 (95% CI, 1.2 to 5.1)",
+    "location_hint": "Results, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day disabling stroke or death, endarterectomy vs stenting",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "endarterectomy",
+    "first_value": 1.5,
+    "second_label": "stenting",
+    "second_value": 3.4,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The 30-day incidence of disabling stroke or death was 1.5% after endarterectomy (95% CI, 0.5 to 4.2) and 3.4% after stenting",
+    "location_hint": "Results, secondary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day disabling stroke or death, relative risk of stenting vs endarterectomy",
+    "quantity_type": "single",
+    "value": 2.2,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "relative risk",
+    "ci_low": 0.7,
+    "ci_high": 7.2,
+    "p_value": null,
+    "source_quote": "the relative risk was 2.2 (95% CI, 0.7 to 7.2)",
+    "location_hint": "Results, secondary outcome"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "6-month any stroke or death, endarterectomy vs stenting",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "endarterectomy",
+    "first_value": 6.1,
+    "second_label": "stenting",
+    "second_value": 11.7,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.02,
+    "source_quote": "At 6 months, the incidence of any stroke or death was 6.1% after endarterectomy and 11.7% after stenting (P=0.02)",
+    "location_hint": "Results, secondary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In symptomatic carotid stenosis, stenting was not shown to be as safe as endarterectomy and the trial was stopped early, with higher stroke-or-death rates after stenting overall, though the disabling-stroke-or-death difference alone was statistically inconclusive.",
+  "designCaution": "The trial was stopped prematurely with a modest sample, so effect estimates are imprecise, and it reflects the operators, devices, and era of that trial, including early-generation stenting without modern embolic protection practices.",
+  "relevance": "Core evidence for your carotid stenosis management north star and a useful anchor for the Carotid Stenosis Stroke Prediction project's treatment-risk framing.",
+  "score": 88,
+  "tier": 1,
+  "check": {
+   "verdict": "unchecked",
+   "reason": ""
+  },
+  "cautionCheck": {
+   "verdict": "unchecked",
+   "reason": ""
+  }
+ }
+}

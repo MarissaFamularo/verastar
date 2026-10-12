@@ -46,6 +46,16 @@ row with `purpose = 'ping'`. A non-sponsored account must get a 403.
 
 ## 4b. Deploy the scheduler and its cron job
 
+> **Proposed change, 2026-10-09 (not deployed).** The spending safeguards replace the
+> jsDelivr pin below: `npm run bundle:functions` now writes
+> `supabase/functions/digest-run/app.bundle.js` plus `app.bundle.manifest.js`, and
+> `digest-run/index.ts` imports the bundle relatively, so the CLI deploys it with the
+> function. The cutover deploys the new `model`, `digest-run` and `redeem-invite` FIRST
+> (they fail closed against the old schema), drains old workers, then applies the
+> migration, verifies, and configures values: see
+> [SPENDING_CONTRACT.md](SPENDING_CONTRACT.md) § Cutover. Until that release, the text
+> below describes what is live.
+
 ```bash
 supabase functions deploy digest-run --no-verify-jwt --import-map supabase/functions/deno.json --project-ref lahahztitoqjumrxjcim
 ```
@@ -138,14 +148,26 @@ Per-account overrides: `daily_cap_usd`, `monthly_cap_usd` (null = config default
 
 ## 6. Populate the reference collection
 
-Run each seed paper once through the app (Add a paper) from a sponsored account, which
-stores its extraction in `evidence_cache`. Then:
+Freeze the extraction version and selected model before preparing Starter content. The
+browser's Add a paper route no longer writes shared cache entries. Legacy `evidence_cache`
+rows and private evaluation reports are not eligible Starter cache entries.
+
+For each clinically reviewed seed paper, first confirm a matching row in
+`evidence_cache_trusted`: the current extraction version, hash of the exact source input
+the reader will fetch, and genuine `digest-run` provenance from the bundled server runner.
+Do not label an imported evaluation report as scheduler-produced or restamp an older
+extraction. The scheduler is the current trusted writer; targeted cache preparation must
+be included in the separately authorized release procedure, with its spending bounds.
+
+Only after that read-back, add the corresponding shelf entry:
 
 ```sql
 insert into reference_papers (specialty, pmid, rank, note) values ('vascular-surgery', '<pmid>', 1, '<why>');
 ```
 
-A new account seeds from these shelves without a model call. Papers not yet in the cache
+A new account seeds from these shelves without a model call. A shelf row alone does not
+prove readiness: validate a new account's saved paper and current verifier result using
+the actual trusted-cache hit. Papers not yet in the cache
 are retried with backoff (seeding stays open, it does not complete), so populate the cache
 first; accounts waiting on an empty shelf pick it up at their next app open after the
 cooldown.

@@ -19,7 +19,11 @@ BYOK remains fully supported and is unchanged.
 - The function authenticates the caller with the Supabase JWT, requires an active row in
   `sponsored_accounts`, checks spend against per-day, per-month, and global ceilings, and
   records the call's cost to `model_spend` (model, tokens, cached tokens, USD, purpose,
-  cache hit). **As built:** the ledger is its own service-role-only table, not `events`,
+  cache hit). **Proposed 2026-10-09 (not deployed):** the check is an atomic database
+  reservation of the request's maximum cost before dispatch and a settlement after it,
+  shared with the scheduler, plus a total beta budget and a spending pause; only exact
+  model ids and a fixed request shape are admitted. Contract:
+  [SPENDING_CONTRACT.md](SPENDING_CONTRACT.md). **As built:** the ledger is its own service-role-only table, not `events`,
   because users hold an update policy on their own `events` rows and could edit a ledger
   there downward. The client never reads or writes `model_spend`.
 - Cap values, the global ceiling, and the sponsored allowlist are read from Supabase
@@ -51,13 +55,17 @@ relevance prose ("why this matters") is personalized to north stars and stays pe
 - Holds only what a citation holds: metadata, quantities, short verbatim source quotes,
   character offsets, verdicts. Never full text.
 - Readable by all authenticated users. Writable only by the edge function under the
-  service role. Clients cannot insert or update; a client-writable cache would let one
+  service role. **Proposed 2026-10-09 (not deployed):** shared hits come only from a new
+  `evidence_cache_trusted` table written by the scheduled digest with server-owned
+  provenance; the proxy and the browser read only that table and never write. Legacy
+  `evidence_cache` rows are preserved but no longer served. See SPENDING_CONTRACT.md §
+  Cache trust. Clients cannot insert or update; a client-writable cache would let one
   user poison every other user's badges.
 - Read path: `runPaper` hashes the source text, asks the cache directly (any signed-in
   user, BYOK or sponsored), and on a miss sends the key on the extraction call as
   `x-verastar-cache: <pmid>|<version>|<sha256>|<tier>`. The sponsored proxy serves a hit
-  from that header without a model call and stores a clean `end_turn` response after a
-  miss. A BYOK call goes browser-direct to Anthropic and the header is simply unused.
+  from that header without a model call (as built, it also stored a clean `end_turn`
+  response after a miss; the 2026-10-09 proposal removes that write). A BYOK call goes browser-direct to Anthropic and the header is simply unused.
   A `cacheOnly` mode returns an error instead of calling the model; seeding uses it.
 - A version bump of the extraction schema or the relationship contract invalidates by
   key, not by deleting rows. Old rows stay for audit.
@@ -179,6 +187,11 @@ feature. Two pieces:
   (`configureServerClient`, `configureServerStore`, `configureEvidenceCacheServer`) and
   polyfills `DOMParser` with linkedom for the PMC and PubMed XML parsing in `sources.js`.
   Spend lands in `model_spend` with purpose `scheduled-digest`; cache writes happen inline.
+  **Proposed 2026-10-09 (not deployed):** those process-wide setters are replaced by a
+  per-request AsyncLocalStorage scope (`lib/serverScope.js`); every model attempt goes
+  through the same reserve/settle boundary as the proxy; claims are atomic with an owner
+  token and every storage write is fenced by it; the app bundle ships inside the function
+  instead of a jsDelivr pin. See SPENDING_CONTRACT.md.
 - `digest_schedules` holds enabled, local hour and timezone per account (own-row RLS for
   those columns; claim and result columns are server-owned). Settings shows the block only
   to sponsored accounts, with a "Run now" that calls the same function on the user's JWT.

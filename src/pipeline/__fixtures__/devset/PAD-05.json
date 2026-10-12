@@ -1,0 +1,190 @@
+{
+ "row_id": "PAD-05",
+ "pmid": "34192807",
+ "trial": "",
+ "design": "meta_analysis",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Cilostazol for intermittent claudication.\n\nBACKGROUND: Peripheral arterial disease (PAD) affects between 4% and 12% of \npeople aged 55 to 70 years, and 20% of people over 70 years. A common complaint \nis intermittent claudication (exercise-induced lower limb pain relieved by \nrest). These patients have a three- to six-fold increase in cardiovascular \nmortality.  Cilostazol is a drug licensed for the use of improving claudication \ndistance and, if shown to reduce cardiovascular risk, could offer additional \nclinical benefits. This is an update of the review first published in 2007.\nOBJECTIVES: To determine the effect of cilostazol on initial and absolute \nclaudication distances, mortality and vascular events in patients with stable \nintermittent claudication.\nSEARCH METHODS: The Cochrane Vascular Information Specialist searched the \nCochrane Vascular Specialised Register, CENTRAL, MEDLINE, Embase, CINAHL, and \nAMED databases, and the World Health Organization International Clinical Trials \nRegistry Platform and ClinicalTrials.gov trials registries, on 9 November 2020.\nSELECTION CRITERIA: We considered double-blind, randomised controlled trials \n(RCTs) of cilostazol versus placebo, or versus other drugs used to improve \nclaudication distance in patients with stable intermittent claudication.\nDATA COLLECTION AND ANALYSIS: Two authors independently assessed trials for \nselection and independently extracted data. Disagreements were resolved by \ndiscussion. We assessed the risk of bias with the Cochrane risk of bias tool. \nCertainty of the evidence was evaluated using GRADE. For dichotomous outcomes, \nwe used odds ratios (ORs) with corresponding 95% confidence intervals (CIs) and \nfor continuous outcomes we used mean differences (MDs) and 95% CIs. We pooled \ndata using a fixed-effect model, or a random-effects model when heterogeneity \nwas identified. Primary outcomes were initial claudication distance (ICD) and \nquality of life (QoL). Secondary outcomes were absolute claudication distance \n(ACD), revascularisation, amputation, adverse events and cardiovascular events.\nMAIN RESULTS: We included 16 double-blind, RCTs (3972 participants) comparing \ncilostazol with placebo, of which five studies also compared cilostazol with \npentoxifylline. Treatment duration ranged from six to 26 weeks. All participants \nhad intermittent claudication secondary to PAD. Cilostazol dose ranged from 100 \nmg to 300 mg; pentoxifylline dose ranged from 800 mg to 1200 mg. The certainty \nof the evidence was downgraded by one level for all studies because publication \nbias was strongly suspected. Other reasons for downgrading were imprecision, \ninconsistency and selective reporting. Cilostazol versus placebo Participants \ntaking cilostazol had a higher ICD compared with those taking placebo (MD 26.49 \nmetres; 95% CI 18.93 to 34.05; 1722 participants; six studies; low-certainty \nevidence). We reported QoL measures descriptively due to insufficient \nstatistical detail within the studies to combine the results; there was a \npossible indication in improvement of QoL in the cilostazol treatment groups \n(low-certainty evidence). Participants taking cilostazol had a higher ACD \ncompared with those taking placebo (39.57 metres; 95% CI 21.80 to 57.33; 2360 \nparticipants; eight studies; very-low certainty evidence). The most commonly \nreported adverse events were headache, diarrhoea, abnormal stools, dizziness, \npain and palpitations. Participants taking cilostazol had an increased odds of \nexperiencing headache compared to participants taking placebo (OR 2.83; 95% CI \n2.26 to 3.55; 2584 participants; eight studies; moderate-certainty \nevidence).Very few studies reported on other outcomes so conclusions on \nrevascularisation, amputation, or cardiovascular events could not be made. \nCilostazol versus pentoxifylline There was no difference detected between \ncilostazol and pentoxifylline for improving walking distance, both in terms of \nICD (MD 20.0 metres, 95% CI -2.57 to 42.57; 417 participants; one study; \nlow-certainty evidence); and ACD (MD 13.4 metres, 95% CI -43.50 to 70.36; 866 \nparticipants; two studies; very low-certainty evidence). One study reported on \nQoL; the study authors reported no difference in QoL between the treatment \ngroups (very low-certainty evidence). No study reported on revascularisation, \namputation or cardiovascular events. Cilostazol participants had an increased \nodds of experiencing headache compared with participants taking pentoxifylline \nat 24 weeks (OR 2.20, 95% CI 1.16 to 4.17; 982 participants; two studies; \nlow-certainty evidence).\nAUTHORS' CONCLUSIONS: Cilostazol has been shown to improve walking distance in \npeople with intermittent claudication. However, participants taking cilostazol \nhad higher odds of experiencing headache. There is insufficient evidence about \nthe effectiveness of cilostazol for serious events such as amputation, \nrevascularisation, and cardiovascular events. Despite the importance of QoL to \npatients, meta-analysis could not be undertaken because of differences in \nmeasures used and reporting. Very limited data indicated no difference between \ncilostazol and pentoxifylline for improving walking distance and data were too \nlimited for any conclusions on other outcomes.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Initial claudication distance, cilostazol vs placebo (mean difference)",
+    "quantity_type": "single",
+    "value": 26.49,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "metres",
+    "ci_low": 18.93,
+    "ci_high": 34.05,
+    "p_value": null,
+    "source_quote": "Participants taking cilostazol had a higher ICD compared with those taking placebo (MD 26.49 metres; 95% CI 18.93 to 34.05; 1722 participants; six studies; low-certainty evidence).",
+    "location_hint": "Abstract, Main results, cilostazol versus placebo"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Absolute claudication distance, cilostazol vs placebo (mean difference)",
+    "quantity_type": "single",
+    "value": 39.57,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "metres",
+    "ci_low": 21.8,
+    "ci_high": 57.33,
+    "p_value": null,
+    "source_quote": "Participants taking cilostazol had a higher ACD compared with those taking placebo (39.57 metres; 95% CI 21.80 to 57.33; 2360 participants; eight studies; very-low certainty evidence).",
+    "location_hint": "Abstract, Main results, cilostazol versus placebo"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Headache, cilostazol vs placebo (odds ratio)",
+    "quantity_type": "single",
+    "value": 2.83,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": 2.26,
+    "ci_high": 3.55,
+    "p_value": null,
+    "source_quote": "Participants taking cilostazol had an increased odds of experiencing headache compared to participants taking placebo (OR 2.83; 95% CI 2.26 to 3.55; 2584 participants; eight studies; moderate-certainty evidence).",
+    "location_hint": "Abstract, Main results, cilostazol versus placebo"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Initial claudication distance, cilostazol vs pentoxifylline (mean difference)",
+    "quantity_type": "single",
+    "value": 20,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "metres",
+    "ci_low": -2.57,
+    "ci_high": 42.57,
+    "p_value": null,
+    "source_quote": "ICD (MD 20.0 metres, 95% CI -2.57 to 42.57; 417 participants; one study; low-certainty evidence)",
+    "location_hint": "Abstract, Main results, cilostazol versus pentoxifylline"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Absolute claudication distance, cilostazol vs pentoxifylline (mean difference)",
+    "quantity_type": "single",
+    "value": 13.4,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "metres",
+    "ci_low": -43.5,
+    "ci_high": 70.36,
+    "p_value": null,
+    "source_quote": "ACD (MD 13.4 metres, 95% CI -43.50 to 70.36; 866 participants; two studies; very low-certainty evidence)",
+    "location_hint": "Abstract, Main results, cilostazol versus pentoxifylline"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Headache at 24 weeks, cilostazol vs pentoxifylline (odds ratio)",
+    "quantity_type": "single",
+    "value": 2.2,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": 1.16,
+    "ci_high": 4.17,
+    "p_value": null,
+    "source_quote": "Cilostazol participants had an increased odds of experiencing headache compared with participants taking pentoxifylline at 24 weeks (OR 2.20, 95% CI 1.16 to 4.17; 982 participants; two studies; low-certainty evidence).",
+    "location_hint": "Abstract, Main results, cilostazol versus pentoxifylline"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "This Cochrane update of double-blind randomized trials found cilostazol caused substantially more headache than both placebo and pentoxifylline, a tolerability cost to weigh against its claudication-distance benefit.",
+  "designCaution": "Trials were short, ranging from about six to weeks, and the evidence was downgraded for likely publication bias, so long-term cardiovascular and limb outcomes remain uncertain.",
+  "relevance": "Claudication medical therapy sits upstream of your CLTI limb preservation work, but it is a drug-efficacy update rather than anything practice-changing for limb salvage.",
+  "score": 42,
+  "tier": 1,
+  "check": {
+   "verdict": "refuted",
+   "reason": "The snippet does not provide any information about headache rates or adverse events for cilostazol, placebo, or pentoxifylline; the text ends mid-sentence before reporting results on adverse events or tolerability comparisons."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states treatment duration ranged from six to 26 weeks and that certainty of evidence was downgraded because publication bias was strongly suspected, supporting the claim that trials were short and evidence quality was compromised for publication bias, leaving long-term outcomes uncertain."
+  }
+ }
+}

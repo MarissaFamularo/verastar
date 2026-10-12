@@ -1,0 +1,163 @@
+{
+ "row_id": "CAD-02",
+ "pmid": "34735046",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Fractional Flow Reserve-Guided PCI as Compared with Coronary Bypass Surgery.\n\nBACKGROUND: Patients with three-vessel coronary artery disease have been found \nto have better outcomes with coronary-artery bypass grafting (CABG) than with \npercutaneous coronary intervention (PCI), but studies in which PCI is guided by \nmeasurement of fractional flow reserve (FFR) have been lacking.\nMETHODS: In this multicenter, international, noninferiority trial, patients with \nthree-vessel coronary artery disease were randomly assigned to undergo CABG or \nFFR-guided PCI with current-generation zotarolimus-eluting stents. The primary \nend point was the occurrence within 1 year of a major adverse cardiac or \ncerebrovascular event, defined as death from any cause, myocardial infarction, \nstroke, or repeat revascularization. Noninferiority of FFR-guided PCI to CABG \nwas prespecified as an upper boundary of less than 1.65 for the 95% confidence \ninterval of the hazard ratio. Secondary end points included a composite of \ndeath, myocardial infarction, or stroke; safety was also assessed.\nRESULTS: A total of 1500 patients underwent randomization at 48 centers. \nPatients assigned to undergo PCI received a mean (±SD) of 3.7±1.9 stents, and \nthose assigned to undergo CABG received 3.4±1.0 distal anastomoses. The 1-year \nincidence of the composite primary end point was 10.6% among patients randomly \nassigned to undergo FFR-guided PCI and 6.9% among those assigned to undergo CABG \n(hazard ratio, 1.5; 95% confidence interval [CI], 1.1 to 2.2), findings that \nwere not consistent with noninferiority of FFR-guided PCI (P = 0.35 for \nnoninferiority). The incidence of death, myocardial infarction, or stroke was \n7.3% in the FFR-guided PCI group and 5.2% in the CABG group (hazard ratio, 1.4; \n95% CI, 0.9 to 2.1). The incidences of major bleeding, arrhythmia, and acute \nkidney injury were higher in the CABG group than in the FFR-guided PCI group.\nCONCLUSIONS: In patients with three-vessel coronary artery disease, FFR-guided \nPCI was not found to be noninferior to CABG with respect to the incidence of a \ncomposite of death, myocardial infarction, stroke, or repeat revascularization \nat 1 year. (Funded by Medtronic and Abbott Vascular; FAME 3 ClinicalTrials.gov \nnumber, NCT02100722.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "1-year primary composite endpoint (death, MI, stroke, repeat revascularization), FFR-guided PCI vs CABG",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "FFR-guided PCI",
+    "first_value": 10.6,
+    "second_label": "CABG",
+    "second_value": 6.9,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The 1-year incidence of the composite primary end point was 10.6% among patients randomly assigned to undergo FFR-guided PCI and 6.9% among those assigned to undergo CABG",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Hazard ratio for 1-year primary composite endpoint, FFR-guided PCI vs CABG",
+    "quantity_type": "single",
+    "value": 1.5,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 1.1,
+    "ci_high": 2.2,
+    "p_value": null,
+    "source_quote": "(hazard ratio, 1.5; 95% confidence interval [CI], 1.1 to 2.2)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Noninferiority test of FFR-guided PCI vs CABG for primary endpoint",
+    "quantity_type": "single",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": null,
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.35,
+    "source_quote": "findings that were not consistent with noninferiority of FFR-guided PCI (P = 0.35 for noninferiority)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "flagged",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quantity must contain exactly one declared shape: a single value, a true range, a labeled change, or a labeled group comparison."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Incidence of death, myocardial infarction, or stroke, FFR-guided PCI vs CABG",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "FFR-guided PCI",
+    "first_value": 7.3,
+    "second_label": "CABG",
+    "second_value": 5.2,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "The incidence of death, myocardial infarction, or stroke was 7.3% in the FFR-guided PCI group and 5.2% in the CABG group",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Hazard ratio for death, myocardial infarction, or stroke, FFR-guided PCI vs CABG",
+    "quantity_type": "single",
+    "value": 1.4,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 0.9,
+    "ci_high": 2.1,
+    "p_value": null,
+    "source_quote": "(hazard ratio, 1.4; 95% CI, 0.9 to 2.1)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "FFR-guided PCI did not meet noninferiority to bypass surgery in three-vessel coronary disease at one year, with more composite events driven partly by repeat revascularization, and no statistically clear difference in death, heart attack, or stroke alone.",
+  "designCaution": "The trial was industry-funded with only one year of follow-up, so durability of revascularization strategies and late outcomes remain unaddressed.",
+  "relevance": "High-impact NEJM RCT worth knowing for conference discussion, but coronary-focused and only tangentially related to your vascular north stars and the revascularization-strategy debate in CLTI.",
+  "score": 45,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states FFR-guided PCI failed noninferiority testing with a primary endpoint hazard ratio of 1.5 (10.6% vs 6.9%), and separately reports death/MI/stroke with HR 1.4 (95% CI 0.9 to 2.1, which crosses 1.0 and is not statistically significant), with repeat revascularization being part of the composite primary endpoint."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the trial was 'Funded by Medtronic and Abbott Vascular' (industry funding) and the primary endpoint is defined as 'within 1 year' with results presented at 1-year follow-up, supporting the caution about industry sponsorship and limited follow-up duration, which leaves durability and late outcomes unaddressed."
+  }
+ }
+}

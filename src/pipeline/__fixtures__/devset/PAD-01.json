@@ -1,0 +1,190 @@
+{
+ "row_id": "PAD-01",
+ "pmid": "26547465",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Endovascular Revascularization and Supervised Exercise for Peripheral Artery \nDisease and Intermittent Claudication: A Randomized Clinical Trial.\n\nIMPORTANCE: Supervised exercise is recommended as a first-line treatment for \nintermittent claudication. Combination therapy of endovascular revascularization \nplus supervised exercise may be more promising but few data comparing the 2 \ntherapies are available.\nOBJECTIVE: To assess the effectiveness of endovascular revascularization plus \nsupervised exercise for intermittent claudication compared with supervised \nexercise only.\nDESIGN, SETTING, AND PARTICIPANTS: Randomized clinical trial of 212 patients \nallocated to either endovascular revascularization plus supervised exercise or \nsupervised exercise only. Data were collected between May 17, 2010, and February \n16, 2013, in the Netherlands at 10 sites. Patients were followed up for 12 \nmonths and the data were analyzed according to the intention-to-treat principle.\nINTERVENTIONS: A combination of endovascular revascularization (selective \nstenting) plus supervised exercise (n = 106) or supervised exercise only (n = \n106).\nMAIN OUTCOMES AND MEASURES: The primary end point was the difference in maximum \ntreadmill walking distance at 12 months between the groups. Secondary end points \nincluded treadmill pain-free walking distance, vascular quality of life \n(VascuQol) score (1 [worst outcome] to 7 [best outcome]), and 36-item Short-Form \nHealth Survey (SF-36) domain scores for physical functioning, physical role \nfunctioning, bodily pain, and general health perceptions (0 [severe limitation] \nto 100 [no limitation]).\nRESULTS: Endovascular revascularization plus supervised exercise (combination \ntherapy) was associated with significantly greater improvement in maximum \nwalking distance (from 264 m to 1501 m for an improvement of 1237 m) compared \nwith the supervised exercise only group (from 285 m to 1240 m for improvement of \n955 m) (mean difference between groups, 282 m; 99% CI, 60-505 m) and in \npain-free walking distance (from 117 m to 1237 m for an improvement of 1120 m vs \nfrom 135 m to 847 m for improvement of 712 m, respectively) (mean difference, \n408 m; 99% CI, 195-622 m). Similarly, the combination therapy group demonstrated \nsignificantly greater improvement in the disease-specific VascuQol score (1.34 \n[99% CI, 1.04-1.64] in the combination therapy group vs 0.73 [99% CI, 0.43-1.03] \nin the exercise group; mean difference, 0.62 [99% CI, 0.20-1.03]) and in the \nscore for the SF-36 physical functioning (22.4 [99% CI, 16.3-28.5] vs 12.6 [99% \nCI, 6.3-18.9], respectively; mean difference, 9.8 [99% CI, 1.4-18.2]). No \nsignificant differences were found for the SF-36 domains of physical role \nfunctioning, bodily pain, and general health perceptions.\nCONCLUSIONS AND RELEVANCE: Among patients with intermittent claudication after 1 \nyear of follow-up, a combination therapy of endovascular revascularization \nfollowed by supervised exercise resulted in significantly greater improvement in \nwalking distances and health-related quality-of-life scores compared with \nsupervised exercise only.\nTRIAL REGISTRATION: Netherlands Trial Registry Identifier: NTR2249.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "12-month maximum treadmill walking distance, mean difference between combination therapy and supervised exercise only",
+    "quantity_type": "single",
+    "value": 282,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "m",
+    "ci_low": 60,
+    "ci_high": 505,
+    "p_value": null,
+    "source_quote": "(mean difference between groups, 282 m; 99% CI, 60-505 m)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Maximum walking distance change, combination therapy group (baseline to 12 months)",
+    "quantity_type": "change",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 264,
+    "second_label": null,
+    "second_value": 1501,
+    "unit": "m",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "from 264 m to 1501 m for an improvement of 1237 m",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Maximum walking distance change, supervised exercise only group (baseline to 12 months)",
+    "quantity_type": "change",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 285,
+    "second_label": null,
+    "second_value": 1240,
+    "unit": "m",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "from 285 m to 1240 m for improvement of 955 m",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Pain-free walking distance, mean difference between combination therapy and supervised exercise only",
+    "quantity_type": "single",
+    "value": 408,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "m",
+    "ci_low": 195,
+    "ci_high": 622,
+    "p_value": null,
+    "source_quote": "(mean difference, 408 m; 99% CI, 195-622 m)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "VascuQol score, mean difference between combination therapy and exercise group",
+    "quantity_type": "single",
+    "value": 0.62,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "points",
+    "ci_low": 0.2,
+    "ci_high": 1.03,
+    "p_value": null,
+    "source_quote": "mean difference, 0.62 [99% CI, 0.20-1.03]",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "SF-36 physical functioning score, mean difference between combination therapy and exercise group",
+    "quantity_type": "single",
+    "value": 9.8,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "points",
+    "ci_low": 1.4,
+    "ci_high": 18.2,
+    "p_value": null,
+    "source_quote": "mean difference, 9.8 [99% CI, 1.4-18.2]",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "Adding endovascular revascularization to supervised exercise produced significantly greater gains in walking distance and quality of life at one year than supervised exercise alone in patients with claudication.",
+  "designCaution": "The trial studied claudication rather than limb-threatening ischemia and followed patients for only a year, so it cannot speak to durability of stenting benefit or limb salvage outcomes.",
+  "relevance": "Peripheral to your CLTI limb preservation focus, but informs the revascularization-versus-conservative-therapy debate in the earlier PAD spectrum.",
+  "score": 55,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet directly states that combination therapy was associated with significantly greater improvement in maximum walking distance (282 m difference, 99% CI 60-505 m) and pain-free walking distance (408 m difference, 99% CI 195-622 m), and significantly greater improvement in VascuQol score and SF-36 physical functioning, all at 12 months in the claudication population."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states patients had intermittent claudication (not limb-threatening ischemia) and were followed for 12 months, supporting both the design limitation regarding patient population and the follow-up duration constraint mentioned in the claim regarding inability to assess durability or limb salvage outcomes."
+  }
+ }
+}

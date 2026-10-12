@@ -1,0 +1,244 @@
+{
+ "row_id": "AS-02",
+ "pmid": "21639811",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Transcatheter versus surgical aortic-valve replacement in high-risk patients.\n\nBACKGROUND: The use of transcatheter aortic-valve replacement has been shown to \nreduce mortality among high-risk patients with aortic stenosis who are not \ncandidates for surgical replacement. However, the two procedures have not been \ncompared in a randomized trial involving high-risk patients who are still \ncandidates for surgical replacement.\nMETHODS: At 25 centers, we randomly assigned 699 high-risk patients with severe \naortic stenosis to undergo either transcatheter aortic-valve replacement with a \nballoon-expandable bovine pericardial valve (either a transfemoral or a \ntransapical approach) or surgical replacement. The primary end point was death \nfrom any cause at 1 year. The primary hypothesis was that transcatheter \nreplacement is not inferior to surgical replacement.\nRESULTS: The rates of death from any cause were 3.4% in the transcatheter group \nand 6.5% in the surgical group at 30 days (P=0.07) and 24.2% and 26.8%, \nrespectively, at 1 year (P=0.44), a reduction of 2.6 percentage points in the \ntranscatheter group (upper limit of the 95% confidence interval, 3.0 percentage \npoints; predefined margin, 7.5 percentage points; P=0.001 for noninferiority). \nThe rates of major stroke were 3.8% in the transcatheter group and 2.1% in the \nsurgical group at 30 days (P=0.20) and 5.1% and 2.4%, respectively, at 1 year \n(P=0.07). At 30 days, major vascular complications were significantly more \nfrequent with transcatheter replacement (11.0% vs. 3.2%, P<0.001); adverse \nevents that were more frequent after surgical replacement included major \nbleeding (9.3% vs. 19.5%, P<0.001) and new-onset atrial fibrillation (8.6% vs. \n16.0%, P=0.006). More patients undergoing transcatheter replacement had an \nimprovement in symptoms at 30 days, but by 1 year, there was not a significant \nbetween-group difference.\nCONCLUSIONS: In high-risk patients with severe aortic stenosis, transcatheter \nand surgical procedures for aortic-valve replacement were associated with \nsimilar rates of survival at 1 year, although there were important differences \nin periprocedural risks. (Funded by Edwards Lifesciences; Clinical Trials.gov \nnumber, NCT00530894.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "1-year death from any cause, transcatheter vs surgical replacement",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 24.2,
+    "second_label": null,
+    "second_value": 26.8,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.44,
+    "source_quote": "24.2% and 26.8%, respectively, at 1 year (P=0.44)",
+    "location_hint": "Results, primary end point"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "1-year death from any cause, absolute reduction in transcatheter group (noninferiority)",
+    "quantity_type": "single",
+    "value": 2.6,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "percentage points",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "a reduction of 2.6 percentage points in the transcatheter group (upper limit of the 95% confidence interval, 3.0 percentage points; predefined margin, 7.5 percentage points; P=0.001 for noninferiority)",
+    "location_hint": "Results, primary end point"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day death from any cause, transcatheter vs surgical replacement",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "transcatheter",
+    "first_value": 3.4,
+    "second_label": "surgical",
+    "second_value": 6.5,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.07,
+    "source_quote": "The rates of death from any cause were 3.4% in the transcatheter group and 6.5% in the surgical group at 30 days (P=0.07)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day major stroke, transcatheter vs surgical replacement",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "transcatheter",
+    "first_value": 3.8,
+    "second_label": "surgical",
+    "second_value": 2.1,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.2,
+    "source_quote": "The rates of major stroke were 3.8% in the transcatheter group and 2.1% in the surgical group at 30 days (P=0.20)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "1-year major stroke, transcatheter vs surgical replacement",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 5.1,
+    "second_label": null,
+    "second_value": 2.4,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.07,
+    "source_quote": "5.1% and 2.4%, respectively, at 1 year (P=0.07)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day major vascular complications, transcatheter vs surgical replacement",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 11,
+    "second_label": null,
+    "second_value": 3.2,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "At 30 days, major vascular complications were significantly more frequent with transcatheter replacement (11.0% vs. 3.2%, P<0.001)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "verified-comparison",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "comparison-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Both values and the P value verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day major bleeding, transcatheter vs surgical replacement",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 9.3,
+    "second_label": null,
+    "second_value": 19.5,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.001,
+    "source_quote": "major bleeding (9.3% vs. 19.5%, P<0.001)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "verified-comparison",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "comparison-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Both values and the P value verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "30-day new-onset atrial fibrillation, transcatheter vs surgical replacement",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": 8.6,
+    "second_label": null,
+    "second_value": 16,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": 0.006,
+    "source_quote": "new-onset atrial fibrillation (8.6% vs. 16.0%, P=0.006)",
+    "location_hint": "Results"
+   },
+   "verdict": {
+    "tier": "verified-comparison",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "comparison-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Both values and the P value verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "Transcatheter and surgical valve replacement gave similar one-year survival in high-risk aortic stenosis, with significantly more vascular complications but less bleeding and new atrial fibrillation after the transcatheter approach.",
+  "designCaution": "The trial was funded by the device manufacturer and tested non-inferiority on mortality, and the symptom benefit seen early with the transcatheter approach did not persist at one year.",
+  "relevance": "A landmark NEJM RCT, but cardiac rather than a vascular north star; the access-site vascular complication signal is only tangentially relevant to your endovascular practice.",
+  "score": 32,
+  "tier": 1,
+  "check": {
+   "verdict": "refuted",
+   "reason": "The claim states transcatheter approach had 'less bleeding and new atrial fibrillation,' but the snippet clearly shows surgical replacement had significantly MORE major bleeding (19.5% vs. 9.3%) and MORE new-onset atrial fibrillation (16.0% vs. 8.6%), meaning transcatheter had LESS of these complications, which reverses the direction of comparison as stated in the claim."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the trial was funded by Edwards Lifesciences (device manufacturer), tested a non-inferiority hypothesis on mortality at 1 year, and notes 'More patients undergoing transcatheter replacement had an improvement in symptoms at 30 days, but by 1 year, there was not a significant between-group difference,' supporting all elements of the design caution."
+  }
+ }
+}

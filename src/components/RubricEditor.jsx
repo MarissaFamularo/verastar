@@ -1,3 +1,4 @@
+import { PILOT_DIGEST_LIMIT, digestCount } from '../pipeline/digestLimit.js'
 // components/RubricEditor.jsx — the user-owned steering rubric.
 //
 // This is the editorial half of triage: the criteria that decide which papers are worth
@@ -79,8 +80,8 @@ export default function RubricEditor({
             <input
               type="number"
               min="1"
-              max="30"
-              value={selectCount}
+              max={PILOT_DIGEST_LIMIT}
+              value={digestCount(selectCount)}
               onChange={(e) => emit({ selectCount: clampCount(e.target.value) })}
               style={numberInput}
             />
@@ -89,7 +90,7 @@ export default function RubricEditor({
       </div>
       <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', lineHeight: 1.5 }}>
         What makes a paper worth your morning. Your digest scores every candidate against
-        this, keeps the ones scoring {floor} or better, and shows at most {selectCount}.
+        this, keeps the ones scoring {floor} or better, and shows at most {digestCount(selectCount)} (pilot maximum: 20).
         Edit it, then re-rank the candidates to see it swing.
       </p>
       <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-faint)', lineHeight: 1.5 }}>
@@ -208,5 +209,5 @@ const migrationNote = { margin: '7px 0 0', fontSize: 11.5, color: 'var(--color-f
 function clampCount(raw) {
   const n = Math.round(Number(raw))
   if (!Number.isFinite(n) || n < 1) return 1
-  return Math.min(n, 30)
+  return Math.min(n, PILOT_DIGEST_LIMIT)
 }

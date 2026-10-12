@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('./supabase.js', () => ({ supabase: null, supabaseConfigured: false, isSignedIn: () => false }))
 vi.mock('./sponsor.js', () => ({ refreshSponsorship: async () => {} }))
 
-const { normalizeInviteCode } = await import('./inviteCode.js')
+const { normalizeInviteCode, INVITE_MESSAGES } = await import('./inviteCode.js')
 
 describe('normalizeInviteCode', () => {
   it('accepts a code typed in lowercase or mixed case', () => {
@@ -24,5 +24,16 @@ describe('normalizeInviteCode', () => {
     expect(normalizeInviteCode(null)).toBe('')
     expect(normalizeInviteCode(undefined)).toBe('')
     expect(normalizeInviteCode(42)).toBe('42')
+  })
+})
+
+describe('redemption states', () => {
+  it('every status redeem_sponsor_invite can return has its own message', async () => {
+    const { readFileSync } = await import('node:fs')
+    const sql = readFileSync(new URL('../../supabase/migrations/20261009120000_beta_spending_safeguards.sql', import.meta.url), 'utf8')
+    const body = sql.slice(sql.indexOf('create or replace function public.redeem_sponsor_invite'))
+    const statuses = [...new Set([...body.matchAll(/'status', '([a-z_]+)'/g)].map((m) => m[1]))]
+    expect(statuses.sort()).toEqual(['already', 'enrolled', 'exhausted', 'expired', 'full', 'inactive', 'invalid', 'paused', 'revoked'])
+    for (const s of statuses) expect(INVITE_MESSAGES[s]).toBeTruthy()
   })
 })

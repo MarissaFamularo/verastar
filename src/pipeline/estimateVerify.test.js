@@ -148,9 +148,12 @@ describe('estimate tier — bracketed abbreviations (estimates-v2)', () => {
   it('[false-verify guard] swapped bounds still fail with the abbreviation present', () => {
     expect(verify({ ...restenosis, ci_low: 3.02, ci_high: 1.03 }, SRC).flagged).toBe(true)
   })
-  it('reads a 2026-09-24 verdict as stamped', () => {
+  // estimates-v7 tightened P binding in this tier, so the old stamp is no longer a subset
+  // (lib/evidenceVersion.js); read paths with saved source re-derive it instead.
+  it('downgrades a 2026-09-24 verdict in a tier v7 tightened', () => {
     const old = { verificationVersion: '2026-09-24.estimates-v1', tier: 'verified-estimate', flagged: false, relationshipValidated: true }
-    expect(evidenceVerdict(old).tier).toBe('verified-estimate')
+    expect(evidenceVerdict(old).tier).toBe('legacy-unchecked')
+    expect(evidenceVerdict(old).originalTier).toBe('verified-estimate')
   })
 })
 

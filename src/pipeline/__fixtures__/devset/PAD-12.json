@@ -1,0 +1,136 @@
+{
+ "row_id": "PAD-12",
+ "pmid": "37116524",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "A vein bypass first versus a best endovascular treatment first revascularisation \nstrategy for patients with chronic limb threatening ischaemia who required an \ninfra-popliteal, with or without an additional more proximal infra-inguinal \nrevascularisation procedure to restore limb perfusion (BASIL-2): an open-label, \nrandomised, multicentre, phase 3 trial.\n\nBACKGROUND: Chronic limb-threatening ischaemia is the severest manifestation of \nperipheral arterial disease and presents with ischaemic pain at rest or tissue \nloss (ulceration, gangrene, or both), or both. We compared the effectiveness of \na vein bypass first with a best endovascular treatment first revascularisation \nstrategy in terms of preventing major amputation and death in patients with \nchronic limb threatening ischaemia who required an infra-popliteal, with or \nwithout an additional more proximal infra-inguinal, revascularisation procedure \nto restore limb perfusion.\nMETHODS: Bypass versus Angioplasty for Severe Ischaemia of the Leg (BASIL)-2 was \nan open-label, pragmatic, multicentre, phase 3, randomised trial done at 41 \nvascular surgery units in the UK (n=39), Sweden (n=1), and Denmark (n=1). \nEligible patients were those who presented to hospital-based vascular surgery \nunits with chronic limb-threatening ischaemia due to atherosclerotic disease and \nwho required an infra-popliteal, with or without an additional more proximal \ninfra-inguinal, revascularisation procedure to restore limb perfusion. \nParticipants were randomly assigned (1:1) to receive either vein bypass (vein \nbypass group) or best endovascular treatment (best endovascular treatment group) \nas their first revascularisation procedure through a secure online randomisation \nsystem. Participants were excluded if they had ischaemic pain or tissue loss \nconsidered not to be primarily due to atherosclerotic peripheral artery disease. \nMost vein bypasses used the great saphenous vein and originated from the common \nor superficial femoral arteries. Most endovascular interventions comprised plain \nballoon angioplasty with selective use of plain or drug eluting stents. \nParticipants were followed up for a minimum of 2 years. Data were collected \nlocally at participating centres. In England, Wales, and Sweden, centralised \ndatabases were used to collect information on amputations and deaths. Data were \nanalysed centrally at the Birmingham Clinical Trials Unit. The primary outcome \nwas amputation-free survival defined as time to first major (above the ankle) \namputation or death from any cause measured in the intention-to-treat \npopulation. Safety was assessed by monitoring serious adverse events up to \n30-days after first revascularisation. The trial is registered with the ISRCTN \nregistry, ISRCTN27728689.\nFINDINGS: Between July 22, 2014, and Nov 30, 2020, 345 participants (65 [19%] \nwomen and 280 [81%] men; median age 72·5 years [62·7-79·3]) with chronic \nlimb-threatening ischaemia were enrolled in the trial and randomly assigned: 172 \n(50%) to the vein bypass group and 173 (50%) to the best endovascular treatment \ngroup. Major amputation or death occurred in 108 (63%) of 172 patients in the \nvein bypass group and 92 (53%) of 173 patients in the best endovascular \ntreatment group (adjusted hazard ratio [HR] 1·35 [95% CI 1·02-1·80]; p=0·037). \n91 (53%) of 172 patients in the vein bypass group and 77 (45%) of 173 patients \nin the best endovascular treatment group died (adjusted HR 1·37 [95% CI \n1·00-1·87]). In both groups the most common causes of morbidity and death, \nincluding that occurring within 30 days of their first revascularisation, were \ncardiovascular (61 deaths in the vein bypass group and 49 in the best \nendovascular treatment group) and respiratory events (25 deaths in the vein \nbypass group and 23 in the best endovascular treatment group; number of \ncardiovascular and respiratory deaths were not mutually exclusive).\nINTERPRETATION: In the BASIL-2 trial, a best endovascular treatment first \nrevascularisation strategy was associated with a better amputation-free \nsurvival, which was largely driven by fewer deaths in the best endovascular \ntreatment group. These data suggest that more patients with chronic \nlimb-threatening ischaemia who required an infra-popliteal, with or without an \nadditional more proximal infra-inguinal, revascularisation procedure to restore \nlimb perfusion should be considered for a best endovascular treatment first \nrevascularisation strategy.\nFUNDING: UK National Institute of Health Research Health Technology Programme.",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Amputation-free survival (major amputation or death), vein bypass vs best endovascular treatment, adjusted HR",
+    "quantity_type": "single",
+    "value": 1.35,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 1.02,
+    "ci_high": 1.8,
+    "p_value": 0.037,
+    "source_quote": "adjusted hazard ratio [HR] 1·35 [95% CI 1·02-1·80]; p=0·037",
+    "location_hint": "Findings, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Major amputation or death, number of patients (%), vein bypass vs best endovascular treatment",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "vein bypass group",
+    "first_value": 108,
+    "second_label": "best endovascular treatment group",
+    "second_value": 92,
+    "unit": "patients",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "Major amputation or death occurred in 108 (63%) of 172 patients in the vein bypass group and 92 (53%) of 173 patients in the best endovascular treatment group",
+    "location_hint": "Findings, primary outcome"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "All-cause death, vein bypass vs best endovascular treatment, adjusted HR",
+    "quantity_type": "single",
+    "value": 1.37,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 1,
+    "ci_high": 1.87,
+    "p_value": null,
+    "source_quote": "adjusted HR 1·37 [95% CI \n1·00-1·87]",
+    "location_hint": "Findings, secondary outcome (death)"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "All-cause death, number of patients, vein bypass vs best endovascular treatment",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "vein bypass group",
+    "first_value": 91,
+    "second_label": "best endovascular treatment group",
+    "second_value": 77,
+    "unit": "patients",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "91 (53%) of 172 patients in the vein bypass group and 77 (45%) of 173 patients \nin the best endovascular treatment group died",
+    "location_hint": "Findings, secondary outcome (death)"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In the BASIL-2 randomised trial of infra-popliteal CLTI revascularisation, a vein-bypass-first strategy was associated with higher all-cause death than best-endovascular-first (adjusted HR 1·37, CI 1·00–1·87), a borderline signal that tempers any presumption that bypass is the safer first strategy.",
+  "designCaution": "The trial was open-label and pragmatic, so unblinded treatment and variable procedural practice across centres may influence outcomes, and the death signal is a secondary component whose interval sits at the edge of statistical significance.",
+  "relevance": "Directly central to your CLTI limb preservation work and the Limb Preservation Program's first-line revascularisation decision-making.",
+  "score": 96,
+  "tier": 1,
+  "check": {
+   "verdict": "refuted",
+   "reason": "The snippet describes the trial design and primary outcome (amputation-free survival) but does not provide any results, effect estimates, or data about all-cause death comparisons between groups, so the numerical finding and directional claim cannot be supported from this excerpt alone."
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states the trial was 'open-label' and 'pragmatic,' and acknowledges that death is not the primary outcome (amputation-free survival is primary), supporting the caution that unblinded treatment, variable practice, and the secondary nature of the death endpoint with borderline significance are design limitations present in the trial."
+  }
+ }
+}

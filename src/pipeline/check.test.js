@@ -13,7 +13,7 @@ vi.mock('../lib/anthropic.js', () => ({
 }))
 
 import { extractStructured } from '../lib/anthropic.js'
-import { checkFindings, CHECK_SCHEMA, SNIPPET_CHARS } from './check.js'
+import { checkFindings, CHECK_SCHEMA, SNIPPET_CHARS, NO_VERDICT_REASON } from './check.js'
 import { triage, TRIAGE_SCHEMA } from './triage.js'
 
 const ITEMS = [
@@ -68,7 +68,8 @@ describe('checkFindings — verdict plumbing', () => {
     })
     const out = await checkFindings({ items: ITEMS })
     expect(out.get('p1').verdict).toBe('supported')
-    expect(out.get('p2')).toEqual({ verdict: 'unchecked', reason: '' })
+    // 2026-10-11 fix 6: still unchecked, but the omission is surfaced in the reason.
+    expect(out.get('p2')).toEqual({ verdict: 'unchecked', reason: NO_VERDICT_REASON })
     expect(out.has('ghost')).toBe(false)
   })
 
@@ -205,6 +206,7 @@ describe('triage() — the gate is wired in, and can never block the digest', ()
     })
     const out = await triage({ candidates: CANDIDATES })
     expect(out[0].finding).toBe('Reduced amputation.')
-    expect(out[0].check).toEqual({ verdict: 'unchecked', reason: '' })
+    // 2026-10-11 fix 6: still unchecked, and the failure is surfaced in the reason.
+    expect(out[0].check).toEqual({ verdict: 'unchecked', reason: 'Not checked: the source check failed (network down).' })
   })
 })

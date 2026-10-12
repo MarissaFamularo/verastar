@@ -55,7 +55,7 @@ export function badgeExplanation(tier, sourceTier) {
     case 'source-located':
       return { checked: ['The quote was found in the source.'], unchecked: ['Whether the number belongs to what the label says. Read the source before using it.'] }
     case 'legacy-unchecked':
-      return { checked: ['Checked under earlier, looser rules that matched numbers only.'], unchecked: ['What each number measures, under the current rules. Refresh the paper or read the source.'] }
+      return { checked: ['This saved result was checked under an earlier version of the verification rules.'], unchecked: ['Whether it passes the current checks. Refresh the paper or read the source.'] }
     default:
       return { checked: [], unchecked: ['The app could not match this value to the source. It is withheld; read the source.'] }
   }

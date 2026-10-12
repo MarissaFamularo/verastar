@@ -1,0 +1,109 @@
+{
+ "row_id": "CAD-10",
+ "pmid": "39213187",
+ "trial": "",
+ "design": "RCT",
+ "tier": "abstract_only",
+ "sourceDoc": {
+  "text": "Beta-Blocker Interruption or Continuation after Myocardial Infarction.\n\nBACKGROUND: The appropriate duration of treatment with beta-blocker drugs after \na myocardial infarction is unknown. Data are needed on the safety and efficacy \nof the interruption of long-term beta-blocker treatment to reduce side effects \nand improve quality of life in patients with a history of uncomplicated \nmyocardial infarction.\nMETHODS: In a multicenter, open label, randomized, noninferiority trial \nconducted at 49 sites in France, we randomly assigned patients with a history of \nmyocardial infarction, in a 1:1 ratio, to interruption or continuation of \nbeta-blocker treatment. All the patients had a left ventricular ejection \nfraction of at least 40% while receiving long-term beta-blocker treatment and \nhad no history of a cardiovascular event in the previous 6 months. The primary \nend point was a composite of death, nonfatal myocardial infarction, nonfatal \nstroke, or hospitalization for cardiovascular reasons at the longest follow-up \n(minimum, 1 year), according to an analysis of noninferiority (defined as a \nbetween-group difference of <3 percentage points for the upper boundary of the \ntwo-sided 95% confidence interval). The main secondary end point was the change \nin quality of life as measured by the European Quality of Life-5 Dimensions \nquestionnaire.\nRESULTS: A total of 3698 patients underwent randomization: 1846 to the \ninterruption group and 1852 to the continuation group. The median time between \nthe last myocardial infarction and randomization was 2.9 years (interquartile \nrange, 1.2 to 6.4), and the median follow-up was 3.0 years (interquartile range, \n2.0 to 4.0). A primary-outcome event occurred in 432 of 1812 patients (23.8%) in \nthe interruption group and in 384 of 1821 patients (21.1%) in the continuation \ngroup (risk difference, 2.8 percentage points; 95% confidence interval [CI], \n<0.1 to 5.5), for a hazard ratio of 1.16 (95% CI, 1.01 to 1.33; P = 0.44 for \nnoninferiority). Beta-blocker interruption did not seem to improve the patients' \nquality of life.\nCONCLUSIONS: In patients with a history of myocardial infarction, interruption \nof long-term beta-blocker treatment was not found to be noninferior to a \nstrategy of beta-blocker continuation. (Funded by the French Ministry of Health \nand ACTION Study Group; ABYSS ClinicalTrials.gov number, NCT03498066; EudraCT \nnumber, 2017-003903-23.).",
+  "tables": ""
+ },
+ "rows": [
+  {
+   "quantity": {
+    "name": "Primary composite outcome, interruption vs continuation of beta-blocker",
+    "quantity_type": "comparison",
+    "value": null,
+    "range_low": null,
+    "range_high": null,
+    "first_label": "interruption group",
+    "first_value": 23.8,
+    "second_label": "continuation group",
+    "second_value": 21.1,
+    "unit": "%",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "A primary-outcome event occurred in 432 of 1812 patients (23.8%) in the interruption group and in 384 of 1821 patients (21.1%) in the continuation group",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Primary outcome hazard ratio, interruption vs continuation (noninferiority P)",
+    "quantity_type": "single",
+    "value": 1.16,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "hazard ratio",
+    "ci_low": 1.01,
+    "ci_high": 1.33,
+    "p_value": 0.44,
+    "source_quote": "for a hazard ratio of 1.16 (95% CI, 1.01 to 1.33; P = 0.44 for noninferiority)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "verified-estimate",
+    "flagged": false,
+    "sourceLocated": true,
+    "relationshipStatus": "estimate-validated",
+    "sourceTier": "abstract_only",
+    "reason": "Estimate, confidence interval and P value verified as printed together in the abstract. Which endpoint and comparison they belong to is not checked — read the quote."
+   }
+  },
+  {
+   "quantity": {
+    "name": "Median follow-up",
+    "quantity_type": "single",
+    "value": 3,
+    "range_low": null,
+    "range_high": null,
+    "first_label": null,
+    "first_value": null,
+    "second_label": null,
+    "second_value": null,
+    "unit": "years",
+    "ci_low": null,
+    "ci_high": null,
+    "p_value": null,
+    "source_quote": "the median follow-up was 3.0 years (interquartile range, 2.0 to 4.0)",
+    "location_hint": "Abstract, Results"
+   },
+   "verdict": {
+    "tier": "source-located",
+    "flagged": true,
+    "sourceLocated": true,
+    "relationshipStatus": "unresolved",
+    "sourceTier": "abstract_only",
+    "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim."
+   }
+  }
+ ],
+ "recordedTake": {
+  "finding": "In the ABYSS randomized trial of patients with prior myocardial infarction, interrupting long-term beta-blockers failed to show noninferiority to continuation (HR 1.16 (CI 1.01–1.33), P=0.44 for noninferiority), with no apparent quality-of-life gain.",
+  "designCaution": "The trial was open label with a composite endpoint that includes hospitalization for cardiovascular reasons, and it enrolled only patients with preserved ejection fraction and no recent cardiovascular events, so it cannot be generalized to higher-risk post-infarction patients or settle the question of optimal treatment duration.",
+  "relevance": "Relevant to your atherosclerosis prevention north star and secondary-prevention medical therapy, though only indirectly tied to your vascular surgery projects.",
+  "score": 58,
+  "tier": 1,
+  "check": {
+   "verdict": "supported",
+   "reason": "The snippet explicitly states that interruption 'was not found to be noninferior' with the exact hazard ratio, confidence interval, and P-value provided, and reports that 'Beta-blocker interruption did not seem to improve the patients' quality of life.'"
+  },
+  "cautionCheck": {
+   "verdict": "supported",
+   "reason": "The snippet confirms the trial was 'open label,' the primary endpoint is explicitly described as 'a composite of death, nonfatal myocardial infarction, nonfatal stroke, or hospitalization for cardiovascular reasons,' enrollment was restricted to patients 'with a left ventricular ejection fraction of at least 40%' and 'no history of a cardiovascular event in the previous 6 months,' and these selection criteria inherently limit generalizability to higher-risk populations and cannot definitively establish optimal treatment duration for all post-infarction patients."
+  }
+ }
+}

@@ -9,6 +9,10 @@ export const INVITE_MESSAGES = {
   invalid: 'That code is not recognized. Check it and try again.',
   expired: 'That code has expired.',
   exhausted: 'That code has been used up. Ask for a new one.',
+  inactive: 'That code is no longer active. Ask for a new one.',
+  revoked: 'Sponsored access on this account has ended. A new code cannot restart it; ask the person who invited you.',
+  paused: 'New sign-ups are paused right now. Try again later.',
+  full: 'The beta is full right now. Try again later.',
   slow_down: 'Too many attempts. Try again in an hour.',
   error: 'Something went wrong. Try again in a moment.',
 }

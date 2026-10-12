@@ -38,8 +38,17 @@ import {
   sameDayNote,
   saveSuccessfulScan,
   loadSuccessfulScan,
+  scheduledDigestStatus,
+  isHeldRun,
+  HELD_DIGEST_NOTE,
+  ABANDONED_DIGEST_NOTE,
+  frozenDigestState,
+  createContinuationGate,
+  digestControlPolicy,
   mayOverwriteDigest,
   saveDailyDigestIfCurrent,
+  staleDigestReason,
+  markDigestOpened,
 } from './digestStore.js'
 import { store, __data } from './store.js'
 
@@ -468,5 +477,192 @@ describe('sameDayNote', () => {
     expect(sameDayNote()).toMatch(/already here/)
     expect(sameDayNote()).toMatch(/tomorrow/)
     expect(sameDayNote()).not.toMatch(/replace|discard|run again/i)
+  })
+})
+
+// Signed in, the database refuses a browser write that would destroy newer digest state
+// (migration 20261010120000_digest_write_guard.sql) and the cloud store surfaces it as an
+// error carrying `digest_stale:<rule>`. These lock what the digest store does with that
+// refusal; the refusal itself is tested against a real local database
+// (evidence-eval/implementation/digest-race-20261010/race.mjs).
+describe('a write the database refuses as stale', () => {
+  const yesterday = '2026-10-09T09:00:00.000Z'
+  const today = '2026-10-10T09:00:00.000Z'
+  const refusal = (rule) => new Error(`Cloud write failed: digest_stale:${rule}`)
+  const realPut = store.put
+  const realDelete = store.delete
+  beforeEach(() => {
+    store.put = realPut
+    store.delete = realDelete
+  })
+
+  it('names the rule, and is null for any other error', () => {
+    expect(staleDigestReason(refusal('newer_digest'))).toBe('newer_digest')
+    expect(staleDigestReason(new Error('Cloud delete failed: digest_stale:scheduler_running'))).toBe('scheduler_running')
+    expect(staleDigestReason(new Error('Cloud write failed: network'))).toBeNull()
+    expect(staleDigestReason(null)).toBeNull()
+  })
+
+  it('reports a refused save as false and leaves the stored digest alone', async () => {
+    // The local check passes (the read saw yesterday); the scheduler saves today in between.
+    await saveDailyDigest({ ...snapshot(), ranAt: yesterday })
+    store.put = async () => {
+      __data.set('digests:daily:latest', serializeDigest({ ...snapshot(), runBy: 'scheduler', ranAt: today, server: { phase: 'done' } }))
+      throw refusal('newer_digest')
+    }
+    expect(await saveDailyDigestIfCurrent({ ...snapshot(), ranAt: yesterday })).toBe(false)
+    expect((await store.get('digests', 'daily:latest')).ranAt).toBe(today)
+  })
+
+  it('still throws a save that failed for another reason', async () => {
+    store.put = async () => { throw new Error('Cloud write failed: network') }
+    await expect(saveDailyDigestIfCurrent({ ...snapshot(), ranAt: today })).rejects.toThrow(/network/)
+  })
+
+  it('stamps opened on the fresh record after a refused stamp, keeping what changed in between', async () => {
+    await saveDailyDigest({ ...snapshot(), runBy: 'scheduler', ranAt: today, server: { phase: 'reading' } })
+    let puts = 0
+    store.put = async (collection, key, value) => {
+      if (++puts === 1) {
+        // The scheduler saved another paper after the stamp's read: the stale write is refused.
+        const fresh = __data.get('digests:daily:latest')
+        __data.set('digests:daily:latest', { ...fresh, results: [...fresh.results, { paper: { id: '999' }, rows: [] }] })
+        throw refusal('scheduler_in_flight')
+      }
+      return realPut(collection, key, value)
+    }
+    expect(await markDigestOpened('2026-10-10T09:30:00.000Z', { ranAt: today })).toBe(true)
+    const stored = await store.get('digests', 'daily:latest')
+    expect(puts).toBe(2)
+    expect(stored.openedAt).toBe('2026-10-10T09:30:00.000Z')
+    expect(stored.results.map((r) => r.paper.id)).toContain('999')
+  })
+
+  it('does not stamp a different digest than the one that was shown', async () => {
+    await saveDailyDigest({ ...snapshot(), ranAt: today })
+    expect(await markDigestOpened('2026-10-10T09:30:00.000Z', { ranAt: yesterday })).toBe(false)
+    expect((await store.get('digests', 'daily:latest')).openedAt).toBeNull()
+  })
+
+  it('stamps once without a named digest, as before', async () => {
+    await saveDailyDigest({ ...snapshot(), ranAt: today })
+    expect(await markDigestOpened('2026-10-10T09:30:00.000Z')).toBe(true)
+    expect(await markDigestOpened('2026-10-10T10:30:00.000Z')).toBe(false)
+    expect((await store.get('digests', 'daily:latest')).openedAt).toBe('2026-10-10T09:30:00.000Z')
+  })
+
+  it('gives up quietly when the stamp keeps being refused', async () => {
+    await saveDailyDigest({ ...snapshot(), ranAt: today })
+    let puts = 0
+    store.put = async () => { puts++; throw refusal('scheduler_in_flight') }
+    expect(await markDigestOpened('2026-10-10T09:30:00.000Z', { ranAt: today })).toBe(false)
+    expect(puts).toBe(3)
+  })
+
+  it('reports a refused clear as false, a clear as true, and rethrows other failures', async () => {
+    await saveDailyDigest({ ...snapshot(), runBy: 'scheduler', ranAt: today, server: { phase: 'reading' } })
+    store.delete = async () => { throw new Error('Cloud delete failed: digest_stale:scheduler_running') }
+    expect(await clearDailyDigest()).toBe(false)
+    expect(await loadDailyDigest()).not.toBeNull()
+    store.delete = async () => { throw new Error('Cloud delete failed: network') }
+    await expect(clearDailyDigest()).rejects.toThrow(/network/)
+    store.delete = realDelete
+    expect(await clearDailyDigest()).toBe(true)
+    expect(await loadDailyDigest()).toBeNull()
+  })
+})
+
+describe('scheduled digests that did not simply finish', () => {
+  const base = { kind: 'daily', runBy: 'scheduler', ranAt: '2026-10-10T10:00:00.000Z', results: [] }
+  it('a held run says it is delayed, is still pending, and does not invite another start', () => {
+    const s = scheduledDigestStatus({ ...base, server: { phase: 'reading', held: { reason: 'unresolved_liability', at: '2026-10-10T10:01:00.000Z' } } })
+    expect(s).toMatchObject({ note: HELD_DIGEST_NOTE, pending: true, held: true, abandoned: false, delayed: true })
+    expect(HELD_DIGEST_NOTE).toMatch(/delayed/)
+    expect(HELD_DIGEST_NOTE).toMatch(/do not need to do anything/)
+    expect(HELD_DIGEST_NOTE).not.toMatch(/try again|run again|retry/i)
+    expect(HELD_DIGEST_NOTE).not.toMatch(/\d/) // number-free, like the rest of the digest prose
+  })
+  it('an abandoned run is shown as stopped, never as a prepared or finished digest', () => {
+    const s = scheduledDigestStatus({ ...base, server: { phase: 'done', abandoned: true, held: { reason: 'unresolved_liability' } } })
+    expect(s).toMatchObject({ note: ABANDONED_DIGEST_NOTE, pending: false, held: false, abandoned: true, delayed: true })
+    expect(ABANDONED_DIGEST_NOTE).toMatch(/not a complete digest/)
+    expect(ABANDONED_DIGEST_NOTE).not.toMatch(/prepared|ready/i)
+  })
+  it('an ordinary unfinished run and an ordinary finished one keep their existing lines', () => {
+    expect(scheduledDigestStatus({ ...base, server: { phase: 'rank' } })).toMatchObject({ pending: true, held: false, delayed: false, note: expect.stringMatching(/still being prepared/) })
+    expect(scheduledDigestStatus({ ...base, server: { phase: 'done' } })).toMatchObject({ pending: false, abandoned: false, delayed: false, note: expect.stringMatching(/prepared/) })
+    // A held marker left on a finished digest (the run was released and completed) means nothing.
+    expect(scheduledDigestStatus({ ...base, server: { phase: 'done', held: { reason: 'x' } } })).toMatchObject({ held: false, delayed: false })
+  })
+  it('a digest the reader ran in the browser is not a scheduled digest', () => {
+    expect(scheduledDigestStatus({ ...base, runBy: 'user', server: null })).toBeNull()
+    expect(scheduledDigestStatus(null)).toBeNull()
+  })
+  it('isHeldRun recognises a held tick and a run refused for the hold, and nothing else', () => {
+    expect(isHeldRun({ ran: true, phase: 'held' })).toBe(true)
+    expect(isHeldRun({ ran: false, reason: 'spending stopped: unresolved_liability' })).toBe(true)
+    for (const other of [{ ran: false, reason: 'spending stopped: spending_paused' }, { ran: false, reason: 'cap reached' }, { ran: true, phase: 'capped' }, { ran: true, phase: 'error' }, { ran: false, reason: 'already running' }, null, undefined]) expect(isHeldRun(other)).toBe(false)
+  })
+})
+
+describe('no continuing a held or stopped server digest', () => {
+  const sched = (server, extra = {}) => scheduledDigestStatus({ kind: 'daily', runBy: 'scheduler', ranAt: '2026-10-10T10:00:00.000Z', results: [], server, ...extra })
+  it('frozenDigestState: held and abandoned scheduler digests are frozen; everything else is not', () => {
+    expect(frozenDigestState(sched({ phase: 'reading', held: { reason: 'unresolved_liability' } }))).toBe('held')
+    expect(frozenDigestState(sched({ phase: 'rank', held: { reason: 'unresolved_liability' } }))).toBe('held')
+    expect(frozenDigestState(sched({ phase: 'done', abandoned: true }))).toBe('abandoned')
+    expect(frozenDigestState(sched({ phase: 'reading' }))).toBeNull() // an ordinary unfinished server run
+    expect(frozenDigestState(sched({ phase: 'done' }))).toBeNull()
+    expect(frozenDigestState(scheduledDigestStatus({ kind: 'daily', runBy: 'user', server: null, results: [] }))).toBeNull() // a browser-lane digest
+    expect(frozenDigestState(null)).toBeNull()
+  })
+
+  it('the gate blocks while frozen, accepts only the two frozen states, and clears', () => {
+    const gate = createContinuationGate()
+    expect([gate.blocked(), gate.state()]).toEqual([false, null])
+    gate.freeze('held'); expect([gate.blocked(), gate.state()]).toEqual([true, 'held'])
+    gate.freeze('abandoned'); expect([gate.blocked(), gate.state()]).toEqual([true, 'abandoned'])
+    gate.freeze('pending'); expect(gate.blocked()).toBe(false) // not a frozen state
+    gate.freeze('held'); gate.freeze(null); expect(gate.blocked()).toBe(false)
+    gate.freeze('held'); gate.clear(); expect([gate.blocked(), gate.state()]).toEqual([false, null])
+  })
+
+  it('an action queued before the digest was found held stops at its next step', async () => {
+    // The shape of the screen's run loop: check the gate before each paid step.
+    const gate = createContinuationGate()
+    const sent = []
+    let release
+    const firstPaper = new Promise((r) => { release = r })
+    const run = async (papers, wait = Promise.resolve()) => { for (const p of papers) { if (gate.blocked()) return 'stopped'; sent.push(p); await wait } return gate.blocked() ? 'stopped' : 'ranked' }
+    const queued = run(['a', 'b', 'c'], firstPaper) // the first paper is being read
+    gate.freeze('held') // the server's refusal arrives meanwhile
+    release()
+    expect(await queued).toBe('stopped')
+    expect(sent).toEqual(['a']) // nothing after the refusal, and no ranking
+    expect(await run(['d'])).toBe('stopped') // and nothing started afterwards
+    expect(sent).toEqual(['a'])
+    gate.clear()
+    expect(await run(['e'])).toBe('ranked') // a deliberately started new run is not blocked
+  })
+
+  it('held: no Finish, no retry, no run control, pool locked, whatever else is true', () => {
+    for (const extra of [{}, { incomplete: true }, { missing: 3 }, { failedCount: 2 }, { incomplete: true, missing: 3, failedCount: 2, busy: false }]) {
+      expect(digestControlPolicy({ frozen: 'held', ...extra })).toEqual({ frozen: 'held', showFinish: false, failedCount: 0, lockedToday: true, poolLocked: true })
+    }
+  })
+
+  it('abandoned: no Finish, no retry, pool locked; the separate new-run control keeps its own rule', () => {
+    expect(digestControlPolicy({ frozen: 'abandoned', incomplete: true, missing: 1, failedCount: 2 })).toEqual({ frozen: 'abandoned', showFinish: false, failedCount: 0, lockedToday: false, poolLocked: true })
+    expect(digestControlPolicy({ frozen: 'abandoned', missing: 1, lockedToday: true }).lockedToday).toBe(true) // today's digest on screen: unchanged rule
+  })
+
+  it('ordinary digests are unchanged: a short restore or a live gap offers Finish, failed papers offer retry', () => {
+    expect(digestControlPolicy({ incomplete: true })).toEqual({ frozen: null, showFinish: true, failedCount: 0, lockedToday: false, poolLocked: false })
+    expect(digestControlPolicy({ missing: 2, failedCount: 1 })).toEqual({ frozen: null, showFinish: true, failedCount: 1, lockedToday: false, poolLocked: false })
+    expect(digestControlPolicy({ missing: 2, busy: true }).showFinish).toBe(false) // as before: not while a run is under way
+    expect(digestControlPolicy({ incomplete: true, busy: true }).showFinish).toBe(true)
+    expect(digestControlPolicy({ lockedToday: true }).lockedToday).toBe(true)
+    expect(digestControlPolicy({})).toEqual({ frozen: null, showFinish: false, failedCount: 0, lockedToday: false, poolLocked: false })
+    expect(digestControlPolicy({ frozen: 'pending', missing: 1 }).showFinish).toBe(true) // an ordinary unfinished server run is not frozen
   })
 })
