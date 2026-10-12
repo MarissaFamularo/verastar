@@ -3,7 +3,7 @@
 // schedule (signed out, or not sponsored), so BYOK settings are unchanged.
 
 import { useEffect, useState } from 'react'
-import { canSchedule, getDigestSchedule, setDigestSchedule, runScheduledDigestNow, browserTimezone, hourLabel, DEFAULT_HOUR } from '../lib/digestSchedule.js'
+import { canSchedule, digestRefusalMessage, getDigestSchedule, setDigestSchedule, runScheduledDigestNow, browserTimezone, hourLabel, DEFAULT_HOUR } from '../lib/digestSchedule.js'
 
 export default function DigestSchedule() {
   const [row, setRow] = useState(null)
@@ -45,8 +45,8 @@ export default function DigestSchedule() {
     try {
       const out = await runScheduledDigestNow()
       setRunNote(out?.ran
-        ? (out.phase === 'done' ? 'Your digest is ready. Open the Digest tab.' : out.phase === 'reading' ? 'Reading in progress; it will finish in the background over the next few minutes.' : out.note || 'Nothing new to read.')
-        : out?.reason === "today's digest already exists" ? 'Today\u2019s digest is already here. The next run is tomorrow morning.' : out?.reason === 'already running' ? 'Your digest is already being prepared. It will be on the Digest tab in a few minutes.' : 'Nothing ran.')
+        ? (out.phase === 'done' ? 'Your digest is ready. Open the Digest tab.' : out.phase === 'reading' || out.phase === 'rank' ? 'Reading in progress; it will finish in the background over the next few minutes.' : out.note || 'Nothing new to read.')
+        : digestRefusalMessage(out?.reason))
       setState('idle')
     } catch (err) {
       setError(err.message)

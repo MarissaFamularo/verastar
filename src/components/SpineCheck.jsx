@@ -11,7 +11,7 @@ import { ClaimCheckMark } from './ClaimCheckMark.jsx'
 import { useEffect, useRef, useState } from 'react'
 import { hasModelAccess } from '../lib/anthropic.js'
 import { CAP_MESSAGE } from '../lib/sponsor.js'
-import { canSchedule, runScheduledDigestNow } from '../lib/digestSchedule.js'
+import { canSchedule, digestRefusalMessage, runScheduledDigestNow } from '../lib/digestSchedule.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import {
   saveDailyDigestIfCurrent,
@@ -1136,7 +1136,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           if (out?.reason === 'cap reached') setScanError(CAP_MESSAGE)
           // Held for review: say it is delayed, once, and do not suggest trying again.
           else if (isHeldRun(out)) markHeld()
-          else if (out?.reason !== "today's digest already exists") setScanError('The digest server did not start a run. Try again in a minute.')
+          else if (out?.reason !== "today's digest already exists") setScanError(digestRefusalMessage(out?.reason))
           break
         }
         if (out.phase === 'done') break
