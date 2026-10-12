@@ -144,6 +144,13 @@ describe('sourceNoteMd', () => {
     expect(md).toContain('Amputation-free survival:** 84%')
   })
 
+  it('does not repeat the read-the-paper instruction already in the reason', () => {
+    const reason = "Withheld: the app could not identify this study's primary result among the extracted results, so a main finding cannot be weighed against it. Read the paper's primary result before repeating a takeaway."
+    const md = sourceNoteMd(paper({ check: { verdict: 'refuted', reason } }))
+    expect(md.match(/Read the paper/g)).toHaveLength(1)
+    expect(md).not.toContain('.)')
+  })
+
   it('withholds a refuted finding without dangling parens when there is no reason', () => {
     const md = sourceNoteMd(paper({ check: { verdict: 'refuted', reason: '' } }))
     expect(md).toContain("Summary withheld — the source check couldn't confirm it. Read the paper")

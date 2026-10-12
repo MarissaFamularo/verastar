@@ -11,7 +11,7 @@ import { depositPaperToLibrary } from '../lib/library.js'
 import { runPaper } from './pipeline.js'
 import { triage } from './triage.js'
 import { evidenceSummary } from './evidenceWindow.js'
-import { findPrimary } from './primaryResult.js'
+import { findPrimary, verificationCorpus } from './primaryResult.js'
 import { buildPaperRecord, mergeRefreshedEvidence } from './save.js'
 import { paperIndicatesRetraction } from './retractions.js'
 
@@ -33,7 +33,7 @@ function candidateFromResult(res, id) {
     title: res.paper.title || res.citation?.title || `PMID ${id}`,
     design: res.design,
     summary: evidenceSummary(res),
-    primary: findPrimary(res.rows, (row) => !row.verdict.flagged),
+    primary: findPrimary(res.rows, (row) => !row.verdict.flagged, verificationCorpus(res)),
     verified: res.rows
       .filter((row) => !row.verdict.flagged)
       .map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity) })),

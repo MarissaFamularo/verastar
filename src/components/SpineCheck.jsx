@@ -64,6 +64,7 @@ import HeartButton from './HeartButton.jsx'
 import SharePaperButton from './SharePaperButton.jsx'
 import { resolveOaLink, pmcUrl } from '../pipeline/openaccess.js'
 import { fmtNum } from '../lib/format.js'
+import { withheldSummaryCopy } from '../lib/libraryFormat.js'
 import ProvenanceBadge from './ProvenanceBadge.jsx'
 import ReportBadgeButton from './ReportBadgeButton.jsx'
 import SourceViewer from './SourceViewer.jsx'
@@ -123,7 +124,13 @@ const KEYLESS_EXAMPLES = (() => {
 // to report it renders nothing — a grey "none" badge on a new clinician's first paper reads
 // as a failure when it is only a paper without checkable numbers.
 function VerificationChip({ count, sourceTier }) {
-  if (!(count > 0)) return null
+  if (!(count > 0)) {
+    return (
+      <span className="inline-flex items-center" title="No number on this card passed the source check" style={{ gap: 6, padding: '4px 10px', borderRadius: 999, background: 'rgba(255,255,255,.05)', color: 'var(--color-fg-muted)', fontSize: 11.5, fontWeight: 600 }}>
+        No checked numbers
+      </span>
+    )
+  }
   const t = count > 0
     ? (TIER_CHIP[sourceTier] || TIER_CHIP['abstract-only'])
     : { source: '', dot: 'var(--color-fg-muted)', text: 'var(--color-fg-muted)', bg: 'rgba(255,255,255,.05)' }
@@ -139,10 +146,11 @@ function VerificationChip({ count, sourceTier }) {
 }
 
 // The citation line — authors · journal · year · clickable PMID, in mono, with the
-// "citation verified" mark (the app confirmed the PMID resolves to a real indexed paper)
+// PubMed resolved this PMID. The mark is muted on purpose: a green "verified" next to a
+// withheld summary was read as the paper's results having been checked.
 // and, when Unpaywall found one, the free-full-text link — the digest workflow is
 // read-the-paper-first, so the link belongs here, before Save.
-function Citation({ citation, oa, pmcid }) {
+function Citation({ citation, oa, pmcid, claimsChecked = true }) {
   if (!citation) return null
   const bits = [citation.author, citation.journal, citation.year].filter(Boolean).join(' · ')
   // Read-the-paper-first: prefer Unpaywall's direct link, but fall back to the PMC article
@@ -165,8 +173,12 @@ function Citation({ citation, oa, pmcid }) {
         </a>
       )}
       {citation.verified && (
-        <span className="inline-flex items-center" style={{ marginLeft: 8, gap: 5, color: 'var(--color-verified-soft)' }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-verified)' }} /> citation verified
+        <span
+          className="inline-flex items-center"
+          title="PubMed has this record. This does not check the paper's numbers or summary."
+          style={{ marginLeft: 8, gap: 5, color: claimsChecked ? 'var(--color-fg-muted)' : 'var(--color-fg-faint)' }}
+        >
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-fg-faint)' }} /> PubMed record
         </span>
       )}
     </p>
@@ -1769,9 +1781,12 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                 ))}
               </ul>
               {(topicReconciliation.retained.multiTopic > 0 || topicReconciliation.scored.multiTopic > 0) && (
-                <p style={{ margin: '7px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
-                  Unique totals reconcile differently from the topic rows: {topicReconciliation.retained.unique} retained paper{topicReconciliation.retained.unique === 1 ? '' : 's'} produced {topicReconciliation.retained.assignments} topic assignment{topicReconciliation.retained.assignments === 1 ? '' : 's'} ({topicReconciliation.retained.multiTopic} matched multiple topics); {topicReconciliation.scored.unique} scored paper{topicReconciliation.scored.unique === 1 ? '' : 's'} produced {topicReconciliation.scored.assignments} topic assignment{topicReconciliation.scored.assignments === 1 ? '' : 's'} ({topicReconciliation.scored.multiTopic} matched multiple topics).
-                </p>
+                <details style={{ margin: '7px 0 0 17px' }}>
+                  <summary className="cursor-pointer" style={{ fontSize: 11.5, color: 'var(--color-fg-faint)' }}>Why the topic counts exceed the paper count</summary>
+                  <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
+                    A paper can match more than one topic, so adding the topic rows counts some papers twice. {topicReconciliation.retained.unique} paper{topicReconciliation.retained.unique === 1 ? '' : 's'} were kept and matched {topicReconciliation.retained.assignments} topic{topicReconciliation.retained.assignments === 1 ? '' : 's'} ({topicReconciliation.retained.multiTopic} matched more than one). {topicReconciliation.scored.unique} paper{topicReconciliation.scored.unique === 1 ? '' : 's'} were scored across {topicReconciliation.scored.assignments} topic{topicReconciliation.scored.assignments === 1 ? '' : 's'} ({topicReconciliation.scored.multiTopic} matched more than one).
+                  </p>
+                </details>
               )}
               {topicReport.some((row) => !row.failed && (row.retained < row.available || row.more)) && (
                 <p style={{ margin: '7px 0 0 17px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.45 }}>
@@ -1813,6 +1828,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           const verifiedRows = !res.error ? res.rows.filter((r) => isRelationshipValidated(r.verdict)) : []
           const heroRow = verifiedRows[0] || null
           const rank = String(idx + 1).padStart(2, '0')
+          const articleUrl = res.citation?.url || (paper.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/` : '')
+          const summaryWithheld = take?.check?.verdict === 'refuted'
+          const claimsChecked = verifiedRows.length > 0 && !summaryWithheld
           return (
             <article key={paper.id} style={{ padding: '24px 26px', borderRadius: 15, background: 'var(--surface-1)' }}>
               {/* Header — rank · verification chip · post-read fit / save. The fit label
@@ -1826,6 +1844,9 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                 {!res.error && (!stage || stage === 'done') ? <VerificationChip count={verifiedRows.length} sourceTier={res.source?.tier} /> : stage && stage !== 'done' ? (
                   <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>{STAGE_LABEL[stage]}</span>
                 ) : null}
+                {summaryWithheld && (
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--color-abstract)' }}>Summary withheld</span>
+                )}
                 <div className="flex flex-wrap items-center justify-end" style={{ marginLeft: 'auto', gap: 14, maxWidth: '100%' }}>
                   {readFitLabel(take) && (
                     <span
@@ -1866,8 +1887,14 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                 <WhyPrompt onSave={(text) => commitWhy(paper.id, text)} onSkip={() => setWhyFor(null)} />
               )}
 
-              <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, lineHeight: 1.32, color: 'var(--color-fg)' }}>{title}</h3>
-              <Citation citation={res.citation} oa={res.oa} pmcid={res.source?.pmcid} />
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, lineHeight: 1.32, color: 'var(--color-fg)' }}>
+                {articleUrl ? (
+                  <a href={articleUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,.28)', textUnderlineOffset: 3 }}>
+                    {title}
+                  </a>
+                ) : title}
+              </h3>
+              <Citation citation={res.citation} oa={res.oa} pmcid={res.source?.pmcid} claimsChecked={claimsChecked} />
 
               {/* The pre-read screen cleared this one and reading it disagreed. Muted, in
                   the same quiet mono as the search note — NOT the withheld-summary amber
@@ -1876,6 +1903,13 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
               {belowFloorNote({ score: take?.score, floor: scoreFloor }) && (
                 <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>
                   {belowFloorNote({ score: take?.score, floor: scoreFloor })}
+                </p>
+              )}
+
+              {!take?.finding && heroRow && (
+                <p style={{ margin: '11px 0 0', fontSize: 15, lineHeight: 1.55, color: 'var(--color-fg-soft)' }}>
+                  <span style={{ color: 'var(--color-fg-muted)' }}>Checked result: </span>
+                  {heroRow.quantity.name}: {fmtNum(heroRow.quantity)}
                 </p>
               )}
 
@@ -1911,8 +1945,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
               )}
               {take?.finding && take?.check?.verdict === 'refuted' && (
                 <p style={{ margin: '11px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--color-abstract)' }}>
-                  ⚠︎ Summary withheld — the source check couldn't confirm it
-                  {take.check?.reason ? ` (${take.check.reason})` : ''}. Read the paper before repeating a takeaway.{' '}
+                  ⚠︎ {withheldSummaryCopy(take.check?.reason)}{' '}
                   {heroRow && (
                     <button onClick={() => openSource(heroRow.quantity, heroRow.verdict, res.sourceDoc, title)} className="cursor-pointer whitespace-nowrap" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-verified-soft)' }}>
                       verified values are unaffected ↗

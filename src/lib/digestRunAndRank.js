@@ -20,11 +20,27 @@ import { fmtNum } from './format.js'
 import { isRelationshipValidated } from './evidenceVersion.js'
 import { runPaper, corruptAndReverify } from '../pipeline/pipeline.js'
 import { triage } from '../pipeline/triage.js'
-import { findPrimary } from '../pipeline/primaryResult.js'
+import { findPrimary, verificationCorpus } from '../pipeline/primaryResult.js'
 import { evidenceSummary } from '../pipeline/evidenceWindow.js'
 import { applyPostReadFloor } from '../pipeline/select.js'
 
 const REAL_DEPS = { runPaper, getProfile, digestProjects, triage, logEvent }
+
+// One sentence, one period. The cap message already ends with a period; appending another
+// produced "works.. They were left out". A retry that read nothing must not say "0 papers".
+export function rankingFailureNote({ append = false, added = 0, message = '' } = {}) {
+  const detail = String(message || 'unknown error').trim().replace(/[.]+$/, '')
+  const n = Number(added) || 0
+  if (append && n > 0) {
+    const paper = n === 1 ? 'paper was' : 'papers were'
+    const pronoun = n === 1 ? 'it' : 'them'
+    return `The ${n} added ${paper} read but Claude could not score and summarize ${pronoun}: ${detail}. They were left out of the digest rather than shown unsummarized; use “Finish this digest” to retry without reading them again.`
+  }
+  if (append) {
+    return `Claude could not score and summarize the papers already read: ${detail}. Nothing new was read. Use “Finish this digest” to retry the summaries.`
+  }
+  return `The papers were read and verified, but Claude could not finish their summaries: ${detail}. Your completed reading was saved; use “Finish this digest” to retry the summaries without reading the papers again.`
+}
 
 // Run a list of papers through the pipeline, then rank + summarize them. In append mode the
 // existing results are kept and only papers not already in the digest are run, so topping up
@@ -179,7 +195,7 @@ export async function runAndRankDigest(papers, {
             topics: r.paper.topics,
             topicSteering: r.paper.topicSteering,
             summary: evidenceSummary(r),
-            primary: findPrimary(r.rows, (row) => isRelationshipValidated(row.verdict)),
+            primary: findPrimary(r.rows, (row) => isRelationshipValidated(row.verdict), verificationCorpus(r)),
             // The finding is written only from values the app verified.
             verified: r.rows
               .filter((row) => isRelationshipValidated(row.verdict))
@@ -208,24 +224,33 @@ export async function runAndRankDigest(papers, {
         // control. Reading can overturn the abstract screen; when it does, enforce the
         // better-informed score. Failed papers remain visible as failures, but a successful
         // paper below the bar is not padding in the digest.
+        ui.setScanError('')
         if (!injectCorrupt) {
           const post = applyPostReadFloor(collected, byId, profile?.rubric?.scoreFloor)
           postNow = post
           const bar = post.floor
-          const forced = collected.filter((r) => forceIncludeIds.has(r.paper.id) && !r.error && !r.retracted)
-          const visibleById = new Map([...post.kept, ...forced].map((r) => [r.paper.id, r]))
+          // Every paper that was read stays on screen. The bar is a label on the card
+          // and a sentence here. Removing the rest after Finish left a one-card digest
+          // in place of the list (2026-10-12).
+          const visibleById = new Map(collected.filter((r) => !r.retracted).map((r) => [r.paper.id, r]))
+          for (const id of forceIncludeIds) {
+            const forced = collected.find((r) => r.paper.id === id && !r.error && !r.retracted)
+            if (forced) visibleById.set(id, forced)
+          }
           visible = [...visibleById.values()]
           ui.setResults([...visible])
           ui.setProcessedResults([...collected])
           ui.setSelectedIds(new Set(visible.map((r) => r.paper.id)))
           ui.setScoreFloor(bar)
+          const below = post.excluded === 1 ? 'paper is' : 'papers are'
+          const stay = post.total === 1 ? 'paper stays' : 'papers stay'
           const postRead = post.total === 0
             ? ''
             : post.cleared === post.total
               ? `After reading, all ${post.total} cleared your bar of ${bar}.`
               : post.cleared
-                ? `After reading, ${post.cleared} of ${post.total} cleared your bar of ${bar}; ${post.excluded} ${post.excluded === 1 ? 'paper was' : 'papers were'} excluded.`
-                : `After reading, nothing cleared your bar of ${bar}. The digest is empty; ${post.total} ${post.total === 1 ? 'paper was' : 'papers were'} excluded.`
+                ? `After reading, ${post.cleared} of ${post.total} cleared your bar of ${bar}. ${post.excluded} ${below} below that bar and stay in the list.`
+                : `After reading, nothing cleared your bar of ${bar}. The ${post.total} read ${stay} in the list.`
           if (postRead) ui.setScanNote((prev) => prev ? `${prev} ${postRead}` : postRead)
         }
       }
@@ -233,13 +258,7 @@ export async function runAndRankDigest(papers, {
       console.warn('Triage failed (facts unaffected):', err.message)
       // A stale run's failure is not this screen's news either.
       if (live()) {
-        ui.setScanError(
-          append
-            ? `The ${toRun.length} added paper${toRun.length === 1 ? ' was' : 's were'} read but Claude could not score and summarize ${toRun.length === 1 ? 'it' : 'them'}: ${err.message}. ` +
-              'They were left out of the digest rather than shown unsummarized; use “Finish this digest” to retry without reading them again.'
-            : `The papers were read and verified, but Claude could not finish their summaries: ${err.message}. ` +
-              'Your completed reading was saved; use “Finish this digest” to retry the summaries without reading the papers again.',
-        )
+        ui.setScanError(rankingFailureNote({ append, added: toRun.length, message: err?.message }))
       }
     }
     if (tickets.latest(ticket)) ui.setRanking(false)

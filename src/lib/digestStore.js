@@ -211,15 +211,22 @@ export function isHeldRun(out) {
 export function scheduledDigestStatus(saved) {
   if (!saved || saved.runBy !== 'scheduler') return null
   const phase = saved.server?.phase
-  const pending = !!phase && phase !== 'done'
-  const held = pending && !!saved.server?.held
+  const shown = Array.isArray(saved.results) && saved.results.length > 0
+  const phasePending = !!phase && phase !== 'done'
+  // A finished read with a summary for every paper is the digest, even if a stale
+  // phase never moved to 'done'. Saying it is "still being prepared" over that page
+  // is the 2026-10-12 header bug. A hold still wins: the page must not look finished.
+  const ready = shown && digestGaps(saved).complete && !saved.server?.held
+  const pending = phasePending && !ready
+  const held = phasePending && !!saved.server?.held
   const abandoned = !pending && saved.server?.abandoned === true
   const ran = saved.ranAt ? new Date(saved.ranAt) : null
   const morning = ran && !Number.isNaN(ran.getTime()) && ran.getHours() < 8
   const note = held ? HELD_DIGEST_NOTE
-    : pending ? PREPARING_DIGEST_NOTE
-      : abandoned ? ABANDONED_DIGEST_NOTE
-        : morning ? 'Your morning digest, prepared while you slept.' : 'Your digest, prepared on the server.'
+    : pending && shown ? 'Your papers are here. Summaries are still being finished on the server. You can close the app; they will be filled in when that finishes.'
+      : pending ? PREPARING_DIGEST_NOTE
+        : abandoned ? ABANDONED_DIGEST_NOTE
+          : morning ? 'Your morning digest, prepared while you slept.' : 'Your digest, prepared on the server.'
   return { note, pending, held, abandoned, delayed: held || abandoned }
 }
 

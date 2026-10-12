@@ -163,7 +163,7 @@ describe('fmtNum — the fact-channel value string', () => {
       p_value: 0.22,
       source_quote: 'hazard ratio 0.84 (0.61 to 1.16); p value 0.22',
     })
-    expect(fmtNum(noOp)).toBe('0.84 (CI 0.61–1.16), P 0.22')
+    expect(fmtNum(noOp)).toBe('0.84 (interval 0.61–1.16), P 0.22')
   })
 })
 
