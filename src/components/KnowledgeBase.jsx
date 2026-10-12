@@ -36,6 +36,7 @@ import HeartButton from './HeartButton.jsx'
 import SharePaperButton from './SharePaperButton.jsx'
 import ReportBadgeButton from './ReportBadgeButton.jsx'
 import { fmtNum } from '../lib/format.js'
+import { withheldSummaryCopy } from '../lib/libraryFormat.js'
 import { evidenceVerdict, isRelationshipValidated, extractionVersionStatus, currentPaperQuantities } from '../lib/evidenceVersion.js'
 import { needsDigestDetails, refreshSavedPaperEvidence } from '../pipeline/refreshEvidence.js'
 
@@ -543,8 +544,7 @@ export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
       {paper.finding && (
         paper.check?.verdict === 'refuted' ? (
           <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-abstract)' }}>
-            ⚠︎ Summary withheld — the source check couldn't confirm it
-            {paper.check?.reason ? ` (${paper.check.reason})` : ''}. Read the paper before repeating a takeaway.
+            ⚠︎ {withheldSummaryCopy(paper.check?.reason)}
           </p>
         ) : (
           <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>

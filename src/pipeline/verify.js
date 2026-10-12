@@ -8,9 +8,12 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-10.estimates-v8'
-// v8 only adds tuple-local rate ratio (RR) definitions. All v7 guarantees survive.
-export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-09.estimates-v7']
+export const VERIFICATION_VERSION = '2026-10-12.estimates-v9'
+// v9 only accepts more of what the source already prints: a ratio followed by an
+// unlabelled bracket interval, a bare OR/RR after punctuation, and a two-group
+// comparison whose quote also carries a later ratio's labelled interval. Nothing
+// v8 accepted is refused. All v8 and v7 guarantees survive.
+export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-10.estimates-v8', '2026-10-09.estimates-v7']
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
@@ -350,10 +353,10 @@ function inlineDefinesRrAsRateRatio(measure, abbrev) {
   return (a === 'rr' || a === 'rrs') && INLINE_RATE_RATIO_MEASURES.includes(m)
 }
 const UNSIGNED = '(?<![\\d.])((?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d))'
-// "or" is an English word ("10% or 0.10 (95% CI ...)"), so a bare abbreviation must open a
-// bracket or follow "adjusted"; spelled-out names and the other abbreviations may stand
-// after any word boundary.
-const MEASURE = `(?:(?<=[(\\[])or|(?<![a-z])(?:${RATIO_NAMES.filter((n) => n !== 'or').map((n) => n.replace(/ /g, '\\s')).join('|')}))`
+// Bare "or" is an English word ("10% or 0.10 (95% CI ...)"), so it only counts as an
+// odds ratio when it opens the span or follows a bracket, semicolon, or colon
+// ("; OR 1.64; 95% CI, 1.12-2.41"). A comma is not enough: "10%, or 0.10" is prose.
+const MEASURE = `(?:(?:^|(?<=[(\\[;:]))\\s*or|(?<![a-z])(?:${RATIO_NAMES.filter((n) => n !== 'or').map((n) => n.replace(/ /g, '\\s')).join('|')}))`
 // A spelled-out name may carry its bracketed abbreviation — "hazard ratio [HR] 1.77,
 // 95% confidence interval [CI] 1.03 - 3.02" — which is a label, not a second value.
 const ABBREV = `(?:\\s*[(\\[](${RATIO_NAMES.filter((n) => !n.includes(' ')).join('|')})[)\\]])?`
@@ -468,6 +471,56 @@ function validateEstimate(quantity, matched, corpus, declaredType) {
   return true
 }
 
+// --- Unlabelled bracket interval after a ratio (2026-10-12) --------------------
+//
+// Journals such as J Vasc Surg print "HR 1.81 [1.04-3.13]" with no "95% CI" words.
+// This accepts that shape and nothing wider: one ratio measure, one value, then a
+// bracket or parenthesis holding exactly two unsigned numbers and a dash or "to".
+// At least one bound must be a decimal, so a citation "[12]" or an integer range
+// "[12-34]" does not pass. A labelled CI in the same span stays on validateEstimate.
+// The tier is still an estimate; the reason must not claim the source printed the
+// words "confidence interval".
+const BRACKET_INTERVAL = new RegExp(
+  `(${MEASURE})(?![a-z])${ABBREV}\\s*(?:[,:=]|\\s(?:was|were|of|is|are))?\\s*${UNSIGNED}\\s*([(\\[])\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}\\s*([)\\]])` +
+  `(?:\\s*[,;]\\s*p\\s*(?:-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${UNSIGNED})?`,
+  'g',
+)
+
+function validateBracketInterval(quantity, matched, corpus, declaredType) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (declaredType !== 'single') return false
+  const span = corpus.slice(matched.index, matched.index + matched.length)
+  if (corpus.indexOf(span, matched.index + 1) !== -1) return false
+  if ((span.match(CI_CLAUSE) || []).length !== 0) return false
+  const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
+  if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
+  if (!normalize(quantity.name)) return false
+  const tuples = [...span.matchAll(BRACKET_INTERVAL)]
+  if (tuples.length !== 1) return false
+  const [, measure, abbrev, value, opener, ciLow, ciHigh, closer, printedP] = tuples[0]
+  if (CLOSES[opener] !== closer) return false
+  if (!/\d\.\d/.test(`${ciLow}${ciHigh}`)) return false
+  if (Number(ciLow) > Number(ciHigh)) return false
+  let p = printedP
+  if (p != null && !pEndsItsClause(corpus, matched.index + tuples[0].index + tuples[0][0].length)) p = null
+  const familyOf = (name) => RATIO_GROUPS.find((names) => names.includes(normalize(name).replace(/\s+/g, ' ')))
+  const localRrDefinition = inlineDefinesRrAsRateRatio(measure, abbrev)
+  if (abbrev && !localRrDefinition && familyOf(abbrev) !== familyOf(measure)) return false
+  const unit = normalize(quantity.unit)
+  if (unit) {
+    if (localRrDefinition) {
+      if (!RATE_RATIO_UNITS.includes(unit.replace(/\s+/g, ' '))) return false
+    } else {
+      const group = RATIO_GROUPS.find((names) => names.includes(normalize(measure).replace(/\s+/g, ' ')))
+      if (!group || !group.includes(unit)) return false
+    }
+  }
+  const fields = [[quantity.value, value], [quantity.ci_low, ciLow], [quantity.ci_high, ciHigh]]
+  if (!fields.every(([mine, printed]) => Number.isFinite(mine) && numbersEqual(mine, Number(printed)))) return false
+  if (quantity.p_value != null && !(p != null && Number.isFinite(quantity.p_value) && numbersEqual(quantity.p_value, Number(p)))) return false
+  return true
+}
+
 // --- Printed two-group comparison (2026-09-30) ---------------------------------
 //
 // Results print group values as "(36% vs. 26%, P=0.035)" or "144.3 ± 63.7 vs 341.8 ± 106.8
@@ -476,8 +529,10 @@ function validateEstimate(quantity, matched, corpus, declaredType) {
 // left and right numbers in that order, that a claimed unit is printed on the pair, and
 // that a claimed P is the one printed directly after it. It does NOT bind the values to
 // groups or to an endpoint: the verdict carries endpointValidated: false and the badge
-// reads "groups unchecked". Unsigned values only; CIs, "compared with", tables, fuzzy and
-// repeated quotes stay unresolved.
+// reads "groups unchecked". Unsigned values only. A later ratio's labelled interval may
+// sit in the same quote ("6.20% vs 4.43%; OR 1.42; 95% CI, 1.25-1.62"); the comparison
+// still cannot claim that interval (ci_low and ci_high must be empty). "compared with",
+// tables, fuzzy and repeated quotes stay unresolved.
 const COMPARATOR = /(?<![a-z])(?:vs\.?|versus)(?![a-z])/g
 const PAIR_NUM = '(?<![\\d.±a-z-])((?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d))'
 const SPREAD_NUM = '(?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d)'
@@ -488,8 +543,18 @@ function validateComparison(quantity, matched, corpus, declaredType) {
   const span = corpus.slice(matched.index, matched.index + matched.length)
   if (corpus.indexOf(span, matched.index + 1) !== -1) return false
   if ((span.match(COMPARATOR) || []).length !== 1) return false
-  if ((span.match(CI_CLAUSE) || []).length !== 0) return false
   if (quantity.ci_low != null || quantity.ci_high != null) return false
+  // A confidence interval in the span belongs to this comparison unless every such
+  // clause is the interval of a later ratio ("12% vs 10%; OR 1.64; 95% CI, 1.12-2.41").
+  // "12% vs 10% (difference 2%, 95% CI 1-3)" has a CI and no ratio, so it stays unresolved.
+  const ciClauses = span.match(/\d\s*%\s*(?:ci|confidence interval)\b/gi) || []
+  if (ciClauses.length) {
+    const ratioThenCi = new RegExp(
+      `${MEASURE}(?![a-z])${ABBREV}\\s*(?:[,:=]|\\s(?:was|were|of|is|are))?\\s*${UNSIGNED}\\s*[,;]?\\s*\\d+\\s*%\\s*(?:ci|confidence interval)\\b`,
+      'gi',
+    )
+    if ([...span.matchAll(ratioThenCi)].length !== ciClauses.length) return false
+  }
   const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
   if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
   if (!normalize(quantity.name)) return false
@@ -795,7 +860,8 @@ export function verify(quantity, source, opts = {}) {
   // corpus located the quote.
   const matchedCorpus = matched?.corpus === 'tables' ? normTables : normProse
   const relationshipValidated = consistent && validateRelationship(quantity, matched, matchedCorpus, declaredType)
-  const estimateValidated = consistent && !relationshipValidated && validateEstimate(quantity, matched, matchedCorpus, declaredType)
+  const bracketValidated = consistent && !relationshipValidated && validateBracketInterval(quantity, matched, matchedCorpus, declaredType)
+  const estimateValidated = consistent && !relationshipValidated && (validateEstimate(quantity, matched, matchedCorpus, declaredType) || bracketValidated)
   const comparisonValidated = consistent && !relationshipValidated && !estimateValidated &&
     (validateComparison(quantity, matched, matchedCorpus, declaredType) || validateAndPair(quantity, matched, matchedCorpus, declaredType))
   const proportionValidated = consistent && !relationshipValidated && !estimateValidated && !comparisonValidated && validateProportion(quantity, matched, matchedCorpus, declaredType)
@@ -818,7 +884,9 @@ export function verify(quantity, source, opts = {}) {
   } else if (estimateValidated) {
     tier = TIERS.ESTIMATE
     const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'
-    reason = `Estimate, confidence interval${quantity.p_value != null ? ' and P value' : ''} verified as printed together in ${where}. Which endpoint and comparison they belong to is not checked — read the quote.`
+    reason = bracketValidated
+      ? `Estimate and bracketed interval${quantity.p_value != null ? ' and P value' : ''} verified as printed together in ${where}. The source did not label the interval as a confidence interval. Which endpoint and comparison they belong to is not checked — read the quote.`
+      : `Estimate, confidence interval${quantity.p_value != null ? ' and P value' : ''} verified as printed together in ${where}. Which endpoint and comparison they belong to is not checked — read the quote.`
   } else if (comparisonValidated) {
     tier = TIERS.COMPARISON
     const where = sourceTier === 'abstract_only' ? 'the abstract' : sourceTier === 'user_text' ? 'text you supplied' : 'the full text'

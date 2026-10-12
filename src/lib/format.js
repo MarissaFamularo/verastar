@@ -217,9 +217,18 @@ function boundMarker(quantity) {
   return { level: null, credible: false, span, text, unbound: true }
 }
 
+// A journal bracket with no "CI" words ("HR 1.81 [1.04-3.13]") is an interval the source
+// did not name. Calling it "CI" would assert a confidence interval the paper never printed.
+function bareBracketInterval(marker) {
+  if (!marker?.span || !marker.unbound) return false
+  const before = marker.text.slice(Math.max(0, marker.span.start - 1), marker.span.start)
+  const after = marker.text.slice(marker.span.end, marker.span.end + 1)
+  return before === '[' && after === ']'
+}
+
 export function ciLabel(quantity) {
   const m = boundMarker(quantity)
-  if (!m || m.unbound) return 'CI'
+  if (!m || m.unbound) return bareBracketInterval(m) ? 'interval' : 'CI'
   if (m.credible) return `${m.level ? `${m.level}% ` : ''}credible interval`
   if (m.level && m.level !== '95') return `${m.level}% CI`
   return 'CI'

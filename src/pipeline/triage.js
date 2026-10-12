@@ -301,9 +301,11 @@ export async function triage({
           : '  (no verified values)'
         const primaryLine = c.primary?.state === 'identified'
           ? `Primary result: ${c.primary.name}${c.primary.verified ? ' (verified; listed below)' : ' (NOT verified by the app — describe it in words from the snippet, never copy numbers for it)'}\n`
-          : primaryState(c) === 'unknown'
-            ? 'Primary result: NOT identified by the app among the extracted results — do not present any listed result as the main result.\n'
-            : ''
+          : primaryState(c) === 'unspecified'
+            ? 'Primary result: this paper does not name one. Summarize only the verified results below, and do not call any of them the primary result.\n'
+            : primaryState(c) === 'unknown'
+              ? 'Primary result: NOT identified by the app among the extracted results — do not present any listed result as the main result.\n'
+              : ''
         const steering = (Array.isArray(c.topicSteering) ? c.topicSteering : [])
           .map((row) => `${row.topic || 'Unnamed topic'} → ${(row.northStars || []).length ? row.northStars.join(', ') : '(unmapped)'}`)
           .join('; ')

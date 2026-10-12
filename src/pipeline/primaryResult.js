@@ -78,19 +78,101 @@ const PRIMARY_BASES = [
   ['location', (q) => PRIMARY_WORD.test(String(q?.location_hint || ''))],
 ]
 
+// The full text the verifier saw. Abstracts name the primary outcome in Methods and print
+// the number in Results, so the row's own quote often never contains the word "primary".
+export function verificationCorpus(result) {
+  const doc = result?.sourceDoc
+  if (typeof doc === 'string') return doc
+  if (!doc || typeof doc !== 'object') return ''
+  return [doc.text, doc.tables].filter(Boolean).join('\n')
+}
+
+const ROLE = '(?:efficacy\\s+|safety\\s+|effectiveness\\s+|composite\\s+)?(?:end\\s?-?points?|outcomes?|analys(?:is|es)|results?)'
+const DECLARES_PRIMARY = new RegExp(`\\bprimary\\s+${ROLE}\\b`, 'i')
+const DECLARES_SECONDARY = new RegExp(`\\bsecondary\\s+${ROLE}\\b`, 'i')
+const PRIMARY_CLAUSE = new RegExp(`\\bprimary\\s+${ROLE}\\s+(?:were|was|included|comprised|:)\\s+([^.]{4,500})`, 'i')
+const SECONDARY_CLAUSE = new RegExp(`\\bsecondary\\s+${ROLE}\\s+(?:were|was|included|comprised|:)\\s+([^.]{4,500})`, 'i')
+const LEADING_ROLE = /^(?:the\s+)?(?:incidence|rate|risk|odds|hazard|occurrence|proportion)\s+of\s+/i
+const TRAILING_CLAUSE = /\s+(?:at|after|during|following|within|between|compared|versus|vs\.?|assessed|measured|evaluated|using|defined)\s+/i
+const QUALIFIER_BEFORE = '(?:central|branch|secondary|composite)'
+
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function abbreviationExpansions(text) {
+  const map = new Map()
+  const raw = String(text || '')
+  for (const match of raw.matchAll(/\b([A-Za-z][^()]{2,80}?)\s*\(([A-Z][A-Z0-9]{1,10})\)/g)) {
+    const phrase = match[1].replace(/\s+/g, ' ').trim()
+    if (phrase && !map.has(match[2])) map.set(match[2], phrase)
+  }
+  return map
+}
+
+function outcomeNeedles(clause, expansions) {
+  if (!clause) return []
+  return clause.split(/,| and | or /i).flatMap((part) => {
+    let phrase = part.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
+    phrase = phrase.replace(/^(?:and|or)\s+/i, '')
+    if (/^(?:assessed|measured|evaluated|using|defined|compared)\b/i.test(phrase)) return []
+    const abbrevs = [...part.matchAll(/\(([A-Z][A-Z0-9]{1,10})\)/g)].map((m) => m[1])
+    phrase = phrase.replace(LEADING_ROLE, '').split(TRAILING_CLAUSE)[0].replace(/^(?:the|a|an)\s+/i, '').trim()
+    if (phrase.length < 3 && !abbrevs.length) return []
+    return [{ phrase, abbrevs, expansions }]
+  })
+}
+
+function phraseHit(raw, phrase) {
+  const text = normalize(raw)
+  const needle = normalize(phrase)
+  if (!needle || needle.length < 3) return false
+  if (needle.length <= 5) return new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(needle)}(?:$|[^a-z0-9])`).test(text)
+  const qualified = new RegExp(`(?:^|[^a-z0-9])(${QUALIFIER_BEFORE}\\s+)?${escapeRegExp(needle)}(?:$|[^a-z0-9])`).exec(text)
+  return !!qualified && !qualified[1]
+}
+
+function textHits(raw, needle) {
+  const abbrevs = [...needle.abbrevs]
+  if (/^[A-Z][A-Z0-9]{1,10}$/.test(needle.phrase) && !abbrevs.includes(needle.phrase)) abbrevs.push(needle.phrase)
+  if (abbrevs.some((abbrev) => new RegExp(`\\b${escapeRegExp(abbrev)}\\b`).test(String(raw || '')))) return true
+  const phrases = [needle.phrase]
+  for (const abbrev of abbrevs) {
+    const expanded = needle.expansions.get(abbrev)
+    if (expanded) phrases.push(expanded)
+  }
+  return phrases.some((phrase) => phraseHit(raw, phrase))
+}
+
+function matchesDeclared(row, primaryNeedles, secondaryNeedles) {
+  const name = String(row?.quantity?.name || '')
+  const quote = String(row?.quantity?.source_quote || '')
+  const hits = (needles, text) => needles.some((needle) => textHits(text, needle))
+  if (hits(secondaryNeedles, name)) return false
+  if (hits(primaryNeedles, name)) return true
+  if (hits(secondaryNeedles, quote)) return false
+  return hits(primaryNeedles, quote)
+}
+
 // The paper's primary result, as an EXPLICIT state — never null:
 //   { state: 'identified', name, verified, indexes, basis }  a row is labelled primary (by its
 //       name, else its verbatim quote, else its location hint) and is not secondary, a
 //       subgroup, or a per-protocol / as-treated analysis (per-protocol noninferiority is
 //       allowed). verified: any primary row passes the call site's verified predicate.
 //   { state: 'unknown', name: null, verified: false, indexes: [] }  results were extracted
-//       but none is labelled primary — e.g. only secondary results. The main finding is then
-//       WITHHELD by triage(): it cannot be weighed against a primary the app cannot name.
+//       but none is labelled primary — e.g. only secondary results, or the source names a
+//       primary outcome and no extracted row matches it. The main finding is then WITHHELD
+//       by triage(): it cannot be weighed against a primary the app cannot name.
+//   { state: 'unspecified', ... }  the source text was supplied and it never declares a
+//       primary or a secondary endpoint (a meta-analysis that pools named outcomes, for
+//       example). Verified results may be summarized; none of them is called the primary.
 //   { state: 'no-results', name: null, verified: false, indexes: [] }  nothing was extracted
 //       (narrative review, methods paper, extraction error). There is no result to headline;
 //       the finding is number-free by construction (empty verified set) and model-checked.
 // rows: runPaper rows [{ quantity, verdict }]. isVerified: the call site's own predicate.
-export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged) {
+// sourceText: the abstract or full text, when the caller has it. Omitted, an unlabelled
+// row is still unknown — position never promotes a row (REV2).
+export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, sourceText = '') {
   const list = Array.isArray(rows) ? rows : []
   const none = (state) => ({ state, name: null, verified: false, indexes: [], basis: null })
   if (!list.length) return none('no-results')
@@ -98,19 +180,42 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged) 
     const t = tagResult(row?.quantity)
     return !nonRandomized(t) && !t.subgroup && !t.secondary
   }
+  const identified = (indexes, basis) => ({
+    state: 'identified',
+    name: String(list[indexes[0]]?.quantity?.name || ''),
+    verified: indexes.some((i) => isVerified(list[i])),
+    indexes,
+    basis,
+  })
   for (const [basis, test] of PRIMARY_BASES) {
     const indexes = list.flatMap((row, i) => (eligible(row) && test(row?.quantity) ? [i] : []))
-    if (indexes.length) {
-      return {
-        state: 'identified',
-        name: String(list[indexes[0]]?.quantity?.name || ''),
-        verified: indexes.some((i) => isVerified(list[i])),
-        indexes,
-        basis,
-      }
-    }
+    if (indexes.length) return identified(indexes, basis)
   }
-  return none('unknown')
+  const source = String(sourceText || '')
+  if (!source) return none('unknown')
+  const expansions = abbreviationExpansions(source)
+  const primaryNeedles = outcomeNeedles(source.match(PRIMARY_CLAUSE)?.[1], expansions)
+  const secondaryNeedles = outcomeNeedles(source.match(SECONDARY_CLAUSE)?.[1], expansions)
+  if (primaryNeedles.length) {
+    const indexes = list.flatMap((row, i) => (eligible(row) && matchesDeclared(row, primaryNeedles, secondaryNeedles) ? [i] : []))
+    if (indexes.length) return identified(indexes, 'source')
+    return none('unknown')
+  }
+  // A declared secondary endpoint with no declared primary means the primary is missing.
+  if (DECLARES_PRIMARY.test(source) || DECLARES_SECONDARY.test(source)) return none('unknown')
+  if (list.some((row) => {
+    const tags = tagResult(row?.quantity)
+    return tags.secondary || tags.subgroup || nonRandomized(tags)
+  })) return none('unknown')
+  const indexes = list.flatMap((row, i) => (eligible(row) ? [i] : []))
+  if (!indexes.length) return none('unknown')
+  return {
+    state: 'unspecified',
+    name: null,
+    verified: indexes.some((i) => isVerified(list[i])),
+    indexes,
+    basis: 'no-declared-primary',
+  }
 }
 
 export const PRIMARY_UNKNOWN_REASON =

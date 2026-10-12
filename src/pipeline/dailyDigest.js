@@ -37,7 +37,7 @@ import { profileTopics, profileSearchDays, profileTopicCap } from './topics.js'
 import { DEFAULT_SELECT_COUNT } from './onboard.js'
 import { isRelationshipValidated } from '../lib/evidenceVersion.js'
 import { fmtNum } from '../lib/format.js'
-import { findPrimary } from './primaryResult.js'
+import { findPrimary, verificationCorpus } from './primaryResult.js'
 import { isCapReached } from '../lib/anthropic.js'
 import { serverRunUnresolved } from '../lib/serverScope.js'
 
@@ -236,7 +236,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
             topics: r.paper.topics,
             topicSteering: r.paper.topicSteering,
             summary: evidenceSummary(r),
-            primary: findPrimary(r.rows, (row) => isRelationshipValidated(row.verdict)),
+            primary: findPrimary(r.rows, (row) => isRelationshipValidated(row.verdict), verificationCorpus(r)),
             verified: r.rows.filter((row) => isRelationshipValidated(row.verdict)).map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity), quote: row.quantity.source_quote })),
           })),
         })

@@ -576,8 +576,8 @@ describe('floorSummary', () => {
 // digest appearing to contradict itself.
 describe('readFitLabel', () => {
   it('marks the card score as a post-read judgment', () => {
-    expect(readFitLabel({ score: 58 })).toBe('58% match')
-    expect(readFitLabel({ score: 0 })).toBe('0% match')
+    expect(readFitLabel({ score: 58 })).toBe('58% rubric fit')
+    expect(readFitLabel({ score: 0 })).toBe('0% rubric fit')
   })
 
   it('drops the label rather than rendering a bare "after reading"', () => {
