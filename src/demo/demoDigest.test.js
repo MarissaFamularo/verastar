@@ -39,3 +39,16 @@ it('labels the real all-time counts as the library rather than this week', () =>
   expect(html).not.toContain('This week')
   expect(html).toContain('with checked numbers')
 })
+
+it('names a starter sample without counting it as a saved paper', () => {
+  const html = renderToStaticMarkup(React.createElement(DigestRail, {
+    counts: { verified: 0, saved: 0, flagged: 0, withoutWhy: 0, starters: 1, starterTitle: 'CREST' },
+    projects: [],
+    trellis: [],
+    demo: false,
+  }))
+  expect(html).toContain('1 starter sample')
+  expect(html).toContain('CREST')
+  expect(html).toContain('not counted above')
+  expect(html).toMatch(/>0<\/div>.*?saved/)
+})

@@ -377,7 +377,7 @@ function ConnectionList({ connections, onDismiss }) {
           <li key={edge.id} className="group" style={{ padding: '12px 15px', borderRadius: 11, background: 'var(--surface-1)' }}>
             <div className="flex items-center justify-between" style={{ gap: 8 }}>
               <span className="min-w-0 truncate" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-fg-soft)' }}>{other.label}</span>
-              <button onClick={() => onDismiss(edge)} title="Unlink" className="shrink-0 cursor-pointer opacity-0 transition group-hover:opacity-100" style={{ color: 'var(--color-fg-faint)', background: 'transparent', border: 0 }}>✕</button>
+              <button type="button" onClick={() => onDismiss(edge)} title="Unlink" aria-label={`Unlink ${other.label}`} className="shrink-0 cursor-pointer opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100" style={{ color: 'var(--color-fg-muted)', background: 'transparent', border: 0 }}><span aria-hidden="true">✕</span></button>
             </div>
             {edge.rationale && <p style={{ margin: '3px 0 0', fontSize: 12, fontStyle: 'italic', color: 'var(--color-fg-muted)' }}>{edge.rationale}</p>}
           </li>
