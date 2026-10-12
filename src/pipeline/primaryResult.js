@@ -159,8 +159,10 @@ const RELATION_WORD = /^(?:at|after|during|following|within|between|over|through
 const PHRASE_FINAL_ANCHOR = new RegExp(`^(.*)\\s+(?:${ANCHOR_INTRO})\\s+(${ANCHOR_PHRASE})\\s*$`, 'i')
 const LOOSE_ANCHOR = new RegExp(`\\b(?:${ANCHOR_INTRO})\\b`, 'i')
 const LEADING_RELATION = new RegExp(`^(${WINDOW_REL})\\s+(${TIME_LIST})(?:\\s+(${ANCHOR_INTRO})\\s+${ANCHOR_PHRASE})?\\s+`, 'i')
-const QUALIFIER_PHRASE = /^(?:requiring|related(?:\s+to)?|due(?:\s+to)?|associated(?:\s+with)?|stratified(?:\s+by)?|caused(?:\s+by)?|secondary(?:\s+to)?|adjudicated|confirmed|excluding|including|limited(?:\s+to)?|restricted(?:\s+to)?)\b/i
-const STOP_WORDS = new Set(['only', 'the', 'a', 'an', 'of', 'by', 'with', 'from', 'to', 'for', 'and', 'or'])
+// Articles and "only" drop out. Connector words do not: "with", "to", and "from"
+// are not discarded, so an unfamiliar phrase cannot disappear before the
+// vocabulary check.
+const STOP_WORDS = new Set(['only', 'the', 'a', 'an', 'of', 'by', 'for'])
 
 function canonicalRelation(relation) {
   return String(relation || 'at').trim().toLowerCase() || 'at'
@@ -220,6 +222,73 @@ function wordBag(text) {
   return [...new Set(contentWords(text))].sort()
 }
 
+// A comma/or piece is one component only when its content words are exactly one
+// outcome from this list, plus qualifier phrases from the list below. Anything
+// else ("leading to", "resulting in", "due to", "causing", "with") is unparsed.
+// The matcher does not split a piece into a guessed outcome and a leftover.
+const OUTCOME_PHRASES = [
+  'death',
+  'stroke',
+  'myocardial infarction',
+  'major bleeding',
+  'major amputation',
+  'wound healing',
+  'major adverse limb events',
+  'amputation-free survival',
+  'retinal artery occlusion',
+]
+const OUTCOME_ALIASES = [
+  ['MI', 'myocardial infarction'],
+  ['MALE', 'major adverse limb events'],
+  ['RAO', 'retinal artery occlusion'],
+]
+const QUALIFIER_PHRASES = [
+  'requiring hospitalization',
+  'cardiovascular',
+  'ipsilateral',
+]
+
+function phraseWords(phrase) {
+  return contentWords(phrase)
+}
+
+const OUTCOME_TERMS = OUTCOME_PHRASES.map((phrase) => ({ words: phraseWords(phrase), canonical: wordBag(phrase) }))
+const ALIAS_TERMS = OUTCOME_ALIASES.map(([alias, phrase]) => ({ words: [alias.toLowerCase()], canonical: wordBag(phrase) }))
+const TERMS = [...OUTCOME_TERMS, ...ALIAS_TERMS].sort((a, b) => b.words.length - a.words.length)
+const QUALIFIER_TERMS = QUALIFIER_PHRASES.map((phrase) => phraseWords(phrase)).sort((a, b) => b.length - a.length)
+
+function sameWords(left, right) {
+  return left.length === right.length && left.every((word, index) => word === right[index])
+}
+
+function coversPhrases(words, phrases) {
+  if (!words.length) return true
+  for (const phrase of phrases) {
+    if (phrase.length > words.length || !sameWords(words.slice(0, phrase.length), phrase)) continue
+    if (coversPhrases(words.slice(phrase.length), phrases)) return true
+  }
+  return false
+}
+
+// One successful reading. Two different ways to assign the same words is a guess.
+function recognizeHead(words) {
+  if (!words.length) return null
+  const found = []
+  for (const term of TERMS) {
+    for (let start = 0; start + term.words.length <= words.length; start++) {
+      if (!sameWords(words.slice(start, start + term.words.length), term.words)) continue
+      const before = words.slice(0, start)
+      const after = words.slice(start + term.words.length)
+      if (!coversPhrases(before, QUALIFIER_TERMS) || !coversPhrases(after, QUALIFIER_TERMS)) continue
+      found.push({ headWords: term.canonical, qualifiers: [...before, ...after].sort() })
+    }
+  }
+  if (!found.length) return null
+  const key = (item) => `${item.headWords.join('\0')}\0${item.qualifiers.join('\0')}`
+  if (new Set(found.map(key)).size !== 1) return null
+  return found[0]
+}
+
 function absorbAnchor(text, windows, markers) {
   const tail = String(text || '').match(PHRASE_FINAL_ANCHOR)
   if (!tail) return { text, windows, ok: true }
@@ -234,9 +303,9 @@ function absorbAnchor(text, windows, markers) {
 }
 
 // A parenthetical or bracket is never discarded. It is a time window, a pure
-// abbreviation, a one-word qualifier folded into its component, or — anything
-// else — an extra outcome kept as its own component. A time mixed with other
-// words, or a decoration with no content, is unparsed.
+// abbreviation, a recognized qualifier phrase, or a piece that is re-read as a
+// component. That piece survives only when it is a recognized outcome. A time
+// mixed with other words, or a decoration with no content, is unparsed.
 function anchorOf(phrase) {
   const words = contentWords(phrase)
   if (!words.length || timesIn(phrase).length) return null
@@ -281,16 +350,17 @@ function decorate(text) {
     } else {
       const windows = decorationWindows(inner)
       const words = contentWords(inner)
-      const qualifierPhrase = words.length === 1 || QUALIFIER_PHRASE.test(inner.replace(/§\d+§/g, ' '))
       if (windows) {
         markers.push({ kind: 'window', value: windows })
         replacement = ` §${markers.length - 1}§ `
       } else if (timesIn(inner.replace(/§\d+§/g, ' ')).length || words.length === 0) {
         return { text: current, markers, uncertain: true }
-      } else if (qualifierPhrase) {
+      } else if (coversPhrases(words, QUALIFIER_TERMS)) {
         markers.push({ kind: 'qualifier', value: words })
         replacement = ` §${markers.length - 1}§ `
       } else {
+        // Re-read as its own piece. It survives only when that piece is a
+        // recognized outcome; an unfamiliar phrase does not become one.
         markers.push({ kind: 'extra', value: inner })
         replacement = ` §${markers.length - 1}§ `
       }
@@ -409,13 +479,6 @@ function analyzeClause(clause) {
   return { text, windows: dedupeWindows([...peeled.windows, ...method.windows]), markers: decorated.markers }
 }
 
-function qualifierSplit(text) {
-  const match = String(text || '').match(new RegExp(`^(.*?)(?:\\s+)(${QUALIFIER_PHRASE.source.slice(1)})`, 'i'))
-  if (!match || !match[1].trim()) return null
-  const end = match[1].length
-  return { head: match[1].trim(), qualifier: text.slice(end).trim() }
-}
-
 function parsePiece(raw, markers, inherited) {
   const abbrevs = []
   const qualifiers = []
@@ -432,9 +495,6 @@ function parsePiece(raw, markers, inherited) {
   part = part.replace(/^(?:the|a|an)\s+/i, '').replace(/\s+/g, ' ').trim()
   if (!part && !abbrevs.length && !qualifiers.length) return undefined
   if (METHOD_START.test(part)) return null
-  if (part && QUALIFIER_PHRASE.test(part) && !timesIn(part).length) {
-    return { qualifierOnly: true, qualifiers: [...new Set([...qualifiers, ...contentWords(part)])].sort() }
-  }
   const trailing = trailingWindow(part)
   if (trailing) {
     own.push(...trailing.windows)
@@ -458,24 +518,35 @@ function parsePiece(raw, markers, inherited) {
   if (!absorbed.ok) return null
   part = absorbed.text
   own.splice(0, own.length, ...absorbed.windows)
-  const bound = qualifierSplit(part)
-  if (bound) {
-    qualifiers.push(...contentWords(bound.qualifier))
-    part = bound.head
-  }
   part = part.replace(/^(?:the|a|an)\s+/i, '').replace(/\s+/g, ' ').trim()
   if (timesIn(part).length || /§\d+§|[()[\]]/.test(part)) return null
-  // "from" is a stop word, so a leftover anchor intro has to be rejected on the
-  // raw text. "after" and "following" are relation words as well.
+  // A leftover anchor intro was not placed in a window.
   if (LOOSE_ANCHOR.test(part) || contentWords(part).some((word) => RELATION_WORD.test(word))) return null
-  if (!part && !abbrevs.length && !qualifiers.length) return undefined
   if ((inherited || []).length && own.length && !sameWindowSet(inherited, own)) return null
   const windows = dedupeWindows(own.length ? own : inherited)
   if (/^[A-Z][A-Z0-9]{1,10}$/.test(part) && !abbrevs.includes(part)) abbrevs.push(part)
-  const headWords = wordBag(part)
-  if (!headWords.length && !abbrevs.length && !qualifiers.length) return undefined
-  if (headWords.length && headWords.every((word) => word.length < 3) && !abbrevs.length) return null
-  return { headWords, qualifiers: [...new Set(qualifiers)].sort(), abbrevs, windows, head: part }
+  const words = contentWords(part)
+  const markerQualifiers = [...qualifiers]
+  if (markerQualifiers.length && !coversPhrases(markerQualifiers, QUALIFIER_TERMS)) return null
+  const recognized = recognizeHead(words)
+  if (recognized) {
+    return {
+      headWords: recognized.headWords,
+      qualifiers: [...new Set([...markerQualifiers, ...recognized.qualifiers])].sort(),
+      abbrevs,
+      windows,
+      head: part,
+    }
+  }
+  // A comma piece that is only a recognized qualifier binds to the previous
+  // outcome. It does not become an outcome of its own.
+  if (!abbrevs.length && !windows.length && words.length && coversPhrases(words, QUALIFIER_TERMS)) {
+    return { qualifierOnly: true, qualifiers: [...new Set([...markerQualifiers, ...words])].sort() }
+  }
+  if (!words.length && !abbrevs.length && coversPhrases(markerQualifiers, QUALIFIER_TERMS) && markerQualifiers.length && !windows.length) {
+    return { qualifierOnly: true, qualifiers: [...new Set(markerQualifiers)].sort() }
+  }
+  return null
 }
 
 function segmentComponents(raw, markers, inherited) {
@@ -677,13 +748,12 @@ function matchesDeclared(row, primaryItems, secondaryItems) {
 // declaration succeeds only when the row's endpoint equals the declared one:
 // an order-independent set of (component, qualifiers of that component, window)
 // tuples. A window is its relation, duration, and anchor event, and the anchor
-// has to be the same event or both absent. An abbreviation is a synonym for the
-// single component it follows. A parenthetical or bracket that is not a window
-// or that abbreviation stays on that component, or becomes another component
-// when it is a separate outcome. A token that fits none of those slots —
-// component, qualifier of that component, window relation, duration, anchor, or
-// abbreviation — leaves the declaration or the row unidentified. Quote text is
-// never an identification path.
+// has to be the same event or both absent. A component is one outcome from a
+// closed list, plus recognized qualifier phrases; an abbreviation on that list
+// is that outcome. An unfamiliar word is not split into an outcome and a
+// leftover, and it is not dropped. A token that fits none of those slots leaves
+// the declaration or the row unidentified. Quote text is never an identification
+// path.
 export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, sourceText = '') {
   const list = Array.isArray(rows) ? rows : []
   const none = (state) => ({ state, name: null, verified: false, indexes: [], basis: null })

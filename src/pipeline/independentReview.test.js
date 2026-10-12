@@ -6,7 +6,9 @@
 // A window is shared only when the phrase puts one window on the whole endpoint.
 // "within" is not "at". A named anchor is not an absent or different anchor.
 // A subset, a superset, a different window, or a quote/name/location that merely
-// says "primary" does not match. A token the parser cannot place is unidentified.
+// says "primary" does not match. A component has to be one outcome from a closed
+// list plus recognized qualifier phrases. An unfamiliar word leaves the primary
+// unidentified; the matcher does not turn it into another outcome.
 
 import { describe, it, expect } from 'vitest'
 import { verify, TIERS } from './verify.js'
@@ -386,6 +388,57 @@ describe('a qualifier stays on its outcome, and a window keeps its anchor', () =
     expect(check(declared, 'death within 30 days after the randomization')).toMatchObject({
       state: 'identified', basis: 'source', verified: true, indexes: [0],
     })
+  })
+
+  it('does not treat leading to hospitalization as an outcome that can move', () => {
+    const declared = 'MI leading to hospitalization, or stroke'
+    expect(check(declared, 'MI, or stroke leading to hospitalization')).toMatchObject(UNKNOWN)
+    expect(check(declared, declared)).toMatchObject(UNKNOWN)
+    expect(check('MI, leading to hospitalization, or stroke', 'MI, or stroke, leading to hospitalization')).toMatchObject(UNKNOWN)
+    expect(check('MI (leading to hospitalization), or stroke', 'MI or stroke (leading to hospitalization)')).toMatchObject(UNKNOWN)
+    expect(check('MI [leading to hospitalization], or stroke', 'MI, or stroke [leading to hospitalization]')).toMatchObject(UNKNOWN)
+  })
+})
+
+const UNFAMILIAR_CONNECTORS = [
+  'leading to',
+  'resulting in',
+  'due to',
+  'causing',
+  'with',
+  'associated with',
+  'related to',
+  'secondary to',
+  'followed by',
+  'complicated by',
+  'progressing to',
+  'presenting with',
+  'manifesting as',
+  'attributed to',
+  'accompanied by',
+  'preceding',
+  'subsequent to',
+  'in the setting of',
+  'as a cause of',
+  'culminating in',
+  'producing',
+  'triggering',
+  'evolving into',
+  'characterized by',
+]
+
+describe('an unfamiliar connecting phrase leaves the primary unidentified', () => {
+  it.each(UNFAMILIAR_CONNECTORS)('%s', (connector) => {
+    const inline = `MI ${connector} hospitalization, or stroke`
+    const inlineSource = `The primary end point was ${inline}.`
+    expect(findPrimary([row(inline)], () => true, inlineSource), inline).toMatchObject(UNKNOWN)
+    expect(findPrimary([row(`MI, or stroke ${connector} hospitalization`)], () => true, inlineSource)).toMatchObject(UNKNOWN)
+    const comma = `MI, ${connector} hospitalization, or stroke`
+    const commaSource = `The primary end point was ${comma}.`
+    expect(findPrimary([row(`MI, or stroke, ${connector} hospitalization`)], () => true, commaSource)).toMatchObject(UNKNOWN)
+    const paren = `MI (${connector} hospitalization), or stroke`
+    const parenSource = `The primary end point was ${paren}.`
+    expect(findPrimary([row(`MI or stroke (${connector} hospitalization)`)], () => true, parenSource)).toMatchObject(UNKNOWN)
   })
 })
 
