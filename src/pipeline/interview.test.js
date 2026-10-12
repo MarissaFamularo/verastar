@@ -31,6 +31,8 @@ import {
   FALLBACK_QUESTIONS,
   SCRIPTED_QUESTIONS,
   questionMeta,
+  interviewProgressLabel,
+  interviewThinkingCopy,
   INTERVIEW_SYSTEM,
   INTERVIEW_FIELDS,
   PROFILE_INTERVIEW_SCHEMA,
@@ -431,6 +433,16 @@ describe('transcript — turn accounting and the free paths', () => {
     }
     // The follow-up prompt is told not to reopen the questions that were cut.
     expect(INTERVIEW_SYSTEM).toMatch(/Do NOT ask about study designs/)
+  })
+
+  it('does not number a question while the next one is still being chosen', () => {
+    const last = SCRIPTED_QUESTIONS[3].question
+    const transcript = SCRIPTED_QUESTIONS.map((q) => ({ question: q.question, answer: 'x' }))
+    expect(interviewProgressLabel({ phase: 'thinking', question: last, transcript })).toBe('')
+    expect(interviewThinkingCopy(transcript)).toMatch(/one more question/i)
+    expect(interviewThinkingCopy(transcript.slice(0, 2))).toMatch(/what to ask next/i)
+    expect(interviewProgressLabel({ phase: 'asking', question: last })).toBe('QUESTION 4 OF 4')
+    expect(interviewProgressLabel({ phase: 'asking', question: 'Should I also watch dialysis access?' })).toBe('ONE QUICK FOLLOW-UP')
   })
 
   it('nudges the greeting toward Dr. Lastname and prompts topics from clinic and research', () => {
