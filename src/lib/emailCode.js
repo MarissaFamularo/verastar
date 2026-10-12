@@ -4,7 +4,10 @@
 // readable error. Reloading here is what blanked the page and dumped people on
 // the marketing landing with no session and no message: verify resolved without
 // a user, and the screen treated that as success. A hung check gets its own
-// timeout message instead of spinning until the page gives up.
+// timeout message instead of spinning until the page gives up. Sending a new
+// code starts a new attempt: the previous check can still sign the user in if
+// it succeeds and no session exists yet, but its in-flight state cannot block
+// the replacement code.
 
 import { useRef, useState } from 'react'
 import { awaitWithin } from './deadline.js'
@@ -144,6 +147,9 @@ async function sessionUserAfter(sessionPromise, sessionMs) {
 
 export function useEmailCodeSignIn() {
   const attempt = useRef(0)
+  // Attempt id of the verifyOtp still in flight, or null. Only that id may
+  // block another submit. A resend or reset bumps `attempt`, so a stale flight
+  // no longer matches and cannot hold the next code.
   const flight = useRef(null)
   const sendFlight = useRef(null)
   const entered = useRef(false)
@@ -205,16 +211,20 @@ export function useEmailCodeSignIn() {
     })
   }
 
+  function releaseFlight(id) {
+    if (flight.current === id) flight.current = null
+  }
+
   async function verify(event) {
     event?.preventDefault()
     const trimmed = code.trim()
-    // One verifyOtp at a time. A retry while the first request is still in flight
-    // (including after the 8s timeout) would burn the code and then report it invalid.
-    if (!trimmed || flight.current) return
+    // One verifyOtp for this attempt. Retrying that same code while its request
+    // is in flight (including after the 8s timeout) would burn the code and
+    // then report it invalid. A newer attempt is a different id, so a stale
+    // in-flight check must not block it.
+    if (!trimmed || (flight.current !== null && flight.current === attempt.current)) return
     const id = ++attempt.current
-    let release = () => {}
-    const gate = new Promise((resolve) => { release = resolve })
-    flight.current = gate
+    flight.current = id
     setPending(true)
     setVerifyState('verifying')
     setVerifyError('')
@@ -223,33 +233,41 @@ export function useEmailCodeSignIn() {
       const result = await verifyEmailCodeForSignIn(email.trim(), trimmed, {
         onLateSession: () => enter(),
         onSettled: (settled) => {
-          if (flight.current === gate) flight.current = null
-          release()
+          releaseFlight(id)
+          // Late success from any attempt still signs the user in when this
+          // screen has not already taken a session.
           if (settled?.ok) {
             enter()
             return
           }
-          if (entered.current) return
-          if (id === attempt.current && settled && !settled.ok) {
+          if (entered.current || id !== attempt.current) return
+          if (settled && !settled.ok) {
             setVerifyError(settled.message)
             setVerifyState('error')
           }
           setPending(false)
         },
       })
-      if (id !== attempt.current) return
-      if (!result.ok) {
-        setVerifyError(result.message)
-        setVerifyState('error')
-        if (result.kind !== 'timeout') setPending(false)
+      if (result.ok) {
+        releaseFlight(id)
+        enter()
         return
       }
-      enter()
+      // A superseded attempt must not rewrite the newer code's screen, and a
+      // failure must not undo a session another attempt already opened.
+      if (entered.current || id !== attempt.current) return
+      setVerifyError(result.message)
+      setVerifyState('error')
+      // The timeout leaves this attempt in flight so the same code is not
+      // submitted twice. Any other result has settled and can be retried.
+      if (result.kind !== 'timeout') {
+        releaseFlight(id)
+        setPending(false)
+      }
     } catch (err) {
-      if (flight.current === gate) flight.current = null
-      release()
+      releaseFlight(id)
+      if (entered.current || id !== attempt.current) return
       setPending(false)
-      if (id !== attempt.current) return
       setVerifyError(err?.message || EMAIL_CODE_MESSAGES.network)
       setVerifyState('error')
     }
@@ -257,7 +275,12 @@ export function useEmailCodeSignIn() {
 
   async function resend() {
     if (!email.trim() || resending || sendFlight.current) return
+    // The new code supersedes the previous check. Bumping the attempt id is
+    // what unblocks submit: the old flight no longer matches. Drop the busy
+    // flag now so the replacement can be typed and sent while that request
+    // is still outstanding. A late success still reaches enter().
     const id = ++attempt.current
+    setPending(false)
     const pending = sendMagicLink(email.trim())
     sendFlight.current = pending
     setSendPending(true)
@@ -284,6 +307,7 @@ export function useEmailCodeSignIn() {
 
   function reset() {
     ++attempt.current
+    setPending(false)
     setSendState('idle')
     setSendError('')
     setVerifyState('idle')

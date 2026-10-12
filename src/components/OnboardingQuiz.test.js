@@ -1,6 +1,6 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mountDom } from '../test-utils/dom.js'
+import { deferred, mountDom } from '../test-utils/dom.js'
 import { installOnboardHistory } from '../test-utils/onboardHistory.js'
 
 vi.mock('../lib/supabase.js', () => ({
@@ -164,6 +164,136 @@ describe('onboarding sign-in and review', () => {
       for (let i = 0; i < 20; i += 1) await Promise.resolve()
     })
     expect(assign).toHaveBeenCalledWith('/')
+    expect(dom.text()).not.toMatch(/invalid or expired/i)
+  })
+
+  async function flushSignIn() {
+    for (let i = 0; i < 20; i += 1) await Promise.resolve()
+  }
+
+  async function openCodeScreen() {
+    await dom.render(React.createElement(OnboardingQuiz))
+    await dom.click(dom.button('Set up my digest'))
+    await dom.type(dom.q('#account-email'), 'doctor@clinic.edu')
+    await dom.submit(dom.q('form'))
+  }
+
+  it('submits a replacement code after a permanently stalled check', async () => {
+    vi.useFakeTimers()
+    const assign = vi.fn()
+    window.location = { pathname: '/', search: '', hash: '', assign }
+    sendMagicLink.mockResolvedValue(undefined)
+    const first = deferred()
+    const replacement = deferred()
+    verifyEmailCode.mockImplementation((_email, code) => (code === '123456' ? first.promise : replacement.promise))
+    await openCodeScreen()
+    await dom.type(dom.q('#email-code'), '123456')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    expect(dom.q('[role="alert"]').textContent).toMatch(/timed out/i)
+    expect(dom.button('Checking…').disabled).toBe(true)
+    await dom.click(dom.button('Send a new code'))
+    expect(dom.text()).toContain('A new code is on its way')
+    expect(dom.q('[role="alert"]')).toBeNull()
+    expect(dom.button('Checking…')).toBeUndefined()
+    expect(dom.button('Continue').disabled).toBe(false)
+    expect(verifyEmailCode).toHaveBeenCalledTimes(1)
+    await dom.type(dom.q('#email-code'), '654321')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    expect(verifyEmailCode).toHaveBeenCalledTimes(2)
+    expect(verifyEmailCode).toHaveBeenLastCalledWith('doctor@clinic.edu', '654321')
+    expect(dom.button('Checking…').disabled).toBe(true)
+    expect(assign).not.toHaveBeenCalled()
+    await dom.settle(async () => {
+      replacement.resolve({ id: 'user-new' })
+      await flushSignIn()
+    })
+    expect(assign).toHaveBeenCalledTimes(1)
+    expect(assign).toHaveBeenCalledWith('/')
+  })
+
+  it('lets each resend supersede an older in-flight check', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    verifyEmailCode.mockImplementation(() => deferred().promise)
+    await openCodeScreen()
+    await dom.type(dom.q('#email-code'), '111111')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    expect(dom.q('[role="alert"]').textContent).toMatch(/timed out/i)
+
+    await dom.click(dom.button('Send a new code'))
+    await dom.click(dom.button('Send a new code'))
+    expect(sendMagicLink).toHaveBeenCalledTimes(3)
+    expect(dom.text()).toContain('A new code is on its way')
+    expect(dom.button('Continue').disabled).toBe(false)
+
+    await dom.type(dom.q('#email-code'), '222222')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    expect(verifyEmailCode.mock.calls.map((call) => call[1])).toEqual(['111111', '222222'])
+    expect(dom.button('Checking…').disabled).toBe(true)
+    await dom.submit(dom.q('#email-code').closest('form'))
+    expect(verifyEmailCode).toHaveBeenCalledTimes(2)
+
+    await dom.click(dom.button('Send a new code'))
+    expect(dom.button('Checking…')).toBeUndefined()
+    expect(dom.button('Continue').disabled).toBe(false)
+    await dom.type(dom.q('#email-code'), '333333')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    expect(verifyEmailCode.mock.calls.map((call) => call[1])).toEqual(['111111', '222222', '333333'])
+    expect(dom.button('Checking…').disabled).toBe(true)
+  })
+
+  it('signs in when an older attempt succeeds after the replacement code fails', async () => {
+    vi.useFakeTimers()
+    const assign = vi.fn()
+    window.location = { pathname: '/', search: '', hash: '', assign }
+    sendMagicLink.mockResolvedValue(undefined)
+    const first = deferred()
+    verifyEmailCode.mockImplementation((_email, code) => (
+      code === '123456' ? first.promise : Promise.reject(new Error('Token has expired or is invalid'))
+    ))
+    await openCodeScreen()
+    await dom.type(dom.q('#email-code'), '123456')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    await dom.click(dom.button('Send a new code'))
+    await dom.type(dom.q('#email-code'), '654321')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    expect(dom.q('[role="alert"]').textContent).toMatch(/invalid or expired/i)
+    expect(assign).not.toHaveBeenCalled()
+    await dom.settle(async () => {
+      first.resolve({ id: 'user-old' })
+      await flushSignIn()
+    })
+    expect(assign).toHaveBeenCalledTimes(1)
+    expect(assign).toHaveBeenCalledWith('/')
+  })
+
+  it('stays signed in when an older attempt succeeds after the replacement code does', async () => {
+    vi.useFakeTimers()
+    const assign = vi.fn()
+    window.location = { pathname: '/', search: '', hash: '', assign }
+    sendMagicLink.mockResolvedValue(undefined)
+    const first = deferred()
+    verifyEmailCode.mockImplementation((_email, code) => (
+      code === '123456' ? first.promise : Promise.resolve({ id: 'user-new' })
+    ))
+    await openCodeScreen()
+    await dom.type(dom.q('#email-code'), '123456')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    await dom.click(dom.button('Send a new code'))
+    await dom.type(dom.q('#email-code'), '654321')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    expect(assign).toHaveBeenCalledTimes(1)
+    expect(assign).toHaveBeenCalledWith('/')
+    expect(dom.q('[role="alert"]')).toBeNull()
+    await dom.settle(async () => {
+      first.resolve({ id: 'user-old' })
+      await flushSignIn()
+    })
+    expect(assign).toHaveBeenCalledTimes(1)
     expect(dom.text()).not.toMatch(/invalid or expired/i)
   })
 
