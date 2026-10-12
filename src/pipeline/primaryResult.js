@@ -142,153 +142,284 @@ function timesIn(text) {
   return found
 }
 
-// A declared timepoint must be present, and a different timepoint must not be.
-// No declared timepoint does not constrain the row (a paper can still say "two-year").
-function timesAgree(declared, rowTimes) {
-  if (!declared.length) return true
-  if (!rowTimes.length) return false
-  return rowTimes.every((time) => declared.includes(time))
+// A window is a relation plus a canonical time ("within" 30 days is not "at" 30 days).
+// A bare "30-day" prefix is the relation "at". No declared window does not constrain
+// the row. A declared window requires the row window to be one of the declared ones.
+const WINDOW_REL = 'at|after|during|following|within|between|over|through|by'
+const TIME_LIST = `${TIME_PHRASE}(?:\\s+(?:and|or)\\s+${TIME_PHRASE})*`
+const TRAILING_WINDOW = new RegExp(
+  `\\s+(${WINDOW_REL})\\s+(${TIME_LIST})(?:\\s+(?:after|following|from)\\s+[^,;]+)?\\s*$`,
+  'i',
+)
+const LEADING_TIME = new RegExp(`^(?:(?:${TIME_PHRASE})\\s+)+`, 'i')
+const LEADING_RELATION = new RegExp(`^(${WINDOW_REL})\\s+(${TIME_LIST})\\s+`, 'i')
+const STOP_WORDS = new Set(['only', 'the', 'a', 'an', 'of', 'by', 'with', 'from', 'to', 'for', 'and', 'or'])
+
+function canonicalRelation(relation) {
+  return String(relation || 'at').trim().toLowerCase() || 'at'
 }
 
-function dedupeTimes(times) {
+function dedupeWindows(windows) {
   const found = []
-  for (const time of times) if (time && !found.includes(time)) found.push(time)
+  const seen = new Set()
+  for (const window of windows || []) {
+    if (!window?.time) continue
+    const relation = canonicalRelation(window.relation)
+    const key = `${relation}|${window.time}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    found.push({ relation, time: window.time })
+  }
   return found
 }
 
-// A parenthetical that is only a timepoint is part of the endpoint
-// ("death or stroke (at 30 days)"). An abbreviation stays attached to the words
-// it follows. A parenthetical that mixes a timepoint with other words cannot be
-// split safely, so the clause is unparsed. A parenthetical with no timepoint is
-// a qualifier ("stratified by…") and is not an endpoint component.
-function timePhraseOnly(inner) {
-  const text = String(inner || '').replace(/\s+/g, ' ').trim()
+function windowsFrom(relation, timeText) {
+  const rel = canonicalRelation(relation)
+  return dedupeWindows(timesIn(timeText).map((time) => ({ relation: rel, time })))
+}
+
+function windowsAgree(declared, row) {
+  const left = declared || []
+  const right = row || []
+  if (!left.length) return true
+  if (!right.length) return false
+  return right.every((window) => left.some((item) => item.relation === window.relation && item.time === window.time))
+}
+
+function sameWindowSet(left, right) {
+  const a = dedupeWindows(left)
+  const b = dedupeWindows(right)
+  return a.length === b.length && windowsAgree(a, b)
+}
+
+function contentWords(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/§\d+§/g, ' ')
+    .split(/[^a-z0-9'-]+/)
+    .filter((word) => word && !STOP_WORDS.has(word))
+}
+
+function wordBag(text) {
+  return [...new Set(contentWords(text))].sort()
+}
+
+function bagsEqual(left, right) {
+  return left.length === right.length && left.every((word, index) => word === right[index])
+}
+
+// A parenthetical or bracket is never discarded. It is a time window, a pure
+// abbreviation, a one-word qualifier folded into its component, or — anything
+// else — an extra outcome kept as its own component. A time mixed with other
+// words, or a decoration with no content, is unparsed.
+function decorationWindows(inner) {
+  const text = String(inner || '').replace(/§\d+§/g, ' ').replace(/\s+/g, ' ').trim()
   if (!text) return null
-  const re = new RegExp(
-    `^(?:(?:at|after|during|following|within|between|over|through|by)\\s+)?${TIME_PHRASE}(?:\\s+(?:and|or)\\s+${TIME_PHRASE})*$`,
-    'i',
-  )
-  if (!re.test(text)) return null
-  const times = timesIn(text)
-  return times.length ? times : null
+  const withRelation = text.match(new RegExp(`^(${WINDOW_REL})\\s+(${TIME_LIST})(?:\\s+(?:after|following|from)\\s+[^,;]+)?$`, 'i'))
+  if (withRelation) {
+    const windows = windowsFrom(withRelation[1], withRelation[2])
+    return windows.length ? windows : null
+  }
+  const bare = text.match(new RegExp(`^(${TIME_LIST})$`, 'i'))
+  if (bare) {
+    const windows = windowsFrom('at', bare[1])
+    return windows.length ? windows : null
+  }
+  return null
 }
 
-function absorbParentheticals(text) {
+function decorate(text) {
   const markers = []
-  const times = []
-  let uncertain = false
-  const cleaned = String(text || '')
-    .replace(/\[[^\]]*\]/g, (whole) => {
-      if (timesIn(whole).length) uncertain = true
-      return ' '
-    })
-    .replace(/\(([^)]*)\)/g, (_, inner) => {
-      const abbrev = String(inner).trim().match(/^([A-Z][A-Z0-9]{1,10})$/)
-      if (abbrev) {
-        const id = markers.length
-        markers.push(abbrev[1])
-        return ` §${id}§ `
+  let current = String(text || '')
+  for (let step = 0; step < 20; step++) {
+    const match = /\(([^()[\]]*)\)|\[([^()[\]]*)\]/.exec(current)
+    if (!match) break
+    const inner = String(match[1] ?? match[2] ?? '').replace(/\s+/g, ' ').trim()
+    const abbrev = inner.match(/^([A-Z][A-Z0-9]{1,10})$/)
+    let replacement = ' '
+    if (abbrev) {
+      markers.push({ kind: 'abbrev', value: abbrev[1] })
+      replacement = ` §${markers.length - 1}§ `
+    } else {
+      const windows = decorationWindows(inner)
+      if (windows) {
+        markers.push({ kind: 'window', value: windows })
+        replacement = ` §${markers.length - 1}§ `
+      } else if (timesIn(inner.replace(/§\d+§/g, ' ')).length || contentWords(inner).length === 0) {
+        return { text: current, markers, uncertain: true }
+      } else if (contentWords(inner).length === 1 && !/§\d+§/.test(inner)) {
+        markers.push({ kind: 'qualifier', value: contentWords(inner)[0] })
+        replacement = ` §${markers.length - 1}§ `
+      } else {
+        markers.push({ kind: 'extra', value: inner })
+        replacement = ` §${markers.length - 1}§ `
       }
-      const found = timePhraseOnly(inner)
-      if (found) {
-        times.push(...found)
-        return ' '
-      }
-      if (timesIn(inner).length) uncertain = true
-      return ' '
-    })
-  return { cleaned: cleaned.replace(/\s+/g, ' ').trim(), markers, times: dedupeTimes(times), uncertain }
-}
-
-const TRAILING_TIME = new RegExp(
-  `\\s+(?:at|after|during|following|within|between|over|through|by)\\s+(?:${TIME_PHRASE}(?:\\s+(?:and|or)\\s+${TIME_PHRASE})*)(?:\\s+(?:after|following|from)\\s+[^,;]+)?\\s*$`,
-  'i',
-)
-const LEADING_TIME = new RegExp(`^(?:${TIME_PHRASE}\\s+)+`, 'i')
-
-// The shared timepoint sits on the whole endpoint ("…, or stroke at 30 days",
-// "30-day death or stroke"). A time left between components is not one shared
-// timepoint, so the declaration is not parsed.
-function takeSharedTime(phrase) {
-  let text = phrase
-  const collected = []
-  const trailing = text.match(TRAILING_TIME)
-  if (trailing) {
-    collected.push(...timesIn(trailing[0]))
-    text = text.slice(0, trailing.index).trim()
-  }
-  const sameIntervals = text.match(/\s+at\s+the\s+same\s+intervals?\s*$/i)
-  if (sameIntervals) text = text.slice(0, sameIntervals.index).trim()
-  const leading = text.match(LEADING_TIME)
-  if (leading) {
-    collected.push(...timesIn(leading[0]))
-    text = text.slice(leading[0].length).trim()
-  }
-  if (timesIn(text).length) return null
-  return { text, times: dedupeTimes(collected) }
-}
-
-function componentsFromText(text, markers) {
-  const components = []
-  for (const raw of String(text || '').split(COMPONENT_SPLIT)) {
-    const abbrevs = []
-    let part = raw.replace(/§(\d+)§/g, (_, n) => {
-      const abbrev = markers[Number(n)]
-      if (abbrev) abbrevs.push(abbrev)
-      return ' '
-    })
-    part = part.replace(/^(?:and\/or|and|or)\s+/i, '').replace(/\s+(?:and\/or|and|or)$/i, '')
-    part = part.replace(/^(?:the|a|an)\s+/i, '').replace(/\s+/g, ' ').trim()
-    if (!part && abbrevs.length) {
-      components.push({ text: abbrevs[0], abbrevs })
-      continue
     }
-    if (!part || METHOD_START.test(part)) continue
-    if (part.length < 3 && !/^[A-Z][A-Z0-9]{1,10}$/.test(part)) return null
-    if (/§\d+§/.test(part)) return null
-    components.push({ text: part, abbrevs })
+    current = `${current.slice(0, match.index)}${replacement}${current.slice(match.index + match[0].length)}`
   }
-  return components.length ? components : null
+  if (/[()[\]]/.test(current)) return { text: current, markers, uncertain: true }
+  return { text: current.replace(/\s+/g, ' ').trim(), markers, uncertain: false }
 }
 
-// Timepoints are kept before a method clause is removed. "assessed at 30 days"
-// is the endpoint's timepoint; dropping it would let a one-year row match.
-// A timepoint that cannot be kept makes the clause unparsed.
-function clauseCore(clause) {
-  const absorbed = absorbParentheticals(clause)
-  if (absorbed.uncertain) return null
-  const method = absorbed.cleaned.match(METHOD_CLAUSE)
-  let text = absorbed.cleaned
-  const methodTimes = []
-  if (method) {
-    methodTimes.push(...timesIn(method[0]))
-    text = text.slice(0, method.index).trim()
+function hasWindow(text, markers) {
+  if (timesIn(text).length) return true
+  for (const match of String(text || '').matchAll(/§(\d+)§/g)) {
+    if (markers[Number(match[1])]?.kind === 'window') return true
   }
-  const timed = takeSharedTime(text)
-  if (!timed) return null
-  const times = dedupeTimes([...absorbed.times, ...methodTimes, ...timed.times])
-  if (timesIn(clause).some((time) => !times.includes(time))) return null
-  return { text: timed.text, times, markers: absorbed.markers }
+  return false
 }
 
-function prepareClause(clause) {
-  const core = clauseCore(clause)
-  if (!core) return null
-  const text = core.text
+// A window is shared by every component only when one leading or trailing window
+// covers the whole phrase. A window left on a component stays on that component.
+function peelSharedWindow(text, markers) {
+  const accept = (rest, windows) => {
+    const cleaned = String(rest || '').replace(/^[,\s]+|[,\s]+$/g, '').trim()
+    if (!windows.length || hasWindow(cleaned, markers)) return null
+    return { text: cleaned, windows: dedupeWindows(windows) }
+  }
+  let match = text.match(TRAILING_WINDOW)
+  if (match) {
+    const peeled = accept(text.slice(0, match.index), windowsFrom(match[1], match[2]))
+    if (peeled) return peeled
+  }
+  match = text.match(/\s*§(\d+)§\s*$/)
+  if (match && markers[Number(match[1])]?.kind === 'window') {
+    const peeled = accept(text.slice(0, match.index), markers[Number(match[1])].value)
+    if (peeled) return peeled
+  }
+  match = text.match(LEADING_TIME)
+  if (match) {
+    const peeled = accept(text.slice(match[0].length), windowsFrom('at', match[0]))
+    if (peeled) return peeled
+  }
+  match = text.match(LEADING_RELATION)
+  if (match) {
+    const peeled = accept(text.slice(match[0].length), windowsFrom(match[1], match[2]))
+    if (peeled) return peeled
+  }
+  return { text, windows: [] }
+}
+
+function finishBody(text) {
+  return String(text || '')
     .replace(/^(?:(?:a|an|the)\s+)?composite\s+of\s+/i, '')
     .replace(LEADING_ROLE, '')
     .replace(/^(?:the|a|an)\s+/i, '')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function methodWindows(method) {
+  const related = String(method || '').match(new RegExp(`\\b(${WINDOW_REL})\\s+(${TIME_LIST})`, 'i'))
+  if (related) return windowsFrom(related[1], related[2])
+  if (timesIn(method).length) return windowsFrom('at', method)
+  return []
+}
+
+// Time windows are kept before a method clause is removed. A method-clause
+// window and a different window inside the endpoint cannot both be read, so
+// that clause is unparsed. "at the same intervals" names no window.
+function analyzeClause(clause) {
+  const decorated = decorate(clause)
+  if (decorated.uncertain) return null
+  let text = decorated.text.replace(/\bat\s+the\s+same\s+intervals?\b/gi, ' ').replace(/\s+/g, ' ').trim()
+  const method = text.match(METHOD_CLAUSE)
+  let shared = []
+  if (method) {
+    const found = methodWindows(method[0])
+    const body = text.slice(0, method.index).replace(/[,\s]+$/g, '').trim()
+    if (found.length && hasWindow(body, decorated.markers)) return null
+    shared = found
+    text = body
+  }
+  text = text.replace(/^(?:the|a|an)\s+/i, '').trim()
+  const peeled = peelSharedWindow(text, decorated.markers)
+  if (shared.length && peeled.windows.length && !sameWindowSet(shared, peeled.windows)) return null
+  text = finishBody(peeled.text)
   if (!text) return null
-  return { text, times: core.times, markers: core.markers }
+  return { text, windows: dedupeWindows([...peeled.windows, ...shared]), markers: decorated.markers }
+}
+
+function parsePiece(raw, markers, inherited) {
+  const abbrevs = []
+  const qualifiers = []
+  const own = []
+  let part = String(raw || '').replace(/§(\d+)§/g, (_, n) => {
+    const marker = markers[Number(n)]
+    if (!marker || marker.kind === 'extra') return ' '
+    if (marker.kind === 'abbrev') abbrevs.push(marker.value)
+    else if (marker.kind === 'qualifier') qualifiers.push(marker.value)
+    else if (marker.kind === 'window') own.push(...marker.value)
+    return ' '
+  })
+  part = part.replace(/^(?:and\/or|and|or)\s+/i, '').replace(/\s+(?:and\/or|and|or)$/i, '')
+  part = part.replace(/^(?:the|a|an)\s+/i, '').replace(/\s+/g, ' ').trim()
+  if (METHOD_START.test(part)) return undefined
+  const trailing = part.match(TRAILING_WINDOW)
+  if (trailing) {
+    own.push(...windowsFrom(trailing[1], trailing[2]))
+    part = part.slice(0, trailing.index).trim()
+  }
+  const leading = part.match(LEADING_TIME)
+  if (leading) {
+    own.push(...windowsFrom('at', leading[0]))
+    part = part.slice(leading[0].length).trim()
+  }
+  const leadingRelation = part.match(LEADING_RELATION)
+  if (leadingRelation) {
+    own.push(...windowsFrom(leadingRelation[1], leadingRelation[2]))
+    part = part.slice(leadingRelation[0].length).trim()
+  }
+  part = part.replace(/^(?:the|a|an)\s+/i, '').replace(/\s+/g, ' ').trim()
+  if (timesIn(part).length || /§\d+§|[()[\]]/.test(part)) return null
+  if (!part && !abbrevs.length && !qualifiers.length) return undefined
+  if ((inherited || []).length && own.length && !sameWindowSet(inherited, own)) return null
+  const windows = dedupeWindows(own.length ? own : inherited)
+  if (/^[A-Z][A-Z0-9]{1,10}$/.test(part) && !abbrevs.includes(part)) abbrevs.push(part)
+  const bag = [...new Set([...wordBag(part), ...qualifiers])].sort()
+  if (!bag.length && !abbrevs.length) return undefined
+  if (bag.length && bag.every((word) => word.length < 3) && !abbrevs.length) return null
+  return { bag, abbrevs, windows, head: part }
+}
+
+function segmentComponents(raw, markers, inherited) {
+  const extras = []
+  const hostText = String(raw || '').replace(/§(\d+)§/g, (whole, n) => {
+    const marker = markers[Number(n)]
+    if (marker?.kind === 'extra') {
+      extras.push(marker.value)
+      return ' '
+    }
+    return whole
+  })
+  const host = parsePiece(hostText, markers, inherited)
+  if (host === null) return null
+  const windows = host?.windows?.length ? host.windows : inherited
+  const components = []
+  if (host) components.push(host)
+  for (const extra of extras) {
+    const nested = componentsFromText(extra, markers, windows)
+    if (!nested) return null
+    components.push(...nested)
+  }
+  return components
+}
+
+function componentsFromText(text, markers, inherited) {
+  const components = []
+  for (const raw of String(text || '').split(COMPONENT_SPLIT)) {
+    const parsed = segmentComponents(raw, markers, inherited)
+    if (!parsed) return null
+    components.push(...parsed)
+  }
+  return components.length ? components : null
 }
 
 // Singular "the end point was …" and any "composite of …" are one endpoint:
-// commas, "or", "and", and "and/or" are components of that endpoint, and the
-// timepoint belongs to all of them. Plural "outcomes were A, B, and C" is a
-// list of endpoints. Plural mixed with "or" / "and/or" / an embedded composite
-// has no single reading, so it is not parsed.
+// commas, "or", "and", and "and/or" are components of that endpoint. A window
+// shared by the phrase structure belongs to each of them. Plural "outcomes were
+// A, B, and C" is a list of endpoints. Plural mixed with "or" / "and/or" / an
+// embedded composite has no single reading, so it is not parsed.
 function parseDeclaration(match, expansions) {
   if (!match) return { endpoints: [], uncertain: false }
   const noun = match[1].toLowerCase().replace(/[\s-]/g, '')
@@ -296,7 +427,7 @@ function parseDeclaration(match, expansions) {
   const nounPlural = noun.endsWith('s')
   if ((verb === 'were' && !nounPlural) || (verb === 'was' && nounPlural)) return { endpoints: [], uncertain: true }
   const plural = verb === 'were' || (nounPlural && verb !== 'was')
-  const prepared = prepareClause(match[3])
+  const prepared = analyzeClause(match[3])
   if (!prepared) return { endpoints: [], uncertain: true }
   const compositeOf = /\bcomposite\s+of\b/i.test(match[3])
   const hasOr = /\band\s*\/\s*or\b|\bor\b/i.test(prepared.text)
@@ -305,66 +436,72 @@ function parseDeclaration(match, expansions) {
     return { endpoints: [], uncertain: true }
   }
   if (!plural || compositeOf) {
-    const components = componentsFromText(prepared.text, prepared.markers)
+    const components = componentsFromText(prepared.text, prepared.markers, prepared.windows)
     if (!components) return { endpoints: [], uncertain: true }
-    return { endpoints: [{ components, times: prepared.times, expansions }], uncertain: false }
+    return { endpoints: [{ components, expansions }], uncertain: false }
   }
   const endpoints = []
   for (const piece of prepared.text.split(/\s*,\s*/)) {
-    const components = componentsFromText(piece, prepared.markers)
+    const components = componentsFromText(piece, prepared.markers, prepared.windows)
     if (!components) return { endpoints: [], uncertain: true }
-    endpoints.push({ components, times: prepared.times, expansions })
+    endpoints.push({ components, expansions })
   }
   return endpoints.length ? { endpoints, uncertain: false } : { endpoints: [], uncertain: true }
 }
 
+function abbrevList(component) {
+  const abbrevs = [...(component.abbrevs || [])]
+  if (/^[A-Z][A-Z0-9]{1,10}$/.test(component.head || '') && !abbrevs.includes(component.head)) abbrevs.push(component.head)
+  return abbrevs
+}
+
+function expansionBag(abbrev, expansions) {
+  const phrase = expansions?.get(abbrev)
+  if (!phrase) return null
+  return wordBag(phrase)
+}
+
+// A pure abbreviation is only the token ("MI", "MALE", "RAO"). It names the
+// component that abbreviation is attached to, qualifiers included. Extra words
+// on the abbreviation ("perioperative MI", "central retinal artery occlusion")
+// are a different component.
+function pureAbbrev(component) {
+  const abbrevs = abbrevList(component)
+  if (abbrevs.length !== 1) return null
+  const token = abbrevs[0].toLowerCase()
+  if (component.bag.length > 1) return null
+  if (component.bag.length === 1 && component.bag[0] !== token) return null
+  return abbrevs[0]
+}
+
 function componentEquals(rowComponent, declared, expansions) {
-  const rowNorm = normalize(rowComponent.text)
-  const declaredNorm = normalize(declared.text)
-  if (rowNorm && declaredNorm && rowNorm === declaredNorm) return true
-  const abbrevsOf = (component) => {
-    const abbrevs = [...component.abbrevs]
-    if (/^[A-Z][A-Z0-9]{1,10}$/.test(component.text) && !abbrevs.includes(component.text)) abbrevs.push(component.text)
-    return abbrevs
-  }
-  const rowAbbrevs = abbrevsOf(rowComponent)
-  const declaredAbbrevs = abbrevsOf(declared)
-  if (rowAbbrevs.some((abbrev) => declaredAbbrevs.includes(abbrev))) return true
-  if (declaredAbbrevs.some((abbrev) => normalize(expansions.get(abbrev) || '') === rowNorm)) return true
-  if (rowAbbrevs.some((abbrev) => normalize(expansions.get(abbrev) || '') === declaredNorm)) return true
+  if (!windowsAgree(declared.windows, rowComponent.windows)) return false
+  if (bagsEqual(rowComponent.bag, declared.bag)) return true
+  const rowPure = pureAbbrev(rowComponent)
+  const declaredPure = pureAbbrev(declared)
+  if (rowPure && !declaredPure && abbrevList(declared).includes(rowPure)) return true
+  if (declaredPure && !rowPure && abbrevList(rowComponent).includes(declaredPure)) return true
+  const rowExpansion = rowPure ? expansionBag(rowPure, expansions) : null
+  if (rowExpansion && bagsEqual(rowExpansion, declared.bag)) return true
+  const declaredExpansion = declaredPure ? expansionBag(declaredPure, expansions) : null
+  if (declaredExpansion && bagsEqual(declaredExpansion, rowComponent.bag)) return true
   return false
 }
 
-// The row's component set has to be the declared set. A strict subset (stroke
-// alone) and a strict superset (death, stroke, or major bleeding) are different
-// endpoints. A parenthesis on the row that is neither an abbreviation nor a
-// timepoint can hide another component, so that row does not match.
+// The row's component set has to be the declared set. Each component carries
+// its qualifiers and its own window. A strict subset and a strict superset are
+// different endpoints. A parenthesis or bracket on the row is part of that
+// structure; a statistic tail is not an outcome.
 function rowEndpoint(name) {
   let text = String(name || '')
   text = text.replace(/^(?:the\s+)?(?:co-?)?primary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?|analysis|composite)\s*[:\-—]?\s*/i, '')
   text = text.replace(/,\s+[^,]*\b(?:versus|vs\.?|compared(?:\s+with|\s+to)?)\b[\s\S]*$/i, '')
   text = text.replace(/,?\s*\((?:hazard ratio|odds ratio|risk ratio|HR|OR|RR)\)\s*$/i, '')
-  const absorbed = absorbParentheticals(text)
-  if (absorbed.uncertain) return null
-  const hidden = String(name || '').match(/\(([^)]*)\)/g) || []
-  for (const paren of hidden) {
-    const inner = paren.slice(1, -1).trim()
-    if (/^[A-Z][A-Z0-9]{1,10}$/.test(inner)) continue
-    if (timePhraseOnly(inner)) continue
-    if (/^(?:hazard ratio|odds ratio|risk ratio|HR|OR|RR)$/i.test(inner)) continue
-    return null
-  }
-  const core = clauseCore(text)
+  const core = analyzeClause(text)
   if (!core) return null
-  const body = core.text
-    .replace(/^(?:(?:a|an|the)\s+)?composite\s+of\s+/i, '')
-    .replace(LEADING_ROLE, '')
-    .replace(/^(?:the|a|an)\s+/i, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const components = componentsFromText(body, core.markers)
+  const components = componentsFromText(core.text, core.markers, core.windows)
   if (!components) return null
-  return { components, times: core.times }
+  return { components }
 }
 
 function sameComponentSet(rowComponents, item) {
@@ -381,7 +518,6 @@ function sameComponentSet(rowComponents, item) {
 function itemHits(name, item) {
   const row = rowEndpoint(name)
   if (!row || !item.components.length) return false
-  if (!timesAgree(item.times, row.times)) return false
   return sameComponentSet(row.components, item)
 }
 
@@ -396,7 +532,7 @@ function matchesDeclared(row, primaryItems, secondaryItems) {
 
 // The paper's primary result, as an EXPLICIT state — never null:
 //   { state: 'identified', name, verified, indexes, basis }  the row's endpoint equals
-//       the declared primary (component set and timepoint), or — only when the source
+//       the declared primary (each component, with its qualifiers and window), or — only when the source
 //       declares neither a primary nor a secondary — the row's name or location hint
 //       says primary. It is not secondary, a subgroup, or a per-protocol / as-treated
 //       analysis (per-protocol noninferiority is allowed). verified: any primary row
@@ -414,9 +550,11 @@ function matchesDeclared(row, primaryItems, secondaryItems) {
 // rows: runPaper rows [{ quantity, verdict }]. isVerified: the call site's own predicate.
 // sourceText: the abstract or full text, when the caller has it. Omitted, an unlabelled
 // row is still unknown — position never promotes a row (REV2). Identification against a
-// declaration succeeds only when the row's endpoint equals the declared one. An
-// abbreviation is a synonym for the single component it follows. Any other parse is
-// unidentified. Quote text is never an identification path.
+// declaration succeeds only when the row's endpoint equals the declared one:
+// each component's words, qualifiers, and window. An abbreviation is a synonym
+// for the single component it follows. A parenthetical or bracket that is not a
+// window or that abbreviation stays in the component or becomes another one.
+// Any other parse is unidentified. Quote text is never an identification path.
 export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, sourceText = '') {
   const list = Array.isArray(rows) ? rows : []
   const none = (state) => ({ state, name: null, verified: false, indexes: [], basis: null })

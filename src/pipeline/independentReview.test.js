@@ -1,8 +1,10 @@
 // Reproductions from the 2026-10-12 owner review of primary-outcome identification.
-// A row is the declared primary only when its component set and timepoint are the
-// declared ones. A parenthetical or method-clause timepoint still counts. A subset,
-// a superset, a different timepoint, a missing timepoint, or a quote/name/location
-// that merely says "primary" does not.
+// A row is the declared primary only when each component matches, qualifiers and
+// window included. A parenthetical or bracket is a time window, a pure abbreviation,
+// or part of the component; it is never dropped. A window is shared only when the
+// phrase puts one window on the whole endpoint. "within" is not "at". A subset, a
+// superset, a different window, or a quote/name/location that merely says "primary"
+// does not match.
 
 import { describe, it, expect } from 'vitest'
 import { verify, TIERS } from './verify.js'
@@ -66,6 +68,76 @@ describe('declared timepoints are kept, including parenthetical and method-claus
     const source = `The primary end point was death or stroke, assessed at 30 days. ${thirtyDay}.`
     const row = validated(hr('Death or stroke at 30 days', thirtyDay), source)
     expect(findPrimary([row], isValidated, source)).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+    })
+  })
+})
+
+describe('a qualifier or a bracketed outcome is part of the endpoint', () => {
+  it('does not accept unrestricted death for death (cardiovascular only)', () => {
+    const quote = 'Death was higher (HR 1.81 [1.04-3.13])'
+    const source = `The primary end point was death (cardiovascular only). ${quote}.`
+    const row = validated(hr('Death', quote), source)
+    expect(findPrimary([row], isValidated, source)).toMatchObject(UNKNOWN)
+  })
+
+  it('identifies cardiovascular death, including the same parenthetical', () => {
+    const quote = 'Cardiovascular death was higher (HR 1.81 [1.04-3.13])'
+    const source = `The primary end point was death (cardiovascular only). ${quote}.`
+    const spelled = validated(hr('cardiovascular death', quote), source)
+    expect(findPrimary([spelled], isValidated, source)).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0], name: 'cardiovascular death',
+    })
+    const paren = validated(hr('death (cardiovascular only)', quote), source)
+    expect(findPrimary([paren], isValidated, source)).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+    })
+  })
+
+  it('does not drop an extra outcome written in square brackets', () => {
+    const quote = 'The composite was higher (HR 1.81 [1.04-3.13])'
+    const source = `The primary end point was death or stroke [major bleeding]. ${quote}.`
+    const row = validated(hr('death or stroke', quote), source)
+    expect(findPrimary([row], isValidated, source)).toMatchObject(UNKNOWN)
+  })
+
+  it('identifies the bracketed composite, spelled out or still in brackets', () => {
+    const quote = 'The composite was higher (HR 1.81 [1.04-3.13])'
+    const source = `The primary end point was death or stroke [major bleeding]. ${quote}.`
+    const spelled = validated(hr('death or stroke or major bleeding', quote), source)
+    expect(findPrimary([spelled], isValidated, source)).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+    })
+    const bracketed = validated(hr('death or stroke [major bleeding]', quote), source)
+    expect(findPrimary([bracketed], isValidated, source)).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+    })
+  })
+})
+
+describe('a window belongs to the component it is written on', () => {
+  const quote = 'The 1-year rate was higher (HR 1.81 [1.04-3.13])'
+  const source = `The primary end point was death within 30 days or ipsilateral stroke at one year. ${quote}.`
+
+  it('does not extend early death across the one-year stroke window', () => {
+    const row = validated(hr('1-year death or ipsilateral stroke', quote), source)
+    expect(findPrimary([row], isValidated, source)).toMatchObject(UNKNOWN)
+  })
+
+  it('identifies the row that keeps each component window and the ipsilateral qualifier', () => {
+    const row = validated(hr('Death within 30 days or ipsilateral stroke at one year', quote), source)
+    expect(findPrimary([row], isValidated, source)).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+      name: 'Death within 30 days or ipsilateral stroke at one year',
+    })
+  })
+
+  it('does not treat within 30 days as at 30 days', () => {
+    const early = 'Death within 30 days was higher (HR 1.81 [1.04-3.13])'
+    const declared = `The primary end point was death within 30 days. ${early}.`
+    expect(findPrimary([validated(hr('30-day death', early), declared)], isValidated, declared)).toMatchObject(UNKNOWN)
+    expect(findPrimary([validated(hr('death at 30 days', early), declared)], isValidated, declared)).toMatchObject(UNKNOWN)
+    expect(findPrimary([validated(hr('death within 30 days', early), declared)], isValidated, declared)).toMatchObject({
       state: 'identified', basis: 'source', verified: true, indexes: [0],
     })
   })
@@ -194,6 +266,61 @@ function propertyCases() {
     '30-day stroke or death',
     'identified',
   )
+  const qualifier = { label: 'cardiovascular qualifier', source: 'The primary end point was death (cardiovascular only).' }
+  add(qualifier, 'dropped qualifier', 'death', 'unknown')
+  add(qualifier, 'dropped qualifier', '2-year death', 'unknown')
+  add(qualifier, 'superset', 'cardiovascular death or stroke', 'unknown')
+  add(qualifier, 'exact', 'cardiovascular death', 'identified')
+  add(qualifier, 'exact', 'death (cardiovascular only)', 'identified')
+  add(qualifier, 'exact', 'death [cardiovascular only]', 'identified')
+
+  const bracket = { label: 'bracketed major bleeding', source: 'The primary end point was death or stroke [major bleeding].' }
+  add(bracket, 'dropped bracket', 'death or stroke', 'unknown')
+  add(bracket, 'dropped bracket', '30-day death or stroke', 'unknown')
+  add(bracket, 'subset', 'major bleeding', 'unknown')
+  add(bracket, 'superset', 'death or stroke or major bleeding or rehospitalization', 'unknown')
+  add(bracket, 'exact', 'death or stroke or major bleeding', 'identified')
+  add(bracket, 'exact', 'death, stroke, or major bleeding', 'identified')
+  add(bracket, 'exact', 'death or stroke [major bleeding]', 'identified')
+
+  const bracketTime = { label: 'bracket timepoint [at 30 days]', source: 'The primary end point was death or stroke [at 30 days].' }
+  add(bracketTime, 'wrong timepoint', '1-year death or stroke', 'unknown')
+  add(bracketTime, 'missing timepoint', 'death or stroke', 'unknown')
+  add(bracketTime, 'subset', '30-day death', 'unknown')
+  add(bracketTime, 'exact', '30-day death or stroke', 'identified')
+  add(bracketTime, 'exact', 'death or stroke [at 30 days]', 'identified')
+  add(bracketTime, 'exact', 'death or stroke (at 30 days)', 'identified')
+
+  const within = { label: 'within 30 days', source: 'The primary end point was death within 30 days.' }
+  add(within, 'within is not at', '30-day death', 'unknown')
+  add(within, 'within is not at', 'death at 30 days', 'unknown')
+  add(within, 'wrong timepoint', 'death within 1 year', 'unknown')
+  add(within, 'missing timepoint', 'death', 'unknown')
+  add(within, 'exact', 'death within 30 days', 'identified')
+  add(within, 'exact', 'death (within 30 days)', 'identified')
+
+  const perComponent = {
+    label: 'per-component windows',
+    source: 'The primary end point was death within 30 days or ipsilateral stroke at one year.',
+  }
+  add(perComponent, 'shared window', '1-year death or ipsilateral stroke', 'unknown')
+  add(perComponent, 'shared window', 'death or ipsilateral stroke at one year', 'unknown')
+  add(perComponent, 'within is not at', 'death at 30 days or ipsilateral stroke at one year', 'unknown')
+  add(perComponent, 'within is not at', '30-day death or ipsilateral stroke at 1 year', 'unknown')
+  add(perComponent, 'dropped qualifier', 'death within 30 days or stroke at one year', 'unknown')
+  add(perComponent, 'subset', 'death within 30 days', 'unknown')
+  add(perComponent, 'subset', 'ipsilateral stroke at one year', 'unknown')
+  add(perComponent, 'exact', 'death within 30 days or ipsilateral stroke at one year', 'identified')
+  add(perComponent, 'exact', 'death (within 30 days) or ipsilateral stroke at one year', 'identified')
+  add(perComponent, 'exact', 'death within 30 days or 1-year ipsilateral stroke', 'identified')
+
+  const parenWindows = {
+    label: 'parenthetical per-component windows',
+    source: 'The primary end point was death (within 30 days) or ipsilateral stroke at one year.',
+  }
+  add(parenWindows, 'shared window', '1-year death or ipsilateral stroke', 'unknown')
+  add(parenWindows, 'within is not at', '30-day death or ipsilateral stroke at one year', 'unknown')
+  add(parenWindows, 'exact', 'death within 30 days or ipsilateral stroke at one year', 'identified')
   return cases
 }
 
@@ -212,7 +339,7 @@ const row = (name) => ({
   verdict: { flagged: true },
 })
 
-describe('endpoint equality across subsets, supersets, and timepoints', () => {
+describe('endpoint equality across subsets, supersets, qualifiers, brackets, and windows', () => {
   it.each(propertyCases())('$id', ({ source, name, state }) => {
     const primary = findPrimary([row(name)], () => true, source)
     if (state === 'identified') {
