@@ -43,7 +43,8 @@ describe('Library paper digest disclosure', () => {
   it('replaces fragmented controls with one collapsed digest-details caret', () => {
     const html = renderToStaticMarkup(React.createElement(PaperRow, { paper: paper(), ...handlers }))
 
-    expect(html).toContain('▸ Digest details')
+    expect(html).toContain('aria-label="Digest details"')
+    expect(html).toContain('Digest details')
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('>Summary<')
     expect(html).not.toContain('verified value')
@@ -58,7 +59,7 @@ describe('Library paper digest disclosure', () => {
     expect(html).toContain('The intervention improved the primary outcome.')
     expect(html).toContain('Why it connects to your work:')
     expect(html).toContain('The observational design cannot establish causality.')
-    expect(html).toContain('VERIFIED')
+    expect(html).toContain('0 verified · 1 withheld')
     expect(html).toContain('The primary outcome occurred in 5.5%.')
     expect(html).toContain('View article')
     expect(html).toContain('https://example.org/paper.pdf')
@@ -96,7 +97,8 @@ describe('Library paper digest disclosure', () => {
       canCreateDetails: false,
     }))
 
-    expect(html).toContain('✦ Create digest details')
+    expect(html).toContain('aria-label="Create digest details"')
+    expect(html).toContain('Create digest details')
     expect(html).toContain('Re-reads and verifies this paper')
     expect(disabled).toContain('disabled=""')
     expect(disabled).toContain('set your API key in Settings')
@@ -152,13 +154,15 @@ describe('saved quantity rendering policy', () => {
     expect(html).toContain('Claim withheld')
     expect(html).toContain('Mortality was 10% in Treatment A and 20% in Treatment B.')
     expect(html).not.toContain('Treatment A: 20')
-    expect(html).toContain('0 VALUES VERIFIED')
+    expect(html).toContain('0 verified · 1 withheld')
+    expect(html).not.toContain('VALUES VERIFIED')
   })
   it('renders a current correctly bound claim through the same saved surface', () => {
     const quantity = { name: 'Mortality', value: 10, unit: '%', source_quote: 'Mortality was 10%.' }
     quantity.verdict = verify(quantity, quantity.source_quote)
     const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { initialEvidenceOpen: true, paper: paper({ quantities: [quantity] }) }))
-    expect(html).toContain('1 VALUE VERIFIED')
+    expect(html).toContain('1 verified')
+    expect(html).not.toContain('VALUE VERIFIED')
     expect(html).toContain('10%')
     expect(html).not.toContain('Claim withheld')
   })
@@ -194,7 +198,8 @@ describe('Library evidence is re-checked under the current verifier', () => {
     const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, {
       paper: paper({ finding: 'Crossing succeeded in most lesions (93.2%).', quantities: [crossing, technical], fullText: SRC }),
     }))
-    expect(html).toContain('▸ EVIDENCE · 1 NUMBER IN THE SUMMARY, VERIFIED')
+    expect(html).toContain('EVIDENCE · 1 NUMBER IN THE SUMMARY, VERIFIED')
+    expect(html).toContain('aria-hidden="true"')
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('Successful lesion crossing:')
   })
@@ -217,7 +222,8 @@ describe('Library evidence is re-checked under the current verifier', () => {
   })
   it('renders the upgraded values in the saved details', () => {
     const html = renderToStaticMarkup(React.createElement(SavedDigestDetails, { initialEvidenceOpen: true, paper: paper({ quantities: [crossing, technical], fullText: SRC }) }))
-    expect(html).toContain('2 VALUES VERIFIED')
+    expect(html).toContain('2 verified')
+    expect(html).not.toContain('VALUES VERIFIED')
     expect(html).toContain('93.2%')
   })
 })

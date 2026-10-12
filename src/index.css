@@ -20,8 +20,8 @@
   --color-fg: #f4f5f9;
   --color-fg-soft: #cbd0da;
   --color-fg-dim: #9aa1af;
-  --color-fg-muted: #7a8291;
-  --color-fg-faint: #5d6473;
+  --color-fg-muted: #9199a8;
+  --color-fg-faint: #868e9e;
 
   /* Accents */
   --color-accent: #ef8f5b;        /* orange — primary action */
@@ -274,4 +274,11 @@ a:hover {
 .vs-settings-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
 .vs-settings-tabs button { padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: transparent; color: var(--color-fg-muted); font: inherit; font-size: 12px; cursor: pointer; }
 .vs-settings-tabs button[aria-current] { color: var(--color-accent); background: rgba(239,143,91,.08); border-color: rgba(239,143,91,.35); }
-.vs-settings-menu > button:focus-visible, .vs-settings-back:focus-visible, .vs-settings-tabs button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.vs-settings-menu > button:focus-visible, .vs-settings-back:focus-visible, .vs-settings-tabs button:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: 3px; }
+
+/* Keyboard focus stays visible on the dark theme, including controls that set
+   outline: none inline. Mouse clicks keep the quiet default (:focus-visible). */
+:focus-visible {
+  outline: 2px solid var(--color-accent-bright) !important;
+  outline-offset: 2px;
+}
