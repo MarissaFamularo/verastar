@@ -167,8 +167,9 @@ export async function searchCandidates({
       union.push(pmid)
     }
   }
-  // Titles and abstracts are the relevance gate. A missing abstract leaves the title rule
-  // in charge rather than dropping the morning's real matches.
+  // Titles and abstracts are the relevance gate. A missing abstract is not evidence against
+  // a specific term: the paper stays and scoring decides. A broad title-only word can still
+  // be rejected from the title alone.
   const cites = union.length ? await fetchCitations(union) : []
   const abstracts = union.length ? await fetchAbstractsByPmid(union).catch(() => ({})) : {}
   const citeById = new Map(cites.map((cite) => [String(cite.pmid), cite]))

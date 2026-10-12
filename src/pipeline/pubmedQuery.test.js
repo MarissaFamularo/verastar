@@ -42,6 +42,11 @@ describe('compilePubmedQuery', () => {
     )
   })
 
+  it('leaves a trailing wildcard unquoted and tags each word', () => {
+    expect(compilePubmedQuery('carotid stent*')).toBe('carotid[tiab] AND stent*[tiab]')
+    expect(compilePubmedQuery('stent*[tiab] OR carotid stenosis')).toBe('stent*[tiab] OR "carotid stenosis"[tiab]')
+  })
+
   it('preserves parentheses, AND, NOT, and a field tag the clinician already wrote', () => {
     expect(compilePubmedQuery('(carotid stenosis OR carotid stenting) AND stroke')).toBe(
       '("carotid stenosis"[tiab] OR "carotid stenting"[tiab]) AND stroke[tiab]',
@@ -145,6 +150,110 @@ describe('fitsTopic — real topic papers still qualify', () => {
       title: 'Recurrent bloodstream infection in patients requiring long-term vascular access.',
       abstract: 'Long-term vascular access was the indication for catheter exchange.',
     })).toBe(true)
+  })
+
+  it('lets a specific single word qualify from repeated abstract use', () => {
+    const paper = {
+      label: 'Diabetes',
+      query: 'diabetes',
+      title: 'Glycemic trajectories after bariatric procedures.',
+    }
+    expect(fitsTopic({
+      ...paper,
+      abstract: 'Diabetes remission was the endpoint. Diabetes medications were stopped. Diabetes duration predicted relapse.',
+    })).toBe(true)
+    expect(fitsTopic({
+      ...paper,
+      abstract: 'Diabetes was listed among the baseline comorbidities.',
+    })).toBe(false)
+    expect(fitsTopic({ ...paper, abstract: '' })).toBe(true)
+  })
+
+  it('still requires a broad single word to be the title subject', () => {
+    const bland = {
+      title: 'Glycemic trajectories after bariatric procedures.',
+      abstract: 'Surgery was compared with surgery in a second cohort. Surgery remained the common pathway. Outcomes were recorded and outcomes were compared. Outcomes favored the second cohort.',
+    }
+    expect(fitsTopic({ ...bland, label: 'Surgery', query: 'surgery' })).toBe(false)
+    expect(fitsTopic({ ...bland, label: 'Outcomes', query: 'outcomes' })).toBe(false)
+    expect(fitsTopic({
+      ...bland,
+      label: 'Amputation',
+      query: 'amputations',
+      abstract: 'Amputations were reviewed. Amputations were declined. Amputations were not performed.',
+    })).toBe(false)
+    expect(fitsTopic({
+      label: 'Surgery',
+      query: 'surgery',
+      title: 'Outcomes after vascular surgery.',
+      abstract: 'One cohort was enrolled.',
+    })).toBe(true)
+    expect(fitsTopic({
+      label: 'Amputation',
+      query: 'amputation',
+      title: 'Flap Reconstruction for Deep Hand Burns: A Case Series.',
+      abstract: '',
+    })).toBe(false)
+  })
+
+  it('does not re-check publication type, MeSH, author, or date in the prose', () => {
+    expect(fitsTopic({
+      label: 'Carotid stenosis',
+      query: 'carotid stenosis AND randomized controlled trial[pt] AND smith ja[au] AND 2024[dp] AND stents[mh]',
+      title: 'Carotid stenosis treated with stenting.',
+      abstract: 'Carotid stenosis was the indication for carotid stenting. Carotid stenosis was measured on duplex.',
+    })).toBe(true)
+    expect(fitsTopic({
+      label: 'Carotid stenosis',
+      query: 'carotid stenosis AND randomized controlled trial[pt]',
+      title: 'Mitral valve repair techniques.',
+      abstract: 'This randomized controlled trial enrolled patients after mitral valve repair. The randomized controlled trial excluded neck disease.',
+    })).toBe(false)
+    expect(fitsTopic({
+      label: 'Trials',
+      query: 'randomized controlled trial[pt]',
+      title: 'Mitral valve repair techniques.',
+      abstract: 'The mitral valve was replaced after leaflet failure.',
+    })).toBe(true)
+  })
+
+  it('honors an explicit title or abstract tag', () => {
+    const abstract = 'Diabetes remission was the endpoint. Diabetes medications were stopped. Diabetes duration predicted relapse.'
+    expect(fitsTopic({
+      label: 'Diabetes',
+      query: 'diabetes[ti]',
+      title: 'Glycemic trajectories after bariatric procedures.',
+      abstract,
+    })).toBe(false)
+    expect(fitsTopic({
+      label: 'Diabetes',
+      query: 'diabetes[ti]',
+      title: 'Diabetes remission after bariatric procedures.',
+      abstract: 'One cohort was enrolled.',
+    })).toBe(true)
+    expect(fitsTopic({
+      label: 'Diabetes',
+      query: 'diabetes[ab]',
+      title: 'Glycemic trajectories after bariatric procedures.',
+      abstract,
+    })).toBe(true)
+  })
+
+  it('matches a trailing wildcard and keeps syntax it cannot read', () => {
+    expect(fitsTopic({
+      label: 'Carotid stent',
+      query: 'carotid stent*',
+      title: 'Carotid stenting outcomes',
+      abstract: '',
+    })).toBe(true)
+    const unrelated = {
+      label: 'Carotid stent',
+      title: 'Mitral valve repair techniques.',
+      abstract: 'The mitral valve was replaced after leaflet failure.',
+    }
+    expect(fitsTopic({ ...unrelated, query: '*stent' })).toBe(true)
+    expect(fitsTopic({ ...unrelated, query: 'sten*sis' })).toBe(true)
+    expect(fitsTopic({ ...unrelated, query: 'wom?n' })).toBe(true)
   })
 
   it('keeps venous stents, VTE treatment, and vascular surgery education', () => {

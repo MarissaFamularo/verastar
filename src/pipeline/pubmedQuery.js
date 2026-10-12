@@ -15,10 +15,19 @@
 //
 // Compilation quotes each OR-clause into [tiab]. That keeps the synonyms (so a 3-day window
 // still returns papers) and turns mapping off for that clause. The lexical gate then drops
-// hits whose title is about something else: a single passing abstract mention, a generic
-// word that never makes the title, or a neurovascular fistula returned for dialysis access.
+// hits that are not about the topic: a single passing abstract mention of a specific
+// concept, a genuinely broad word (amputation, surgery, outcomes) that never makes the
+// title, or a neurovascular fistula returned for dialysis access. Tags other than
+// title/abstract stay with PubMed, and syntax this matcher cannot read is kept for scoring.
 
 const ACRONYMS = new Set(['aaa', 'avf', 'avg', 'cas', 'cea', 'clti', 'dvt', 'evar', 'pad', 'pe', 'svg', 'tavr', 'tevar', 'vte'])
+
+// Title-only terms. Everything else, including a specific single word such as "diabetes",
+// can qualify from repeated use in the abstract. Plurals are listed explicitly so a stem
+// does not turn "outcomes" into a different word.
+const BROAD_TERMS = new Set([
+  'amputation', 'amputations', 'outcome', 'outcomes', 'surgeries', 'surgery',
+])
 
 // Words that appear in topic labels but do not say which disease the title is about.
 const GENERIC = new Set([
@@ -100,24 +109,34 @@ function wordsOf(value) {
   return normalizePhrase(value).split(' ').filter(Boolean)
 }
 
-function isAcronym(word) {
-  const token = String(word || '')
-  return ACRONYMS.has(token.toLowerCase()) || /^[A-Z]{2,6}$/.test(token)
-}
-
-function isOrdinaryWord(value) {
+function isBroadTerm(value) {
   const words = wordsOf(value)
   if (words.length !== 1) return false
-  const raw = stripTag(String(value || '')).replace(/^"+|"+$/g, '').trim()
-  return !isAcronym(raw)
+  return BROAD_TERMS.has(words[0].replace(/\*$/, ''))
+}
+
+// [ti] / [ab] / [tiab] are the only tags the local gate can check. Publication type, MeSH,
+// author, date, and the rest are already applied by PubMed and must not be re-required in prose.
+function fieldScope(value) {
+  const match = String(value || '').match(/\[([^\]]+)\]\s*$/)
+  if (!match) return 'tiab'
+  const tag = match[1].trim().toLowerCase()
+  if (tag === 'ti' || tag === 'title') return 'title'
+  if (tag === 'ab' || tag === 'abstract') return 'abstract'
+  if (tag === 'tiab' || tag === 'title/abstract') return 'tiab'
+  return null
+}
+
+function wordBody(word) {
+  // Trailing truncation: stent* matches stenting. A star anywhere else is not this pattern.
+  if (/^[a-z0-9]+\*$/.test(word)) return `${escapeRegExp(word.slice(0, -1))}[a-z0-9]*`
+  return `${escapeRegExp(word)}(?:s|es)?`
 }
 
 function termPattern(value, flags) {
   const words = wordsOf(value)
   if (!words.length) return null
-  const body = words.length === 1
-    ? `${escapeRegExp(words[0])}(?:s|es)?`
-    : words.map(escapeRegExp).join('[\\s\\-\u2010-\u2015]+')
+  const body = words.map(wordBody).join('[\\s\\-\u2010-\u2015]+')
   return new RegExp(`(?:^|[^A-Za-z0-9])(?:${body})(?=[^A-Za-z0-9]|$)`, flags)
 }
 
@@ -138,6 +157,11 @@ function compileAtom(value) {
   if (/\[[^\]]+\]\s*$/.test(raw)) return raw
   const bare = raw.replace(/^"+|"+$/g, '').replace(/[\u2010-\u2015-]/g, ' ').replace(/\s+/g, ' ').trim()
   if (!bare) return ''
+  // A quoted star is a literal asterisk in PubMed. Tag each word so mapping stays off
+  // and the truncation still applies to the word that carries it.
+  if (bare.includes('*')) {
+    return bare.split(' ').filter(Boolean).map((word) => `${word}[tiab]`).join(' AND ')
+  }
   if (/\s/.test(bare)) return `"${bare}"[tiab]`
   return `${bare}[tiab]`
 }
@@ -223,32 +247,10 @@ function negativeParts(tokens) {
   return parts
 }
 
-function partMatches(part, text) {
-  const inner = innerExpression(part)
-  if (inner != null) return expressionMatches(tokenize(inner), text)
-  return termMatches(part, text)
-}
-
-function andNotMatches(tokens, text) {
-  const positive = positiveParts(tokens)
-  if (!positive.length || !positive.every((part) => partMatches(part, text))) return false
-  return negativeParts(tokens).every((part) => !partMatches(part, text))
-}
-
-function expressionMatches(tokens, text) {
-  const groups = splitBy(tokens, 'OR')
-  if (groups.length > 1) return groups.some((group) => andNotMatches(group, text))
-  return andNotMatches(tokens, text)
-}
-
 function leafTerms(part) {
   const inner = innerExpression(part)
   if (inner != null) return tokenize(inner).filter((token) => token.type === 'atom').flatMap((token) => leafTerms(token.value))
   return [part]
-}
-
-function orGroups(query) {
-  return splitBy(tokenize(query), 'OR')
 }
 
 function distinctiveLabelTokens(label) {
@@ -273,31 +275,149 @@ function crossSpecialtyVeto({ title, abstract, query, label }) {
   return true
 }
 
-function groupKept(tokens, title, abstract) {
-  if (andNotMatches(tokens, title)) return true
-  const combined = `${title}\n${abstract}`
-  if (!andNotMatches(tokens, combined)) return false
-  const leaves = positiveParts(tokens).flatMap(leafTerms)
-  // "Amputation" twice in a hand-burn abstract is not limb preservation. A generic word
-  // has to be the title's subject. A real multi-word concept can carry a bland title when
-  // the abstract keeps returning to it, not when it is named once in passing.
-  if (leaves.some((part) => isOrdinaryWord(part) && !termMatches(part, title))) return false
-  return leaves.some((part) => !isOrdinaryWord(part) && termCount(part, abstract) >= 2)
+function abstractMissing(abstract) {
+  return !String(abstract || '').trim()
+}
+
+// Supported truncation is a trailing * on a word of letters or digits (stent*). A leading
+// or internal star, ?, or ~ is left to PubMed: the gate keeps the paper.
+function hasUnsupportedSyntax(query) {
+  const withoutSupported = String(query || '').replace(/[A-Za-z0-9]\*(?![A-Za-z0-9*])/g, 'W')
+  return /[*?~]/.test(withoutSupported)
+}
+
+// How one text leaf meets the gate. A broad word has to be the title's subject.
+// A specific concept can pass from the title, or from repeated abstract use. One
+// passing abstract mention is not enough, and a missing abstract is left for scoring.
+function leafStatus(part, title, abstract) {
+  const scope = fieldScope(part)
+  if (scope == null) return { ignore: true }
+  const broad = isBroadTerm(part)
+  const inTitle = scope !== 'abstract' && termMatches(part, title)
+  const missing = abstractMissing(abstract)
+  const count = scope !== 'title' && !missing ? termCount(part, abstract) : 0
+  if (broad && scope !== 'abstract') return inTitle ? { title: true } : { fail: true }
+  if (scope === 'title') return inTitle ? { title: true } : { fail: true }
+  if (inTitle) return { title: true }
+  if (missing) return { uncertain: true }
+  if (count >= (broad ? 1 : 2)) return { repeated: true }
+  if (count === 1) return { once: true }
+  return { fail: true }
+}
+
+function combine(statuses) {
+  if (statuses.some((status) => status.fail)) return { pass: false, uncertain: false }
+  const text = statuses.filter((status) => !status.ignore)
+  if (!text.length) return { pass: true, uncertain: false, reason: 'ignore' }
+  if (text.some((status) => status.uncertain)) return { pass: true, uncertain: true, reason: 'uncertain' }
+  if (text.every((status) => status.title)) return { pass: true, uncertain: false, reason: 'title' }
+  // One substantive concept carries an AND-group whose other concepts are present.
+  if (text.some((status) => status.repeated)) return { pass: true, uncertain: false, reason: 'repeated' }
+  return { pass: false, uncertain: false }
+}
+
+function negativeHits(part, title, abstract) {
+  const inner = innerExpression(part)
+  if (inner != null) {
+    const result = evalExpr(tokenize(inner), title, abstract)
+    return result.pass && !result.uncertain
+  }
+  const scope = fieldScope(part)
+  if (scope == null) return false
+  if (scope !== 'abstract' && termMatches(part, title)) return true
+  if (scope === 'title') return false
+  if (abstractMissing(abstract)) return false
+  return termMatches(part, abstract)
+}
+
+function statusOf(part, title, abstract) {
+  const inner = innerExpression(part)
+  if (inner == null) return leafStatus(part, title, abstract)
+  const result = evalExpr(tokenize(inner), title, abstract)
+  if (!result.pass) return { fail: true }
+  if (result.uncertain) return { uncertain: true }
+  if (result.reason === 'title') return { title: true }
+  if (result.reason === 'ignore') return { ignore: true }
+  return { repeated: true }
+}
+
+function evalAnd(tokens, title, abstract) {
+  const statuses = positiveParts(tokens).map((part) => statusOf(part, title, abstract))
+  for (const part of negativeParts(tokens)) {
+    if (negativeHits(part, title, abstract)) return { pass: false, uncertain: false }
+    const scope = fieldScope(part)
+    if (scope != null && scope !== 'title' && abstractMissing(abstract) && !termMatches(part, title)) {
+      statuses.push({ uncertain: true })
+    }
+  }
+  return combine(statuses)
+}
+
+function evalExpr(tokens, title, abstract) {
+  const groups = splitBy(tokens, 'OR')
+  if (groups.length <= 1) return evalAnd(groups[0] || [], title, abstract)
+  const results = groups.map((group) => evalAnd(group, title, abstract))
+  if (results.some((result) => result.pass && result.reason === 'repeated')) {
+    return { pass: true, uncertain: false, reason: 'repeated' }
+  }
+  if (results.some((result) => result.pass && !result.uncertain)) {
+    return { pass: true, uncertain: false, reason: 'title' }
+  }
+  if (results.some((result) => result.pass || result.uncertain)) {
+    return { pass: true, uncertain: true, reason: 'uncertain' }
+  }
+  return { pass: false, uncertain: false }
+}
+
+function textMatchesOnce(part, title, abstract) {
+  const scope = fieldScope(part)
+  if (scope == null) return true
+  if (scope !== 'abstract' && termMatches(part, title)) return true
+  if (scope === 'title') return false
+  if (abstractMissing(abstract)) return true
+  return termCount(part, abstract) >= 1
+}
+
+function partMatchesOnce(part, title, abstract) {
+  const inner = innerExpression(part)
+  if (inner != null) return exprMatchesOnce(tokenize(inner), title, abstract)
+  return textMatchesOnce(part, title, abstract)
+}
+
+function exprMatchesOnce(tokens, title, abstract) {
+  const groups = splitBy(tokens, 'OR')
+  if (groups.length > 1) return groups.some((group) => andMatchesOnce(group, title, abstract))
+  return andMatchesOnce(tokens, title, abstract)
+}
+
+function andMatchesOnce(tokens, title, abstract) {
+  const positives = positiveParts(tokens).filter((part) => fieldScope(part) != null || innerExpression(part) != null)
+  if (!positives.length) return false
+  if (!positives.every((part) => partMatchesOnce(part, title, abstract))) return false
+  return negativeParts(tokens).every((part) => !negativeHits(part, title, abstract))
+}
+
+// The title already names the topic, so one abstract mention of a specific concept is enough.
+// A broad word still has to be the title's subject; that path is decided above.
+function labelRescue(tokens, title, abstract) {
+  return splitBy(tokens, 'OR').some((group) => {
+    const leaves = positiveParts(group).flatMap(leafTerms).filter((part) => fieldScope(part) != null)
+    return leaves.length > 0
+      && leaves.every((part) => !isBroadTerm(part))
+      && andMatchesOnce(group, title, abstract)
+  })
 }
 
 // True when this paper belongs on the topic's preview line and in the pool that is scored
-// before digest triage. Title and abstract only — MeSH-only hits never qualify.
+// before digest triage. Title and abstract only — a MeSH, author, or publication-type tag
+// is not searched again in the prose.
 export function fitsTopic({ title = '', abstract = '', query = '', label = '' } = {}) {
-  const groups = orGroups(query)
-  if (!groups.length) return false
+  const raw = typeof query === 'string' ? query.trim() : ''
+  if (!raw) return false
+  if (hasUnsupportedSyntax(raw)) return true
   if (crossSpecialtyVeto({ title, abstract, query, label })) return false
-  if (groups.some((group) => groupKept(group, title, abstract))) return true
+  const result = evalExpr(tokenize(raw), title, abstract)
+  if (result.pass) return true
   if (!titleCarriesLabel(title, label)) return false
-  const combined = `${title}\n${abstract}`
-  return groups.some((group) => {
-    const leaves = positiveParts(group).flatMap(leafTerms)
-    return leaves.length > 0
-      && leaves.every((part) => !isOrdinaryWord(part))
-      && andNotMatches(group, combined)
-  })
+  return labelRescue(tokenize(raw), title, abstract)
 }
