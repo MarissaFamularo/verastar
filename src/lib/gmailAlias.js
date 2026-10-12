@@ -3,9 +3,15 @@
 // The server reports only whether a different account already normalizes to this
 // inbox, plus a one-character hint. This module never receives the other address.
 
+import { awaitWithin } from './deadline.js'
 import { supabase } from './supabase.js'
 
 const MASKED_HINT = /^[^\s@]…@(gmail|googlemail)\.com$/u
+
+// Short on purpose. The sign-in screen is already in "Sending…" during this
+// check, and the code-send timeout (8s) does not start until the check returns.
+// 2.5s sits inside that budget: a stall becomes "no match" and the code still sends.
+export const GMAIL_ALIAS_LOOKUP_MS = 2500
 
 export function isGmailFamily(email) {
   const domain = String(email || '').trim().toLowerCase().split('@')[1] || ''
@@ -32,13 +38,15 @@ export function gmailAliasDecision(lookup, { force = false } = {}) {
   return { send: true, warning: '' }
 }
 
-// Missing function, rate limit, and network errors all return no match so a
-// code can still be sent. The check is a warning, not a lock on the door.
-export async function lookupGmailAlias(email) {
+// Missing function, rate limit, timeout, and network errors all return no match
+// so a code can still be sent. The check is a warning, not a lock on the door.
+export async function lookupGmailAlias(email, { timeoutMs = GMAIL_ALIAS_LOOKUP_MS } = {}) {
   const typed = String(email || '').trim()
   if (!isGmailFamily(typed) || typeof supabase?.rpc !== 'function') return { match: false }
   try {
-    const { data, error } = await supabase.rpc('gmail_alias_hint', { p_email: typed })
+    const raced = await awaitWithin(supabase.rpc('gmail_alias_hint', { p_email: typed }), timeoutMs)
+    if (raced.timeout) return { match: false }
+    const { data, error } = raced.value || {}
     if (error || !data || data.match !== true || !isMaskedGmailHint(data.hint)) return { match: false }
     return { match: true, hint: data.hint }
   } catch {

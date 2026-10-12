@@ -49,6 +49,7 @@ vi.mock('./ProfileInterview.jsx', () => ({
 }))
 
 import { redeemInviteCode } from '../lib/inviteCode.js'
+import { GMAIL_ALIAS_LOOKUP_MS } from '../lib/gmailAlias.js'
 import { sendMagicLink, supabase, verifyEmailCode } from '../lib/supabase.js'
 import OnboardingQuiz from './OnboardingQuiz.jsx'
 
@@ -116,6 +117,22 @@ describe('onboarding sign-in and review', () => {
     await dom.click(dom.button('Send a code to this address anyway'))
     expect(sendMagicLink).toHaveBeenCalledWith('famularo.marissa@gmail.com')
     expect(dom.text()).toContain('Code sent to famularo.marissa@gmail.com')
+  })
+
+  it('sends the code when the gmail lookup never returns', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    supabase.rpc.mockReturnValue(new Promise(() => {}))
+    await dom.render(React.createElement(OnboardingQuiz))
+    await dom.click(dom.button('Set up my digest'))
+    await dom.type(dom.q('#account-email'), 'famularo.marissa@gmail.com')
+    await dom.submit(dom.q('form'))
+    expect(dom.button('Sending…')).toBeTruthy()
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    await dom.settle(() => vi.advanceTimersByTimeAsync(GMAIL_ALIAS_LOOKUP_MS))
+    expect(sendMagicLink).toHaveBeenCalledWith('famularo.marissa@gmail.com')
+    expect(dom.text()).toContain('Code sent to famularo.marissa@gmail.com')
+    expect(dom.text()).not.toContain('You already have an account')
   })
 
   it('shows a timeout on the code screen instead of leaving', async () => {

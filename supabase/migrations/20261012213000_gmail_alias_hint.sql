@@ -12,6 +12,11 @@
 -- Not applied by the change that added this file. Apply it with the usual
 -- migration path when you are ready for the warning to go live. Until then the
 -- client treats a missing function as "no match" and still sends the code.
+--
+-- The hourly caps are one row per bucket. INSERT ... ON CONFLICT DO UPDATE
+-- locks that row, so concurrent calls serialize and the returned count is the
+-- count after this call. A plain insert-then-count let every overlapping
+-- transaction see only its own row and all of them returned a hint.
 
 begin;
 
@@ -20,17 +25,44 @@ create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
 grant usage on schema private to anon, authenticated, service_role;
 
-create table if not exists private.gmail_alias_probes (
-  id         bigint generated always as identity primary key,
-  bucket     text not null,
-  created_at timestamptz not null default now()
+-- One row per normalized inbox and one per client address. hits is the number
+-- of lookups in the open hour that started at window_start.
+create table if not exists private.gmail_alias_limits (
+  bucket       text primary key,
+  window_start timestamptz not null,
+  hits         integer not null
 );
 
-create index if not exists gmail_alias_probes_bucket_created_idx
-  on private.gmail_alias_probes (bucket, created_at);
+alter table private.gmail_alias_limits enable row level security;
+revoke all on table private.gmail_alias_limits from public, anon, authenticated;
 
-alter table private.gmail_alias_probes enable row level security;
-revoke all on table private.gmail_alias_probes from public, anon, authenticated;
+-- Locks the bucket row. Concurrent callers for the same bucket wait, then
+-- increment the count the previous caller committed. The returned hits value
+-- already includes this call.
+create or replace function private.gmail_alias_hit(p_bucket text)
+returns integer
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_hits integer;
+begin
+  insert into private.gmail_alias_limits as lim (bucket, window_start, hits)
+  values (p_bucket, now(), 1)
+  on conflict (bucket) do update
+  set hits = case
+        when lim.window_start <= now() - interval '1 hour' then 1
+        else lim.hits + 1
+      end,
+      window_start = case
+        when lim.window_start <= now() - interval '1 hour' then now()
+        else lim.window_start
+      end
+  returning hits into v_hits;
+  return v_hits;
+end;
+$$;
 
 -- Dots and +tags are insignificant. googlemail.com is the same inbox as gmail.com.
 -- Anything else, including a second @, returns null and is not looked up.
@@ -112,22 +144,12 @@ begin
   v_email_bucket := 'email:' || v_canon;
   v_ip_bucket := 'ip:' || coalesce(v_ip, 'unknown');
 
-  insert into private.gmail_alias_probes (bucket) values (v_email_bucket), (v_ip_bucket);
-  delete from private.gmail_alias_probes
-   where bucket in (v_email_bucket, v_ip_bucket)
-     and created_at < now() - interval '2 hours';
-
-  select count(*) into v_email_count
-    from private.gmail_alias_probes
-   where bucket = v_email_bucket
-     and created_at > now() - interval '1 hour';
-  select count(*) into v_ip_count
-    from private.gmail_alias_probes
-   where bucket = v_ip_bucket
-     and created_at > now() - interval '1 hour';
-
-  -- Eight lookups per normalized inbox per hour, twenty per client address.
-  -- Over the limit the answer is the same shape as "no account", with no hint.
+  -- Email first, then the client address, every time. The hit function locks
+  -- its row until this transaction commits, so a burst cannot all read a count
+  -- of one. Eight lookups per normalized inbox per hour, twenty per client
+  -- address. Over either limit the answer is the same shape as "no account".
+  v_email_count := private.gmail_alias_hit(v_email_bucket);
+  v_ip_count := private.gmail_alias_hit(v_ip_bucket);
   if v_email_count > 8 or v_ip_count > 20 then
     return jsonb_build_object('match', false);
   end if;
@@ -167,6 +189,7 @@ $$;
 
 revoke all on function private.gmail_canonical(text) from public, anon, authenticated;
 revoke all on function private.mask_email_hint(text) from public, anon, authenticated;
+revoke all on function private.gmail_alias_hit(text) from public, anon, authenticated;
 revoke all on function private.gmail_alias_lookup(text) from public;
 grant execute on function private.gmail_alias_lookup(text) to anon, authenticated, service_role;
 

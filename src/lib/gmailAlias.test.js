@@ -5,6 +5,7 @@ vi.mock('./supabase.js', () => ({ supabase: { rpc: vi.fn() } }))
 
 import { supabase } from './supabase.js'
 import {
+  GMAIL_ALIAS_LOOKUP_MS,
   gmailAliasDecision,
   gmailAliasWarning,
   isGmailFamily,
@@ -56,6 +57,23 @@ describe('gmail alias warning', () => {
     supabase.rpc.mockRejectedValue(new Error('function gmail_alias_hint does not exist'))
     await expect(lookupGmailAlias('famularo.marissa@googlemail.com')).resolves.toEqual({ match: false })
   })
+
+  it('treats a lookup that never returns as no match', async () => {
+    vi.useFakeTimers()
+    supabase.rpc.mockReturnValue(new Promise(() => {}))
+    const pending = lookupGmailAlias('famularo.marissa@gmail.com')
+    let settled = false
+    const done = pending.then((result) => {
+      settled = true
+      return result
+    })
+    await vi.advanceTimersByTimeAsync(GMAIL_ALIAS_LOOKUP_MS - 1)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(done).resolves.toEqual({ match: false })
+    expect(GMAIL_ALIAS_LOOKUP_MS).toBeLessThan(8000)
+    vi.useRealTimers()
+  })
 })
 
 describe('gmail alias migration', () => {
@@ -70,11 +88,15 @@ describe('gmail alias migration', () => {
     expect(body).toContain("jsonb_build_object('match', false)")
     expect(body).not.toMatch(/jsonb_build_object\([^)]*email/i)
     expect(body).toContain('enable row level security')
-    expect(body).toContain('revoke all on table private.gmail_alias_probes from public, anon, authenticated')
+    expect(body).toContain('revoke all on table private.gmail_alias_limits from public, anon, authenticated')
+    expect(body).toContain('on conflict (bucket) do update')
+    expect(body).toContain('returning hits into v_hits')
+    expect(body).toContain('revoke all on function private.gmail_alias_hit(text) from public, anon, authenticated')
     expect(body).toContain("v_domain not in ('gmail.com', 'googlemail.com')")
     expect(body).toContain("v_local := replace(v_local, '.', '')")
     expect(body).toContain("v_local := split_part(v_local, '+', 1)")
     expect(body).toContain('v_email_count > 8 or v_ip_count > 20')
+    expect(body).not.toContain('gmail_alias_probes')
     expect(body).toContain('grant execute on function public.gmail_alias_hint(text) to anon, authenticated, service_role')
   })
 })
