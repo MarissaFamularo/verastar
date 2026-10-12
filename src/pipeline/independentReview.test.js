@@ -1,10 +1,12 @@
 // Reproductions from the 2026-10-12 owner review of primary-outcome identification.
-// A row is the declared primary only when each component matches, qualifiers and
-// window included. A parenthetical or bracket is a time window, a pure abbreviation,
-// or part of the component; it is never dropped. A window is shared only when the
-// phrase puts one window on the whole endpoint. "within" is not "at". A subset, a
-// superset, a different window, or a quote/name/location that merely says "primary"
-// does not match.
+// A row is the declared primary only when each component matches, qualifiers bound
+// to that component and window included. A window is relation, duration, and anchor.
+// A parenthetical or bracket is a time window, a pure abbreviation, or part of the
+// component; it is never dropped and a qualifier never moves to another outcome.
+// A window is shared only when the phrase puts one window on the whole endpoint.
+// "within" is not "at". A named anchor is not an absent or different anchor.
+// A subset, a superset, a different window, or a quote/name/location that merely
+// says "primary" does not match. A token the parser cannot place is unidentified.
 
 import { describe, it, expect } from 'vitest'
 import { verify, TIERS } from './verify.js'
@@ -341,6 +343,200 @@ const row = (name) => ({
 
 describe('endpoint equality across subsets, supersets, qualifiers, brackets, and windows', () => {
   it.each(propertyCases())('$id', ({ source, name, state }) => {
+    const primary = findPrimary([row(name)], () => true, source)
+    if (state === 'identified') {
+      expect(primary, name).toMatchObject({ state: 'identified', basis: 'source' })
+    } else {
+      expect(primary, name).toMatchObject(UNKNOWN)
+    }
+  })
+})
+
+describe('a qualifier stays on its outcome, and a window keeps its anchor', () => {
+  const quote = 'The endpoint was higher (HR 1.81 [1.04-3.13])'
+  const check = (declared, name) => {
+    const source = `The primary end point was ${declared}. ${quote}.`
+    return findPrimary([validated(hr(name, quote), source)], isValidated, source)
+  }
+
+  it('does not match when requiring hospitalization moves from MI onto stroke', () => {
+    const declared = 'MI requiring hospitalization, or stroke'
+    expect(check(declared, 'MI, or stroke requiring hospitalization')).toMatchObject(UNKNOWN)
+    expect(check(declared, 'MI or stroke (requiring hospitalization)')).toMatchObject(UNKNOWN)
+    expect(check('MI (requiring hospitalization), or stroke', 'MI or stroke (requiring hospitalization)')).toMatchObject(UNKNOWN)
+    expect(check('MI [requiring hospitalization], or stroke', 'MI, or stroke [requiring hospitalization]')).toMatchObject(UNKNOWN)
+    expect(check('MI, requiring hospitalization, or stroke', 'MI or stroke, requiring hospitalization')).toMatchObject(UNKNOWN)
+    expect(check(declared, 'MI requiring hospitalization or stroke')).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+    })
+    expect(check('MI (requiring hospitalization), or stroke', 'MI (requiring hospitalization) or stroke')).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+    })
+  })
+
+  it('does not match when the anchor is surgery, or when the anchor is absent', () => {
+    const declared = 'Death within 30 days after randomization'
+    expect(check(declared, 'Death within 30 days after surgery')).toMatchObject(UNKNOWN)
+    expect(check(declared, 'Death within 30 days')).toMatchObject(UNKNOWN)
+    expect(check(declared, 'Death at 30 days after randomization')).toMatchObject(UNKNOWN)
+    expect(check(declared, 'Death within 90 days after randomization')).toMatchObject(UNKNOWN)
+    expect(check(declared, 'Death within 30 days after randomization')).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+    })
+    expect(check(declared, 'death within 30 days after the randomization')).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+    })
+  })
+})
+
+const SLOT_ANCHOR = 'surgery'
+const SLOT_DURATION = '90 days'
+
+function cloneSlots(components) {
+  return components.map((component) => ({
+    head: component.head,
+    qualifier: component.qualifier,
+    window: component.window ? { ...component.window } : null,
+  }))
+}
+
+function windowText(window) {
+  if (!window) return ''
+  const anchor = window.anchor ? ` after ${window.anchor}` : ''
+  return ` ${window.relation} ${window.duration}${anchor}`
+}
+
+function renderComponent(component, style) {
+  const timing = windowText(component.window)
+  if (!component.qualifier) return `${component.head}${timing}`
+  if (style === 'paren') return `${component.head} (${component.qualifier})${timing}`
+  if (style === 'bracket') return `${component.head} [${component.qualifier}]${timing}`
+  if (style === 'comma') return `${component.head}, ${component.qualifier}${timing}`
+  return `${component.head} ${component.qualifier}${timing}`
+}
+
+function renderEndpoint(components, style) {
+  const rendered = components.map((component) => renderComponent(component, style))
+  if (rendered.length < 2) return rendered.join('')
+  if (style === 'comma') return `${rendered[0]}, or ${rendered.slice(1).join(' or ')}`
+  if (rendered.length === 2) return rendered.join(' or ')
+  return `${rendered.slice(0, -1).join(', ')}, or ${rendered[rendered.length - 1]}`
+}
+
+function otherAnchor(anchor) {
+  return anchor === SLOT_ANCHOR ? 'discharge' : SLOT_ANCHOR
+}
+
+function otherRelation(relation) {
+  return relation === 'within' ? 'at' : 'within'
+}
+
+function otherDuration(duration) {
+  return duration === '30 days' ? SLOT_DURATION : '30 days'
+}
+
+function slotPerturbations(components) {
+  const found = []
+  const qualifierAt = components.findIndex((component) => component.qualifier)
+  if (qualifierAt >= 0 && components.length > 1) {
+    const target = components.findIndex((_, index) => index !== qualifierAt)
+    const moved = cloneSlots(components)
+    moved[target] = { ...moved[target], qualifier: moved[qualifierAt].qualifier }
+    moved[qualifierAt] = { ...moved[qualifierAt], qualifier: null }
+    found.push(['move qualifier', moved])
+  }
+  components.forEach((component, index) => {
+    if (!component.window) return
+    const anchor = cloneSlots(components)
+    anchor[index] = { ...anchor[index], window: { ...component.window, anchor: otherAnchor(component.window.anchor) } }
+    found.push([`change anchor of ${component.head}`, anchor])
+    if (component.window.anchor) {
+      const dropped = cloneSlots(components)
+      dropped[index] = { ...dropped[index], window: { ...component.window, anchor: '' } }
+      found.push([`drop anchor of ${component.head}`, dropped])
+    } else {
+      const added = cloneSlots(components)
+      added[index] = { ...added[index], window: { ...component.window, anchor: SLOT_ANCHOR } }
+      found.push([`add anchor of ${component.head}`, added])
+    }
+    const relation = cloneSlots(components)
+    relation[index] = { ...relation[index], window: { ...component.window, relation: otherRelation(component.window.relation) } }
+    found.push([`change relation of ${component.head}`, relation])
+    const duration = cloneSlots(components)
+    duration[index] = { ...duration[index], window: { ...component.window, duration: otherDuration(component.window.duration) } }
+    found.push([`change duration of ${component.head}`, duration])
+  })
+  if (components.some((component) => component.window)) {
+    const host = components.findIndex((component) => !component.window)
+    if (host >= 0) {
+      const addedWindow = cloneSlots(components)
+      addedWindow[host] = { ...addedWindow[host], window: { relation: 'at', duration: '1 year', anchor: 'discharge' } }
+      found.push([`add window of ${components[host].head}`, addedWindow])
+    }
+  }
+  found.push(['add component', [...cloneSlots(components), { head: 'major bleeding', qualifier: null, window: null }]])
+  if (components.length > 1) found.push(['drop component', cloneSlots(components).slice(0, -1)])
+  return found
+}
+
+const miAndStroke = [
+  { head: 'MI', qualifier: 'requiring hospitalization', window: null },
+  { head: 'stroke', qualifier: null, window: null },
+]
+const SLOT_BASES = [
+  { id: 'inline qualifier', style: 'inline', components: miAndStroke },
+  { id: 'parenthetical qualifier', style: 'paren', components: miAndStroke },
+  { id: 'bracket qualifier', style: 'bracket', components: miAndStroke },
+  { id: 'comma qualifier', style: 'comma', components: miAndStroke },
+  {
+    id: 'anchored death',
+    style: 'inline',
+    components: [
+      { head: 'death', qualifier: null, window: { relation: 'within', duration: '30 days', anchor: 'randomization' } },
+    ],
+  },
+  {
+    id: 'anchored death or stroke',
+    style: 'inline',
+    components: [
+      { head: 'death', qualifier: null, window: { relation: 'within', duration: '30 days', anchor: 'randomization' } },
+      { head: 'stroke', qualifier: 'requiring hospitalization', window: null },
+    ],
+  },
+  {
+    id: 'qualified death and anchored stroke',
+    style: 'paren',
+    components: [
+      { head: 'death', qualifier: 'requiring hospitalization', window: { relation: 'within', duration: '30 days', anchor: 'surgery' } },
+      { head: 'stroke', qualifier: null, window: { relation: 'at', duration: '1 year', anchor: 'discharge' } },
+    ],
+  },
+  {
+    id: 'untimed anchor slot',
+    style: 'inline',
+    components: [
+      { head: 'death', qualifier: null, window: { relation: 'within', duration: '30 days', anchor: '' } },
+    ],
+  },
+]
+
+function slotCases() {
+  const cases = []
+  for (const base of SLOT_BASES) {
+    const declared = renderEndpoint(base.components, base.style)
+    const source = `The primary end point was ${declared}.`
+    cases.push({ id: `${base.id} / exact / ${declared}`, source, name: declared, state: 'identified' })
+    for (const [kind, components] of slotPerturbations(base.components)) {
+      const name = renderEndpoint(components, base.style)
+      if (name === declared) throw new Error(`perturbation ${base.id} / ${kind} did not change the endpoint`)
+      cases.push({ id: `${base.id} / ${kind} / ${name}`, source, name, state: 'unknown' })
+    }
+  }
+  return cases
+}
+
+describe('one-slot perturbations of a parsed endpoint are unidentified', () => {
+  it.each(slotCases())('$id', ({ source, name, state }) => {
     const primary = findPrimary([row(name)], () => true, source)
     if (state === 'identified') {
       expect(primary, name).toMatchObject({ state: 'identified', basis: 'source' })
