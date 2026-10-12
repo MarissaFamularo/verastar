@@ -22,6 +22,7 @@ import { isSponsored } from '../lib/sponsor.js'
 import InviteCode from './InviteCode.jsx'
 import { currentNpiMatch } from '../lib/npi.js'
 import { supabaseConfigured } from '../lib/supabase.js'
+import { GmailAliasNotice } from './GmailAliasNotice.jsx'
 import { useEmailCodeSignIn } from '../lib/emailCode.js'
 import { useOnboardStep } from '../lib/onboardingRoute.js'
 import { getProfile, saveProfile } from '../lib/store.js'
@@ -261,6 +262,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
                 <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {signin.sendError}
               </div>
             )}
+            <GmailAliasNotice message={signin.aliasWarning} busy={signin.sendBusy} onContinue={() => signin.send(null, { force: true })} />
             <div className="flex items-center" style={{ marginTop: 20, gap: 18 }}>
                 <button type="submit" disabled={signin.sendBusy} className="cursor-pointer" style={{ ...primaryBtn, opacity: signin.sendBusy ? 0.6 : 1 }}>
                   {signin.sendBusy ? 'Sending…' : 'Email me a code'}

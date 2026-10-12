@@ -31,6 +31,7 @@ import { refreshSponsorship, isSponsored } from './lib/sponsor.js'
 import { seedLibraryIfDue } from './pipeline/seed.js'
 import { digestDateLine } from './lib/digestStore.js'
 import { needsExistingLibrarySync } from './lib/accountGate.js'
+import { GmailAliasNotice } from './components/GmailAliasNotice.jsx'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
@@ -364,6 +365,7 @@ function AccountSection({ account, first = false }) {
               <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {form.sendError}
             </div>
           )}
+          <GmailAliasNotice message={form.aliasWarning} busy={form.sendBusy} onContinue={() => form.send(null, { force: true })} />
           <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
             Signing in stores your steering profile, literature library, and usage events on our servers —
             never patient data, and never sold. You always hold your own flat-file copy
@@ -448,6 +450,7 @@ function ExistingLibrarySyncGate({ onNotNow }) {
                 <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {form.sendError}
               </div>
             )}
+            <GmailAliasNotice message={form.aliasWarning} busy={form.sendBusy} onContinue={() => form.send(null, { force: true })} />
             <div className="flex items-center" style={{ marginTop: 22, gap: 18 }}>
               <button type="submit" disabled={form.sendBusy || !form.email.trim()} className="cursor-pointer" style={{ padding: '12px 22px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: form.sendBusy || !form.email.trim() ? 0.5 : 1 }}>
                 {form.sendBusy ? 'Sending…' : 'Email me a secure code'}
