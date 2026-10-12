@@ -8,8 +8,9 @@
 // PAD-12, PAD-15, HF-02, AS-04, AS-01, PAD-05, CAR-10 led with secondary or subgroup results).
 //
 // This module is deterministic and pure. It never verifies anything and never marks an
-// unverified result as verified; it only LABELS results (from their own name and verbatim
-// quote) and decides when a finding must not carry numbers or must be withheld:
+// unverified result as verified; it only LABELS results (from their own name, and from
+// the verbatim quote for population and hypothesis) and decides when a finding must not
+// carry numbers or must be withheld:
 //   - tagResult: population (ITT / modified ITT / per-protocol / as-treated), hypothesis
 //     (noninferiority / superiority / equivalence), subgroup, primary/secondary role.
 //   - findPrimary: which extracted rows report the primary endpoint, and whether any of
@@ -67,14 +68,15 @@ export function describeTags(tags, { isPrimary = false } = {}) {
   return out.map((t) => `[${t}]`).join(' ')
 }
 
-// Where a row's PRIMARY label comes from, strongest first. Extraction order is NOT one of
-// them: the extraction prompt asks for the primary first, but nothing checks that it did,
-// and a paper whose extracted rows are all secondary still has a row zero (REV2, gap 1).
+// Where a row's PRIMARY label comes from when the source never declares one.
+// Extraction order is NOT one of them: the extraction prompt asks for the primary
+// first, but nothing checks that it did, and a paper whose extracted rows are all
+// secondary still has a row zero (REV2, gap 1). The source quote is not a label.
+// A quote can name the primary beside a different result ("stroke alone… the
+// primary end point was death or stroke"). The row's own endpoint is its name.
 const PRIMARY_WORD = /\b(?:co-?)?primary\b/i
-const PRIMARY_IN_QUOTE = /\bprimary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?|analysis|composite)\b/i
-const PRIMARY_BASES = [
+const LABEL_BASES = [
   ['name', (q) => PRIMARY_WORD.test(String(q?.name || ''))],
-  ['quote', (q) => PRIMARY_IN_QUOTE.test(String(q?.source_quote || ''))],
   ['location', (q) => PRIMARY_WORD.test(String(q?.location_hint || ''))],
 ]
 
@@ -98,7 +100,6 @@ const LEADING_ROLE = /^(?:the\s+)?(?:incidence|rate|risk|odds|hazard|occurrence|
 const METHOD_START = /^(?:assessed|measured|evaluated|using|defined|compared)\b/i
 const METHOD_CLAUSE = /\s*,?\s+(?:assessed|measured|evaluated|using|defined|compared|versus|vs\.?)\b[\s\S]*$/i
 const COMPONENT_SPLIT = /\s*,\s*|\s+and\s*\/\s*or\s+|\s+or\s+|\s+and\s+/i
-const QUALIFIER_BEFORE = '(?:central|branch|secondary|composite)'
 // A follow-up time stays attached to the endpoint. "12 months" is not "1 year":
 // only the printed number and unit are kept, and a different unit does not match.
 const TIME_WORDS = {
@@ -106,10 +107,7 @@ const TIME_WORDS = {
   nine: '9', ten: '10', eleven: '11', twelve: '12', thirty: '30', sixty: '60', ninety: '90',
 }
 const TIME_NUM_SRC = 'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirty|sixty|ninety|\\d+'
-
-function escapeRegExp(text) {
-  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
+const TIME_PHRASE = `(?:${TIME_NUM_SRC})[-\\s]?(?:day|week|month|year)s?`
 
 function abbreviationExpansions(text) {
   const map = new Map()
@@ -158,23 +156,50 @@ function dedupeTimes(times) {
   return found
 }
 
-// Parenthetical abbreviations stay attached to the words they follow. Any other
-// parenthesis is a qualifier ("stratified by…") and is not part of the endpoint.
-function absorbParentheticals(text) {
-  const markers = []
-  const cleaned = String(text || '')
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/\(([^)]*)\)/g, (_, inner) => {
-      const abbrev = String(inner).trim().match(/^([A-Z][A-Z0-9]{1,10})$/)
-      if (!abbrev) return ' '
-      const id = markers.length
-      markers.push(abbrev[1])
-      return ` §${id}§ `
-    })
-  return { cleaned: cleaned.replace(/\s+/g, ' ').trim(), markers }
+// A parenthetical that is only a timepoint is part of the endpoint
+// ("death or stroke (at 30 days)"). An abbreviation stays attached to the words
+// it follows. A parenthetical that mixes a timepoint with other words cannot be
+// split safely, so the clause is unparsed. A parenthetical with no timepoint is
+// a qualifier ("stratified by…") and is not an endpoint component.
+function timePhraseOnly(inner) {
+  const text = String(inner || '').replace(/\s+/g, ' ').trim()
+  if (!text) return null
+  const re = new RegExp(
+    `^(?:(?:at|after|during|following|within|between|over|through|by)\\s+)?${TIME_PHRASE}(?:\\s+(?:and|or)\\s+${TIME_PHRASE})*$`,
+    'i',
+  )
+  if (!re.test(text)) return null
+  const times = timesIn(text)
+  return times.length ? times : null
 }
 
-const TIME_PHRASE = `(?:${TIME_NUM_SRC})[-\\s]?(?:day|week|month|year)s?`
+function absorbParentheticals(text) {
+  const markers = []
+  const times = []
+  let uncertain = false
+  const cleaned = String(text || '')
+    .replace(/\[[^\]]*\]/g, (whole) => {
+      if (timesIn(whole).length) uncertain = true
+      return ' '
+    })
+    .replace(/\(([^)]*)\)/g, (_, inner) => {
+      const abbrev = String(inner).trim().match(/^([A-Z][A-Z0-9]{1,10})$/)
+      if (abbrev) {
+        const id = markers.length
+        markers.push(abbrev[1])
+        return ` §${id}§ `
+      }
+      const found = timePhraseOnly(inner)
+      if (found) {
+        times.push(...found)
+        return ' '
+      }
+      if (timesIn(inner).length) uncertain = true
+      return ' '
+    })
+  return { cleaned: cleaned.replace(/\s+/g, ' ').trim(), markers, times: dedupeTimes(times), uncertain }
+}
+
 const TRAILING_TIME = new RegExp(
   `\\s+(?:at|after|during|following|within|between|over|through|by)\\s+(?:${TIME_PHRASE}(?:\\s+(?:and|or)\\s+${TIME_PHRASE})*)(?:\\s+(?:after|following|from)\\s+[^,;]+)?\\s*$`,
   'i',
@@ -226,19 +251,37 @@ function componentsFromText(text, markers) {
   return components.length ? components : null
 }
 
-function prepareClause(clause) {
+// Timepoints are kept before a method clause is removed. "assessed at 30 days"
+// is the endpoint's timepoint; dropping it would let a one-year row match.
+// A timepoint that cannot be kept makes the clause unparsed.
+function clauseCore(clause) {
   const absorbed = absorbParentheticals(clause)
-  let text = absorbed.cleaned.replace(METHOD_CLAUSE, '').trim()
+  if (absorbed.uncertain) return null
+  const method = absorbed.cleaned.match(METHOD_CLAUSE)
+  let text = absorbed.cleaned
+  const methodTimes = []
+  if (method) {
+    methodTimes.push(...timesIn(method[0]))
+    text = text.slice(0, method.index).trim()
+  }
   const timed = takeSharedTime(text)
   if (!timed) return null
-  text = timed.text
+  const times = dedupeTimes([...absorbed.times, ...methodTimes, ...timed.times])
+  if (timesIn(clause).some((time) => !times.includes(time))) return null
+  return { text: timed.text, times, markers: absorbed.markers }
+}
+
+function prepareClause(clause) {
+  const core = clauseCore(clause)
+  if (!core) return null
+  const text = core.text
     .replace(/^(?:(?:a|an|the)\s+)?composite\s+of\s+/i, '')
     .replace(LEADING_ROLE, '')
     .replace(/^(?:the|a|an)\s+/i, '')
     .replace(/\s+/g, ' ')
     .trim()
   if (!text) return null
-  return { text, times: timed.times, markers: absorbed.markers }
+  return { text, times: core.times, markers: core.markers }
 }
 
 // Singular "the end point was …" and any "composite of …" are one endpoint:
@@ -275,36 +318,76 @@ function parseDeclaration(match, expansions) {
   return endpoints.length ? { endpoints, uncertain: false } : { endpoints: [], uncertain: true }
 }
 
-function phraseHit(raw, phrase) {
-  const text = normalize(raw)
-  const needle = normalize(phrase)
-  if (!needle || needle.length < 3) return false
-  if (needle.length <= 5) return new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(needle)}(?:$|[^a-z0-9])`).test(text)
-  const qualified = new RegExp(`(?:^|[^a-z0-9])(${QUALIFIER_BEFORE}\\s+)?${escapeRegExp(needle)}(?:$|[^a-z0-9])`).exec(text)
-  return !!qualified && !qualified[1]
+function componentEquals(rowComponent, declared, expansions) {
+  const rowNorm = normalize(rowComponent.text)
+  const declaredNorm = normalize(declared.text)
+  if (rowNorm && declaredNorm && rowNorm === declaredNorm) return true
+  const abbrevsOf = (component) => {
+    const abbrevs = [...component.abbrevs]
+    if (/^[A-Z][A-Z0-9]{1,10}$/.test(component.text) && !abbrevs.includes(component.text)) abbrevs.push(component.text)
+    return abbrevs
+  }
+  const rowAbbrevs = abbrevsOf(rowComponent)
+  const declaredAbbrevs = abbrevsOf(declared)
+  if (rowAbbrevs.some((abbrev) => declaredAbbrevs.includes(abbrev))) return true
+  if (declaredAbbrevs.some((abbrev) => normalize(expansions.get(abbrev) || '') === rowNorm)) return true
+  if (rowAbbrevs.some((abbrev) => normalize(expansions.get(abbrev) || '') === declaredNorm)) return true
+  return false
 }
 
-function abbrevHit(name, abbrev, expansions) {
-  if (new RegExp(`\\b${escapeRegExp(abbrev)}\\b`).test(String(name || ''))) return true
-  const expanded = expansions.get(abbrev)
-  return !!(expanded && phraseHit(name, expanded))
+// The row's component set has to be the declared set. A strict subset (stroke
+// alone) and a strict superset (death, stroke, or major bleeding) are different
+// endpoints. A parenthesis on the row that is neither an abbreviation nor a
+// timepoint can hide another component, so that row does not match.
+function rowEndpoint(name) {
+  let text = String(name || '')
+  text = text.replace(/^(?:the\s+)?(?:co-?)?primary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?|analysis|composite)\s*[:\-—]?\s*/i, '')
+  text = text.replace(/,\s+[^,]*\b(?:versus|vs\.?|compared(?:\s+with|\s+to)?)\b[\s\S]*$/i, '')
+  text = text.replace(/,?\s*\((?:hazard ratio|odds ratio|risk ratio|HR|OR|RR)\)\s*$/i, '')
+  const absorbed = absorbParentheticals(text)
+  if (absorbed.uncertain) return null
+  const hidden = String(name || '').match(/\(([^)]*)\)/g) || []
+  for (const paren of hidden) {
+    const inner = paren.slice(1, -1).trim()
+    if (/^[A-Z][A-Z0-9]{1,10}$/.test(inner)) continue
+    if (timePhraseOnly(inner)) continue
+    if (/^(?:hazard ratio|odds ratio|risk ratio|HR|OR|RR)$/i.test(inner)) continue
+    return null
+  }
+  const core = clauseCore(text)
+  if (!core) return null
+  const body = core.text
+    .replace(/^(?:(?:a|an|the)\s+)?composite\s+of\s+/i, '')
+    .replace(LEADING_ROLE, '')
+    .replace(/^(?:the|a|an)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const components = componentsFromText(body, core.markers)
+  if (!components) return null
+  return { components, times: core.times }
 }
 
-function componentHit(name, component, expansions) {
-  if (phraseHit(name, component.text)) return true
-  const abbrevs = [...component.abbrevs]
-  if (/^[A-Z][A-Z0-9]{1,10}$/.test(component.text) && !abbrevs.includes(component.text)) abbrevs.push(component.text)
-  return abbrevs.some((abbrev) => abbrevHit(name, abbrev, expansions))
+function sameComponentSet(rowComponents, item) {
+  if (rowComponents.length !== item.components.length) return false
+  const used = new Set()
+  for (const rowComponent of rowComponents) {
+    const index = item.components.findIndex((component, i) => !used.has(i) && componentEquals(rowComponent, component, item.expansions))
+    if (index < 0) return false
+    used.add(index)
+  }
+  return true
 }
 
 function itemHits(name, item) {
-  if (!timesAgree(item.times, timesIn(name))) return false
-  if (!item.components.length) return false
-  return item.components.every((component) => componentHit(name, component, item.expansions))
+  const row = rowEndpoint(name)
+  if (!row || !item.components.length) return false
+  if (!timesAgree(item.times, row.times)) return false
+  return sameComponentSet(row.components, item)
 }
 
-// The row's own endpoint name has to be the declared endpoint. A shared quote that
-// mentions the primary beside some other result does not make that other result primary.
+// The row's own endpoint name has to equal the declared endpoint. A shared quote
+// that mentions the primary beside some other result does not make that other
+// result primary, and neither does the word "primary" in the name or location.
 function matchesDeclared(row, primaryItems, secondaryItems) {
   const name = String(row?.quantity?.name || '')
   if (secondaryItems.some((item) => itemHits(name, item))) return false
@@ -312,14 +395,16 @@ function matchesDeclared(row, primaryItems, secondaryItems) {
 }
 
 // The paper's primary result, as an EXPLICIT state — never null:
-//   { state: 'identified', name, verified, indexes, basis }  a row is labelled primary (by its
-//       name, else its verbatim quote, else its location hint) and is not secondary, a
-//       subgroup, or a per-protocol / as-treated analysis (per-protocol noninferiority is
-//       allowed). verified: any primary row passes the call site's verified predicate.
+//   { state: 'identified', name, verified, indexes, basis }  the row's endpoint equals
+//       the declared primary (component set and timepoint), or — only when the source
+//       declares neither a primary nor a secondary — the row's name or location hint
+//       says primary. It is not secondary, a subgroup, or a per-protocol / as-treated
+//       analysis (per-protocol noninferiority is allowed). verified: any primary row
+//       passes the call site's verified predicate.
 //   { state: 'unknown', name: null, verified: false, indexes: [] }  results were extracted
-//       but none is labelled primary — e.g. only secondary results, or the source names a
-//       primary outcome and no extracted row matches it. The main finding is then WITHHELD
-//       by triage(): it cannot be weighed against a primary the app cannot name.
+//       but none is the primary — the declaration does not parse, no row equals it, or
+//       the source names a primary the app cannot bind. The main finding is then
+//       WITHHELD by triage(): it cannot be weighed against a primary the app cannot name.
 //   { state: 'unspecified', ... }  the source text was supplied and it never declares a
 //       primary or a secondary endpoint (a meta-analysis that pools named outcomes, for
 //       example). Verified results may be summarized; none of them is called the primary.
@@ -328,11 +413,10 @@ function matchesDeclared(row, primaryItems, secondaryItems) {
 //       the finding is number-free by construction (empty verified set) and model-checked.
 // rows: runPaper rows [{ quantity, verdict }]. isVerified: the call site's own predicate.
 // sourceText: the abstract or full text, when the caller has it. Omitted, an unlabelled
-// row is still unknown — position never promotes a row (REV2). One declared endpoint
-// matches only a name that carries every component and the shared timepoint. An
-// abbreviation is a synonym for the single component it follows. A parse that is
-// not one of those shapes is unidentified. The source quote is not a second copy
-// of the endpoint name.
+// row is still unknown — position never promotes a row (REV2). Identification against a
+// declaration succeeds only when the row's endpoint equals the declared one. An
+// abbreviation is a synonym for the single component it follows. Any other parse is
+// unidentified. Quote text is never an identification path.
 export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, sourceText = '') {
   const list = Array.isArray(rows) ? rows : []
   const none = (state) => ({ state, name: null, verified: false, indexes: [], basis: null })
@@ -348,23 +432,24 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
     indexes,
     basis,
   })
-  for (const [basis, test] of PRIMARY_BASES) {
-    const indexes = list.flatMap((row, i) => (eligible(row) && test(row?.quantity) ? [i] : []))
-    if (indexes.length) return identified(indexes, basis)
-  }
   const source = String(sourceText || '')
-  if (!source) return none('unknown')
-  const expansions = abbreviationExpansions(source)
-  const primaryParsed = parseDeclaration(source.match(PRIMARY_DECLARATION), expansions)
-  const secondaryParsed = parseDeclaration(source.match(SECONDARY_DECLARATION), expansions)
-  if (primaryParsed.uncertain || secondaryParsed.uncertain) return none('unknown')
-  if (primaryParsed.endpoints.length) {
+  // A declared primary is the only definition that counts. Name, location, and
+  // quote labels are not consulted, and a declaration that does not parse is
+  // unidentified rather than a reason to trust those labels.
+  if (source && (DECLARES_PRIMARY.test(source) || DECLARES_SECONDARY.test(source))) {
+    const expansions = abbreviationExpansions(source)
+    const primaryParsed = parseDeclaration(source.match(PRIMARY_DECLARATION), expansions)
+    const secondaryParsed = parseDeclaration(source.match(SECONDARY_DECLARATION), expansions)
+    if (primaryParsed.uncertain || secondaryParsed.uncertain || !primaryParsed.endpoints.length) return none('unknown')
     const indexes = list.flatMap((row, i) => (eligible(row) && matchesDeclared(row, primaryParsed.endpoints, secondaryParsed.endpoints) ? [i] : []))
     if (indexes.length) return identified(indexes, 'source')
     return none('unknown')
   }
-  // A declared secondary endpoint with no declared primary means the primary is missing.
-  if (DECLARES_PRIMARY.test(source) || DECLARES_SECONDARY.test(source)) return none('unknown')
+  for (const [basis, test] of LABEL_BASES) {
+    const indexes = list.flatMap((row, i) => (eligible(row) && test(row?.quantity) ? [i] : []))
+    if (indexes.length) return identified(indexes, basis)
+  }
+  if (!source) return none('unknown')
   if (list.some((row) => {
     const tags = tagResult(row?.quantity)
     return tags.secondary || tags.subgroup || nonRandomized(tags)
