@@ -56,12 +56,14 @@ describe('gap 1 — a missing primary is an explicit state, and the main finding
     expect(findPrimary(rows)).toMatchObject({ state: 'unknown' })
   })
 
-  it('identifies by name, then verbatim quote, then location hint — never by position', () => {
+  it('identifies by name, then location hint — never by position or by quote text', () => {
     const byQuote = [
       { quantity: q({ name: 'Death, A vs B', source_quote: 'death occurred in 5%' }), verdict: { flagged: false } },
       { quantity: q({ name: 'Composite, A vs B', source_quote: 'the primary end point occurred in 10% and 12%' }), verdict: { flagged: true } },
     ]
-    expect(findPrimary(byQuote)).toMatchObject({ state: 'identified', basis: 'quote', indexes: [1], verified: false })
+    expect(findPrimary(byQuote)).toMatchObject({ state: 'unknown', name: null, verified: false, indexes: [] })
+    const byName = [{ quantity: q({ name: 'Primary composite, A vs B' }), verdict: { flagged: false } }]
+    expect(findPrimary(byName)).toMatchObject({ state: 'identified', basis: 'name', verified: true, indexes: [0] })
     const byHint = [{ quantity: q({ name: 'Composite, A vs B', location_hint: 'Results, primary outcome' }), verdict: { flagged: false } }]
     expect(findPrimary(byHint)).toMatchObject({ state: 'identified', basis: 'location', verified: true })
     // a subgroup labelled "primary" never stands in for the primary

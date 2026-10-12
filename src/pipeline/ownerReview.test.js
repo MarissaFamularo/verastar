@@ -183,11 +183,11 @@ describe('comma lists and abbreviations are one composite', () => {
     })
   })
 
-  it('keeps a plural outcome list as separate endpoints and withholds a plural list joined by or', () => {
+  it('keeps a plural outcome list as separate endpoints and withholds a combination or a list joined by or', () => {
     const listed = 'Primary outcomes were wound healing, major amputation, and major adverse limb events (MALE).'
     expect(findPrimary([row('Two-year major amputation')], () => true, listed)).toMatchObject({ state: 'identified' })
     expect(findPrimary([row('Two-year MALE')], () => true, listed)).toMatchObject({ state: 'identified' })
-    expect(findPrimary([row('wound healing and major amputation')], () => true, listed)).toMatchObject({ state: 'identified' })
+    expect(findPrimary([row('wound healing and major amputation')], () => true, listed)).toMatchObject({ state: 'unknown', verified: false })
     const mixed = 'Primary outcomes were death, myocardial infarction, or stroke at 30 days.'
     expect(findPrimary([row('30-day death, myocardial infarction, or stroke')], () => true, mixed)).toMatchObject({ state: 'unknown', verified: false })
     expect(findPrimary([row('Myocardial infarction')], () => true, mixed)).toMatchObject({ state: 'unknown', verified: false })

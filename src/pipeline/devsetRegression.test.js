@@ -207,7 +207,7 @@ describe('fix 2 — primary-result handling on saved rows', () => {
 
   it('PAD-15, PAD-05, CAR-10: primary state (the model-side fix needs a paid rerun to confirm)', () => {
     expect(findPrimary(load('PAD-15').rows).name).toMatch(/VascuQoL-6.*primary endpoint/)
-    // REV2: no PAD-05 row is labelled primary (name, quote, or location) → unknown, not row 0
+    // REV2: no PAD-05 row is labelled primary (name or location) → unknown, not row 0
     expect(findPrimary(load('PAD-05').rows)).toMatchObject({ state: 'unknown', name: null, verified: false })
     // REV2: CAR-10's only verified "primary" rows were the symptomatic/asymptomatic subgroups
     expect(findPrimary(load('CAR-10').rows)).toMatchObject({ state: 'identified', verified: false, indexes: [0, 1, 2] })

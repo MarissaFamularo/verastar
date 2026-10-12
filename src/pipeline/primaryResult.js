@@ -8,8 +8,9 @@
 // PAD-12, PAD-15, HF-02, AS-04, AS-01, PAD-05, CAR-10 led with secondary or subgroup results).
 //
 // This module is deterministic and pure. It never verifies anything and never marks an
-// unverified result as verified; it only LABELS results (from their own name and verbatim
-// quote) and decides when a finding must not carry numbers or must be withheld:
+// unverified result as verified; it only LABELS results (from their own name, and from
+// the verbatim quote for population and hypothesis) and decides when a finding must not
+// carry numbers or must be withheld:
 //   - tagResult: population (ITT / modified ITT / per-protocol / as-treated), hypothesis
 //     (noninferiority / superiority / equivalence), subgroup, primary/secondary role.
 //   - findPrimary: which extracted rows report the primary endpoint, and whether any of
@@ -67,14 +68,15 @@ export function describeTags(tags, { isPrimary = false } = {}) {
   return out.map((t) => `[${t}]`).join(' ')
 }
 
-// Where a row's PRIMARY label comes from, strongest first. Extraction order is NOT one of
-// them: the extraction prompt asks for the primary first, but nothing checks that it did,
-// and a paper whose extracted rows are all secondary still has a row zero (REV2, gap 1).
+// Where a row's PRIMARY label comes from when the source never declares one.
+// Extraction order is NOT one of them: the extraction prompt asks for the primary
+// first, but nothing checks that it did, and a paper whose extracted rows are all
+// secondary still has a row zero (REV2, gap 1). The source quote is not a label.
+// A quote can name the primary beside a different result ("stroke alone… the
+// primary end point was death or stroke"). The row's own endpoint is its name.
 const PRIMARY_WORD = /\b(?:co-?)?primary\b/i
-const PRIMARY_IN_QUOTE = /\bprimary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?|analysis|composite)\b/i
-const PRIMARY_BASES = [
+const LABEL_BASES = [
   ['name', (q) => PRIMARY_WORD.test(String(q?.name || ''))],
-  ['quote', (q) => PRIMARY_IN_QUOTE.test(String(q?.source_quote || ''))],
   ['location', (q) => PRIMARY_WORD.test(String(q?.location_hint || ''))],
 ]
 
@@ -98,7 +100,6 @@ const LEADING_ROLE = /^(?:the\s+)?(?:incidence|rate|risk|odds|hazard|occurrence|
 const METHOD_START = /^(?:assessed|measured|evaluated|using|defined|compared)\b/i
 const METHOD_CLAUSE = /\s*,?\s+(?:assessed|measured|evaluated|using|defined|compared|versus|vs\.?)\b[\s\S]*$/i
 const COMPONENT_SPLIT = /\s*,\s*|\s+and\s*\/\s*or\s+|\s+or\s+|\s+and\s+/i
-const QUALIFIER_BEFORE = '(?:central|branch|secondary|composite)'
 // A follow-up time stays attached to the endpoint. "12 months" is not "1 year":
 // only the printed number and unit are kept, and a different unit does not match.
 const TIME_WORDS = {
@@ -106,10 +107,7 @@ const TIME_WORDS = {
   nine: '9', ten: '10', eleven: '11', twelve: '12', thirty: '30', sixty: '60', ninety: '90',
 }
 const TIME_NUM_SRC = 'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirty|sixty|ninety|\\d+'
-
-function escapeRegExp(text) {
-  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
+const TIME_PHRASE = `(?:${TIME_NUM_SRC})[-\\s]?(?:day|week|month|year)s?`
 
 function abbreviationExpansions(text) {
   const map = new Map()
@@ -144,108 +142,459 @@ function timesIn(text) {
   return found
 }
 
-// A declared timepoint must be present, and a different timepoint must not be.
-// No declared timepoint does not constrain the row (a paper can still say "two-year").
-function timesAgree(declared, rowTimes) {
-  if (!declared.length) return true
-  if (!rowTimes.length) return false
-  return rowTimes.every((time) => declared.includes(time))
+// A window is (relation, duration, anchor). "within" is not "at". A bare "30-day"
+// prefix is relation "at" and anchor none. The anchor is the event after
+// after/following/from ("randomization", "the index procedure"). An absent anchor
+// is not the same event as a named one. A declaration with no windows at all does
+// not constrain a row window; a single untimed component beside a timed one does.
+const WINDOW_REL = 'at|after|during|following|within|between|over|through|by'
+const ANCHOR_INTRO = 'after|following|from'
+// An anchor is the event words after after/following/from. It stops before the
+// next outcome ("or" / "and"), so "after surgery or stroke" is not one event.
+const ANCHOR_WORD = "(?!(?:or|and|versus|vs)\\b)[A-Za-z][A-Za-z'-]*"
+const ANCHOR_PHRASE = `${ANCHOR_WORD}(?:\\s+${ANCHOR_WORD}){0,5}`
+const TIME_LIST = `${TIME_PHRASE}(?:\\s+(?:and|or)\\s+${TIME_PHRASE})*`
+const LEADING_TIME = new RegExp(`^(?:(?:${TIME_PHRASE})\\s+)+`, 'i')
+const RELATION_WORD = /^(?:at|after|during|following|within|between|over|through)$/i
+const PHRASE_FINAL_ANCHOR = new RegExp(`^(.*)\\s+(?:${ANCHOR_INTRO})\\s+(${ANCHOR_PHRASE})\\s*$`, 'i')
+const LOOSE_ANCHOR = new RegExp(`\\b(?:${ANCHOR_INTRO})\\b`, 'i')
+const LEADING_RELATION = new RegExp(`^(${WINDOW_REL})\\s+(${TIME_LIST})(?:\\s+(${ANCHOR_INTRO})\\s+${ANCHOR_PHRASE})?\\s+`, 'i')
+// Articles and "only" drop out. Connector words do not: "with", "to", and "from"
+// are not discarded, so an unfamiliar phrase cannot disappear before the
+// vocabulary check.
+const STOP_WORDS = new Set(['only', 'the', 'a', 'an', 'of', 'by', 'for'])
+
+function canonicalRelation(relation) {
+  return String(relation || 'at').trim().toLowerCase() || 'at'
 }
 
-function dedupeTimes(times) {
+function dedupeWindows(windows) {
   const found = []
-  for (const time of times) if (time && !found.includes(time)) found.push(time)
+  const seen = new Set()
+  for (const window of windows || []) {
+    if (!window?.time) continue
+    const relation = canonicalRelation(window.relation)
+    const anchor = String(window.anchor || '')
+    const key = `${relation}|${window.time}|${anchor}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    found.push({ relation, time: window.time, anchor })
+  }
   return found
 }
 
-// Parenthetical abbreviations stay attached to the words they follow. Any other
-// parenthesis is a qualifier ("stratified by…") and is not part of the endpoint.
-function absorbParentheticals(text) {
-  const markers = []
-  const cleaned = String(text || '')
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/\(([^)]*)\)/g, (_, inner) => {
-      const abbrev = String(inner).trim().match(/^([A-Z][A-Z0-9]{1,10})$/)
-      if (!abbrev) return ' '
-      const id = markers.length
-      markers.push(abbrev[1])
-      return ` §${id}§ `
-    })
-  return { cleaned: cleaned.replace(/\s+/g, ' ').trim(), markers }
+function windowsFrom(relation, timeText, anchor = '') {
+  const rel = canonicalRelation(relation)
+  const event = String(anchor || '')
+  return dedupeWindows(timesIn(timeText).map((time) => ({ relation: rel, time, anchor: event })))
 }
 
-const TIME_PHRASE = `(?:${TIME_NUM_SRC})[-\\s]?(?:day|week|month|year)s?`
-const TRAILING_TIME = new RegExp(
-  `\\s+(?:at|after|during|following|within|between|over|through|by)\\s+(?:${TIME_PHRASE}(?:\\s+(?:and|or)\\s+${TIME_PHRASE})*)(?:\\s+(?:after|following|from)\\s+[^,;]+)?\\s*$`,
-  'i',
-)
-const LEADING_TIME = new RegExp(`^(?:${TIME_PHRASE}\\s+)+`, 'i')
+function sameWindow(left, right) {
+  return left.relation === right.relation && left.time === right.time && (left.anchor || '') === (right.anchor || '')
+}
 
-// The shared timepoint sits on the whole endpoint ("…, or stroke at 30 days",
-// "30-day death or stroke"). A time left between components is not one shared
-// timepoint, so the declaration is not parsed.
-function takeSharedTime(phrase) {
-  let text = phrase
-  const collected = []
-  const trailing = text.match(TRAILING_TIME)
-  if (trailing) {
-    collected.push(...timesIn(trailing[0]))
-    text = text.slice(0, trailing.index).trim()
+function windowsAgree(declared, row, untimedEndpoint = false) {
+  const left = declared || []
+  const right = row || []
+  // A wholly untimed declaration does not constrain a row window. Once any
+  // component carries a window, a component with no window matches only a
+  // component with no window — an absent anchor or duration is not a wildcard.
+  if (!left.length) return untimedEndpoint || right.length === 0
+  if (!right.length) return false
+  return right.every((window) => left.some((item) => sameWindow(item, window)))
+}
+
+function sameWindowSet(left, right) {
+  const a = dedupeWindows(left)
+  const b = dedupeWindows(right)
+  return a.length === b.length && windowsAgree(a, b)
+}
+
+function contentWords(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/§\d+§/g, ' ')
+    .split(/[^a-z0-9'-]+/)
+    .filter((word) => word && !STOP_WORDS.has(word))
+}
+
+function wordBag(text) {
+  return [...new Set(contentWords(text))].sort()
+}
+
+// A comma/or piece is one component only when its content words are exactly one
+// outcome from this list, plus qualifier phrases from the list below. Anything
+// else ("leading to", "resulting in", "due to", "causing", "with") is unparsed.
+// The matcher does not split a piece into a guessed outcome and a leftover.
+const OUTCOME_PHRASES = [
+  'death',
+  'stroke',
+  'myocardial infarction',
+  'major bleeding',
+  'major amputation',
+  'wound healing',
+  'major adverse limb events',
+  'amputation-free survival',
+  'retinal artery occlusion',
+]
+const OUTCOME_ALIASES = [
+  ['MI', 'myocardial infarction'],
+  ['MALE', 'major adverse limb events'],
+  ['RAO', 'retinal artery occlusion'],
+]
+const QUALIFIER_PHRASES = [
+  'requiring hospitalization',
+  'cardiovascular',
+  'ipsilateral',
+]
+
+function phraseWords(phrase) {
+  return contentWords(phrase)
+}
+
+const OUTCOME_TERMS = OUTCOME_PHRASES.map((phrase) => ({ words: phraseWords(phrase), canonical: wordBag(phrase) }))
+const ALIAS_TERMS = OUTCOME_ALIASES.map(([alias, phrase]) => ({ words: [alias.toLowerCase()], canonical: wordBag(phrase) }))
+const TERMS = [...OUTCOME_TERMS, ...ALIAS_TERMS].sort((a, b) => b.words.length - a.words.length)
+const QUALIFIER_TERMS = QUALIFIER_PHRASES.map((phrase) => phraseWords(phrase)).sort((a, b) => b.length - a.length)
+
+function sameWords(left, right) {
+  return left.length === right.length && left.every((word, index) => word === right[index])
+}
+
+function coversPhrases(words, phrases) {
+  if (!words.length) return true
+  for (const phrase of phrases) {
+    if (phrase.length > words.length || !sameWords(words.slice(0, phrase.length), phrase)) continue
+    if (coversPhrases(words.slice(phrase.length), phrases)) return true
   }
-  const sameIntervals = text.match(/\s+at\s+the\s+same\s+intervals?\s*$/i)
-  if (sameIntervals) text = text.slice(0, sameIntervals.index).trim()
+  return false
+}
+
+// One successful reading. Two different ways to assign the same words is a guess.
+function recognizeHead(words) {
+  if (!words.length) return null
+  const found = []
+  for (const term of TERMS) {
+    for (let start = 0; start + term.words.length <= words.length; start++) {
+      if (!sameWords(words.slice(start, start + term.words.length), term.words)) continue
+      const before = words.slice(0, start)
+      const after = words.slice(start + term.words.length)
+      if (!coversPhrases(before, QUALIFIER_TERMS) || !coversPhrases(after, QUALIFIER_TERMS)) continue
+      found.push({ headWords: term.canonical, qualifiers: [...before, ...after].sort() })
+    }
+  }
+  if (!found.length) return null
+  const key = (item) => `${item.headWords.join('\0')}\0${item.qualifiers.join('\0')}`
+  if (new Set(found.map(key)).size !== 1) return null
+  return found[0]
+}
+
+function absorbAnchor(text, windows, markers) {
+  const tail = String(text || '').match(PHRASE_FINAL_ANCHOR)
+  if (!tail) return { text, windows, ok: true }
+  const anchor = anchorOf(tail[2])
+  const rest = tail[1].replace(/[,\s]+$/g, '').trim()
+  // No window on this phrase yet: the anchor belongs to a component window that
+  // has not been split off, or there is no duration and the component parser
+  // will reject the leftover intro. Do not drop the event.
+  if (!windows.length) return { text, windows, ok: true }
+  if (!anchor || windows.some((window) => window.anchor) || hasWindow(rest, markers)) return { ok: false }
+  return { text: rest, windows: windows.map((window) => ({ ...window, anchor })), ok: true }
+}
+
+// A parenthetical or bracket is never discarded. It is a time window, a pure
+// abbreviation, a recognized qualifier phrase, or a piece that is re-read as a
+// component. That piece survives only when it is a recognized outcome. A time
+// mixed with other words, or a decoration with no content, is unparsed.
+function anchorOf(phrase) {
+  const words = contentWords(phrase)
+  if (!words.length || timesIn(phrase).length) return null
+  return words.join(' ')
+}
+
+// A window phrase is a relation, a duration, and an optional anchor event.
+// Every token has to land in one of those slots. A bare duration is relation "at".
+function parseWindowPhrase(text) {
+  const raw = String(text || '').replace(/§\d+§/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!raw) return null
+  const match = raw.match(new RegExp(
+    `^(?:(${WINDOW_REL})\\s+)?(${TIME_LIST})(?:\\s+(${ANCHOR_INTRO})\\s+(${ANCHOR_PHRASE}))?$`,
+    'i',
+  ))
+  if (!match || !timesIn(match[2]).length) return null
+  let anchor = ''
+  if (match[3]) {
+    anchor = anchorOf(match[4] || '')
+    if (!anchor) return null
+  }
+  const windows = windowsFrom(match[1] || 'at', match[2], anchor)
+  return windows.length ? windows : null
+}
+
+function decorationWindows(inner) {
+  return parseWindowPhrase(inner)
+}
+
+function decorate(text) {
+  const markers = []
+  let current = String(text || '')
+  for (let step = 0; step < 20; step++) {
+    const match = /\(([^()[\]]*)\)|\[([^()[\]]*)\]/.exec(current)
+    if (!match) break
+    const inner = String(match[1] ?? match[2] ?? '').replace(/\s+/g, ' ').trim()
+    const abbrev = inner.match(/^([A-Z][A-Z0-9]{1,10})$/)
+    let replacement = ' '
+    if (abbrev) {
+      markers.push({ kind: 'abbrev', value: abbrev[1] })
+      replacement = ` §${markers.length - 1}§ `
+    } else {
+      const windows = decorationWindows(inner)
+      const words = contentWords(inner)
+      if (windows) {
+        markers.push({ kind: 'window', value: windows })
+        replacement = ` §${markers.length - 1}§ `
+      } else if (timesIn(inner.replace(/§\d+§/g, ' ')).length || words.length === 0) {
+        return { text: current, markers, uncertain: true }
+      } else if (coversPhrases(words, QUALIFIER_TERMS)) {
+        markers.push({ kind: 'qualifier', value: words })
+        replacement = ` §${markers.length - 1}§ `
+      } else {
+        // Re-read as its own piece. It survives only when that piece is a
+        // recognized outcome; an unfamiliar phrase does not become one.
+        markers.push({ kind: 'extra', value: inner })
+        replacement = ` §${markers.length - 1}§ `
+      }
+    }
+    current = `${current.slice(0, match.index)}${replacement}${current.slice(match.index + match[0].length)}`
+  }
+  if (/[()[\]]/.test(current)) return { text: current, markers, uncertain: true }
+  return { text: current.replace(/\s+/g, ' ').trim(), markers, uncertain: false }
+}
+
+function hasWindow(text, markers) {
+  if (timesIn(text).length) return true
+  for (const match of String(text || '').matchAll(/§(\d+)§/g)) {
+    if (markers[Number(match[1])]?.kind === 'window') return true
+  }
+  return false
+}
+
+function trailingWindow(text) {
+  const match = String(text || '').match(new RegExp(
+    `\\s+(${WINDOW_REL})\\s+(${TIME_LIST})(?:\\s+(${ANCHOR_INTRO})\\s+${ANCHOR_PHRASE})?\\s*$`,
+    'i',
+  ))
+  if (!match) return null
+  const windows = parseWindowPhrase(text.slice(match.index))
+  if (!windows) return null
+  return { index: match.index, windows }
+}
+
+// A window is shared by every component only when one leading or trailing window
+// covers the whole phrase. A window left on a component stays on that component.
+function peelSharedWindow(text, markers) {
+  const accept = (rest, windows) => {
+    const cleaned = String(rest || '').replace(/^[,\s]+|[,\s]+$/g, '').trim()
+    if (!windows.length || hasWindow(cleaned, markers)) return null
+    return { text: cleaned, windows: dedupeWindows(windows) }
+  }
+  const trailing = trailingWindow(text)
+  if (trailing) {
+    const peeled = accept(text.slice(0, trailing.index), trailing.windows)
+    if (peeled) return absorbOrKeep(peeled.text, peeled.windows, markers)
+  }
+  const marker = text.match(/\s*§(\d+)§\s*$/)
+  if (marker && markers[Number(marker[1])]?.kind === 'window') {
+    const peeled = accept(text.slice(0, marker.index), markers[Number(marker[1])].value)
+    if (peeled) return absorbOrKeep(peeled.text, peeled.windows, markers)
+  }
   const leading = text.match(LEADING_TIME)
   if (leading) {
-    collected.push(...timesIn(leading[0]))
-    text = text.slice(leading[0].length).trim()
-  }
-  if (timesIn(text).length) return null
-  return { text, times: dedupeTimes(collected) }
-}
-
-function componentsFromText(text, markers) {
-  const components = []
-  for (const raw of String(text || '').split(COMPONENT_SPLIT)) {
-    const abbrevs = []
-    let part = raw.replace(/§(\d+)§/g, (_, n) => {
-      const abbrev = markers[Number(n)]
-      if (abbrev) abbrevs.push(abbrev)
-      return ' '
-    })
-    part = part.replace(/^(?:and\/or|and|or)\s+/i, '').replace(/\s+(?:and\/or|and|or)$/i, '')
-    part = part.replace(/^(?:the|a|an)\s+/i, '').replace(/\s+/g, ' ').trim()
-    if (!part && abbrevs.length) {
-      components.push({ text: abbrevs[0], abbrevs })
-      continue
+    const rest = text.slice(leading[0].length)
+    // "1-year death after randomization or stroke": the anchor sits on death,
+    // so the leading duration is not a window shared by the later outcome.
+    const anchorStaysOnComponent = LOOSE_ANCHOR.test(rest) && !PHRASE_FINAL_ANCHOR.test(rest)
+    if (!anchorStaysOnComponent) {
+      const peeled = accept(rest, windowsFrom('at', leading[0], ''))
+      if (peeled) return absorbOrKeep(peeled.text, peeled.windows, markers)
     }
-    if (!part || METHOD_START.test(part)) continue
-    if (part.length < 3 && !/^[A-Z][A-Z0-9]{1,10}$/.test(part)) return null
-    if (/§\d+§/.test(part)) return null
-    components.push({ text: part, abbrevs })
   }
-  return components.length ? components : null
+  const leadingRelation = text.match(LEADING_RELATION)
+  if (leadingRelation) {
+    const windows = parseWindowPhrase(leadingRelation[0].trim())
+    if (windows) {
+      const peeled = accept(text.slice(leadingRelation[0].length), windows)
+      if (peeled) return absorbOrKeep(peeled.text, peeled.windows, markers)
+    }
+  }
+  return absorbOrKeep(text, [], markers)
 }
 
-function prepareClause(clause) {
-  const absorbed = absorbParentheticals(clause)
-  let text = absorbed.cleaned.replace(METHOD_CLAUSE, '').trim()
-  const timed = takeSharedTime(text)
-  if (!timed) return null
-  text = timed.text
+function absorbOrKeep(text, windows, markers) {
+  const absorbed = absorbAnchor(text, windows, markers)
+  if (!absorbed.ok) return null
+  return { text: absorbed.text, windows: dedupeWindows(absorbed.windows) }
+}
+
+function finishBody(text) {
+  return String(text || '')
     .replace(/^(?:(?:a|an|the)\s+)?composite\s+of\s+/i, '')
     .replace(LEADING_ROLE, '')
     .replace(/^(?:the|a|an)\s+/i, '')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+// A method clause is kept only when it is nothing but a window ("assessed at 30
+// days"). Any other word in that clause is not a component, qualifier, window,
+// or abbreviation, so the declaration is unparsed.
+function readMethod(clause) {
+  const method = String(clause || '').match(METHOD_CLAUSE)
+  if (!method) return { text: clause, windows: [], ok: true }
+  let rest = method[0].replace(/^\s*,?\s*(?:assessed|measured|evaluated|using|defined|compared)\b\s*/i, '')
+  rest = rest.replace(/^(?:by|with|using)\s+/i, '').trim()
+  const body = clause.slice(0, method.index).replace(/[,\s]+$/g, '').trim()
+  if (!rest) return { text: body, windows: [], ok: true }
+  const windows = parseWindowPhrase(rest)
+  if (!windows) return { ok: false }
+  return { text: body, windows, ok: true }
+}
+
+// Time windows are kept before a method clause is removed. A method-clause
+// window and a different window inside the endpoint cannot both be read, so
+// that clause is unparsed.
+function analyzeClause(clause) {
+  const decorated = decorate(clause)
+  if (decorated.uncertain) return null
+  let text = decorated.text.replace(/\s+/g, ' ').trim()
+  const method = readMethod(text)
+  if (!method.ok) return null
+  if (method.windows.length && hasWindow(method.text, decorated.markers)) return null
+  text = method.text.replace(/^(?:the|a|an)\s+/i, '').trim()
+  const peeled = peelSharedWindow(text, decorated.markers)
+  if (!peeled) return null
+  if (method.windows.length && peeled.windows.length && !sameWindowSet(method.windows, peeled.windows)) return null
+  text = finishBody(peeled.text)
   if (!text) return null
-  return { text, times: timed.times, markers: absorbed.markers }
+  return { text, windows: dedupeWindows([...peeled.windows, ...method.windows]), markers: decorated.markers }
+}
+
+function parsePiece(raw, markers, inherited) {
+  const abbrevs = []
+  const qualifiers = []
+  const own = []
+  let part = String(raw || '').replace(/§(\d+)§/g, (_, n) => {
+    const marker = markers[Number(n)]
+    if (!marker || marker.kind === 'extra') return ' '
+    if (marker.kind === 'abbrev') abbrevs.push(marker.value)
+    else if (marker.kind === 'qualifier') qualifiers.push(...marker.value)
+    else if (marker.kind === 'window') own.push(...marker.value)
+    return ' '
+  })
+  part = part.replace(/^(?:and\/or|and|or)\s+/i, '').replace(/\s+(?:and\/or|and|or)$/i, '')
+  part = part.replace(/^(?:the|a|an)\s+/i, '').replace(/\s+/g, ' ').trim()
+  if (!part && !abbrevs.length && !qualifiers.length) return undefined
+  if (METHOD_START.test(part)) return null
+  const trailing = trailingWindow(part)
+  if (trailing) {
+    own.push(...trailing.windows)
+    part = part.slice(0, trailing.index).trim()
+  }
+  const leading = part.match(LEADING_TIME)
+  if (leading) {
+    if (own.length) return null
+    own.push(...windowsFrom('at', leading[0], ''))
+    part = part.slice(leading[0].length).trim()
+  }
+  const leadingRelation = part.match(LEADING_RELATION)
+  if (leadingRelation) {
+    if (own.length) return null
+    const windows = parseWindowPhrase(leadingRelation[0].trim())
+    if (!windows) return null
+    own.push(...windows)
+    part = part.slice(leadingRelation[0].length).trim()
+  }
+  const absorbed = absorbAnchor(part, own, markers)
+  if (!absorbed.ok) return null
+  part = absorbed.text
+  own.splice(0, own.length, ...absorbed.windows)
+  part = part.replace(/^(?:the|a|an)\s+/i, '').replace(/\s+/g, ' ').trim()
+  if (timesIn(part).length || /§\d+§|[()[\]]/.test(part)) return null
+  // A leftover anchor intro was not placed in a window.
+  if (LOOSE_ANCHOR.test(part) || contentWords(part).some((word) => RELATION_WORD.test(word))) return null
+  if ((inherited || []).length && own.length && !sameWindowSet(inherited, own)) return null
+  const windows = dedupeWindows(own.length ? own : inherited)
+  if (/^[A-Z][A-Z0-9]{1,10}$/.test(part) && !abbrevs.includes(part)) abbrevs.push(part)
+  const words = contentWords(part)
+  const markerQualifiers = [...qualifiers]
+  if (markerQualifiers.length && !coversPhrases(markerQualifiers, QUALIFIER_TERMS)) return null
+  const recognized = recognizeHead(words)
+  if (recognized) {
+    return {
+      headWords: recognized.headWords,
+      qualifiers: [...new Set([...markerQualifiers, ...recognized.qualifiers])].sort(),
+      abbrevs,
+      windows,
+      head: part,
+    }
+  }
+  // A comma piece that is only a recognized qualifier binds to the previous
+  // outcome. It does not become an outcome of its own.
+  if (!abbrevs.length && !windows.length && words.length && coversPhrases(words, QUALIFIER_TERMS)) {
+    return { qualifierOnly: true, qualifiers: [...new Set([...markerQualifiers, ...words])].sort() }
+  }
+  if (!words.length && !abbrevs.length && coversPhrases(markerQualifiers, QUALIFIER_TERMS) && markerQualifiers.length && !windows.length) {
+    return { qualifierOnly: true, qualifiers: [...new Set(markerQualifiers)].sort() }
+  }
+  return null
+}
+
+function segmentComponents(raw, markers, inherited) {
+  const extras = []
+  const hostText = String(raw || '').replace(/§(\d+)§/g, (whole, n) => {
+    const marker = markers[Number(n)]
+    if (marker?.kind === 'extra') {
+      extras.push(marker.value)
+      return ' '
+    }
+    return whole
+  })
+  const host = parsePiece(hostText, markers, inherited)
+  if (host === null) return null
+  const windows = host?.windows?.length ? host.windows : inherited
+  const components = []
+  if (host) components.push(host)
+  for (const extra of extras) {
+    const nested = componentsFromText(extra, markers, windows)
+    if (!nested) return null
+    components.push(...nested)
+  }
+  return components
+}
+
+function componentsFromText(text, markers, inherited) {
+  const components = []
+  for (const raw of String(text || '').split(COMPONENT_SPLIT)) {
+    const parsed = segmentComponents(raw, markers, inherited)
+    if (!parsed) return null
+    for (const part of parsed) {
+      if (part.qualifierOnly) {
+        const host = components[components.length - 1]
+        if (!host || host.qualifierOnly) return null
+        host.qualifiers = [...new Set([...(host.qualifiers || []), ...part.qualifiers])].sort()
+        continue
+      }
+      components.push(part)
+    }
+  }
+  return components.length ? components : null
 }
 
 // Singular "the end point was …" and any "composite of …" are one endpoint:
-// commas, "or", "and", and "and/or" are components of that endpoint, and the
-// timepoint belongs to all of them. Plural "outcomes were A, B, and C" is a
-// list of endpoints. Plural mixed with "or" / "and/or" / an embedded composite
-// has no single reading, so it is not parsed.
+// commas, "or", "and", and "and/or" are components of that endpoint. A window
+// shared by the phrase structure belongs to each of them. Plural "outcomes were
+// A, B, and C" is a list of endpoints. Plural mixed with "or" / "and/or" / an
+// embedded composite has no single reading, so it is not parsed.
 function parseDeclaration(match, expansions) {
   if (!match) return { endpoints: [], uncertain: false }
   const noun = match[1].toLowerCase().replace(/[\s-]/g, '')
@@ -253,7 +602,7 @@ function parseDeclaration(match, expansions) {
   const nounPlural = noun.endsWith('s')
   if ((verb === 'were' && !nounPlural) || (verb === 'was' && nounPlural)) return { endpoints: [], uncertain: true }
   const plural = verb === 'were' || (nounPlural && verb !== 'was')
-  const prepared = prepareClause(match[3])
+  const prepared = analyzeClause(match[3])
   if (!prepared) return { endpoints: [], uncertain: true }
   const compositeOf = /\bcomposite\s+of\b/i.test(match[3])
   const hasOr = /\band\s*\/\s*or\b|\bor\b/i.test(prepared.text)
@@ -262,49 +611,114 @@ function parseDeclaration(match, expansions) {
     return { endpoints: [], uncertain: true }
   }
   if (!plural || compositeOf) {
-    const components = componentsFromText(prepared.text, prepared.markers)
+    const components = componentsFromText(prepared.text, prepared.markers, prepared.windows)
     if (!components) return { endpoints: [], uncertain: true }
-    return { endpoints: [{ components, times: prepared.times, expansions }], uncertain: false }
+    return { endpoints: [{ components, expansions }], uncertain: false }
   }
   const endpoints = []
   for (const piece of prepared.text.split(/\s*,\s*/)) {
-    const components = componentsFromText(piece, prepared.markers)
+    const components = componentsFromText(piece, prepared.markers, prepared.windows)
     if (!components) return { endpoints: [], uncertain: true }
-    endpoints.push({ components, times: prepared.times, expansions })
+    endpoints.push({ components, expansions })
   }
   return endpoints.length ? { endpoints, uncertain: false } : { endpoints: [], uncertain: true }
 }
 
-function phraseHit(raw, phrase) {
-  const text = normalize(raw)
-  const needle = normalize(phrase)
-  if (!needle || needle.length < 3) return false
-  if (needle.length <= 5) return new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(needle)}(?:$|[^a-z0-9])`).test(text)
-  const qualified = new RegExp(`(?:^|[^a-z0-9])(${QUALIFIER_BEFORE}\\s+)?${escapeRegExp(needle)}(?:$|[^a-z0-9])`).exec(text)
-  return !!qualified && !qualified[1]
+function abbrevList(component) {
+  const abbrevs = [...(component.abbrevs || [])]
+  if (/^[A-Z][A-Z0-9]{1,10}$/.test(component.head || '') && !abbrevs.includes(component.head)) abbrevs.push(component.head)
+  return abbrevs
 }
 
-function abbrevHit(name, abbrev, expansions) {
-  if (new RegExp(`\\b${escapeRegExp(abbrev)}\\b`).test(String(name || ''))) return true
-  const expanded = expansions.get(abbrev)
-  return !!(expanded && phraseHit(name, expanded))
+function expansionBag(abbrev, expansions) {
+  const phrase = expansions?.get(abbrev)
+  if (!phrase) return null
+  return wordBag(phrase)
 }
 
-function componentHit(name, component, expansions) {
-  if (phraseHit(name, component.text)) return true
-  const abbrevs = [...component.abbrevs]
-  if (/^[A-Z][A-Z0-9]{1,10}$/.test(component.text) && !abbrevs.includes(component.text)) abbrevs.push(component.text)
-  return abbrevs.some((abbrev) => abbrevHit(name, abbrev, expansions))
+function listsEqual(left, right) {
+  return left.length === right.length && left.every((word, index) => word === right[index])
+}
+
+// A qualifier written beside its outcome ("cardiovascular death") and the same
+// qualifier in a parenthetical ("death (cardiovascular only)") are one tuple.
+// Words do not move onto a different outcome.
+function alignedTuple(row, declared) {
+  const qual = new Set([...(row.qualifiers || []), ...(declared.qualifiers || [])])
+  const head = (component) => (component.headWords || []).filter((word) => !qual.has(word)).sort()
+  const quals = (component) => {
+    const set = new Set(component.qualifiers || [])
+    for (const word of component.headWords || []) if (qual.has(word)) set.add(word)
+    return [...set].sort()
+  }
+  return { rowHead: head(row), declaredHead: head(declared), rowQual: quals(row), declaredQual: quals(declared) }
+}
+
+function pureToken(headWords, component) {
+  if (headWords.length !== 1) return null
+  const abbrevs = abbrevList(component)
+  const upper = headWords[0].toUpperCase()
+  if (abbrevs.includes(upper)) return upper
+  if (/^[A-Z][A-Z0-9]{1,10}$/.test(component.head || '') && component.head.toLowerCase() === headWords[0]) return component.head
+  return null
+}
+
+function componentEquals(rowComponent, declared, expansions, untimedEndpoint = false) {
+  if (!windowsAgree(declared.windows, rowComponent.windows, untimedEndpoint)) return false
+  const aligned = alignedTuple(rowComponent, declared)
+  if (listsEqual(aligned.rowHead, aligned.declaredHead) && listsEqual(aligned.rowQual, aligned.declaredQual)) return true
+  if (!listsEqual(aligned.rowQual, aligned.declaredQual)) return false
+  const rowPure = pureToken(aligned.rowHead, rowComponent)
+  const declaredPure = pureToken(aligned.declaredHead, declared)
+  if (rowPure && abbrevList(declared).includes(rowPure)) return true
+  if (declaredPure && abbrevList(rowComponent).includes(declaredPure)) return true
+  const rowExpansion = rowPure ? expansionBag(rowPure, expansions) : null
+  if (rowExpansion && listsEqual(rowExpansion, aligned.declaredHead)) return true
+  const declaredExpansion = declaredPure ? expansionBag(declaredPure, expansions) : null
+  if (declaredExpansion && listsEqual(declaredExpansion, aligned.rowHead)) return true
+  return false
+}
+
+// The row's component set has to be the declared set. Each component carries
+// its qualifiers and its own window. A strict subset and a strict superset are
+// different endpoints. A parenthesis or bracket on the row is part of that
+// structure; a statistic tail is not an outcome.
+function rowEndpoint(name) {
+  let text = String(name || '')
+  text = text.replace(/^(?:the\s+)?(?:co-?)?primary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?|analysis|composite)\s*[:\-—]?\s*/i, '')
+  text = text.replace(/,\s+[^,]*\b(?:versus|vs\.?|compared(?:\s+with|\s+to)?)\b[\s\S]*$/i, '')
+  text = text.replace(/,?\s*\((?:hazard ratio|odds ratio|risk ratio|HR|OR|RR)\)\s*$/i, '')
+  const core = analyzeClause(text)
+  if (!core) return null
+  const components = componentsFromText(core.text, core.markers, core.windows)
+  if (!components) return null
+  return { components }
+}
+
+function sameComponentSet(rowComponents, item) {
+  if (rowComponents.length !== item.components.length) return false
+  const untimedEndpoint = item.components.every((component) => !(component.windows || []).length)
+  const used = new Set()
+  for (const rowComponent of rowComponents) {
+    const index = item.components.findIndex((component, i) => !used.has(i) && componentEquals(rowComponent, component, item.expansions, untimedEndpoint))
+    if (index < 0) return false
+    used.add(index)
+  }
+  return true
 }
 
 function itemHits(name, item) {
-  if (!timesAgree(item.times, timesIn(name))) return false
-  if (!item.components.length) return false
-  return item.components.every((component) => componentHit(name, component, item.expansions))
+  const row = rowEndpoint(name)
+  if (!row || !item.components.length) return false
+  return sameComponentSet(row.components, item)
 }
 
-// The row's own endpoint name has to be the declared endpoint. A shared quote that
-// mentions the primary beside some other result does not make that other result primary.
+// The row's own endpoint name has to equal the declared endpoint. A shared quote
+// that mentions the primary beside some other result does not make that other
+// result primary, and neither does the word "primary" in the name or location.
+// Equality is a set of (component, qualifiers, window) tuples. A qualifier stays
+// on the component it was written on. A window is relation, duration, and anchor
+// event; a named anchor is not the same as a missing or different one.
 function matchesDeclared(row, primaryItems, secondaryItems) {
   const name = String(row?.quantity?.name || '')
   if (secondaryItems.some((item) => itemHits(name, item))) return false
@@ -312,14 +726,16 @@ function matchesDeclared(row, primaryItems, secondaryItems) {
 }
 
 // The paper's primary result, as an EXPLICIT state — never null:
-//   { state: 'identified', name, verified, indexes, basis }  a row is labelled primary (by its
-//       name, else its verbatim quote, else its location hint) and is not secondary, a
-//       subgroup, or a per-protocol / as-treated analysis (per-protocol noninferiority is
-//       allowed). verified: any primary row passes the call site's verified predicate.
+//   { state: 'identified', name, verified, indexes, basis }  the row's endpoint equals
+//       the declared primary (each component, with its qualifiers and window), or — only when the source
+//       declares neither a primary nor a secondary — the row's name or location hint
+//       says primary. It is not secondary, a subgroup, or a per-protocol / as-treated
+//       analysis (per-protocol noninferiority is allowed). verified: any primary row
+//       passes the call site's verified predicate.
 //   { state: 'unknown', name: null, verified: false, indexes: [] }  results were extracted
-//       but none is labelled primary — e.g. only secondary results, or the source names a
-//       primary outcome and no extracted row matches it. The main finding is then WITHHELD
-//       by triage(): it cannot be weighed against a primary the app cannot name.
+//       but none is the primary — the declaration does not parse, no row equals it, or
+//       the source names a primary the app cannot bind. The main finding is then
+//       WITHHELD by triage(): it cannot be weighed against a primary the app cannot name.
 //   { state: 'unspecified', ... }  the source text was supplied and it never declares a
 //       primary or a secondary endpoint (a meta-analysis that pools named outcomes, for
 //       example). Verified results may be summarized; none of them is called the primary.
@@ -328,11 +744,16 @@ function matchesDeclared(row, primaryItems, secondaryItems) {
 //       the finding is number-free by construction (empty verified set) and model-checked.
 // rows: runPaper rows [{ quantity, verdict }]. isVerified: the call site's own predicate.
 // sourceText: the abstract or full text, when the caller has it. Omitted, an unlabelled
-// row is still unknown — position never promotes a row (REV2). One declared endpoint
-// matches only a name that carries every component and the shared timepoint. An
-// abbreviation is a synonym for the single component it follows. A parse that is
-// not one of those shapes is unidentified. The source quote is not a second copy
-// of the endpoint name.
+// row is still unknown — position never promotes a row (REV2). Identification against a
+// declaration succeeds only when the row's endpoint equals the declared one:
+// an order-independent set of (component, qualifiers of that component, window)
+// tuples. A window is its relation, duration, and anchor event, and the anchor
+// has to be the same event or both absent. A component is one outcome from a
+// closed list, plus recognized qualifier phrases; an abbreviation on that list
+// is that outcome. An unfamiliar word is not split into an outcome and a
+// leftover, and it is not dropped. A token that fits none of those slots leaves
+// the declaration or the row unidentified. Quote text is never an identification
+// path.
 export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, sourceText = '') {
   const list = Array.isArray(rows) ? rows : []
   const none = (state) => ({ state, name: null, verified: false, indexes: [], basis: null })
@@ -348,23 +769,24 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
     indexes,
     basis,
   })
-  for (const [basis, test] of PRIMARY_BASES) {
-    const indexes = list.flatMap((row, i) => (eligible(row) && test(row?.quantity) ? [i] : []))
-    if (indexes.length) return identified(indexes, basis)
-  }
   const source = String(sourceText || '')
-  if (!source) return none('unknown')
-  const expansions = abbreviationExpansions(source)
-  const primaryParsed = parseDeclaration(source.match(PRIMARY_DECLARATION), expansions)
-  const secondaryParsed = parseDeclaration(source.match(SECONDARY_DECLARATION), expansions)
-  if (primaryParsed.uncertain || secondaryParsed.uncertain) return none('unknown')
-  if (primaryParsed.endpoints.length) {
+  // A declared primary is the only definition that counts. Name, location, and
+  // quote labels are not consulted, and a declaration that does not parse is
+  // unidentified rather than a reason to trust those labels.
+  if (source && (DECLARES_PRIMARY.test(source) || DECLARES_SECONDARY.test(source))) {
+    const expansions = abbreviationExpansions(source)
+    const primaryParsed = parseDeclaration(source.match(PRIMARY_DECLARATION), expansions)
+    const secondaryParsed = parseDeclaration(source.match(SECONDARY_DECLARATION), expansions)
+    if (primaryParsed.uncertain || secondaryParsed.uncertain || !primaryParsed.endpoints.length) return none('unknown')
     const indexes = list.flatMap((row, i) => (eligible(row) && matchesDeclared(row, primaryParsed.endpoints, secondaryParsed.endpoints) ? [i] : []))
     if (indexes.length) return identified(indexes, 'source')
     return none('unknown')
   }
-  // A declared secondary endpoint with no declared primary means the primary is missing.
-  if (DECLARES_PRIMARY.test(source) || DECLARES_SECONDARY.test(source)) return none('unknown')
+  for (const [basis, test] of LABEL_BASES) {
+    const indexes = list.flatMap((row, i) => (eligible(row) && test(row?.quantity) ? [i] : []))
+    if (indexes.length) return identified(indexes, basis)
+  }
+  if (!source) return none('unknown')
   if (list.some((row) => {
     const tags = tagResult(row?.quantity)
     return tags.secondary || tags.subgroup || nonRandomized(tags)

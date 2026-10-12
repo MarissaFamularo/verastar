@@ -72,16 +72,17 @@ describe('PMID 42855019 — bracketed hazard ratios, J Vasc Surg', () => {
     expect(isRelationshipValidated(verdict)).toBe(false)
   })
 
-  it('identifies the declared primary outcomes from the methods sentence, not from row order', () => {
+  it('leaves the methods sentence unidentified when the analysis method is not a known slot', () => {
+    // Kaplan-Meier and Cox regression are not a component, a qualifier, a window,
+    // or an abbreviation, so the declaration is unidentified. The same outcome list
+    // without that clause still identifies (owner review).
     const male = single({
       name: 'Two-year MALE, peroneal versus AT/PT runoff', unit: 'HR', value: 1.52, ci_low: 1.03, ci_high: 2.25,
       source_quote: 'and MALE (HR 1.52 [1.03-2.25])',
     })
     const rows = [row(hr, verify(hr, src)), row(male, verify(male, src))]
     const primary = findPrimary(rows, (r) => isRelationshipValidated(r.verdict), src)
-    expect(primary).toMatchObject({ state: 'identified', basis: 'source', verified: true })
-    expect(primary.name).toMatch(/major amputation/)
-    expect(primary.indexes).toEqual([0, 1])
+    expect(primary).toMatchObject({ state: 'unknown', name: null, verified: false, indexes: [], basis: null })
   })
 })
 
@@ -118,7 +119,10 @@ describe('PMID 42854197 — RAO after CEA versus CAS', () => {
     expect(isRelationshipValidated(verdict)).toBe(false)
   })
 
-  it('names RAO as the primary outcome and does not promote stroke', () => {
+  it('does not name the unanchored RAO row as primary, and does not promote stroke', () => {
+    // The declared window is anchored to the index procedure. The extracted row has
+    // no anchor, and the secondary clause "at the same intervals" is not a duration,
+    // so neither declaration parses. Stroke stays unidentified with the rest.
     const crao = single({
       name: '1-year central retinal artery occlusion, CAS versus CEA',
       unit: 'OR', value: 2.3, ci_low: 1.1, ci_high: 4.84,
@@ -131,8 +135,7 @@ describe('PMID 42854197 — RAO after CEA versus CAS', () => {
       row(crao, verify(crao, src)),
     ]
     const primary = findPrimary(rows, (r) => isRelationshipValidated(r.verdict), src)
-    expect(primary).toMatchObject({ state: 'identified', basis: 'source', verified: true, indexes: [1, 2] })
-    expect(primary.name).toMatch(/retinal artery occlusion/)
+    expect(primary).toMatchObject({ state: 'unknown', name: null, verified: false, indexes: [], basis: null })
   })
 })
 
