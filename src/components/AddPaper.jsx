@@ -22,7 +22,7 @@ import { savePaper, setPaperNote } from '../pipeline/save.js'
 import { extractPdfText } from '../pipeline/pdfText.js'
 import { WhyPrompt } from './SpineCheck.jsx'
 import { fmtNum } from '../lib/format.js'
-import { findPrimary } from '../pipeline/primaryResult.js'
+import { findPrimary, verificationCorpus } from '../pipeline/primaryResult.js'
 
 const STAGE_LABEL = {
   resolving: 'Finding the paper…',
@@ -115,7 +115,7 @@ export default function AddPaper({ onAdded }) {
             title: res.paper.title || res.citation?.title || `PMID ${pmid}`,
             design: res.design,
             summary: evidenceSummary(res),
-            primary: findPrimary(res.error ? [] : res.rows, (row) => !row.verdict.flagged),
+            primary: findPrimary(res.error ? [] : res.rows, (row) => !row.verdict.flagged, res.error ? '' : verificationCorpus(res)),
             verified: res.error
               ? []
               : res.rows

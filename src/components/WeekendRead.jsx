@@ -69,7 +69,7 @@ function PaperRow({ paper, onToggleFavorite }) {
           <a href={c.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>PMID {c.pmid} ↗</a>
           {c.verified && (
             <span className="inline-flex items-center" style={{ marginLeft: 8, gap: 5, color: 'var(--color-verified-soft)' }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-verified)' }} /> citation verified
+              <span title="PubMed has this record. This does not check the paper's results." style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-fg-faint)' }} /> PubMed record
             </span>
           )}
         </p>

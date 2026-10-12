@@ -16,7 +16,8 @@ import {
 import { libraryRailCounts } from './lib/libraryCounts.js'
 import { ncbiCredentialCopy } from './lib/ncbiCopy.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
-import { supabase, supabaseConfigured, currentUser, sendMagicLink, verifyEmailCode, signOut, isSignedIn } from './lib/supabase.js'
+import { supabase, supabaseConfigured, currentUser, signOut, isSignedIn } from './lib/supabase.js'
+import { useEmailCodeSignIn } from './lib/emailCode.js'
 import { shouldOfferMigration, migrateLocalToAccount, getMigrationProgress } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
@@ -271,45 +272,8 @@ function StarMapSmallSky() {
 // cloned repo without keys keeps the original local-only app. The consent line is
 // required groundwork for the adoption study: one sentence, visible, honest.
 function AccountSection({ account, first = false }) {
-  const [email, setEmail] = useState('')
-  const [sendState, setSendState] = useState('idle') // idle | sending | sent | error
-  const [sendError, setSendError] = useState('')
-  const [code, setCode] = useState('')
-  const [verifyState, setVerifyState] = useState('idle') // idle | verifying | error
-  const [verifyError, setVerifyError] = useState('')
+  const form = useEmailCodeSignIn()
   if (!supabaseConfigured) return null
-
-  // Typing the emailed code signs in HERE — the only path that works from the
-  // installed home-screen app, where clicking the emailed link opens the browser
-  // (a separate storage world) instead of the app that asked.
-  async function verify(e) {
-    e.preventDefault()
-    const trimmed = code.trim()
-    if (!trimmed) return
-    setVerifyState('verifying')
-    setVerifyError('')
-    try {
-      await verifyEmailCode(email.trim(), trimmed)
-      window.location.reload()
-    } catch (err) {
-      setVerifyError(err?.message || String(err))
-      setVerifyState('error')
-    }
-  }
-
-  async function send(e) {
-    e.preventDefault()
-    if (!email.trim()) return
-    setSendState('sending')
-    setSendError('')
-    try {
-      await sendMagicLink(email.trim())
-      setSendState('sent')
-    } catch (err) {
-      setSendError(err?.message || String(err))
-      setSendState('error')
-    }
-  }
 
   return (
     <>
@@ -342,49 +306,62 @@ function AccountSection({ account, first = false }) {
             always hold your own copy on disk, in plain files any agent can read. Your API key
             stays on this device, never in your account.
           </p>
-          {sendState === 'sent' ? (
+          {form.sendState === 'sent' ? (
             <>
-              <div style={{ padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 600 }}>Email sent to {email.trim()}</span> — enter the code from the email below. (The email's link also works, but only in the same browser — from the installed app, use the code.)
+              <div role="status" style={{ padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600 }}>Code sent to {form.email.trim()}.</span> Enter the 6-digit code from that email.
               </div>
-              <form onSubmit={verify} className="flex" style={{ gap: 9, marginTop: 10 }}>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="Code from the email"
-                  style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
-                />
-                <button type="submit" disabled={verifyState === 'verifying'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: verifyState === 'verifying' ? 0.6 : 1 }}>
-                  {verifyState === 'verifying' ? 'Checking…' : 'Sign in'}
-                </button>
+              <form onSubmit={form.verify} style={{ marginTop: 10 }}>
+                <label htmlFor="settings-email-code" style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#aab0be', fontWeight: 500 }}>6-digit code</label>
+                <div className="flex" style={{ gap: 9 }}>
+                  <input
+                    id="settings-email-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={form.code}
+                    onChange={(e) => form.setCode(e.target.value)}
+                    placeholder="123456"
+                    aria-invalid={form.verifyState === 'error'}
+                    style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
+                  />
+                  <button type="submit" disabled={form.verifyBusy} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: form.verifyBusy ? 0.6 : 1 }}>
+                    {form.verifyBusy ? 'Checking…' : 'Continue'}
+                  </button>
+                </div>
               </form>
-              {verifyState === 'error' && (
-                <div style={{ marginTop: 10, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-                  <span style={{ fontWeight: 600 }}>That code didn't work:</span> {verifyError}
+              {form.verifyState === 'error' && (
+                <div role="alert" style={{ marginTop: 10, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                  {form.verifyError}
                 </div>
               )}
+              {form.resendNote && <p role="status" style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--color-verified-soft)' }}>{form.resendNote}</p>}
+              <button type="button" onClick={form.resend} disabled={form.resending} className="cursor-pointer" style={{ marginTop: 10, border: 0, background: 'transparent', padding: 0, color: 'var(--color-accent)', fontSize: 13, fontFamily: 'inherit' }}>
+                {form.resending ? 'Sending…' : 'Send a new code'}
+              </button>
             </>
           ) : (
-            <form onSubmit={send} className="flex" style={{ gap: 9 }}>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
-              />
-              <button type="submit" disabled={sendState === 'sending'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: sendState === 'sending' ? 0.6 : 1 }}>
-                {sendState === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
-              </button>
+            <form onSubmit={form.send}>
+              <label htmlFor="settings-account-email" style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#aab0be', fontWeight: 500 }}>Account email</label>
+              <div className="flex" style={{ gap: 9 }}>
+                <input
+                  id="settings-account-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => form.setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
+                />
+                <button type="submit" disabled={form.sendBusy} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: form.sendBusy ? 0.6 : 1 }}>
+                  {form.sendBusy ? 'Sending…' : 'Email me a code'}
+                </button>
+              </div>
             </form>
           )}
-          {sendState === 'error' && (
-            <div style={{ marginTop: 10, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-              <span style={{ fontWeight: 600 }}>Couldn't send the link:</span> {sendError}
+          {form.sendState === 'error' && (
+            <div role="alert" style={{ marginTop: 10, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+              <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {form.sendError}
             </div>
           )}
           <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
@@ -402,40 +379,7 @@ function AccountSection({ account, first = false }) {
 // the user signs in or dismisses it for the current page load. Signing in reloads
 // the app; the existing empty-cloud migration check then offers the actual move.
 function ExistingLibrarySyncGate({ onNotNow }) {
-  const [email, setEmail] = useState('')
-  const [sendState, setSendState] = useState('idle') // idle | sending | sent | error
-  const [sendError, setSendError] = useState('')
-  const [code, setCode] = useState('')
-  const [verifyState, setVerifyState] = useState('idle') // idle | verifying | error
-  const [verifyError, setVerifyError] = useState('')
-
-  async function send(e) {
-    e.preventDefault()
-    if (!email.trim()) return
-    setSendState('sending')
-    setSendError('')
-    try {
-      await sendMagicLink(email.trim())
-      setSendState('sent')
-    } catch (err) {
-      setSendError(err?.message || String(err))
-      setSendState('error')
-    }
-  }
-
-  async function verify(e) {
-    e.preventDefault()
-    if (!code.trim()) return
-    setVerifyState('verifying')
-    setVerifyError('')
-    try {
-      await verifyEmailCode(email.trim(), code.trim())
-      window.location.reload()
-    } catch (err) {
-      setVerifyError(err?.message || String(err))
-      setVerifyState('error')
-    }
-  }
+  const form = useEmailCodeSignIn()
 
   return (
     <div className="relative flex items-center justify-center" style={{ minHeight: '100vh', padding: '56px 32px', background: 'radial-gradient(120% 80% at 50% -10%,#1a2138,#0b0e18 55%,#08090d)' }}>
@@ -451,54 +395,62 @@ function ExistingLibrarySyncGate({ onNotNow }) {
           this device and are never uploaded.
         </p>
 
-        {sendState === 'sent' ? (
+        {form.sendState === 'sent' ? (
           <>
-            <div style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55 }}>
-              <span style={{ fontWeight: 600 }}>Email sent to {email.trim()}</span> — enter the
-              code from the email here. If you use the installed app, use this code instead of opening
-              the email link in a separate browser.
+            <div role="status" style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55 }}>
+              <span style={{ fontWeight: 600 }}>Code sent to {form.email.trim()}.</span> Enter the 6-digit code from that email.
             </div>
-            <form onSubmit={verify} className="flex" style={{ gap: 10, marginTop: 14 }}>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Code from the email"
-                autoFocus
-                style={{ flex: 1, minWidth: 0, padding: '12px 15px', borderRadius: 11, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 15, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
-              />
-              <button type="submit" disabled={verifyState === 'verifying'} className="cursor-pointer" style={{ padding: '12px 20px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: verifyState === 'verifying' ? 0.6 : 1 }}>
-                {verifyState === 'verifying' ? 'Checking…' : 'Secure my library'}
-              </button>
+            <form onSubmit={form.verify} style={{ marginTop: 14 }}>
+              <label htmlFor="library-email-code" style={{ display: 'block', fontSize: 13, color: '#aab0be', fontWeight: 500 }}>6-digit code</label>
+              <div className="flex" style={{ gap: 10, marginTop: 8 }}>
+                <input
+                  id="library-email-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={form.code}
+                  onChange={(e) => form.setCode(e.target.value)}
+                  placeholder="123456"
+                  aria-invalid={form.verifyState === 'error'}
+                  autoFocus
+                  style={{ flex: 1, minWidth: 0, padding: '12px 15px', borderRadius: 11, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 15, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
+                />
+                <button type="submit" disabled={form.verifyBusy} className="cursor-pointer" style={{ padding: '12px 20px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: form.verifyBusy ? 0.6 : 1 }}>
+                  {form.verifyBusy ? 'Checking…' : 'Secure my library'}
+                </button>
+              </div>
             </form>
-            {verifyState === 'error' && (
-              <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 600 }}>That code didn&rsquo;t work:</span> {verifyError}
+            {form.verifyState === 'error' && (
+              <div role="alert" style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                {form.verifyError}
               </div>
             )}
+            {form.resendNote && <p role="status" style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-verified-soft)' }}>{form.resendNote}</p>}
+            <button type="button" onClick={form.resend} disabled={form.resending} className="cursor-pointer" style={{ marginTop: 14, border: 0, background: 'transparent', padding: 0, color: 'var(--color-accent)', fontSize: 14, fontFamily: 'inherit' }}>
+              {form.resending ? 'Sending…' : 'Send a new code'}
+            </button>
           </>
         ) : (
-          <form onSubmit={send} style={{ marginTop: 26 }}>
-            <label style={{ display: 'block', fontSize: 13, color: '#aab0be', fontWeight: 500 }}>Account email</label>
+          <form onSubmit={form.send} style={{ marginTop: 26 }}>
+            <label htmlFor="library-account-email" style={{ display: 'block', fontSize: 13, color: '#aab0be', fontWeight: 500 }}>Account email</label>
             <input
+              id="library-account-email"
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={form.email}
+              onChange={(e) => form.setEmail(e.target.value)}
               placeholder="you@example.com"
               autoComplete="email"
               autoFocus
               style={{ marginTop: 8, width: '100%', padding: '12px 15px', borderRadius: 11, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
             />
-            {sendState === 'error' && (
-              <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {sendError}
+            {form.sendState === 'error' && (
+              <div role="alert" style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {form.sendError}
               </div>
             )}
             <div className="flex items-center" style={{ marginTop: 22, gap: 18 }}>
-              <button type="submit" disabled={sendState === 'sending' || !email.trim()} className="cursor-pointer" style={{ padding: '12px 22px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: sendState === 'sending' || !email.trim() ? 0.5 : 1 }}>
-                {sendState === 'sending' ? 'Sending…' : 'Email me a secure code'}
+              <button type="submit" disabled={form.sendBusy || !form.email.trim()} className="cursor-pointer" style={{ padding: '12px 22px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: form.sendBusy || !form.email.trim() ? 0.5 : 1 }}>
+                {form.sendBusy ? 'Sending…' : 'Email me a secure code'}
               </button>
               <button type="button" onClick={onNotNow} className="cursor-pointer" style={{ border: 0, background: 'transparent', padding: 0, color: 'var(--color-fg-muted)', fontSize: 14, fontFamily: 'inherit' }}>
                 Not now

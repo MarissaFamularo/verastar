@@ -6,14 +6,21 @@ import { matchNpi } from '../lib/npi.js'
 import NpiMatch from './NpiMatch.jsx'
 let dom
 const receipt = { npi: '1234567893', firstName: 'Jane', lastName: 'Doe', version: 1, matchedAt: '2026-10-12T12:00:00Z' }
-beforeEach(async () => { vi.clearAllMocks(); dom = await mountDom() })
-afterEach(async () => { await dom.unmount() })
+beforeEach(async () => { vi.clearAllMocks(); matchNpi.mockReset(); dom = await mountDom() })
+afterEach(async () => { vi.useRealTimers(); await dom.unmount() })
 async function fill() {
   await dom.type(dom.q('[name=firstName]'), 'Jane')
   await dom.type(dom.q('[name=lastName]'), 'Doe')
   await dom.type(dom.q('[name=npi]'), '1234567893')
 }
 describe('NPI entry', () => {
+  it('names each field from its visible label', async () => {
+    await dom.render(React.createElement(NpiMatch))
+    expect(dom.q('label[for="npi-firstName"]').textContent).toContain('First name')
+    expect(dom.q('label[for="npi-lastName"]').textContent).toContain('Last name')
+    expect(dom.q('label[for="npi-npi"]').textContent).toContain('NPI number')
+    expect(dom.q('#npi-firstName').id).toBe('npi-firstName')
+  })
   it('shows matched only after success, continues with receipt, clears when fields change', async () => {
     const onContinue = vi.fn()
     matchNpi.mockResolvedValue(receipt)
@@ -38,6 +45,22 @@ describe('NPI entry', () => {
     await dom.settle(() => pending.resolve(receipt))
     expect(dom.text()).not.toContain('NPI matched')
     expect(dom.button('Continue')).toBeUndefined()
+  })
+  it('shows a timeout when the registry stalls and still accepts a late match', async () => {
+    vi.useFakeTimers()
+    const pending = deferred()
+    matchNpi.mockReturnValue(pending.promise)
+    await dom.render(React.createElement(NpiMatch))
+    await fill()
+    await dom.submit(dom.q('form'))
+    expect(dom.text()).toContain('Checking')
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    expect(dom.q('[role=alert]').textContent).toMatch(/timed out/i)
+    expect(dom.button('Match NPI').disabled).toBe(false)
+    expect(dom.button('Continue')).toBeUndefined()
+    await dom.settle(() => pending.resolve(receipt))
+    expect(dom.text()).toContain('NPI matched')
+    expect(dom.q('[role=alert]')).toBeNull()
   })
   it('keeps errors retryable without enabling continue', async () => {
     matchNpi.mockRejectedValue(new Error('Try again shortly.'))

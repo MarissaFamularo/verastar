@@ -152,6 +152,16 @@ describe('runDailyDigest', () => {
     expect(mem.get('digests/daily:latest')).toBeUndefined()
   })
 
+  it('keeps a paper that scored below the bar in the scheduled digest', async () => {
+    vi.mocked(triage).mockImplementationOnce(async ({ candidates }) => candidates.map((c) => ({
+      id: c.id, score: c.id === '102' ? 40 : 88, tier: 1, finding: 'f', relevance: 'r', check: { verdict: 'unchecked', reason: '' },
+    })))
+    const out = await runDailyDigest({ budgetMs: 60_000 })
+    expect(out.phase).toBe('done')
+    const ids = mem.get('digests/daily:latest').results.map((r) => r.paper.id)
+    expect(ids).toEqual(['101', '102', '103'])
+  })
+
   it('keeps coverage-fallback reads out of the digest when their ranking fails', async () => {
     mem.set('profile/me', { onboarded: true, northStars: ['CLTI'], rubric: { criteria: 'x', selectCount: 3, scoreFloor: 60 } })
     vi.mocked(searchCandidates).mockImplementationOnce(async () => ({

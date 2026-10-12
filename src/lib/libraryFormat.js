@@ -13,6 +13,16 @@ import { paperIndicatesRetraction } from '../pipeline/retractions.js'
 import { domainLabel } from './domains.js'
 import { fmtNum } from './format.js'
 
+// The withheld sentence, once. Several reasons already end by telling the reader to read
+// the paper; appending that instruction again produced "takeaway.). Read the paper...".
+export function withheldSummaryCopy(reason) {
+  const text = String(reason || '').trim().replace(/\.+$/, '')
+  const already = /read the paper/i.test(text)
+  const body = text ? ` (${text})` : ''
+  const tail = already ? '.' : '. Read the paper before repeating a takeaway.'
+  return `Summary withheld — the source check couldn't confirm it${body}${tail}`
+}
+
 // --- pure helpers -------------------------------------------------------------------------------
 
 // kebab-case an arbitrary string down to ascii: lowercase, strip diacritics + punctuation, join on
@@ -124,7 +134,7 @@ export function sourceNoteMd(paper) {
   if (p.finding && p.check?.verdict === 'refuted') {
     parts.push('', '## Finding', '')
     parts.push(
-      `> ⚠︎ Summary withheld — the source check couldn't confirm it${p.check?.reason ? ` (${p.check.reason})` : ''}. Read the paper before repeating a takeaway.`
+      `> ⚠︎ ${withheldSummaryCopy(p.check?.reason)}`
     )
   } else if (p.finding) {
     parts.push('', '## Finding', '', p.finding)
