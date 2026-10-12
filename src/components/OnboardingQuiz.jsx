@@ -20,6 +20,7 @@ import { useState } from 'react'
 import { hasApiKey, hasModelAccess, setApiKey } from '../lib/anthropic.js'
 import { isSponsored, refreshSponsorship } from '../lib/sponsor.js'
 import InviteCode from './InviteCode.jsx'
+import { currentNpiMatch } from '../lib/npi.js'
 import { supabaseConfigured, sendMagicLink, verifyEmailCode } from '../lib/supabase.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
@@ -86,6 +87,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   const sponsored = isSponsored()
   // With an account, the access code is the path; the personal key opens only on request.
   const [keyOpen, setKeyOpen] = useState(false)
+  const [betaNpi, setBetaNpi] = useState(false)
 
   function connectContinue(e) {
     e.preventDefault()
@@ -149,8 +151,9 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   //     `graphEdges`, `seen`) and nothing in this flow writes or clears any of them.
   //   - In preview it neither writes NOR reads. ?firstrun=1 persists nothing, full stop.
   async function save() {
+    const npiMatch = preview ? null : currentNpiMatch()
     const fields = {
-      name: (draft.name || 'Doctor').trim(),
+      name: (draft.name || (npiMatch ? `${npiMatch.firstName} ${npiMatch.lastName}` : 'Doctor')).trim(),
       northStars: draft.northStars || [],
       projects: draft.projects || [],
       journalPreferences: normalizeJournalPreferences(draft.journalPreferences),
@@ -297,23 +300,25 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
     const blocked = !preview && !sponsored && !keySet && !keyInput.trim()
     return (
       <div>
+        <div hidden={betaNpi}>
         <p style={stepMark}>01 / 03 · CONNECT</p>
         <h2 className="vs-step-title" style={stepTitle}>{sponsored ? 'You are all set.' : 'Connect Verastar.'}</h2>
         <p style={{ ...stepLede, maxWidth: 500 }}>
           {sponsored
             ? 'This account has sponsored access: Verastar does the reading for you, no key needed. You can still add your own Anthropic key later in Settings.'
             : canUseCode
-              ? 'Verastar uses Claude, an AI model, to read and score papers for you. Enter an access code if you have one, or use your own Anthropic key.'
+              ? 'Verastar uses Claude, an AI model, to read and score papers for you. Enter your beta invitation code for sponsored access, or use your own Anthropic key.'
               : 'Verastar uses Claude, an AI model, to read and score papers for you. It runs on your own Anthropic key.'}
         </p>
 
+        </div>
         {canUseCode && (
-          <div style={{ marginTop: 28 }}>
-            <InviteCode lead preview={preview} onEnrolled={() => setSponsorVersion((v) => v + 1)} />
+          <div style={{ marginTop: betaNpi ? 0 : 28 }}>
+            <InviteCode onNpiStep={setBetaNpi} lead preview={preview} onEnrolled={() => setSponsorVersion((v) => v + 1)} />
           </div>
         )}
 
-        <form onSubmit={connectContinue}>
+        <form hidden={betaNpi} onSubmit={connectContinue}>
           {!sponsored && canUseCode && !keySet && !keyOpen && (
             <button type="button" onClick={() => setKeyOpen(true)} aria-expanded={false} className="cursor-pointer" style={{ ...ghostLink, marginTop: 22, fontSize: 13.5 }}>
               No code? <span style={{ color: 'var(--color-fg-soft)' }}>Use your own Anthropic key instead</span>

@@ -8,6 +8,7 @@
 // docs/SPENDING_CONTRACT.md § Invitations.
 
 import { createClient } from '@supabase/supabase-js'
+import { hasNpiMatch } from '../_shared/npiMatch.js'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -53,6 +54,34 @@ Deno.serve(async (req) => {
   if ((count || 0) >= 5) return json(429, { status: 'slow_down' })
   const { error: logError } = await admin.from('events').insert({ user_id: user.id, type: 'invite_attempt', payload: {} })
   if (logError) return json(503, { status: 'error' })
+
+  if (!hasNpiMatch(user)) {
+    // Non-consuming beta-code preflight. Codes are exact text primary keys in the
+    // current schema. The atomic RPC below remains the only consumer, and checks
+    // these states again after NPI entry (a code may expire or fill in between).
+    const { data: invite, error: inviteError } = await admin.from('sponsor_invites')
+      .select('revoked_at, expires_at, uses, max_uses').eq('code', code).maybeSingle()
+    if (inviteError) return json(503, { status: 'error' })
+    if (!invite) return json(200, { status: 'invalid' })
+    // Match the RPC's precedence for existing accounts; no new enrollment occurs.
+    const { data: account, error: accountError } = await admin.from('sponsored_accounts')
+      .select('active, ends_at, cohort').eq('user_id', user.id).maybeSingle()
+    if (accountError) return json(503, { status: 'error' })
+    if (account) {
+      return account.active && (account.ends_at === null || Date.parse(account.ends_at) > Date.now())
+        ? json(200, { status: 'already', cohort: account.cohort })
+        : json(200, { status: 'revoked' })
+    }
+    if (invite.revoked_at !== null) return json(200, { status: 'inactive' })
+    if (invite.expires_at !== null) {
+      const expiry = Date.parse(invite.expires_at)
+      if (!Number.isFinite(expiry)) return json(503, { status: 'error' })
+      if (expiry <= Date.now()) return json(200, { status: 'expired' })
+    }
+    if (!Number.isInteger(invite.uses) || !Number.isInteger(invite.max_uses)) return json(503, { status: 'error' })
+    if (invite.uses >= invite.max_uses) return json(200, { status: 'exhausted' })
+    return json(403, { status: 'npi_required' })
+  }
 
   const { data, error } = await admin.rpc('redeem_sponsor_invite', { p_code: code, p_user_id: user.id })
   if (error) return json(500, { status: 'error' })

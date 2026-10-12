@@ -256,3 +256,22 @@ a:hover {
     radial-gradient(1.1px 1.1px at 70% 30%, rgba(255, 255, 255, 0.35), transparent);
   opacity: 0.7;
 }
+
+/* Settings starts with a short index; each destination gets its own screen. */
+.vs-settings-menu { display: grid; }
+.vs-settings-menu > button {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; padding: 18px 12px; text-align: left; font: inherit;
+  border: 0; border-bottom: 1px solid var(--hairline); border-radius: 8px;
+  background: transparent; color: var(--color-fg); cursor: pointer;
+}
+.vs-settings-menu > button:hover { background: var(--surface-1); }
+.vs-settings-menu strong { display: block; font-size: 15px; font-weight: 500; }
+.vs-settings-menu strong + span { display: block; margin-top: 5px; font-size: 12px; line-height: 1.5; color: var(--color-fg-muted); }
+.vs-settings-chevron { font-size: 24px; color: var(--color-fg-muted); }
+.vs-settings-back { display: block; margin: 0 0 12px; padding: 4px 0; border: 0; background: transparent; color: var(--color-accent); font: inherit; font-size: 13px; cursor: pointer; }
+.vs-settings-help { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; }
+.vs-settings-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+.vs-settings-tabs button { padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: transparent; color: var(--color-fg-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.vs-settings-tabs button[aria-current] { color: var(--color-accent); background: rgba(239,143,91,.08); border-color: rgba(239,143,91,.35); }
+.vs-settings-menu > button:focus-visible, .vs-settings-back:focus-visible, .vs-settings-tabs button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }

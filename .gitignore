@@ -25,6 +25,9 @@ build/
 .claude/settings.local.json
 .netlify
 
+# Local retired files retained instead of deleting them.
+_to_delete/
+
 # Supabase CLI linked-project metadata (machine-local, never publish)
 supabase/.temp/
 

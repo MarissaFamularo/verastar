@@ -1,0 +1,6 @@
+# Keep old links working at the public custom domain, including paths and queries.
+https://verastar.netlify.app/* https://verastar.papertrellis.com/:splat 301!
+http://verastar.netlify.app/* https://verastar.papertrellis.com/:splat 301!
+
+# SPA fallback must follow the domain redirects.
+/* /index.html 200

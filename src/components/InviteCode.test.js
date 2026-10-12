@@ -1,0 +1,59 @@
+import React from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mountDom } from '../test-utils/dom.js'
+vi.mock('../lib/inviteCode.js', () => ({
+  canRedeem: () => true, redeemInviteCode: vi.fn(), normalizeInviteCode: (s) => s.toUpperCase(),
+  INVITE_MESSAGES: { invalid: 'Invalid code', npi_required: 'Match NPI', enrolled: 'Enrolled' },
+}))
+vi.mock('../lib/sponsor.js', () => ({ isSponsored: () => false }))
+vi.mock('./NpiMatch.jsx', () => ({ default: ({ onContinue, onBack }) => React.createElement('div', null,
+  'NPI form', React.createElement('button', { onClick: onContinue }, 'Finish NPI'), React.createElement('button', { onClick: onBack }, 'Back')) }))
+import { redeemInviteCode } from '../lib/inviteCode.js'
+import InviteCode from './InviteCode.jsx'
+let dom
+beforeEach(async () => { vi.clearAllMocks(); dom = await mountDom() })
+afterEach(async () => { await dom.unmount() })
+async function enterCode() {
+  await dom.type(dom.q('[aria-label="Access code"]'), 'BETA')
+  await dom.submit(dom.q('form'))
+}
+describe('beta code before NPI', () => {
+  it('starts with code and keeps invalid codes out of the NPI form', async () => {
+    redeemInviteCode.mockResolvedValue({ status: 'invalid' })
+    await dom.render(React.createElement(InviteCode))
+    expect(dom.text()).not.toContain('NPI form')
+    await enterCode()
+    expect(dom.text()).toContain('Invalid code')
+    expect(dom.text()).not.toContain('NPI form')
+  })
+  it('shows NPI only after a usable code and redeems the same code after matching', async () => {
+    const onEnrolled = vi.fn()
+    redeemInviteCode.mockResolvedValueOnce({ status: 'npi_required' }).mockResolvedValueOnce({ status: 'enrolled' })
+    await dom.render(React.createElement(InviteCode, { onEnrolled }))
+    await enterCode()
+    expect(dom.text()).toContain('NPI form')
+    expect(onEnrolled).not.toHaveBeenCalled()
+    await dom.click(dom.button('Finish NPI'))
+    expect(redeemInviteCode).toHaveBeenNthCalledWith(2, 'BETA')
+    expect(onEnrolled).toHaveBeenCalledTimes(1)
+  })
+  it('allows returning to change the code without enrollment', async () => {
+    redeemInviteCode.mockResolvedValue({ status: 'npi_required' })
+    await dom.render(React.createElement(InviteCode))
+    await enterCode()
+    await dom.click(dom.button('Back'))
+    expect(dom.q('[aria-label="Access code"]').value).toBe('BETA')
+    expect(dom.text()).not.toContain('NPI form')
+    expect(redeemInviteCode).toHaveBeenCalledTimes(1)
+  })
+  it('previews the sequence without validating or enrolling', async () => {
+    const onEnrolled = vi.fn()
+    await dom.render(React.createElement(InviteCode, { preview: true, onEnrolled }))
+    await enterCode()
+    expect(dom.text()).toContain('NPI form')
+    await dom.click(dom.button('Finish NPI'))
+    expect(dom.text()).toContain('no access was granted')
+    expect(redeemInviteCode).not.toHaveBeenCalled()
+    expect(onEnrolled).not.toHaveBeenCalled()
+  })
+})

@@ -28,6 +28,7 @@ const STAR_SEED = ['CLTI outcomes', 'Carotid revascularization', 'AI in medicine
 const PROJECT_SEED = ['Limb Care Program', 'Vascular Outcomes Study']
 
 export default function NorthStars() {
+  const [panel, setPanel] = useState('interests')
   const [stars, setStars] = useState([])
   const [projects, setProjects] = useState([])
   const [journalPreferences, setJournalPreferences] = useState(() => normalizeJournalPreferences())
@@ -127,13 +128,16 @@ export default function NorthStars() {
 
   return (
     <section style={{ marginTop: 14 }}>
-      <p style={{ margin: 0, fontSize: 13, color: 'var(--color-fg-muted)', lineHeight: 1.55 }}>
-        The topics you search, the concepts you steer by, the projects you're driving, and
-        the rubric your digest ranks against. Your daily digest surfaces and selects papers
-        using these.
-      </p>
-      <ProfileStorageDisclosure />
-
+      <nav aria-label="Reading preferences" className="vs-settings-tabs">
+        {[
+          ['interests', 'Interests & projects'],
+          ['topics', 'Search topics'],
+          ['selection', 'Paper selection'],
+        ].map(([id, label]) => (
+          <button key={id} aria-current={panel === id ? 'page' : undefined} onClick={() => setPanel(id)}>{label}</button>
+        ))}
+      </nav>
+      <div hidden={panel !== 'interests'}>
       {interviewing ? (
         <div style={{ marginTop: 18, borderRadius: 12, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-1)', padding: '18px 18px 20px' }}>
           <p style={{ margin: '0 0 4px', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.13em', color: 'var(--color-fg-faint)' }}>
@@ -253,7 +257,8 @@ export default function NorthStars() {
         </div>
       )}
 
-      <div style={{ marginTop: 24, borderTop: '1px solid var(--hairline)', paddingTop: 24 }}>
+      </div>
+      <div hidden={panel !== 'topics'} style={{ marginTop: 20 }}>
         <TopicsEditor
           topics={topics}
           days={search.days}
@@ -268,7 +273,7 @@ export default function NorthStars() {
         <QueryFlags topics={topics} />
       </div>
 
-      <div style={{ marginTop: 24, borderTop: '1px solid var(--hairline)', paddingTop: 24 }}>
+      <div hidden={panel !== 'selection'} style={{ marginTop: 20 }}>
         <RubricEditor
           criteria={rubric.criteria}
           selectCount={rubric.selectCount}
@@ -278,6 +283,7 @@ export default function NorthStars() {
           onChange={setRubric}
         />
       </div>
+      <ProfileStorageDisclosure />
     </section>
   )
 }

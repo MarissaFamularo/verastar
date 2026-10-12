@@ -1,0 +1,41 @@
+{
+  "verified_at_utc": "2026-10-12T12:26:22.593071+00:00",
+  "site": "https://verastar.netlify.app",
+  "netlify_deploy_id": "6accd0a7de6cdd72ddb9e257",
+  "match_npi_version": 1,
+  "redeem_invite_version": 5,
+  "source_sha256": {
+    "src/App.jsx": "d0e3eb2546502359a233292187bcff7cedf05dde2752b3730a2fbb6f571afb39",
+    "src/components/InviteCode.jsx": "c0791a6b101060b04f1e606244b35e30677f43b5592b49df226c9fbb8f2b9230",
+    "src/components/NorthStars.jsx": "e90f5c172775b594bf07e7d26583ac30fdedd41823bea121e7c2f99c51872b97",
+    "src/components/OnboardingQuiz.jsx": "da19675b879ed13c52ed26921056e91e13cc5631e8d9be4e0ff2246a3639a62e",
+    "src/components/NpiMatch.jsx": "bacc47c42ab39816fffa6481f4f3878ba55a74399b4168c7ffee4d34d6ce90fb",
+    "src/index.css": "e10efecc9e0b2eadcb39860da0550ef3b4d0a1b6b5469da67d39649dc5929306",
+    "src/lib/inviteCode.js": "e014481bfe1742782fa1ac751a3d72e599ee4b3d7067246cdf196e51003abec9",
+    "src/lib/npi.js": "7228f0ba2b14ddc64498be30e1e597d45b12be2a06b27e1a5ae36e33f59c879a",
+    "supabase/functions/match-npi/index.ts": "60941cd0c76db53893e14cafaab9cc3bcfc030a2d820e68b53bcc3809cc993a4",
+    "supabase/functions/redeem-invite/index.ts": "be5f0f7fea6c38c227827e827d2845c89c12029d1fd56001b7880dd6a0a77358",
+    "supabase/functions/_shared/npiMatch.js": "5fe6c04e2fc7e29d5cb54e03aa993f03ed2a7fe69d70a5d58c43c6d67f9d74b9"
+  },
+  "tests": {
+    "passed": 1771,
+    "todo": 10,
+    "lint_new_diagnostics": 0,
+    "build": "passed"
+  },
+  "live_checks": [
+    "invalid invite rejected",
+    "valid beta code requires NPI",
+    "wrong registry name rejected",
+    "correct registry name matched",
+    "match persisted and re-read via authenticated API",
+    "dedicated zero-budget invite redeemed",
+    "QA sponsorship disabled; QA invite revoked; no schedule created",
+    "real beta code uses remains zero"
+  ],
+  "not_tested": [
+    "fresh email delivery through the browser",
+    "new paid interview or digest"
+  ],
+  "release_method": "Initial direct production deploy from the working copy. Settings, beta NPI signup, and custom-domain redirect sources are preserved together in Git; see repository history for the final release commit."
+}

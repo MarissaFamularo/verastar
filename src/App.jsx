@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { savedWithoutWhy } from './pipeline/save.js'
 import { hasValidatedPaperEvidence } from './lib/evidenceVersion.js'
 import {
@@ -585,8 +585,47 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
   const [settingsVersion, setSettingsVersion] = useState(0)
   void settingsVersion // bumps after an invite code enrolls so sponsored blocks appear without a reload
   const sponsored = isSponsored()
-  // Advanced starts closed; the main path is account, access, schedule and profile.
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [section, setSection] = useState(null)
+  const cardRef = useRef(null)
+  const headingRef = useRef(null)
+  const settingsSections = [
+    ['reading', 'Reading preferences', 'Interests, search topics, and paper selection'],
+    ...(sponsored ? [['schedule', 'Digest schedule', 'When your morning digest runs']] : []),
+    ['library', 'Library organization', 'Groups for your saved papers'],
+    ['account', 'Account', 'Sign in, account details, and sign out'],
+    ['access', 'Access & API key', sponsored ? 'Sponsored access is active' : 'Invite code and personal API key'],
+    ['advanced', 'Advanced', 'PubMed credentials and reset setup'],
+  ]
+  const sectionTitle = settingsSections.find(([id]) => id === section)?.[1] || 'Settings'
+
+  useEffect(() => {
+    const previousFocus = document.activeElement
+    return () => previousFocus?.focus?.()
+  }, [])
+
+  useEffect(() => {
+    cardRef.current?.scrollTo(0, 0)
+    headingRef.current?.focus()
+  }, [section])
+
+  function handleSettingsKey(event) {
+    if (event.key === 'Escape') {
+      event.stopPropagation()
+      onClose()
+    }
+    if (event.key !== 'Tab') return
+    const focusable = [...cardRef.current.querySelectorAll('button, input, select, textarea, a[href], summary, [tabindex="0"]')]
+      .filter((element) => !element.disabled && element.getClientRects().length > 0)
+    const first = focusable[0]
+    const last = focusable.at(-1)
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === headingRef.current)) {
+      event.preventDefault()
+      last?.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first?.focus()
+    }
+  }
   const usage = getUsageSummary()
   const ncbi = getNcbiCredentialStatus()
   void ncbiVersion // state revision makes direct browser-storage writes re-render this block
@@ -686,9 +725,14 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
       style={{ zIndex: 60, padding: 32, background: 'rgba(5,6,10,.62)', backdropFilter: 'blur(3px)' }}
     >
       <div
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        onKeyDown={handleSettingsKey}
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 580,
+          width: 620,
           maxWidth: '100%',
           maxHeight: '86vh',
           overflowY: 'auto',
@@ -701,27 +745,44 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
         {/* Sticky, so the ✕ stays reachable however deep the settings scroll —
             on a phone the card fills the screen and there's no backdrop to tap. */}
         <div className="flex items-center justify-between" style={{ position: 'sticky', top: 0, zIndex: 2, padding: '22px 30px 12px', background: '#141821', borderBottom: '1px solid var(--hairline)' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 500, color: 'var(--color-fg)' }}>Settings</h2>
+          <div>
+            {section && <button className="vs-settings-back" onClick={() => setSection(null)}>← Back to settings</button>}
+            <h2 id="settings-title" ref={headingRef} tabIndex={-1} style={{ margin: 0, outline: 'none', fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 500, color: 'var(--color-fg)' }}>{sectionTitle}</h2>
+          </div>
           <button onClick={onClose} aria-label="Close settings" className="cursor-pointer" style={{ border: 0, background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 19, lineHeight: 1, padding: '6px 8px', margin: '-6px -8px', fontFamily: 'inherit' }}>
             ✕
           </button>
         </div>
 
         <div style={{ padding: '18px 30px 30px' }}>
-          {/* Order (2026-10-09 beta): account, access, schedule, profile first. A sponsored
-              reader never needs a key, so the personal key, NCBI credentials, grouping and
-              start-over sit under Advanced. Without sponsorship the key stays in the main
-              path, since it is the only way to run. */}
-          <AccountSection account={account} first />
-
-          <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
-          <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Access</p>
+          {!section && (
+            <>
+              <nav aria-label="Settings sections" className="vs-settings-menu">
+                {settingsSections.map(([id, title, description]) => (
+                  <button key={id} onClick={() => setSection(id)}>
+                    <span><strong>{title}</strong><span>{description}</span></span>
+                    <span aria-hidden="true" className="vs-settings-chevron">›</span>
+                  </button>
+                ))}
+              </nav>
+              <div className="vs-settings-help">
+                <BetaLabel />
+                <FeedbackButton view="settings" />
+              </div>
+            </>
+          )}
+          <div hidden={section !== 'account'}><AccountSection account={account} first /></div>
+          <div hidden={section !== 'access'}>
           {sponsored ? (
             <div style={{ borderRadius: 10, border: '1px solid rgba(127,191,154,.25)', background: 'rgba(127,191,154,.07)', padding: '10px 13px' }}>
               <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-verified-soft)' }}>
                 Sponsored access is active on this account. Verastar does the reading for you; no API key needed.
                 {saved ? ' A personal key saved on this device is not used while sponsorship is active.' : ''}
               </p>
+              <details style={{ marginTop: 14 }}>
+                <summary className="cursor-pointer" style={{ fontSize: 13, color: 'var(--color-fg-soft)' }}>Personal API key (optional)</summary>
+                <div style={{ marginTop: 14 }}>{keySection}<ApiKeyExplainer /></div>
+              </details>
             </div>
           ) : (
             <>
@@ -739,39 +800,11 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
             </>
           )}
 
-          <DigestSchedule />
-
-          <div className="flex items-center flex-wrap" style={{ marginTop: 18, gap: 10 }}>
-            <BetaLabel />
-            <span style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>Something wrong or confusing?</span>
-            <FeedbackButton view="settings" />
           </div>
-
-          <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
-
-          <p style={{ margin: '0 0 4px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Steering profile</p>
-          <NorthStars />
-
-          <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
-
-          <details open={advancedOpen} onToggle={(e) => setAdvancedOpen(e.currentTarget.open)}>
-            <summary className="cursor-pointer" style={{ minHeight: 32, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, listStyle: 'none', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>
-              <span aria-hidden="true" style={{ fontSize: 9, color: 'var(--color-accent)', letterSpacing: 0 }}>{advancedOpen ? '▼' : '▶'}</span>
-              Advanced
-              <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400, fontSize: 12, color: 'var(--color-fg-faint)' }}>
-                {sponsored ? 'Personal key, PubMed credentials, grouping, start over' : 'PubMed credentials, grouping, start over'}
-              </span>
-            </summary>
-            <div style={{ marginTop: 14 }}>
-              {sponsored && (
-                <div style={{ marginBottom: 18 }}>
-                  <p style={{ margin: '0 0 10px', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
-                    Optional. A personal Anthropic key is used only if sponsored access ends.
-                  </p>
-                  {keySection}
-                  <ApiKeyExplainer />
-                </div>
-              )}
+          <div hidden={section !== 'schedule'}><DigestSchedule /></div>
+          <div hidden={section !== 'reading'}><NorthStars /></div>
+          <div hidden={section !== 'library'}><DomainEditor /></div>
+          <div hidden={section !== 'advanced'}>
               <div style={{ marginTop: 14, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '12px 13px' }}>
                 <div className="flex items-center" style={{ gap: 8 }}>
                   <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>NCBI / PubMed credentials</span>
@@ -809,11 +842,6 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
 
               <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
 
-              <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Library grouping</p>
-              <DomainEditor />
-
-              <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
-
               <p style={{ margin: '0 0 4px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Start over</p>
               {!confirmReset ? (
                 <>
@@ -847,18 +875,7 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
                   </div>
                 </div>
               )}
-            </div>
-          </details>
-          {/* Bottom exit for the long scroll — closing shouldn't require a trip
-              back to the top of the modal. */}
-          <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />
-          <button
-            onClick={onClose}
-            className="cursor-pointer"
-            style={{ width: '100%', padding: '11px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13.5, fontWeight: 600, fontFamily: 'inherit' }}
-          >
-            Done
-          </button>
+          </div>
         </div>
       </div>
     </div>
