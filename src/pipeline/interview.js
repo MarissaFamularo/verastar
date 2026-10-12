@@ -88,6 +88,24 @@ export function questionMeta(question) {
   return { hint: hit?.hint || '', placeholder: hit?.placeholder || '', short: Boolean(hit?.short), scripted: Boolean(hit) }
 }
 
+// The counter is only honest while a question is actually on screen. During the
+// pause after an answer, `question` is still the one just submitted, so numbering
+// it "QUESTION 4 OF 4" beside "thinking about what to ask next" is a lie.
+export function interviewProgressLabel({ phase, question } = {}) {
+  if (phase !== 'asking') return ''
+  if (!questionMeta(question).scripted) return 'ONE QUICK FOLLOW-UP'
+  const index = SCRIPTED_QUESTIONS.findIndex((q) => q.question === str(question))
+  const n = index >= 0 ? index + 1 : 1
+  return `QUESTION ${n} OF ${SCRIPTED_QUESTIONS.length}`
+}
+
+export function interviewThinkingCopy(transcript) {
+  const rows = Array.isArray(transcript) ? transcript : []
+  const scriptedAnswered = SCRIPTED_QUESTIONS.filter((q) => rows.some((t) => str(t?.question) === q.question)).length
+  if (scriptedAnswered >= SCRIPTED_QUESTIONS.length) return 'Checking whether one more question would help…'
+  return 'Thinking about what to ask next…'
+}
+
 // What a follow-up may still go after. Deliberately short: anything not here gets a default.
 const CHECKLIST = `1. The areas to search daily — enough distinct, narrow areas to build ${MIN_TOPICS}–${MAX_TOPICS} searches. "Vascular surgery" alone is too noisy. This is the only gap worth a follow-up in most interviews.
 2. Anything in their answers too ambiguous to act on (an abbreviation with two meanings, a specialty with very different sub-fields).`

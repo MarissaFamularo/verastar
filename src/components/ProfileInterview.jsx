@@ -21,8 +21,9 @@ import {
   outOfTurns,
   answeredTurns,
   OPENING_QUESTION,
-  SCRIPTED_QUESTIONS,
   questionMeta,
+  interviewProgressLabel,
+  interviewThinkingCopy,
 } from '../pipeline/interview.js'
 import { DEMO_PROFILE } from '../pipeline/onboard.js'
 
@@ -106,10 +107,10 @@ export default function ProfileInterview({
     return () => { alive.current = false }
   }, [])
 
-  const asked = transcript.length + (question ? 1 : 0)
   // Scripted questions carry a hint and an example answer; a model follow-up has neither
   // and is labelled as a follow-up instead of being numbered against the fixed four.
   const meta = questionMeta(question)
+  const progress = interviewProgressLabel({ phase, question })
 
   // Drafting is the one paid call in this step. On failure the transcript stays on screen —
   // retyping six answers because a call timed out would be the worst possible failure here.
@@ -193,7 +194,8 @@ export default function ProfileInterview({
         </p>
         <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--color-fg-dim)', maxWidth: 520 }}>
           Turning {answeredTurns(transcript)} answer{answeredTurns(transcript) === 1 ? '' : 's'} into
-          PubMed queries, north stars, and a ranking rubric. You'll see all of it before anything is saved.
+          PubMed searches, north stars, and a ranking rubric. You&rsquo;ll see all three on the next
+          screen before anything is saved.
         </p>
       </div>
     )
@@ -209,11 +211,11 @@ export default function ProfileInterview({
         </ul>
       )}
 
-      <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '.12em', color: 'var(--color-fg-faint)', display: phase === 'failed' ? 'none' : undefined }}>
-        {meta.scripted
-          ? `QUESTION ${Math.min(asked, SCRIPTED_QUESTIONS.length)} OF ${SCRIPTED_QUESTIONS.length}`
-          : 'ONE QUICK FOLLOW-UP'}
-      </p>
+      {progress && (
+        <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '.12em', color: 'var(--color-fg-faint)' }}>
+          {progress}
+        </p>
+      )}
 
       {ack && (
         <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>{ack}</p>
@@ -225,11 +227,11 @@ export default function ProfileInterview({
         </p>
       ) : phase === 'thinking' ? (
         <p style={{ margin: '12px 0 0', fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 19, color: 'var(--color-fg-soft)' }}>
-          Thinking about what to ask next…
+          {interviewThinkingCopy(transcript)}
         </p>
       ) : (
         <>
-          <p style={{ margin: '10px 0 0', fontFamily: 'var(--font-serif)', fontSize: 22, lineHeight: 1.45, color: 'var(--color-fg)', maxWidth: 560 }}>
+          <p id="interview-question" style={{ margin: '10px 0 0', fontFamily: 'var(--font-serif)', fontSize: 22, lineHeight: 1.45, color: 'var(--color-fg)', maxWidth: 560 }}>
             {question}
           </p>
           {meta.hint && (
@@ -248,6 +250,7 @@ export default function ProfileInterview({
             }}
             rows={meta.short ? 1 : 3}
             placeholder={meta.placeholder || 'Answer in your own words — a sentence or two is plenty.'}
+            aria-labelledby="interview-question"
             autoFocus
             style={answerBox}
           />

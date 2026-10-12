@@ -4,7 +4,7 @@
 // welcome → account (configured production only) → connect (access code first, or BYOK — the only place
 // a brand-new user can enter a key) →
 // INTERVIEW (a real conversation, one question at a time — ProfileInterview.jsx) →
-// review (confirm the greeting and the topic labels, then enter — no machinery shown).
+// review (confirm the greeting, topics, PubMed searches, north stars, and rubric).
 // A demo path on the welcome screen seeds DEMO_PROFILE so the app demos keyless.
 //
 // The interview is the ONLY path. Four fixed plain-language questions (pipeline/interview.js)
@@ -18,10 +18,12 @@
 
 import { useState } from 'react'
 import { hasApiKey, hasModelAccess, setApiKey } from '../lib/anthropic.js'
-import { isSponsored, refreshSponsorship } from '../lib/sponsor.js'
+import { isSponsored } from '../lib/sponsor.js'
 import InviteCode from './InviteCode.jsx'
 import { currentNpiMatch } from '../lib/npi.js'
-import { supabaseConfigured, sendMagicLink, verifyEmailCode } from '../lib/supabase.js'
+import { supabaseConfigured } from '../lib/supabase.js'
+import { useEmailCodeSignIn } from '../lib/emailCode.js'
+import { useOnboardStep } from '../lib/onboardingRoute.js'
 import { getProfile, saveProfile } from '../lib/store.js'
 import { DEMO_PROFILE, DEFAULT_RUBRIC, DEFAULT_SELECT_COUNT } from '../pipeline/onboard.js'
 import { mergeInterviewProfile } from '../pipeline/interview.js'
@@ -59,6 +61,12 @@ const primaryBtn = {
   fontFamily: 'inherit',
 }
 const ghostLink = { border: 0, background: 'transparent', padding: 0, fontSize: 14, color: 'var(--color-fg-muted)', fontFamily: 'inherit' }
+const secondaryBtn = {
+  ...primaryBtn,
+  background: 'transparent',
+  color: 'var(--color-fg-soft)',
+  border: '1px solid rgba(255,255,255,.18)',
+}
 
 // The observatory mark — five-point outline chart star (never a four-point sparkle).
 function ChartStar({ size = 44 }) {
@@ -70,16 +78,11 @@ function ChartStar({ size = 44 }) {
 }
 
 export default function OnboardingQuiz({ onDone, preview = false, account = null }) {
-  const [step, setStep] = useState('welcome') // welcome | signin | connect | interview | review
+  const [step, goStep, backStep] = useOnboardStep() // welcome | signin | connect | interview | review
   const [keyInput, setKeyInput] = useState('')
   const [draft, setDraft] = useState(null) // { name, northStars, projects, topics, search, rubric:{criteria,selectCount,scoreFloor} }
   // Account creation/sign-in from the welcome screen (accounts configured only).
-  const [signinEmail, setSigninEmail] = useState('')
-  const [signinState, setSigninState] = useState('idle') // idle | sending | sent | error
-  const [signinError, setSigninError] = useState('')
-  const [signinCode, setSigninCode] = useState('')
-  const [verifyState, setVerifyState] = useState('idle') // idle | verifying | error
-  const [verifyError, setVerifyError] = useState('')
+  const signin = useEmailCodeSignIn()
   const keySet = hasApiKey()
   // A sponsored account needs no key; the connect step says so and lets them through.
   const [sponsorVersion, setSponsorVersion] = useState(0)
@@ -95,43 +98,12 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
       if (keyInput.trim()) setApiKey(keyInput)
       if (!hasModelAccess()) return // key or sponsorship required to interview; the demo path is on the welcome screen
     }
-    setStep('interview')
+    goStep('interview')
   }
 
-  // Send the account magic link. Supabase creates a new account when needed; the
-  // same flow signs returning users in. Finishing sign-in is the email's job — via
-  // the emailed CODE typed here (works everywhere, including the installed
-  // home-screen app, where the link would open the browser's separate storage
-  // world instead), or via the link on a regular browser tab. Either way a session
-  // lands, App reboots onto the cloud profile, and this flow never resumes.
-  async function sendSigninLink(e) {
-    e.preventDefault()
-    if (!signinEmail.trim()) return
-    setSigninState('sending')
-    setSigninError('')
-    try {
-      await sendMagicLink(signinEmail.trim())
-      setSigninState('sent')
-    } catch (err) {
-      setSigninError(err?.message || String(err))
-      setSigninState('error')
-    }
-  }
-
-  async function verifySigninCode(e) {
-    e.preventDefault()
-    const code = signinCode.trim()
-    if (!code) return
-    setVerifyState('verifying')
-    setVerifyError('')
-    try {
-      await verifyEmailCode(signinEmail.trim(), code)
-      await refreshSponsorship()
-      window.location.reload()
-    } catch (err) {
-      setVerifyError(err?.message || String(err))
-      setVerifyState('error')
-    }
+  function leaveSignin() {
+    signin.reset()
+    backStep()
   }
 
   function useDemo() {
@@ -193,7 +165,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
         </p>
         <div className="flex flex-col items-center" style={{ marginTop: 36, gap: 16 }}>
           <button
-            onClick={() => setStep(setupStartStep({ configured: supabaseConfigured, account, preview }))}
+            onClick={() => goStep(setupStartStep({ configured: supabaseConfigured, account, preview }))}
             className="cursor-pointer"
             style={{ ...primaryBtn, padding: '14px 30px', borderRadius: 12, boxShadow: '0 10px 34px -10px rgba(239,143,91,.75)' }}
           >
@@ -203,12 +175,12 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
             Explore a populated sample digest
           </button>
           <p style={{ margin: '-6px 0 0', fontSize: 12, color: 'var(--color-fg-faint)' }}>
-            Public paper metadata, no key needed — read-only and separate from your library.
+            Look through sample papers from the published literature. Nothing is saved to your library.
           </p>
           {/* Returning users can sign in directly. New users reach the same screen from
               the primary setup button, so a real library is never silently local-only. */}
           {supabaseConfigured && !preview && (
-            <button onClick={() => setStep('signin')} className="cursor-pointer" style={{ ...ghostLink, marginTop: 6, color: 'var(--color-fg-soft)' }}>
+            <button onClick={() => goStep('signin')} className="cursor-pointer" style={{ ...ghostLink, marginTop: 6, color: 'var(--color-fg-soft)' }}>
               Have an account? <span style={{ color: 'var(--color-accent)' }}>Sign in</span>
             </button>
           )}
@@ -222,70 +194,80 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
     return (
       <div>
         <p style={stepMark}>ACCOUNT</p>
-        <h2 className="vs-step-title" style={stepTitle}>Secure your library.</h2>
+        <h2 className="vs-step-title" style={stepTitle}>Create your account or sign in.</h2>
         <p style={stepLede}>
-          Enter your email and we&rsquo;ll send a one-time code. This creates your account if
-          you&rsquo;re new, or opens your existing library if you&rsquo;re returning. No password, ever.
+          Enter your email and we&rsquo;ll send a one-time code. New here? This creates your
+          account. Returning? This opens your library. No password, ever.
         </p>
-        {signinState === 'sent' ? (
+        {signin.sendState === 'sent' ? (
           <div style={{ maxWidth: 520 }}>
-            <div style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55 }}>
-              <span style={{ fontWeight: 600 }}>Email sent to {signinEmail.trim()}</span> — enter the
-              6-digit code from it below. (The email&rsquo;s link also works, but only in the same
-              browser — from the installed app, use the code.)
+            <div role="status" style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55 }}>
+              <span style={{ fontWeight: 600 }}>Code sent to {signin.email.trim()}.</span> Enter the 6-digit code from that email.
             </div>
-            <form onSubmit={verifySigninCode} className="flex" style={{ gap: 10, marginTop: 14 }}>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={signinCode}
-                onChange={(e) => setSigninCode(e.target.value)}
-                placeholder="6-digit code"
-                autoFocus
-                style={{ ...inputStyle, marginTop: 0, flex: 1, width: 'auto', letterSpacing: '.14em' }}
-              />
-              <button type="submit" disabled={verifyState === 'verifying'} className="cursor-pointer" style={{ ...primaryBtn, opacity: verifyState === 'verifying' ? 0.6 : 1 }}>
-                {verifyState === 'verifying' ? 'Checking…' : 'Sign in'}
-              </button>
+            <form onSubmit={signin.verify} style={{ marginTop: 14 }}>
+              <label htmlFor="email-code" style={fieldLabel}>6-digit code</label>
+              <div className="flex" style={{ gap: 10, marginTop: 8 }}>
+                <input
+                  id="email-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={signin.code}
+                  onChange={(e) => signin.setCode(e.target.value)}
+                  placeholder="123456"
+                  aria-invalid={signin.verifyState === 'error'}
+                  autoFocus
+                  style={{ ...inputStyle, marginTop: 0, flex: 1, width: 'auto', letterSpacing: '.14em' }}
+                />
+                <button type="submit" disabled={signin.verifyState === 'verifying'} className="cursor-pointer" style={{ ...primaryBtn, opacity: signin.verifyState === 'verifying' ? 0.6 : 1 }}>
+                  {signin.verifyState === 'verifying' ? 'Checking…' : 'Continue'}
+                </button>
+              </div>
             </form>
-            {verifyState === 'error' && (
-              <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 600 }}>That code didn&rsquo;t work:</span> {verifyError}
+            {signin.verifyState === 'error' && (
+              <div role="alert" style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                {signin.verifyError}
               </div>
             )}
+            {signin.resendNote && (
+              <p role="status" style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-verified-soft)' }}>{signin.resendNote}</p>
+            )}
+            <div className="flex items-center" style={{ marginTop: 18, gap: 18 }}>
+              <button type="button" onClick={signin.resend} disabled={signin.resending} className="cursor-pointer" style={{ ...ghostLink, color: 'var(--color-accent)' }}>
+                {signin.resending ? 'Sending…' : 'Send a new code'}
+              </button>
+              <button type="button" onClick={leaveSignin} className="cursor-pointer" style={ghostLink}>
+                ← Back
+              </button>
+            </div>
           </div>
         ) : (
-          <form onSubmit={sendSigninLink} style={{ marginTop: 24, maxWidth: 520 }}>
-            <label style={fieldLabel}>Account email</label>
+          <form onSubmit={signin.send} style={{ marginTop: 24, maxWidth: 520 }}>
+            <label htmlFor="account-email" style={fieldLabel}>Account email</label>
             <input
+              id="account-email"
               type="email"
-              value={signinEmail}
-              onChange={(e) => setSigninEmail(e.target.value)}
+              value={signin.email}
+              onChange={(e) => signin.setEmail(e.target.value)}
               placeholder="you@example.com"
               autoComplete="email"
               autoFocus
               style={inputStyle}
             />
-            {signinState === 'error' && (
-              <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the link:</span> {signinError}
+            {signin.sendState === 'error' && (
+              <div role="alert" style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {signin.sendError}
               </div>
             )}
             <div className="flex items-center" style={{ marginTop: 20, gap: 18 }}>
-              <button type="submit" disabled={signinState === 'sending'} className="cursor-pointer" style={{ ...primaryBtn, opacity: signinState === 'sending' ? 0.6 : 1 }}>
-                {signinState === 'sending' ? 'Sending…' : 'Email me a code'}
+              <button type="submit" disabled={signin.sendState === 'sending'} className="cursor-pointer" style={{ ...primaryBtn, opacity: signin.sendState === 'sending' ? 0.6 : 1 }}>
+                {signin.sendState === 'sending' ? 'Sending…' : 'Email me a code'}
               </button>
-              <button type="button" onClick={() => { setStep('welcome'); setSigninState('idle'); setSigninError('') }} className="cursor-pointer" style={ghostLink}>
+              <button type="button" onClick={leaveSignin} className="cursor-pointer" style={ghostLink}>
                 ← Back
               </button>
             </div>
           </form>
-        )}
-        {signinState === 'sent' && (
-          <button onClick={() => { setStep('welcome'); setSigninState('idle') }} className="cursor-pointer" style={{ ...ghostLink, marginTop: 18 }}>
-            ← Back
-          </button>
         )}
       </div>
     )
@@ -298,6 +280,11 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   if (step === 'connect') {
     const canUseCode = !sponsored && (preview || account)
     const blocked = !preview && !sponsored && !keySet && !keyInput.trim()
+    // The beta code's own Continue is the primary action. A second disabled
+    // Continue, for a key the person has not opened, only looked like a dead end.
+    const keyPathOpen = !sponsored && (!canUseCode || keySet || keyOpen)
+    const showStepContinue = sponsored || preview || keyPathOpen || Boolean(keyInput.trim())
+    const keyAlongsideCode = canUseCode && !sponsored && keyPathOpen
     return (
       <div>
         <div hidden={betaNpi}>
@@ -329,7 +316,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
               {canUseCode && (
                 <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--color-fg-muted)' }}>No code? Use your own Anthropic key.</p>
               )}
-              <label style={fieldLabel}>Anthropic API key</label>
+              <label htmlFor="anthropic-api-key" style={fieldLabel}>Anthropic API key</label>
               {keySet && !keyInput ? (
                 <div className="flex items-center" style={{ marginTop: 8, gap: 10, padding: '11px 14px', borderRadius: 11, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
@@ -338,11 +325,13 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
                 </div>
               ) : (
                 <input
+                  id="anthropic-api-key"
                   type="password"
                   value={keyInput}
                   onChange={(e) => setKeyInput(e.target.value)}
                   placeholder="sk-ant-…"
                   autoComplete="off"
+                  aria-describedby={blocked ? 'connect-continue-help' : undefined}
                   style={inputStyle}
                 />
               )}
@@ -362,13 +351,25 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
           )}
 
           <div className="flex items-center" style={{ marginTop: 30, gap: 18 }}>
-            <button type="submit" disabled={blocked} className="cursor-pointer" style={{ ...primaryBtn, opacity: blocked ? 0.5 : 1 }}>
-              Continue →
-            </button>
-            <button type="button" onClick={() => setStep('welcome')} className="cursor-pointer" style={ghostLink}>
+            {showStepContinue && (
+              <button type="submit" disabled={blocked} aria-describedby={blocked ? 'connect-continue-help' : undefined} className="cursor-pointer" style={{ ...(keyAlongsideCode ? secondaryBtn : primaryBtn), opacity: blocked ? 0.5 : 1 }}>
+                {keyAlongsideCode ? 'Continue with API key' : 'Continue →'}
+              </button>
+            )}
+            <button type="button" onClick={backStep} className="cursor-pointer" style={ghostLink}>
               Back
             </button>
           </div>
+          {blocked && showStepContinue && (
+            <p id="connect-continue-help" style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.5, color: 'var(--color-fg-muted)' }}>
+              Paste your Anthropic API key to continue.
+            </p>
+          )}
+          {!showStepContinue && (
+            <p id="connect-continue-help" style={{ margin: '14px 0 0', fontSize: 13, lineHeight: 1.5, color: 'var(--color-fg-muted)' }}>
+              Enter your beta code above to continue.
+            </p>
+          )}
         </form>
       </div>
     )
@@ -388,9 +389,9 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
             preview={preview}
             onDraft={(drafted) => {
               setDraft(drafted)
-              setStep('review')
+              goStep('review')
             }}
-            onCancel={() => setStep('connect')}
+            onCancel={backStep}
           />
         </div>
       </div>
@@ -398,11 +399,10 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   }
 
   // ===== REVIEW =====
-  // A confirmation, not a settings page. A new clinician sees who the digest is for and what
-  // it will watch, in plain labels, and can drop a topic that is wrong. The machinery — the
-  // PubMed queries, the search window and caps, north stars, the rubric, journal lists — is
-  // drafted and saved exactly as before but NOT shown here; it is all editable later from the
-  // profile panel in the app (NorthStars.jsx), which is where someone who wants it will look.
+  // A confirmation, not a settings page. Topics stay editable as chips. The PubMed
+  // searches, north stars, and ranking rubric are shown here too — collapsible — because
+  // the interview promised she would see them before anything is saved. Journal lists and
+  // the search window stay in the profile panel (NorthStars.jsx) for later tuning.
   const topics = draft?.topics || []
   return (
     <div>
@@ -414,8 +414,9 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
       </p>
 
       <div style={{ marginTop: 26 }}>
-        <label style={fieldLabel}>I&rsquo;ll call you</label>
+        <label htmlFor="digest-name" style={fieldLabel}>I&rsquo;ll call you</label>
         <input
+          id="digest-name"
           value={draft?.name || ''}
           onChange={(e) => setField({ name: e.target.value })}
           placeholder="Dr. Lastname"
@@ -448,6 +449,41 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
         )}
       </div>
 
+      <details open style={{ marginTop: 28 }}>
+        <summary className="cursor-pointer" style={{ fontSize: 13, letterSpacing: '.06em', color: '#aab0be', fontWeight: 600 }}>
+          PubMed searches, north stars, and ranking
+        </summary>
+        <div style={{ marginTop: 16 }}>
+          <h3 style={{ ...fieldLabel, margin: 0 }}>PubMed searches</h3>
+          {topics.length ? (
+            <ul style={{ margin: '10px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {topics.map((t) => (
+                <li key={t.label}>
+                  <span style={{ fontSize: 14.5, color: 'var(--color-fg)' }}>{t.label}</span>
+                  {t.query && (
+                    <span style={{ display: 'block', marginTop: 3, fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.45, color: 'var(--color-fg-dim)' }}>{t.query}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--color-fg-dim)' }}>No searches yet.</p>
+          )}
+          <h3 style={{ ...fieldLabel, margin: '18px 0 0' }}>North stars</h3>
+          {(draft?.northStars || []).length ? (
+            <ul style={{ margin: '8px 0 0', paddingLeft: 18, color: 'var(--color-fg)', fontSize: 14.5, lineHeight: 1.55 }}>
+              {draft.northStars.map((star) => <li key={star}>{star}</li>)}
+            </ul>
+          ) : (
+            <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--color-fg-dim)' }}>None yet. You can add these later in the app.</p>
+          )}
+          <h3 style={{ ...fieldLabel, margin: '18px 0 0' }}>Ranking rubric</h3>
+          <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--color-fg-dim)', whiteSpace: 'pre-wrap', maxWidth: 520 }}>
+            {draft?.rubric?.criteria || DEFAULT_RUBRIC}
+          </p>
+        </div>
+      </details>
+
       <div className="flex items-center" style={{ marginTop: 32, gap: 18 }}>
         <button
           onClick={save}
@@ -457,7 +493,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
         >
           Enter Verastar →
         </button>
-        <button onClick={() => setStep('interview')} className="cursor-pointer" style={ghostLink}>
+        <button onClick={() => goStep('interview', { replace: true })} className="cursor-pointer" style={ghostLink}>
           Start the interview over
         </button>
       </div>

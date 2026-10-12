@@ -38,9 +38,9 @@ export default function NpiMatch({ onContinue, onBack, preview = false }) {
     <form onSubmit={submit}>
       {[
         ['firstName', 'First name', 'given-name'], ['lastName', 'Last name', 'family-name'], ['npi', 'NPI number', 'off'],
-      ].map(([key, label, autoComplete]) => <label key={key} style={{ display: 'block', marginTop: 16, fontSize: 14 }}>
+      ].map(([key, label, autoComplete]) => <label key={key} htmlFor={`npi-${key}`} style={{ display: 'block', marginTop: 16, fontSize: 14 }}>
         {label}
-        <input type="text" name={key} value={fields[key]} onChange={(e) => change(key, e.target.value)} required autoComplete={autoComplete}
+        <input id={`npi-${key}`} type="text" name={key} value={fields[key]} onChange={(e) => change(key, e.target.value)} required autoComplete={autoComplete}
           inputMode={key === 'npi' ? 'numeric' : 'text'} maxLength={key === 'npi' ? 10 : 100}
           pattern={key === 'npi' ? '[0-9]{10}' : undefined} style={inputStyle} />
       </label>)}

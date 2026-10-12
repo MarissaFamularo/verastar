@@ -14,6 +14,13 @@ async function fill() {
   await dom.type(dom.q('[name=npi]'), '1234567893')
 }
 describe('NPI entry', () => {
+  it('names each field from its visible label', async () => {
+    await dom.render(React.createElement(NpiMatch))
+    expect(dom.q('label[for="npi-firstName"]').textContent).toContain('First name')
+    expect(dom.q('label[for="npi-lastName"]').textContent).toContain('Last name')
+    expect(dom.q('label[for="npi-npi"]').textContent).toContain('NPI number')
+    expect(dom.q('#npi-firstName').id).toBe('npi-firstName')
+  })
   it('shows matched only after success, continues with receipt, clears when fields change', async () => {
     const onContinue = vi.fn()
     matchNpi.mockResolvedValue(receipt)

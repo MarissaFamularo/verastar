@@ -1,6 +1,6 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mountDom } from '../test-utils/dom.js'
+import { mountDom, deferred } from '../test-utils/dom.js'
 vi.mock('../lib/inviteCode.js', () => ({
   canRedeem: () => true, redeemInviteCode: vi.fn(), normalizeInviteCode: (s) => s.toUpperCase(),
   INVITE_MESSAGES: { invalid: 'Invalid code', npi_required: 'Match NPI', enrolled: 'Enrolled' },
@@ -14,7 +14,7 @@ let dom
 beforeEach(async () => { vi.clearAllMocks(); dom = await mountDom() })
 afterEach(async () => { await dom.unmount() })
 async function enterCode() {
-  await dom.type(dom.q('[aria-label="Access code"]'), 'BETA')
+  await dom.type(dom.q('#beta-access-code'), 'BETA')
   await dom.submit(dom.q('form'))
 }
 describe('beta code before NPI', () => {
@@ -42,9 +42,25 @@ describe('beta code before NPI', () => {
     await dom.render(React.createElement(InviteCode))
     await enterCode()
     await dom.click(dom.button('Back'))
-    expect(dom.q('[aria-label="Access code"]').value).toBe('BETA')
+    expect(dom.q('#beta-access-code').value).toBe('BETA')
     expect(dom.text()).not.toContain('NPI form')
     expect(redeemInviteCode).toHaveBeenCalledTimes(1)
+  })
+  it('confirms access after NPI without returning to the code form', async () => {
+    const onEnrolled = vi.fn()
+    const onNpiStep = vi.fn()
+    const pending = deferred()
+    redeemInviteCode.mockResolvedValueOnce({ status: 'npi_required' }).mockReturnValueOnce(pending.promise)
+    await dom.render(React.createElement(InviteCode, { onEnrolled, onNpiStep, lead: true }))
+    await enterCode()
+    await dom.click(dom.button('Finish NPI'))
+    expect(dom.q('#beta-access-code')).toBeNull()
+    expect(dom.text()).toContain('Confirming your access')
+    expect(dom.text()).not.toContain('Checking')
+    await dom.settle(() => pending.resolve({ status: 'enrolled' }))
+    expect(onEnrolled).toHaveBeenCalledTimes(1)
+    expect(onNpiStep).toHaveBeenCalledWith(false)
+    expect(dom.q('#beta-access-code')).toBeNull()
   })
   it('previews the sequence without validating or enrolling', async () => {
     const onEnrolled = vi.fn()
