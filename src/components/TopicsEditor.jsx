@@ -35,6 +35,8 @@ const inputStyle = {
 }
 const numberInput = { width: 58, borderRadius: 9, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', padding: '6px 10px', fontSize: 14, fontFamily: 'var(--font-mono)', textAlign: 'center', color: 'var(--color-fg)', outline: 'none' }
 const ghostBtn = { borderRadius: 9, padding: '7px 12px', fontSize: 12, fontWeight: 500, fontFamily: 'inherit', border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--color-fg-soft)', cursor: 'pointer' }
+const fieldLabel = { display: 'block', marginBottom: 4, fontSize: 11, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--color-fg-muted)' }
+const chipBtn = { borderRadius: 999, border: '1px solid rgba(143,189,230,.28)', background: 'rgba(143,189,230,.12)', color: 'var(--color-registry)', padding: '3px 8px', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer' }
 
 function TopicSteering({ topic, northStars, onChange, onNorthStarsChange }) {
   const [newStar, setNewStar] = useState('')
@@ -68,24 +70,35 @@ function TopicSteering({ topic, northStars, onChange, onNorthStarsChange }) {
             type="button"
             onClick={() => setMapped(mapped.filter((item) => item !== star))}
             title={`Remove ${star} mapping`}
+            aria-label={`Remove ${star} steering`}
             className="cursor-pointer"
-            style={{ borderRadius: 999, border: 0, background: 'rgba(143,189,230,.12)', color: 'var(--color-registry)', padding: '2px 7px', fontSize: 10.5, fontFamily: 'inherit' }}
+            style={chipBtn}
           >
-            {star} ×
+            {star} <span aria-hidden="true">×</span>
           </button>
         ))}
-        {available.length > 0 && (
-          <select
-            value=""
-            onChange={(event) => addExisting(event.target.value)}
-            aria-label={`Map ${topic?.label || 'topic'} to a north star`}
-            style={{ borderRadius: 7, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg-muted)', padding: '3px 7px', fontSize: 10.5, fontFamily: 'inherit' }}
-          >
-            <option value="">Map to existing…</option>
-            {available.map((star) => <option key={star} value={star}>{star}</option>)}
-          </select>
-        )}
       </div>
+      {available.length > 0 && (
+        <details style={{ marginTop: 6 }}>
+          <summary className="cursor-pointer" style={{ fontSize: 11, color: 'var(--color-fg-muted)' }}>
+            Map to existing
+          </summary>
+          <div className="flex flex-wrap" style={{ gap: 5, marginTop: 6 }}>
+            {available.map((star) => (
+              <button
+                key={star}
+                type="button"
+                onClick={() => addExisting(star)}
+                aria-label={`Map ${topic?.label || 'topic'} to ${star}`}
+                className="cursor-pointer"
+                style={chipBtn}
+              >
+                {star}
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
       {!mapped.length && (
         <div className="flex flex-wrap items-center" style={{ gap: 6, marginTop: 6 }}>
           <input
@@ -204,24 +217,36 @@ export default function TopicsEditor({ topics, days, perTopic, northStars = [], 
       )}
 
       {topics.length > 0 && (
-        <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {topics.map((t, i) => (
             // Index-keyed on purpose: these rows are positional and freely edited, so a
             // key derived from the (changing) label would remount the input mid-keystroke.
-            <li key={i} className="flex items-start" style={{ gap: 8 }}>
-              <div className="min-w-0 flex-1" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <input
-                  value={t.label ?? ''}
-                  onChange={(e) => setRow(i, { label: e.target.value })}
-                  placeholder="Label — e.g. Aortic Disease"
-                  style={inputStyle}
-                />
-                <input
-                  value={t.query ?? ''}
-                  onChange={(e) => setRow(i, { query: e.target.value })}
-                  placeholder="Query — e.g. aortic aneurysm OR aortic dissection OR TEVAR OR EVAR"
-                  style={{ ...inputStyle, fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--color-fg-soft)' }}
-                />
+            <li
+              key={i}
+              className="flex items-start"
+              style={{ gap: 8, minWidth: 0, overflow: 'hidden', borderRadius: 12, border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.02)', padding: 12 }}
+            >
+              <div className="min-w-0 flex-1" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label>
+                  <span style={fieldLabel}>Label</span>
+                  <input
+                    value={t.label ?? ''}
+                    onChange={(e) => setRow(i, { label: e.target.value })}
+                    placeholder="Short name"
+                    aria-label={`Topic ${i + 1} label`}
+                    style={inputStyle}
+                  />
+                </label>
+                <label>
+                  <span style={fieldLabel}>Query</span>
+                  <input
+                    value={t.query ?? ''}
+                    onChange={(e) => setRow(i, { query: e.target.value })}
+                    placeholder="PubMed terms, joined with OR"
+                    aria-label={`Topic ${i + 1} query`}
+                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--color-fg-soft)' }}
+                  />
+                </label>
                 <TopicSteering
                   topic={t}
                   northStars={northStars}
@@ -230,12 +255,13 @@ export default function TopicsEditor({ topics, days, perTopic, northStars = [], 
                 />
               </div>
               <button
+                type="button"
                 onClick={() => removeRow(i)}
                 aria-label={`Remove ${t.label || t.query || 'topic'}`}
                 className="cursor-pointer"
-                style={{ marginTop: 6, border: 0, background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 15, lineHeight: 1, padding: '4px 6px' }}
+                style={{ marginTop: 18, border: 0, background: 'transparent', color: 'var(--color-fg-muted)', fontSize: 15, lineHeight: 1, padding: '4px 6px' }}
               >
-                ×
+                <span aria-hidden="true">×</span>
               </button>
             </li>
           ))}
@@ -258,7 +284,7 @@ export default function TopicsEditor({ topics, days, perTopic, northStars = [], 
               setPasteError('')
             }}
             rows={7}
-            placeholder={'Paste your topics — JSON rows like { "topic": "Aortic Disease", "query": "aortic aneurysm OR TEVAR" }, or one "Label: query" per line.'}
+            placeholder={'Paste topics — JSON rows like { "topic": "Name", "query": "term OR term" }, or one "Label: query" per line.'}
             style={{ width: '100%', resize: 'vertical', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', padding: '11px 13px', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-soft)', fontFamily: 'var(--font-mono)', outline: 'none' }}
           />
           <div className="flex flex-wrap items-center" style={{ marginTop: 8, gap: 10 }}>

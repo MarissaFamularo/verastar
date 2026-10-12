@@ -270,7 +270,7 @@ export default function NorthStars() {
             setSearch({ days, perTopic })
           }}
         />
-        <QueryFlags topics={topics} />
+        <QueryFlags topics={topics} days={search.days} />
       </div>
 
       <div hidden={panel !== 'selection'} style={{ marginTop: 20 }}>

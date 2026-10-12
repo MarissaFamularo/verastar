@@ -48,7 +48,13 @@ export async function redeemInviteCode(code) {
   })
   let out = null
   try { out = await res.json() } catch { out = null }
-  const status = out?.status || (res.ok ? 'error' : res.status === 429 ? 'slow_down' : 'error')
-  if (status === 'enrolled' || status === 'already') await refreshSponsorship()
-  return { status, cohort: out?.cohort || null }
+  // Enrollment is only a 2xx whose body says so. The NPI gate used to be HTTP 403 with
+  // status npi_required; that is the step before matching, never sponsored access. A 403
+  // (or any other error) must not refresh sponsorship or read as "you are in", even if a
+  // body claims enrolled.
+  const status = res.ok
+    ? (out?.status || 'error')
+    : (out?.status === 'npi_required' ? 'npi_required' : res.status === 429 || out?.status === 'slow_down' ? 'slow_down' : 'error')
+  if (res.ok && (status === 'enrolled' || status === 'already')) await refreshSponsorship()
+  return { status, cohort: res.ok ? (out?.cohort || null) : null }
 }

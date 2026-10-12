@@ -44,21 +44,24 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
     setNote('')
     try {
       const { status } = await redeemInviteCode(code)
+      // The NPI gate is the next step, not access granted. Do not leave a success note
+      // under it, and do not enroll.
       if (status === 'npi_required') {
-        showNpi(true)
-        setNote(INVITE_MESSAGES[status] || '')
         setOk(false)
-      } else {
-        const good = status === 'enrolled' || status === 'already'
-        setOk(good)
-        setNote(INVITE_MESSAGES[status] || INVITE_MESSAGES.error)
-        if (good) {
-          setCode('')
-          onEnrolled?.()
-          // Sponsorship is already refreshed inside redeem. Unhide the connect
-          // heading in the same turn so "You are all set" replaces this step.
-          onNpiStep?.(false)
-        }
+        setNote('')
+        showNpi(true)
+        setState('idle')
+        return
+      }
+      const good = status === 'enrolled' || status === 'already'
+      setOk(good)
+      setNote(INVITE_MESSAGES[status] || INVITE_MESSAGES.error)
+      if (good) {
+        setCode('')
+        onEnrolled?.()
+        // Sponsorship is already refreshed inside redeem. Unhide the connect
+        // heading in the same turn so "You are all set" replaces this step.
+        onNpiStep?.(false)
       }
     } catch (err) {
       setOk(false)

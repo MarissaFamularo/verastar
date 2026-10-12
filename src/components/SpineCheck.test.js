@@ -11,6 +11,7 @@ import SpineCheck, {
   retryBaseSnapshot,
   ScanDetails,
 } from './SpineCheck.jsx'
+import { sourceExamplesVisible } from '../lib/sourceExamples.js'
 
 function memoryStorage() {
   const values = new Map()
@@ -36,6 +37,13 @@ describe('SpineCheck source examples', () => {
     expect(html).not.toContain('Verifier proof')
     expect(html).not.toContain('guarantees')
     expect(html).not.toContain("Run today&#x27;s digest")
+  })
+
+  it('keeps source examples reachable when a failed run leaves no digest', () => {
+    expect(sourceExamplesVisible({ demo: false, keySet: true, resultCount: 0 })).toBe(true)
+    expect(sourceExamplesVisible({ demo: false, keySet: true, resultCount: 3 })).toBe(false)
+    expect(sourceExamplesVisible({ demo: false, keySet: false, resultCount: 3 })).toBe(true)
+    expect(sourceExamplesVisible({ demo: true, keySet: true, resultCount: 3 })).toBe(true)
   })
 })
 

@@ -324,6 +324,42 @@ describe('claims', () => {
   it('unauthenticated manual calls are refused', async () => {
     expect((await handleDigestRun(manual(), deps(memoryDb()).deps)).status).toBe(401)
   })
+
+  it('a manual run provisions an enabled schedule when a sponsored account has none', async () => {
+    const db = memoryDb({ users: ['A'] })
+    db.t.digest_schedules.length = 0
+    const req = new Request('https://fn/digest-run', { method: 'POST', headers: { authorization: 'Bearer u' }, body: JSON.stringify({ timezone: 'America/Los_Angeles' }) })
+    const out = await (await handleDigestRun(req, deps(db, { user: { id: 'A' }, run: async () => ({ phase: 'done', papers: 1, read: 1 }) }).deps)).json()
+    expect(out).toMatchObject({ ran: true, phase: 'done', user_id: 'A' })
+    expect(db.t.digest_schedules).toEqual([expect.objectContaining({ user_id: 'A', enabled: true, hour_local: 6, timezone: 'America/Los_Angeles' })])
+  })
+
+  it('a manual run falls back to New York when the timezone is not real', async () => {
+    const db = memoryDb({ users: ['A'] })
+    db.t.digest_schedules.length = 0
+    const req = new Request('https://fn/digest-run', { method: 'POST', headers: { authorization: 'Bearer u' }, body: JSON.stringify({ timezone: 'Not/AZone' }) })
+    const out = await (await handleDigestRun(req, deps(db, { user: { id: 'A' }, run: async () => ({ phase: 'empty', papers: 0, read: 0 }) }).deps)).json()
+    expect(out.ran).toBe(true)
+    expect(db.t.digest_schedules[0].timezone).toBe('America/New_York')
+  })
+
+  it('cron does not invent a schedule, and a manual run does not sponsor someone or turn a schedule back on', async () => {
+    const bare = memoryDb({ users: ['A'] })
+    bare.t.digest_schedules.length = 0
+    expect(await (await handleDigestRun(cron(), deps(bare).deps)).json()).toMatchObject({ ran: false, reason: 'nothing due' })
+    expect(bare.t.digest_schedules).toHaveLength(0)
+
+    const outsider = memoryDb({ users: ['A'] })
+    outsider.t.digest_schedules.length = 0
+    outsider.t.sponsored_accounts.length = 0
+    expect(await (await handleDigestRun(manual(), deps(outsider, { user: { id: 'A' } }).deps)).json()).toMatchObject({ ran: false, reason: 'nothing due' })
+    expect(outsider.t.digest_schedules).toHaveLength(0)
+
+    const off = memoryDb({ users: ['A'] })
+    off.t.digest_schedules[0].enabled = false
+    expect(await (await handleDigestRun(manual(), deps(off, { user: { id: 'A' }, run: async () => { throw new Error('must not run') } }).deps)).json()).toMatchObject({ ran: false, reason: 'nothing due' })
+    expect(off.t.digest_schedules).toEqual([expect.objectContaining({ user_id: 'A', enabled: false })])
+  })
 })
 
 describe('holds', () => {

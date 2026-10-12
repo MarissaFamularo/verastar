@@ -10,8 +10,9 @@ import { ClaimCheckMark } from './ClaimCheckMark.jsx'
 
 import { useEffect, useRef, useState } from 'react'
 import { hasModelAccess } from '../lib/anthropic.js'
+import { sourceExamplesVisible } from '../lib/sourceExamples.js'
 import { CAP_MESSAGE } from '../lib/sponsor.js'
-import { canSchedule, runScheduledDigestNow } from '../lib/digestSchedule.js'
+import { canSchedule, digestRefusalMessage, runScheduledDigestNow } from '../lib/digestSchedule.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import {
   saveDailyDigestIfCurrent,
@@ -412,8 +413,8 @@ function CandidatePool({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end" style={{ gap: 8 }}>
-          <button onClick={onToggleOpen} style={ghostBtn}>
-            {open ? '▾ Hide list' : `▸ Show all ${candidates.length}`}
+          <button type="button" onClick={onToggleOpen} aria-expanded={open} aria-label={open ? 'Hide list' : `Show all ${candidates.length}`} style={ghostBtn}>
+            <span aria-hidden="true">{open ? '▾' : '▸'}</span> {open ? 'Hide list' : `Show all ${candidates.length}`}
           </button>
           {open && (
             <button onClick={onRescore} disabled={locked || selecting || running} title="Re-score this same pool against your current rubric — no new search" style={{ ...ghostBtn, opacity: locked || selecting || running ? 0.5 : 1 }}>
@@ -1136,7 +1137,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           if (out?.reason === 'cap reached') setScanError(CAP_MESSAGE)
           // Held for review: say it is delayed, once, and do not suggest trying again.
           else if (isHeldRun(out)) markHeld()
-          else if (out?.reason !== "today's digest already exists") setScanError('The digest server did not start a run. Try again in a minute.')
+          else if (out?.reason !== "today's digest already exists") setScanError(digestRefusalMessage(out?.reason))
           break
         }
         if (out.phase === 'done') break
@@ -1596,6 +1597,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             : "Run today's digest"
   const showEmpty =
     !serverRunning && !running && !searching && !selecting && !ranking && results.length === 0 && candidates.length === 0 && !scanError && !scanNote && !restored?.delayed
+  const examplesVisible = sourceExamplesVisible({ demo, keySet, resultCount: results.length })
+  const showExamplesHint = examplesVisible && !busy && results.length === 0 && candidates.length === 0 && !scanNote && !restored?.delayed
   const hasExistingScan = !!(results.length || candidates.length || searchNote || scanNote)
   const hasScanDetails = !demo && !!(
     searchNote || topicReport.length || scanNote || candidates.length || (restored && !restored.incomplete && !restored.delayed)
@@ -1652,7 +1655,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         {/* Reference trials are a demo of the evidence checks. They belong to the sample
             digest and to someone with no access yet (it is the one thing they can do). For
             a clinician with a working digest they are a distraction above their own papers. */}
-        {(demo || !keySet) && <button
+        {examplesVisible && <button
           onClick={runShowcase}
           disabled={busy}
           title={demo || !keySet ? 'Precomputed trial examples; inspect the original source before use' : 'Fetch three reference trials and review their evidence checks'}
@@ -1722,10 +1725,16 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         onFinish={resumeDigest}
       />
       {ranking && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is ranking and summarizing against your steering profile…</p>}
-      {showEmpty && (
+      {showExamplesHint && (
         <p style={{ margin: '16px 0 0', fontSize: 14.5, color: 'var(--color-fg-dim)', lineHeight: 1.6, maxWidth: 620 }}>
-          Hit <span style={{ color: 'var(--color-accent)' }}>Run today's digest</span> — Verastar searches recent literature, scores it against your rubric, and
-          checks the evidence in the top papers for your digest. Or open “Source examples” to explore three reference trials.
+          {showEmpty ? (
+            <>
+              Hit <span style={{ color: 'var(--color-accent)' }}>Run today's digest</span> — Verastar searches recent literature, scores it against your rubric, and
+              checks the evidence in the top papers for your digest. Or open “Source examples” to explore three reference trials.
+            </>
+          ) : (
+            <>The scan didn’t finish. “Source examples” is still here — three reference trials, with no new search.</>
+          )}
         </p>
       )}
 

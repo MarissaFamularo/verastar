@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { savedWithoutWhy } from './pipeline/save.js'
-import { hasValidatedPaperEvidence } from './lib/evidenceVersion.js'
 import {
   setApiKey,
   getApiKey,
@@ -15,6 +13,8 @@ import {
   setAllCredentialsRemembered,
   clearNcbiCredentials,
 } from './lib/anthropic.js'
+import { libraryRailCounts } from './lib/libraryCounts.js'
+import { ncbiCredentialCopy } from './lib/ncbiCopy.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
 import { supabase, supabaseConfigured, currentUser, signOut, isSignedIn } from './lib/supabase.js'
 import { useEmailCodeSignIn } from './lib/emailCode.js'
@@ -122,7 +122,7 @@ function NavIcon({ view }) {
   }
 }
 
-function IconRail({ view, setView, onSettings, initials }) {
+function IconRail({ view, setView, onSettings, initials, name }) {
   // The lattice glyph is unlabeled, so leaving the app can't be a surprise: the
   // doorway asks first, and the new tab opens only from the confirm button.
   const [trellisAsk, setTrellisAsk] = useState(false)
@@ -183,12 +183,11 @@ function IconRail({ view, setView, onSettings, initials }) {
           className="flex flex-col items-center justify-center cursor-pointer"
           style={{ minWidth: 36, padding: '4px 2px', border: 0, background: 'transparent', borderRadius: 11, gap: 4, color: 'var(--color-fg-muted)', fontFamily: 'inherit' }}
         >
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
             <path d="M4 4l16 16M12 4l8 8M4 12l8 8" />
             <path d="M20 4L4 20M12 4l-8 8M20 12l-8 8" />
           </svg>
-          {/* Labeled like every other stop on the bar — an unlettered glyph read as a mystery. */}
-          <span style={{ fontSize: 10.5, fontWeight: 500 }}>PT</span>
+          <span style={{ fontSize: 10.5, fontWeight: 500 }}>Trellis</span>
         </button>
         {trellisAsk && (
           <div
@@ -229,12 +228,15 @@ function IconRail({ view, setView, onSettings, initials }) {
         {/* The avatar doubles as the Settings entry point — no separate rail item. */}
         <button
           onClick={onSettings}
-          title="Settings"
-          aria-label="Settings"
-          className="flex items-center justify-center cursor-pointer"
-          style={{ width: 36, height: 36, padding: 0, border: 0, borderRadius: '50%', background: 'linear-gradient(135deg,#3a4150,#8a94a8)', fontSize: 12.5, fontWeight: 600, color: '#0d0f14', fontFamily: 'inherit' }}
+          title={name ? `Settings for ${name}` : 'Settings'}
+          aria-label={name ? `Settings for ${name}` : 'Settings'}
+          className="flex flex-col items-center cursor-pointer"
+          style={{ gap: 4, padding: 0, border: 0, background: 'transparent', color: 'var(--color-fg-muted)', fontFamily: 'inherit' }}
         >
-          {initials}
+          <span className="flex items-center justify-center" aria-hidden="true" style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#3a4150,#8a94a8)', fontSize: 12.5, fontWeight: 600, color: '#0d0f14' }}>
+            {initials}
+          </span>
+          <span style={{ fontSize: 10.5, fontWeight: 500 }}>Settings</span>
         </button>
       </div>
     </aside>
@@ -760,12 +762,12 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
               <div style={{ marginTop: 14, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '12px 13px' }}>
                 <div className="flex items-center" style={{ gap: 8 }}>
                   <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>NCBI / PubMed credentials</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: ncbi.keyActive ? 'var(--color-verified-soft)' : 'var(--color-abstract)' }}>
-                    API key {ncbi.keyActive ? (ncbi.keyRemembered ? 'active · remembered' : 'active · this session') : 'missing'}
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: ncbi.keyActive ? 'var(--color-verified-soft)' : 'var(--color-fg-muted)' }}>
+                    {ncbiCredentialCopy(ncbi).key}
                   </span>
                 </div>
-                <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
-                  Email {ncbi.emailActive ? (ncbi.emailRemembered ? 'active · remembered' : 'active · this session') : 'missing'} · API key raises the PubMed request limit.
+                <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--color-fg-muted)', lineHeight: 1.45 }}>
+                  {ncbiCredentialCopy(ncbi).email}. Both are optional. An API key only raises the PubMed rate limit.
                 </p>
                 <form onSubmit={saveNcbi} style={{ marginTop: 10 }}>
                   <input
@@ -925,10 +927,21 @@ export function DigestRail({ saved, onSettings, counts, projects, trellis, onCon
       {/* Judgment capture: a save with no "why" is a paper the wiki cannot explain.
           Quiet amber line, only when there is something to do; opens the Library
           where the note field lives. */}
-      {!demo && counts.withoutWhy > 0 && (
-        <p onClick={onLibrary} className="cursor-pointer" style={{ margin: '-22px 0 34px', fontSize: 12.5, lineHeight: 1.5, color: 'var(--color-abstract)' }}>
-          {counts.withoutWhy} saved this week without a why · add one in the Library ↗
-        </p>
+      {!demo && (counts.withoutWhy > 0 || counts.starters > 0) && (
+        <div style={{ margin: '-22px 0 34px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {counts.withoutWhy > 0 && (
+            <p onClick={onLibrary} className="cursor-pointer" style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: 'var(--color-abstract)' }}>
+              {counts.withoutWhy} saved this week without a why · add one in the Library ↗
+            </p>
+          )}
+          {counts.starters > 0 && (
+            <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: 'var(--color-fg-muted)' }}>
+              {counts.starters === 1 ? '1 starter sample' : `${counts.starters} starter samples`}
+              {counts.starterTitle ? ` · ${counts.starterTitle}` : ''}
+              {' '}— a reference paper, not counted above
+            </p>
+          )}
+        </div>
       )}
 
       {(projects.length > 0 || trellis.length > 0) && (
@@ -989,7 +1002,7 @@ export default function App() {
   // restore). Null = no digest, so the header falls back to today's date.
   const [digestSavedAt, setDigestSavedAt] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0, withoutWhy: 0 })
+  const [counts, setCounts] = useState({ verified: 0, saved: 0, flagged: 0, withoutWhy: 0, starters: 0, starterTitle: '' })
   // Synced PaperTrellis project rows (title + stage) for the rail and Settings —
   // display only; the prompt-line merge happens at the digest call sites.
   const [trellis, setTrellis] = useState([])
@@ -1086,12 +1099,7 @@ export default function App() {
   // Derive library-wide counts from saved papers and the current evidence policy.
   function refreshCounts() {
     store.all('papers').then((papers = []) => {
-      setCounts({
-        verified: papers.filter(hasValidatedPaperEvidence).length,
-        saved: papers.length,
-        flagged: papers.filter((p) => p?.flagged).length,
-        withoutWhy: savedWithoutWhy(papers).length,
-      })
+      setCounts(libraryRailCounts(papers))
     }).catch(() => {})
   }
   useEffect(() => {
@@ -1243,7 +1251,7 @@ export default function App() {
 
   return (
     <div className="vs-shell flex overflow-hidden" style={{ height: '100vh', width: '100%', background: 'linear-gradient(165deg,#0f1218,#08090d)' }}>
-      <IconRail view={view} setView={setView} onSettings={() => setSettingsOpen(true)} initials={initials} />
+      <IconRail view={view} setView={setView} onSettings={() => setSettingsOpen(true)} initials={initials} name={name} />
 
       {view === 'digest' && (
         <div className="vs-digest flex" style={{ flex: 1, minWidth: 0 }}>

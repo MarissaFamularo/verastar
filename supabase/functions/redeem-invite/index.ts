@@ -80,7 +80,11 @@ Deno.serve(async (req) => {
     }
     if (!Number.isInteger(invite.uses) || !Number.isInteger(invite.max_uses)) return json(503, { status: 'error' })
     if (invite.uses >= invite.max_uses) return json(200, { status: 'exhausted' })
-    return json(403, { status: 'npi_required' })
+    // Same HTTP status as the other business outcomes (invalid, expired, already). A 403
+    // is an error in the browser console, and onboarding then continues into "You are
+    // all set" after the NPI match — which reads as a failed redeem that the UI treated
+    // as success. The body status is what the client branches on. This does not enroll.
+    return json(200, { status: 'npi_required' })
   }
 
   const { data, error } = await admin.rpc('redeem_sponsor_invite', { p_code: code, p_user_id: user.id })
