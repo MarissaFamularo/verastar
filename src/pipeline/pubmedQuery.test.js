@@ -42,9 +42,27 @@ describe('compilePubmedQuery', () => {
     )
   })
 
-  it('leaves a trailing wildcard unquoted and tags each word', () => {
-    expect(compilePubmedQuery('carotid stent*')).toBe('carotid[tiab] AND stent*[tiab]')
+  it('keeps a wildcard phrase as one clause so OR precedence does not change', () => {
+    expect(compilePubmedQuery('carotid stent*')).toBe('"carotid stent*"[tiab]')
+    expect(compilePubmedQuery('carotid stenosis OR carotid stent*')).toBe(
+      '"carotid stenosis"[tiab] OR "carotid stent*"[tiab]',
+    )
     expect(compilePubmedQuery('stent*[tiab] OR carotid stenosis')).toBe('stent*[tiab] OR "carotid stenosis"[tiab]')
+  })
+
+  it('preserves boolean structure around wildcards, NOT, and nested parentheses', () => {
+    expect(compilePubmedQuery('carotid stenosis NOT (animals[mh] NOT humans[mh])')).toBe(
+      '"carotid stenosis"[tiab] NOT (animals[mh] NOT humans[mh])',
+    )
+    expect(compilePubmedQuery('(carotid stent* OR carotid stenosis) AND stroke NOT mice')).toBe(
+      '("carotid stent*"[tiab] OR "carotid stenosis"[tiab]) AND stroke[tiab] NOT mice[tiab]',
+    )
+    expect(compilePubmedQuery('carotid stent* AND stroke OR carotid stenosis NOT mice')).toBe(
+      '"carotid stent*"[tiab] AND stroke[tiab] OR "carotid stenosis"[tiab] NOT mice[tiab]',
+    )
+    expect(compilePubmedQuery('((carotid stenosis OR carotid stent*) AND stroke) NOT (animals[mh] NOT humans[mh])')).toBe(
+      '(("carotid stenosis"[tiab] OR "carotid stent*"[tiab]) AND stroke[tiab]) NOT (animals[mh] NOT humans[mh])',
+    )
   })
 
   it('preserves parentheses, AND, NOT, and a field tag the clinician already wrote', () => {
@@ -237,6 +255,80 @@ describe('fitsTopic — real topic papers still qualify', () => {
       title: 'Glycemic trajectories after bariatric procedures.',
       abstract,
     })).toBe(true)
+  })
+
+  it('does not let a parenthesized metadata exclusion reject a text match', () => {
+    const human = {
+      label: 'Carotid stenosis',
+      title: 'Management of asymptomatic carotid stenosis.',
+      abstract: 'Carotid stenosis was followed with duplex surveillance. Carotid stenosis progression was the primary endpoint.',
+    }
+    expect(fitsTopic({
+      ...human,
+      query: 'carotid stenosis NOT (animals[mh] NOT humans[mh])',
+    })).toBe(true)
+    expect(fitsTopic({
+      label: 'Carotid stenosis',
+      title: 'Duplex surveillance after neck irradiation.',
+      query: 'carotid stenosis NOT ((animals[mh]) NOT (humans[mh]))',
+      abstract: 'Carotid stenosis was monitored yearly. Carotid stenosis progressed in a third of patients. Carotid stenosis remained asymptomatic.',
+    })).toBe(true)
+    expect(fitsTopic({
+      label: 'Humans',
+      query: 'NOT (animals[mh] NOT humans[mh])',
+      title: 'Mitral valve repair techniques.',
+      abstract: 'The mitral valve was replaced after leaflet failure.',
+    })).toBe(true)
+    expect(fitsTopic({
+      label: 'Carotid stenosis',
+      query: 'carotid stenosis NOT (animals[mh] NOT humans[mh])',
+      title: 'Mitral valve repair techniques.',
+      abstract: 'The mitral valve was replaced after leaflet failure.',
+    })).toBe(false)
+    const animalModel = {
+      label: 'Carotid stenosis',
+      title: 'Carotid stenosis in an animal model.',
+      abstract: 'Carotid stenosis was created in an animal. Carotid stenosis was imaged twice.',
+    }
+    expect(fitsTopic({ ...animalModel, query: 'carotid stenosis NOT (animals[mh] NOT humans[mh])' })).toBe(true)
+    expect(fitsTopic({ ...animalModel, query: 'carotid stenosis NOT animal' })).toBe(false)
+  })
+
+  it('keeps a stenosis paper when the other alternative is a wildcard', () => {
+    const stenosis = {
+      label: 'Carotid stenosis',
+      title: 'Management of asymptomatic carotid stenosis.',
+      abstract: 'Carotid stenosis was followed with duplex surveillance. Carotid stenosis progression was the primary endpoint.',
+    }
+    expect(fitsTopic({ ...stenosis, query: 'carotid stenosis OR carotid stent*' })).toBe(true)
+    expect(fitsTopic({
+      label: 'Carotid stent',
+      query: 'carotid stenosis OR carotid stent*',
+      title: 'Carotid stenting outcomes',
+      abstract: 'Patency after carotid stenting was recorded. Carotid stenting patency was the endpoint.',
+    })).toBe(true)
+    expect(fitsTopic({
+      label: 'Carotid stenosis',
+      query: '(carotid stent* OR carotid stenosis) AND stroke NOT mice',
+      title: 'Stroke prevention in asymptomatic carotid stenosis.',
+      abstract: 'Carotid stenosis was the indication. Stroke risk was the endpoint. Stroke symptoms were recorded twice.',
+    })).toBe(true)
+    expect(fitsTopic({
+      ...stenosis,
+      query: '(carotid stent* OR carotid stenosis) AND stroke NOT mice',
+    })).toBe(false)
+    expect(fitsTopic({
+      label: 'Carotid stenosis',
+      query: '((carotid stenosis OR carotid stent*) AND stroke) NOT (animals[mh] NOT humans[mh])',
+      title: 'Stroke prevention in asymptomatic carotid stenosis.',
+      abstract: 'Carotid stenosis was followed. Stroke risk fell. Stroke symptoms were absent at baseline.',
+    })).toBe(true)
+    expect(fitsTopic({
+      label: 'Carotid stenosis',
+      query: 'carotid stenosis OR carotid stent*',
+      title: 'Mitral valve repair techniques.',
+      abstract: 'The mitral valve was replaced after leaflet failure.',
+    })).toBe(false)
   })
 
   it('matches a trailing wildcard and keeps syntax it cannot read', () => {

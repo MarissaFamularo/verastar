@@ -157,13 +157,21 @@ function compileAtom(value) {
   if (/\[[^\]]+\]\s*$/.test(raw)) return raw
   const bare = raw.replace(/^"+|"+$/g, '').replace(/[\u2010-\u2015-]/g, ' ').replace(/\s+/g, ' ').trim()
   if (!bare) return ''
-  // A quoted star is a literal asterisk in PubMed. Tag each word so mapping stays off
-  // and the truncation still applies to the word that carries it.
-  if (bare.includes('*')) {
-    return bare.split(' ').filter(Boolean).map((word) => `${word}[tiab]`).join(' AND ')
-  }
+  // A multi-word concept, including a trailing wildcard ("carotid stent*"[tiab]), stays one
+  // clause. PubMed applies truncation at the end of a quoted phrase. Splitting the words
+  // into AND would change the meaning of a surrounding OR.
   if (/\s/.test(bare)) return `"${bare}"[tiab]`
   return `${bare}[tiab]`
+}
+
+// A compiled fragment that itself contains AND/OR/NOT has to be one operand. Parentheses
+// keep the surrounding expression's precedence identical to the query that was stored.
+function embed(compiled) {
+  const text = String(compiled || '').trim()
+  if (!text) return text
+  if (innerExpression(text) != null) return text
+  if (/\b(AND|OR|NOT)\b/.test(text)) return `(${text})`
+  return text
 }
 
 // The whole string is one parenthesized expression, not a phrase that merely contains parens.
@@ -185,7 +193,7 @@ function compilePrimary(token) {
   const value = token.type === 'atom' ? token.value : String(token.value || token)
   const inner = innerExpression(value)
   if (inner != null) return `(${compilePubmedQuery(inner)})`
-  if (/^NOT\b/i.test(value)) return `NOT ${compileAtom(value.replace(/^NOT\s+/i, ''))}`
+  if (/^NOT\b/i.test(value)) return `NOT ${embed(compileAtom(value.replace(/^NOT\s+/i, '')))}`
   return compileAtom(value)
 }
 
@@ -194,17 +202,17 @@ function compileAndNot(tokens) {
   let index = 0
   let acc = ''
   if (tokens[0].type === 'op' && tokens[0].value === 'NOT') {
-    acc = `NOT ${compilePrimary(tokens[1])}`
+    acc = `NOT ${embed(compilePrimary(tokens[1]))}`
     index = 2
   } else {
-    acc = compilePrimary(tokens[0])
+    acc = embed(compilePrimary(tokens[0]))
     index = 1
   }
   for (; index < tokens.length; index += 2) {
     const op = tokens[index]
     const rhs = tokens[index + 1]
     if (!op || op.type !== 'op' || !rhs) break
-    acc = `${acc} ${op.value} ${compilePrimary(rhs)}`
+    acc = `${acc} ${op.value} ${embed(compilePrimary(rhs))}`
   }
   return acc
 }
@@ -286,87 +294,141 @@ function hasUnsupportedSyntax(query) {
   return /[*?~]/.test(withoutSupported)
 }
 
-// How one text leaf meets the gate. A broad word has to be the title's subject.
-// A specific concept can pass from the title, or from repeated abstract use. One
-// passing abstract mention is not enough, and a missing abstract is left for scoring.
-function leafStatus(part, title, abstract) {
+// Kleene three-valued logic. A MeSH, author, publication-type, or other non-text tag is
+// unknown: this gate cannot see it. NOT unknown stays unknown, and unknown never becomes
+// a successful match that a surrounding NOT can turn into an exclusion.
+const TRUE = 'true'
+const FALSE = 'false'
+const UNKNOWN = 'unknown'
+
+function kleeneNot(value) {
+  if (value === TRUE) return FALSE
+  if (value === FALSE) return TRUE
+  return UNKNOWN
+}
+
+function kleeneAnd(values) {
+  if (values.some((value) => value === FALSE)) return FALSE
+  if (values.some((value) => value === UNKNOWN)) return UNKNOWN
+  return TRUE
+}
+
+function kleeneOr(values) {
+  if (values.some((value) => value === TRUE)) return TRUE
+  if (values.some((value) => value === UNKNOWN)) return UNKNOWN
+  return FALSE
+}
+
+// How one positive text leaf meets the gate. A broad word has to be the title's subject.
+// A specific concept can pass from the title, or from repeated abstract use. One passing
+// abstract mention is not enough. Metadata and a missing abstract are unknown, not failures.
+function leafEval(part, title, abstract) {
   const scope = fieldScope(part)
-  if (scope == null) return { ignore: true }
+  if (scope == null) return { value: UNKNOWN, anchor: null, kind: 'metadata' }
   const broad = isBroadTerm(part)
   const inTitle = scope !== 'abstract' && termMatches(part, title)
   const missing = abstractMissing(abstract)
   const count = scope !== 'title' && !missing ? termCount(part, abstract) : 0
-  if (broad && scope !== 'abstract') return inTitle ? { title: true } : { fail: true }
-  if (scope === 'title') return inTitle ? { title: true } : { fail: true }
-  if (inTitle) return { title: true }
-  if (missing) return { uncertain: true }
-  if (count >= (broad ? 1 : 2)) return { repeated: true }
-  if (count === 1) return { once: true }
-  return { fail: true }
-}
-
-function combine(statuses) {
-  if (statuses.some((status) => status.fail)) return { pass: false, uncertain: false }
-  const text = statuses.filter((status) => !status.ignore)
-  if (!text.length) return { pass: true, uncertain: false, reason: 'ignore' }
-  if (text.some((status) => status.uncertain)) return { pass: true, uncertain: true, reason: 'uncertain' }
-  if (text.every((status) => status.title)) return { pass: true, uncertain: false, reason: 'title' }
-  // One substantive concept carries an AND-group whose other concepts are present.
-  if (text.some((status) => status.repeated)) return { pass: true, uncertain: false, reason: 'repeated' }
-  return { pass: false, uncertain: false }
-}
-
-function negativeHits(part, title, abstract) {
-  const inner = innerExpression(part)
-  if (inner != null) {
-    const result = evalExpr(tokenize(inner), title, abstract)
-    return result.pass && !result.uncertain
+  if (broad && scope !== 'abstract') {
+    return inTitle
+      ? { value: TRUE, anchor: 'title', kind: 'text' }
+      : { value: FALSE, anchor: null, kind: 'text' }
   }
+  if (scope === 'title') {
+    return inTitle
+      ? { value: TRUE, anchor: 'title', kind: 'text' }
+      : { value: FALSE, anchor: null, kind: 'text' }
+  }
+  if (inTitle) return { value: TRUE, anchor: 'title', kind: 'text' }
+  if (missing) return { value: UNKNOWN, anchor: null, kind: 'text' }
+  if (count >= (broad ? 1 : 2)) return { value: TRUE, anchor: 'repeated', kind: 'text' }
+  if (count === 1) return { value: TRUE, anchor: 'once', kind: 'text' }
+  return { value: FALSE, anchor: null, kind: 'text' }
+}
+
+// Presence, not the inclusion bar. A negated word excludes when it actually occurs.
+// A negated metadata tag stays unknown, so it cannot exclude.
+function presence(part, title, abstract) {
+  const inner = innerExpression(part)
+  if (inner != null) return presenceExpr(tokenize(inner), title, abstract)
   const scope = fieldScope(part)
-  if (scope == null) return false
-  if (scope !== 'abstract' && termMatches(part, title)) return true
-  if (scope === 'title') return false
-  if (abstractMissing(abstract)) return false
-  return termMatches(part, abstract)
+  if (scope == null) return UNKNOWN
+  if (scope !== 'abstract' && termMatches(part, title)) return TRUE
+  if (scope === 'title') return FALSE
+  if (abstractMissing(abstract)) return UNKNOWN
+  return termMatches(part, abstract) ? TRUE : FALSE
+}
+
+function presenceAnd(tokens, title, abstract) {
+  const values = [
+    ...positiveParts(tokens).map((part) => presence(part, title, abstract)),
+    ...negativeParts(tokens).map((part) => kleeneNot(presence(part, title, abstract))),
+  ]
+  if (!values.length) return UNKNOWN
+  return kleeneAnd(values)
+}
+
+function presenceExpr(tokens, title, abstract) {
+  const groups = splitBy(tokens, 'OR')
+  const values = groups.map((group) => presenceAnd(group, title, abstract))
+  return groups.length > 1 ? kleeneOr(values) : values[0]
 }
 
 function statusOf(part, title, abstract) {
   const inner = innerExpression(part)
-  if (inner == null) return leafStatus(part, title, abstract)
-  const result = evalExpr(tokenize(inner), title, abstract)
-  if (!result.pass) return { fail: true }
-  if (result.uncertain) return { uncertain: true }
-  if (result.reason === 'title') return { title: true }
-  if (result.reason === 'ignore') return { ignore: true }
-  return { repeated: true }
+  if (inner == null) return leafEval(part, title, abstract)
+  return evalExpr(tokenize(inner), title, abstract)
+}
+
+// Text requirements only. Metadata clauses are PubMed's job and are not requirements here.
+// One substantive concept carries an AND-group whose other text concepts are present.
+function judgeText(parts) {
+  if (!parts.length) return { keeps: true, anchor: null }
+  if (parts.some((part) => part.value === FALSE)) return { keeps: false, anchor: null }
+  if (parts.some((part) => part.value === UNKNOWN)) return { keeps: true, anchor: null }
+  if (parts.every((part) => part.anchor === 'title')) return { keeps: true, anchor: 'title' }
+  if (parts.some((part) => part.anchor === 'repeated')) return { keeps: true, anchor: 'repeated' }
+  return { keeps: false, anchor: 'once' }
 }
 
 function evalAnd(tokens, title, abstract) {
-  const statuses = positiveParts(tokens).map((part) => statusOf(part, title, abstract))
-  for (const part of negativeParts(tokens)) {
-    if (negativeHits(part, title, abstract)) return { pass: false, uncertain: false }
-    const scope = fieldScope(part)
-    if (scope != null && scope !== 'title' && abstractMissing(abstract) && !termMatches(part, title)) {
-      statuses.push({ uncertain: true })
-    }
+  const positives = positiveParts(tokens).map((part) => statusOf(part, title, abstract))
+  const notValues = negativeParts(tokens).map((part) => kleeneNot(presence(part, title, abstract)))
+  const value = kleeneAnd([...positives.map((part) => part.value), ...notValues])
+  if (value === FALSE) return { value: FALSE, keeps: false, kind: 'text', anchor: null }
+  const text = positives.filter((part) => part.kind !== 'metadata')
+  const judged = judgeText(text)
+  return {
+    value,
+    keeps: judged.keeps,
+    kind: text.length ? 'text' : 'metadata',
+    anchor: judged.anchor,
   }
-  return combine(statuses)
 }
 
 function evalExpr(tokens, title, abstract) {
   const groups = splitBy(tokens, 'OR')
   if (groups.length <= 1) return evalAnd(groups[0] || [], title, abstract)
   const results = groups.map((group) => evalAnd(group, title, abstract))
-  if (results.some((result) => result.pass && result.reason === 'repeated')) {
-    return { pass: true, uncertain: false, reason: 'repeated' }
+  const value = kleeneOr(results.map((result) => result.value))
+  if (value === FALSE) return { value: FALSE, keeps: false, kind: 'text', anchor: null }
+  const anchored = results.some((result) => (
+    result.keeps && result.kind !== 'metadata' && (result.anchor === 'title' || result.anchor === 'repeated')
+  ))
+  if (anchored) {
+    const anchor = results.some((result) => result.anchor === 'repeated') ? 'repeated' : 'title'
+    return { value: TRUE, keeps: true, kind: 'text', anchor }
   }
-  if (results.some((result) => result.pass && !result.uncertain)) {
-    return { pass: true, uncertain: false, reason: 'title' }
+  // Unknown metadata, or a text term we could not read, must not exclude the paper.
+  if (value === UNKNOWN) {
+    const onlyMeta = results.every((result) => result.kind === 'metadata')
+    return { value: UNKNOWN, keeps: true, kind: onlyMeta ? 'metadata' : 'text', anchor: null }
   }
-  if (results.some((result) => result.pass || result.uncertain)) {
-    return { pass: true, uncertain: true, reason: 'uncertain' }
-  }
-  return { pass: false, uncertain: false }
+  return { value: TRUE, keeps: false, kind: 'text', anchor: 'once' }
+}
+
+function negativeHits(part, title, abstract) {
+  return presence(part, title, abstract) === TRUE
 }
 
 function textMatchesOnce(part, title, abstract) {
@@ -417,7 +479,7 @@ export function fitsTopic({ title = '', abstract = '', query = '', label = '' } 
   if (hasUnsupportedSyntax(raw)) return true
   if (crossSpecialtyVeto({ title, abstract, query, label })) return false
   const result = evalExpr(tokenize(raw), title, abstract)
-  if (result.pass) return true
+  if (result.keeps) return true
   if (!titleCarriesLabel(title, label)) return false
   return labelRescue(tokenize(raw), title, abstract)
 }
