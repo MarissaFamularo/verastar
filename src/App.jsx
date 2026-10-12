@@ -353,8 +353,8 @@ function AccountSection({ account, first = false }) {
                   autoComplete="email"
                   style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
                 />
-                <button type="submit" disabled={form.sendState === 'sending'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: form.sendState === 'sending' ? 0.6 : 1 }}>
-                  {form.sendState === 'sending' ? 'Sending…' : 'Email me a code'}
+                <button type="submit" disabled={form.sendBusy} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: form.sendBusy ? 0.6 : 1 }}>
+                  {form.sendBusy ? 'Sending…' : 'Email me a code'}
                 </button>
               </div>
             </form>
@@ -449,8 +449,8 @@ function ExistingLibrarySyncGate({ onNotNow }) {
               </div>
             )}
             <div className="flex items-center" style={{ marginTop: 22, gap: 18 }}>
-              <button type="submit" disabled={form.sendState === 'sending' || !form.email.trim()} className="cursor-pointer" style={{ padding: '12px 22px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: form.sendState === 'sending' || !form.email.trim() ? 0.5 : 1 }}>
-                {form.sendState === 'sending' ? 'Sending…' : 'Email me a secure code'}
+              <button type="submit" disabled={form.sendBusy || !form.email.trim()} className="cursor-pointer" style={{ padding: '12px 22px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: form.sendBusy || !form.email.trim() ? 0.5 : 1 }}>
+                {form.sendBusy ? 'Sending…' : 'Email me a secure code'}
               </button>
               <button type="button" onClick={onNotNow} className="cursor-pointer" style={{ border: 0, background: 'transparent', padding: 0, color: 'var(--color-fg-muted)', fontSize: 14, fontFamily: 'inherit' }}>
                 Not now

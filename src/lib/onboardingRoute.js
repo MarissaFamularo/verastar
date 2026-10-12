@@ -4,9 +4,10 @@
 // browser Back button left onboarding entirely. Each step is now a hash on the
 // same path (`#signin`, `#connect`, …). Welcome stays the bare path so the
 // landing URL does not change. Supabase magic-link hashes are left alone.
-// The NPI form is a history entry on `#connect` (`state.substep === 'npi'`), so
-// Back and Forward restore the code form or the NPI form together with the
-// heading and the other connect controls.
+// The NPI form is a history entry on `#connect` (`state.substep === 'npi'`).
+// The invitation code and any NPI fields typed so far ride along in that same
+// history entry, so Back, Forward, and a reload in this tab restore them.
+// They are not written to storage.
 
 import { useEffect, useRef, useState } from 'react'
 
@@ -47,25 +48,59 @@ function pageHistory() {
   return history
 }
 
+function npiDraftFrom(value) {
+  if (!value || typeof value !== 'object') return null
+  const draft = {
+    firstName: String(value.firstName || ''),
+    lastName: String(value.lastName || ''),
+    npi: String(value.npi || ''),
+  }
+  return draft.firstName || draft.lastName || draft.npi ? draft : null
+}
+
+function connectDataFrom(step, state) {
+  if (step !== 'connect') return { inviteCode: '', npiDraft: null }
+  return {
+    inviteCode: typeof state?.inviteCode === 'string' ? state.inviteCode : '',
+    npiDraft: npiDraftFrom(state?.npiDraft),
+  }
+}
+
 function routeFromLocation() {
   const hash = pageLocation().hash
   const step = onboardStepFromHash(hash) || 'welcome'
-  const substep = step === 'connect' && pageHistory()?.state?.substep === 'npi' ? 'npi' : null
-  return { step, substep }
+  const historyState = pageHistory()?.state
+  const substep = step === 'connect' && historyState?.substep === 'npi' ? 'npi' : null
+  return { step, substep, ...connectDataFrom(step, historyState) }
 }
 
 export function useOnboardStep() {
   const initial = routeFromLocation()
   const [step, setStepState] = useState(initial.step)
   const [substep, setSubstep] = useState(initial.substep)
+  const [inviteCode, setInviteCodeState] = useState(initial.inviteCode)
+  const [npiDraft, setNpiDraftState] = useState(initial.npiDraft)
   const stepRef = useRef(step)
   const substepRef = useRef(substep)
+  const inviteCodeRef = useRef(inviteCode)
+  const npiDraftRef = useRef(npiDraft)
 
   function applyRoute(next) {
     stepRef.current = next.step
-    substepRef.current = next.substep
+    substepRef.current = next.substep || null
+    inviteCodeRef.current = next.inviteCode || ''
+    npiDraftRef.current = next.npiDraft || null
     setStepState(next.step)
-    setSubstep(next.substep)
+    setSubstep(next.substep || null)
+    setInviteCodeState(next.inviteCode || '')
+    setNpiDraftState(next.npiDraft || null)
+  }
+
+  function connectState(substepValue = substepRef.current) {
+    const state = { onboard: 'connect', inviteCode: inviteCodeRef.current }
+    if (substepValue) state.substep = substepValue
+    if (npiDraftRef.current) state.npiDraft = npiDraftRef.current
+    return state
   }
 
   useEffect(() => {
@@ -76,17 +111,24 @@ export function useOnboardStep() {
       if (fromHash && fromHash !== 'welcome' && history.state?.onboard !== fromHash) {
         // Put welcome behind a deep link so Back stays inside onboarding.
         history.replaceState({ onboard: 'welcome' }, '', onboardUrl(pageLocation(), 'welcome'))
-        history.pushState({ onboard: fromHash, ...(substepRef.current ? { substep: substepRef.current } : {}) }, '', onboardUrl(pageLocation(), fromHash))
+        const seeded = fromHash === 'connect'
+          ? connectState(substepRef.current)
+          : { onboard: fromHash }
+        history.pushState(seeded, '', onboardUrl(pageLocation(), fromHash))
       } else if (fromHash && !history.state?.onboard) {
-        const state = { onboard: stepRef.current }
-        if (stepRef.current === 'connect' && substepRef.current) state.substep = substepRef.current
+        const state = fromHash === 'connect' ? connectState(substepRef.current) : { onboard: stepRef.current }
         history.replaceState(state, '', onboardUrl(pageLocation(), stepRef.current))
       }
     }
     function onPop() {
       const next = onboardStepFromHash(pageLocation().hash)
       if (!next) return
-      applyRoute({ step: next, substep: next === 'connect' && pageHistory()?.state?.substep === 'npi' ? 'npi' : null })
+      const historyState = pageHistory()?.state
+      applyRoute({
+        step: next,
+        substep: next === 'connect' && historyState?.substep === 'npi' ? 'npi' : null,
+        ...connectDataFrom(next, historyState),
+      })
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -101,27 +143,40 @@ export function useOnboardStep() {
       if (replace) history.replaceState(state, '', url)
       else history.pushState(state, '', url)
     }
-    applyRoute({ step: next, substep: null })
+    applyRoute({ step: next, substep: null, inviteCode: '', npiDraft: null })
   }
 
-  // `npi` pushes a `#connect` entry. Closing it uses Back so Forward returns to NPI.
-  function goSubstep(next) {
+  function rememberConnect(patch) {
+    if (stepRef.current !== 'connect') return
+    if (Object.prototype.hasOwnProperty.call(patch, 'inviteCode')) inviteCodeRef.current = String(patch.inviteCode || '')
+    if (Object.prototype.hasOwnProperty.call(patch, 'npiDraft')) npiDraftRef.current = npiDraftFrom(patch.npiDraft)
+    setInviteCodeState(inviteCodeRef.current)
+    setNpiDraftState(npiDraftRef.current)
+    const history = pageHistory()
+    if (history) history.replaceState(connectState(), '', onboardUrl(pageLocation(), 'connect'))
+  }
+
+  // `npi` pushes a `#connect` entry that carries the code and NPI fields.
+  // Closing it uses Back so Forward returns to that same entry. `discard`
+  // drops the substep in place when the entry can no longer be completed.
+  function goSubstep(next, options = {}) {
     if (stepRef.current !== 'connect') return
     const want = next === 'npi' ? 'npi' : null
-    if ((substepRef.current || null) === want) return
+    const discard = Boolean(options.discard)
+    if ((substepRef.current || null) === want && !discard) return
     const history = pageHistory()
     const url = onboardUrl(pageLocation(), 'connect')
-    if (!want && history?.state?.substep === 'npi' && typeof history.back === 'function') {
+    if (!want && !discard && history?.state?.substep === 'npi' && typeof history.back === 'function') {
       substepRef.current = null
       history.back()
       return
     }
-    const state = want ? { onboard: 'connect', substep: 'npi' } : { onboard: 'connect' }
+    const state = connectState(want)
     if (history) {
       if (want) history.pushState(state, '', url)
       else history.replaceState(state, '', url)
     }
-    applyRoute({ step: 'connect', substep: want })
+    applyRoute({ step: 'connect', substep: want, inviteCode: inviteCodeRef.current, npiDraft: npiDraftRef.current })
   }
 
   function backStep() {
@@ -133,5 +188,5 @@ export function useOnboardStep() {
     goStep('welcome')
   }
 
-  return [step, goStep, backStep, substep, goSubstep]
+  return [step, goStep, backStep, substep, goSubstep, inviteCode, rememberConnect, npiDraft]
 }

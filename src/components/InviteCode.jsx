@@ -5,26 +5,84 @@
 // because a code is the easy path and the key is the fallback. `preview` (?firstrun=1)
 // renders the same box without an account and never calls the server.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { awaitWithin } from '../lib/deadline.js'
 import { canRedeem, redeemInviteCode, normalizeInviteCode, INVITE_MESSAGES } from '../lib/inviteCode.js'
 import NpiMatch from './NpiMatch.jsx'
 import { isSponsored } from '../lib/sponsor.js'
 
-export default function InviteCode({ onEnrolled, lead = false, preview = false, onNpiStep, npiOpen }) {
+export const INVITE_REDEEM_TIMEOUT_MS = 8000
+const CODE_REQUIRED = 'Enter your invitation code to continue.'
+const REDEEM_TIMEOUT = 'Checking the code timed out. Try again.'
+
+export default function InviteCode({ onEnrolled, lead = false, preview = false, onNpiStep, npiOpen, code: codeProp, onCodeChange, npiDraft, onNpiDraft }) {
   const [phase, setPhase] = useState('code') // code | npi | confirming
-  const [code, setCode] = useState('')
+  const [uncontrolledCode, setUncontrolledCode] = useState('')
   const [state, setState] = useState('idle')
   const [note, setNote] = useState('')
   const [ok, setOk] = useState(false)
+  const redeemAttempt = useRef(0)
+  const onNpiStepRef = useRef(onNpiStep)
+  onNpiStepRef.current = onNpiStep
+  const controlled = codeProp !== undefined
+  const activeCode = controlled ? codeProp : uncontrolledCode
+
+  function updateCode(next) {
+    if (controlled) onCodeChange?.(next)
+    else setUncontrolledCode(next)
+  }
+
+  function showNpi(value, options) {
+    setPhase(value ? 'npi' : 'code')
+    onNpiStepRef.current?.(value, options)
+  }
+
+  function explainMissingCode() {
+    setOk(false)
+    setNote(CODE_REQUIRED)
+    setPhase('code')
+    onNpiStepRef.current?.(false, { discard: true })
+  }
+
+  const routed = typeof npiOpen === 'boolean'
+  const missingCode = routed && npiOpen && !activeCode.trim()
+
+  useEffect(() => {
+    if (!missingCode) return
+    setOk(false)
+    setNote(CODE_REQUIRED)
+    onNpiStepRef.current?.(false, { discard: true })
+  }, [missingCode])
+
   if (!preview && (!canRedeem() || isSponsored())) return null
 
-  function showNpi(value) {
-    setPhase(value ? 'npi' : 'code')
-    onNpiStep?.(value)
+  function settleRedeem(status) {
+    if (status === 'npi_required') {
+      setOk(false)
+      setNote('')
+      showNpi(true)
+      setState('idle')
+      return
+    }
+    const good = status === 'enrolled' || status === 'already'
+    setOk(good)
+    setNote(INVITE_MESSAGES[status] || INVITE_MESSAGES.error)
+    if (good) {
+      updateCode('')
+      onEnrolled?.()
+      // Sponsorship is already refreshed inside redeem. Unhide the connect
+      // heading in the same turn so "You are all set" replaces this step.
+      onNpiStepRef.current?.(false)
+    }
+    setState('idle')
   }
 
   async function applyCode(afterMatch = false) {
-    if (!code.trim() || state === 'busy') return
+    if (state === 'busy') return
+    if (!activeCode.trim()) {
+      explainMissingCode()
+      return
+    }
     if (preview) {
       if (!afterMatch) showNpi(true)
       else {
@@ -40,45 +98,49 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
       setPhase('confirming')
       onNpiStep?.(true)
     }
+    const attempt = ++redeemAttempt.current
     setState('busy')
     setNote('')
+    const pendingRedeem = redeemInviteCode(activeCode)
     try {
-      const { status } = await redeemInviteCode(code)
-      // The NPI gate is the next step, not access granted. Do not leave a success note
-      // under it, and do not enroll.
-      if (status === 'npi_required') {
+      const result = await awaitWithin(pendingRedeem, INVITE_REDEEM_TIMEOUT_MS)
+      if (attempt !== redeemAttempt.current) return
+      if (result.timeout) {
         setOk(false)
-        setNote('')
-        showNpi(true)
+        setNote(REDEEM_TIMEOUT)
         setState('idle')
+        pendingRedeem.then((late) => {
+          if (attempt === redeemAttempt.current) settleRedeem(late.status)
+        }).catch((err) => {
+          if (attempt !== redeemAttempt.current) return
+          setOk(false)
+          setNote(err?.message || INVITE_MESSAGES.error)
+          setState('idle')
+        })
         return
       }
-      const good = status === 'enrolled' || status === 'already'
-      setOk(good)
-      setNote(INVITE_MESSAGES[status] || INVITE_MESSAGES.error)
-      if (good) {
-        setCode('')
-        onEnrolled?.()
-        // Sponsorship is already refreshed inside redeem. Unhide the connect
-        // heading in the same turn so "You are all set" replaces this step.
-        onNpiStep?.(false)
-      }
+      // The NPI gate is the next step, not access granted. Do not leave a success note
+      // under it, and do not enroll.
+      settleRedeem(result.value?.status)
     } catch (err) {
+      if (attempt !== redeemAttempt.current) return
       setOk(false)
       setNote(err.message)
+      setState('idle')
     }
-    setState('idle')
   }
 
   // Onboarding passes npiOpen from the route. Settings leaves it unset and keeps
   // this component's own phase. Confirming stays up only while that route still
-  // says the NPI step is open; Back/Forward otherwise win.
-  const routed = typeof npiOpen === 'boolean'
-  const screen = !routed
-    ? phase
-    : phase === 'confirming' && npiOpen
-      ? 'confirming'
-      : npiOpen ? 'npi' : 'code'
+  // says the NPI step is open; Back/Forward otherwise win. A missing code never
+  // stays on NPI, where Continue would have nothing to submit.
+  const screen = missingCode
+    ? 'code'
+    : !routed
+      ? phase
+      : phase === 'confirming' && npiOpen
+        ? 'confirming'
+        : npiOpen ? 'npi' : 'code'
 
   if (screen === 'confirming') {
     return (
@@ -95,7 +157,7 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
     )
   }
 
-  if (screen === 'npi') return <NpiMatch preview={preview}
+  if (screen === 'npi') return <NpiMatch preview={preview} draft={npiDraft} onDraft={onNpiDraft}
     onBack={() => { showNpi(false); setNote('') }}
     onContinue={() => { void applyCode(true) }} />
 
@@ -114,9 +176,9 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
         <input
           id="beta-access-code"
           type="text"
-          value={code}
+          value={activeCode}
           // Show the code the way it was issued, as it is typed, so what they see is what is sent.
-          onChange={(e) => setCode(normalizeInviteCode(e.target.value))}
+          onChange={(e) => updateCode(normalizeInviteCode(e.target.value))}
           placeholder="Beta access code"
           autoComplete="off"
           autoCapitalize="characters"
@@ -125,11 +187,11 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
           className="min-w-0 flex-1"
           style={{ padding: big ? '12px 15px' : '8px 10px', borderRadius: big ? 11 : 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: big ? 15 : 12.5, fontFamily: 'inherit', outline: 'none' }}
         />
-        <button type="submit" disabled={!code.trim() || state === 'busy'} aria-describedby="beta-code-hint" className="cursor-pointer" style={{ padding: big ? '12px 20px' : '6px 10px', border: 0, borderRadius: big ? 11 : 8, background: 'var(--color-accent)', color: '#1c1206', fontSize: big ? 15 : 11.5, fontWeight: 600, fontFamily: 'inherit', opacity: !code.trim() || state === 'busy' ? 0.5 : 1 }}>
+        <button type="submit" disabled={!activeCode.trim() || state === 'busy'} aria-describedby="beta-code-hint" className="cursor-pointer" style={{ padding: big ? '12px 20px' : '6px 10px', border: 0, borderRadius: big ? 11 : 8, background: 'var(--color-accent)', color: '#1c1206', fontSize: big ? 15 : 11.5, fontWeight: 600, fontFamily: 'inherit', opacity: !activeCode.trim() || state === 'busy' ? 0.5 : 1 }}>
           {state === 'busy' ? 'Checking…' : 'Continue'}
         </button>
       </div>
-      {note && <p style={{ margin: '8px 0 0', fontSize: big ? 13 : 12, color: ok ? 'var(--color-verified-soft)' : 'var(--color-domain-vascular)' }}>{note}</p>}
+      {note && <p role={ok ? 'status' : 'alert'} style={{ margin: '8px 0 0', fontSize: big ? 13 : 12, color: ok ? 'var(--color-verified-soft)' : 'var(--color-domain-vascular)' }}>{note}</p>}
     </form>
   )
 }

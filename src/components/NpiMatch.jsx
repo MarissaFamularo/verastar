@@ -1,15 +1,26 @@
 import { useRef, useState } from 'react'
+import { awaitWithin } from '../lib/deadline.js'
 import { currentNpiMatch, matchNpi } from '../lib/npi.js'
 
-export default function NpiMatch({ onContinue, onBack, preview = false }) {
+const NPI_MATCH_TIMEOUT_MS = 8000
+
+export default function NpiMatch({ onContinue, onBack, preview = false, draft, onDraft }) {
   const [match, setMatch] = useState(() => preview ? null : currentNpiMatch())
-  const [fields, setFields] = useState(() => ({ firstName: match?.firstName || '', lastName: match?.lastName || '', npi: match?.npi || '' }))
+  const [fields, setFields] = useState(() => ({
+    firstName: draft?.firstName || match?.firstName || '',
+    lastName: draft?.lastName || match?.lastName || '',
+    npi: draft?.npi || match?.npi || '',
+  }))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const revision = useRef(0)
   function change(key, value) {
     revision.current += 1
-    setFields((previous) => ({ ...previous, [key]: value }))
+    setFields((previous) => {
+      const next = { ...previous, [key]: value }
+      onDraft?.(next)
+      return next
+    })
     setMatch(null)
     setError('')
     setBusy(false)
@@ -21,9 +32,20 @@ export default function NpiMatch({ onContinue, onBack, preview = false }) {
     setBusy(true)
     setMatch(null)
     setError('')
+    const pending = matchNpi({ ...fields, npi: fields.npi.trim() })
     try {
-      const receipt = await matchNpi({ ...fields, npi: fields.npi.trim() })
-      if (revision.current === attempt) setMatch(receipt)
+      const result = await awaitWithin(pending, NPI_MATCH_TIMEOUT_MS)
+      if (revision.current !== attempt) return
+      if (result.timeout) {
+        setError('Checking the NPI timed out. Try again.')
+        pending.then((receipt) => {
+          if (revision.current !== attempt || !receipt) return
+          setError('')
+          setMatch(receipt)
+        }).catch(() => {})
+        return
+      }
+      setMatch(result.value)
     } catch (err) {
       if (revision.current === attempt) setError(err.message)
     } finally {

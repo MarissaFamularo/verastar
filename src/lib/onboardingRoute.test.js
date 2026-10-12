@@ -25,6 +25,20 @@ describe('onboarding hash steps', () => {
   })
 })
 
+function ConnectMemoryProbe() {
+  const [step, goStep, , substep, goSubstep, inviteCode, rememberConnect, npiDraft] = useOnboardStep()
+  return React.createElement('div', null,
+    React.createElement('p', { id: 'step' }, substep ? `${step}/${substep}` : step),
+    React.createElement('p', { id: 'code' }, inviteCode),
+    React.createElement('p', { id: 'draft' }, npiDraft?.firstName || ''),
+    React.createElement('button', { type: 'button', onClick: () => goStep('connect') }, 'To connect'),
+    React.createElement('button', { type: 'button', onClick: () => rememberConnect({ inviteCode: 'BETA' }) }, 'Save code'),
+    React.createElement('button', { type: 'button', onClick: () => rememberConnect({ npiDraft: { firstName: 'Ada', lastName: '', npi: '' } }) }, 'Save draft'),
+    React.createElement('button', { type: 'button', onClick: () => goSubstep('npi') }, 'Open NPI'),
+    React.createElement('button', { type: 'button', onClick: () => goSubstep(null, { discard: true }) }, 'Discard NPI'),
+  )
+}
+
 function Probe() {
   const [step, goStep, backStep, substep, goSubstep] = useOnboardStep()
   return React.createElement('div', null,
@@ -101,5 +115,44 @@ describe('browser back stays inside onboarding', () => {
     expect(at()).toBe('interview')
     await forward()
     expect(at()).toBe('review')
+  })
+
+  it('keeps the invitation code and NPI draft across back, forward, and a remount', async () => {
+    await dom.render(React.createElement(ConnectMemoryProbe))
+    const back = () => dom.settle(() => { window.history.back() })
+    const forward = () => dom.settle(() => { window.history.forward() })
+    await dom.click(dom.button('To connect'))
+    await dom.click(dom.button('Save code'))
+    await dom.click(dom.button('Open NPI'))
+    await dom.click(dom.button('Save draft'))
+    expect(dom.q('#step').textContent).toBe('connect/npi')
+    expect(window.history.state.inviteCode).toBe('BETA')
+    expect(window.history.state.npiDraft.firstName).toBe('Ada')
+    await back()
+    await back()
+    expect(dom.q('#step').textContent).toBe('welcome')
+    expect(dom.q('#code').textContent).toBe('')
+    await forward()
+    await forward()
+    expect(dom.q('#step').textContent).toBe('connect/npi')
+    expect(dom.q('#code').textContent).toBe('BETA')
+    expect(dom.q('#draft').textContent).toBe('Ada')
+    await dom.render(null)
+    await dom.render(React.createElement(ConnectMemoryProbe))
+    expect(dom.q('#step').textContent).toBe('connect/npi')
+    expect(dom.q('#code').textContent).toBe('BETA')
+    expect(dom.q('#draft').textContent).toBe('Ada')
+  })
+
+  it('discards an NPI entry that has no invitation code', async () => {
+    window.history.replaceState({ onboard: 'connect', substep: 'npi' }, '', '/#connect')
+    await dom.render(React.createElement(ConnectMemoryProbe))
+    expect(dom.q('#step').textContent).toBe('connect/npi')
+    expect(dom.q('#code').textContent).toBe('')
+    await dom.click(dom.button('Discard NPI'))
+    expect(dom.q('#step').textContent).toBe('connect')
+    expect(window.history.state.substep).toBeUndefined()
+    await dom.settle(() => { window.history.forward() })
+    expect(dom.q('#step').textContent).toBe('connect')
   })
 })

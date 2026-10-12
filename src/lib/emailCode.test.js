@@ -66,6 +66,42 @@ describe('email code failures', () => {
     expect(onLateSession).not.toHaveBeenCalled()
   })
 
+  it('shows the timeout when getSession never returns, then signs in if it does', async () => {
+    vi.useFakeTimers()
+    let resolveSession
+    const onLateSession = vi.fn()
+    let outcome
+    const pending = verifyEmailCodeForSignIn('a@clinic.edu', '777777', {
+      timeoutMs: 8000,
+      sessionMs: 2000,
+      verify: () => new Promise(() => {}),
+      getSession: () => new Promise((resolve) => { resolveSession = resolve }),
+      onLateSession,
+    }).then((result) => { outcome = result })
+    await vi.advanceTimersByTimeAsync(8000)
+    await flush()
+    expect(outcome).toMatchObject({ ok: false, kind: 'timeout', message: EMAIL_CODE_MESSAGES.timeout })
+    expect(onLateSession).not.toHaveBeenCalled()
+    resolveSession({ id: 'user-late' })
+    await flush()
+    expect(onLateSession).toHaveBeenCalledWith({ id: 'user-late' })
+  })
+
+  it('does not let a stalled session check hold a bad code for the full timeout', async () => {
+    vi.useFakeTimers()
+    let outcome
+    const pending = verifyEmailCodeForSignIn('a@clinic.edu', '666666', {
+      timeoutMs: 8000,
+      sessionMs: 2000,
+      verify: async () => { throw new Error('Token has expired or is invalid') },
+      getSession: () => new Promise(() => {}),
+    }).then((result) => { outcome = result })
+    await vi.advanceTimersByTimeAsync(2000)
+    await flush()
+    expect(outcome).toMatchObject({ ok: false, kind: 'invalid' })
+    vi.useRealTimers()
+  })
+
   it('does not report success when a timed-out check later fails', async () => {
     vi.useFakeTimers()
     let reject

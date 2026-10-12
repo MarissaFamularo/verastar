@@ -78,7 +78,7 @@ function ChartStar({ size = 44 }) {
 }
 
 export default function OnboardingQuiz({ onDone, preview = false, account = null }) {
-  const [step, goStep, backStep, substep, goSubstep] = useOnboardStep() // welcome | signin | connect | interview | review
+  const [step, goStep, backStep, substep, goSubstep, inviteCode, rememberConnect, npiDraft] = useOnboardStep() // welcome | signin | connect | interview | review
   const [keyInput, setKeyInput] = useState('')
   const [draft, setDraft] = useState(null) // { name, northStars, projects, topics, search, rubric:{criteria,selectCount,scoreFloor} }
   // Account creation/sign-in from the welcome screen (accounts configured only).
@@ -262,9 +262,9 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
               </div>
             )}
             <div className="flex items-center" style={{ marginTop: 20, gap: 18 }}>
-              <button type="submit" disabled={signin.sendState === 'sending'} className="cursor-pointer" style={{ ...primaryBtn, opacity: signin.sendState === 'sending' ? 0.6 : 1 }}>
-                {signin.sendState === 'sending' ? 'Sending…' : 'Email me a code'}
-              </button>
+                <button type="submit" disabled={signin.sendBusy} className="cursor-pointer" style={{ ...primaryBtn, opacity: signin.sendBusy ? 0.6 : 1 }}>
+                  {signin.sendBusy ? 'Sending…' : 'Email me a code'}
+                </button>
               <button type="button" onClick={leaveSignin} className="cursor-pointer" style={ghostLink}>
                 ← Back
               </button>
@@ -303,7 +303,17 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
         </div>
         {canUseCode && (
           <div style={{ marginTop: betaNpi ? 0 : 28 }}>
-            <InviteCode npiOpen={betaNpi} onNpiStep={(open) => goSubstep(open ? 'npi' : null)} lead preview={preview} onEnrolled={() => setSponsorVersion((v) => v + 1)} />
+            <InviteCode
+              npiOpen={betaNpi}
+              onNpiStep={(open, options) => goSubstep(open ? 'npi' : null, options)}
+              code={inviteCode}
+              onCodeChange={(next) => rememberConnect({ inviteCode: next })}
+              npiDraft={npiDraft}
+              onNpiDraft={(next) => rememberConnect({ npiDraft: next })}
+              lead
+              preview={preview}
+              onEnrolled={() => setSponsorVersion((v) => v + 1)}
+            />
           </div>
         )}
 

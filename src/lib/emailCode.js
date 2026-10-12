@@ -7,9 +7,13 @@
 // timeout message instead of spinning until the page gives up.
 
 import { useRef, useState } from 'react'
+import { awaitWithin } from './deadline.js'
 import { sendMagicLink, supabase, verifyEmailCode } from './supabase.js'
 
 export const EMAIL_CODE_TIMEOUT_MS = 8000
+// A session lookup must not swallow the code-check timeout. Two seconds is long
+// enough for a live getSession() and short enough that a stall still fails closed.
+export const EMAIL_CODE_SESSION_MS = 2000
 
 export const EMAIL_CODE_MESSAGES = {
   invalid: 'That code is invalid or expired. It may already have been used. Send a new code and try again.',
@@ -60,11 +64,13 @@ function defaultGetSession() {
 }
 
 // Resolves { ok: true, user } or { ok: false, kind, message }. Never reloads.
-// The code check itself keeps running after the timeout. A session that shows up
-// then — or that is already present when a check fails — is a successful sign-in.
+// The code check itself keeps running after the timeout. A session that is already
+// known can still count as success. A session lookup that has not finished does
+// not delay the timeout message; if it later finds a user, onLateSession runs.
 // A late failure cannot become a success.
 export async function verifyEmailCodeForSignIn(email, code, {
   timeoutMs = EMAIL_CODE_TIMEOUT_MS,
+  sessionMs = EMAIL_CODE_SESSION_MS,
   verify = verifyEmailCode,
   getSession = defaultGetSession,
   onLateSession,
@@ -74,6 +80,22 @@ export async function verifyEmailCodeForSignIn(email, code, {
   let timer
   let timedOut = false
   let honored = false
+  let sessionUser = null
+  let sessionReady = false
+  const sessionPromise = Promise.resolve().then(() => sessionUserFrom(getSession)).then((user) => {
+    sessionUser = user || null
+    sessionReady = true
+    return sessionUser
+  }).catch(() => {
+    sessionReady = true
+    sessionUser = null
+    return null
+  })
+  function honor(user) {
+    if (!user || honored) return
+    honored = true
+    onLateSession?.(user)
+  }
   const timeout = new Promise((resolve) => {
     timer = setTimeout(() => {
       timedOut = true
@@ -86,41 +108,44 @@ export async function verifyEmailCodeForSignIn(email, code, {
   })
   const interpreted = pending.then(
     async (user) => {
-      const sessionUser = user || await sessionUserFrom(getSession)
-      if (!sessionUser) return { ok: false, kind: 'invalid', message: EMAIL_CODE_MESSAGES.invalid }
-      return { ok: true, user: sessionUser }
+      const found = user || await sessionUserAfter(sessionPromise, sessionMs)
+      if (!found) return { ok: false, kind: 'invalid', message: EMAIL_CODE_MESSAGES.invalid }
+      return { ok: true, user: found }
     },
     async (err) => {
-      const sessionUser = await sessionUserFrom(getSession)
-      if (sessionUser) return { ok: true, user: sessionUser }
+      const found = await sessionUserAfter(sessionPromise, sessionMs)
+      if (found) return { ok: true, user: found }
       const kind = emailCodeFailureKind(err)
       return { ok: false, kind, message: EMAIL_CODE_MESSAGES[kind] }
     },
   )
   interpreted.then((result) => {
-    if (timedOut && result?.ok && !honored) {
-      honored = true
-      onLateSession?.(result.user)
-    }
+    if (timedOut && result?.ok) honor(result.user)
     onSettled?.(result)
   }).catch(() => { onSettled?.(null) })
   try {
     let outcome = await Promise.race([interpreted, timeout])
-    // Any failure, including the timeout, yields to a session that already exists.
-    if (!outcome.ok) {
-      const sessionUser = await sessionUserFrom(getSession)
-      if (sessionUser) outcome = { ok: true, user: sessionUser }
-    }
+    // Only a session that has already settled can change this result. Waiting
+    // here is what hid the timeout when getSession() stalled.
+    if (!outcome.ok && sessionReady && sessionUser) outcome = { ok: true, user: sessionUser }
     if (outcome.ok) honored = true
+    else sessionPromise.then((user) => honor(user))
     return outcome
   } finally {
     clearTimeout(timer)
   }
 }
 
+async function sessionUserAfter(sessionPromise, sessionMs) {
+  const result = await awaitWithin(sessionPromise, sessionMs)
+  if (result.timeout) return null
+  return result.value || null
+}
+
 export function useEmailCodeSignIn() {
   const attempt = useRef(0)
   const flight = useRef(null)
+  const sendFlight = useRef(null)
   const entered = useRef(false)
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -131,6 +156,7 @@ export function useEmailCodeSignIn() {
   const [pending, setPending] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendNote, setResendNote] = useState('')
+  const [sendPending, setSendPending] = useState(false)
 
   function enter() {
     if (entered.current) return
@@ -138,18 +164,45 @@ export function useEmailCodeSignIn() {
     reloadAfterSignIn()
   }
 
+  async function finishSend(pending, id, onSuccess, onTimeout) {
+    try {
+      const result = await awaitWithin(pending, EMAIL_CODE_TIMEOUT_MS)
+      if (id !== attempt.current) return
+      if (result.timeout) {
+        onTimeout()
+        pending.then(() => {
+          if (id === attempt.current) onSuccess()
+        }).catch(() => {})
+        return
+      }
+      onSuccess()
+    } catch (err) {
+      if (id !== attempt.current) return
+      onTimeout(err?.message || String(err))
+    } finally {
+      if (sendFlight.current === pending) {
+        sendFlight.current = null
+        setSendPending(false)
+      }
+    }
+  }
+
   async function send(event) {
     event?.preventDefault()
-    if (!email.trim() || sendState === 'sending') return
+    if (!email.trim() || sendFlight.current) return
+    const id = ++attempt.current
+    const pending = sendMagicLink(email.trim())
+    sendFlight.current = pending
+    setSendPending(true)
     setSendState('sending')
     setSendError('')
-    try {
-      await sendMagicLink(email.trim())
+    await finishSend(pending, id, () => {
+      setSendError('')
       setSendState('sent')
-    } catch (err) {
-      setSendError(err?.message || String(err))
+    }, (message) => {
+      setSendError(message || EMAIL_CODE_MESSAGES.network)
       setSendState('error')
-    }
+    })
   }
 
   async function verify(event) {
@@ -176,6 +229,7 @@ export function useEmailCodeSignIn() {
             enter()
             return
           }
+          if (entered.current) return
           if (id === attempt.current && settled && !settled.ok) {
             setVerifyError(settled.message)
             setVerifyState('error')
@@ -202,21 +256,27 @@ export function useEmailCodeSignIn() {
   }
 
   async function resend() {
-    if (!email.trim() || resending) return
-    ++attempt.current
+    if (!email.trim() || resending || sendFlight.current) return
+    const id = ++attempt.current
+    const pending = sendMagicLink(email.trim())
+    sendFlight.current = pending
+    setSendPending(true)
     setResending(true)
     setVerifyState('idle')
     setVerifyError('')
     setResendNote('')
     setCode('')
     try {
-      await sendMagicLink(email.trim())
-      setSendState('sent')
-      setResendNote('A new code is on its way.')
-    } catch (err) {
-      setSendState('sent')
-      setVerifyError(err?.message || 'We couldn\u2019t send a new code. Try again in a moment.')
-      setVerifyState('error')
+      await finishSend(pending, id, () => {
+        setSendState('sent')
+        setVerifyError('')
+        setVerifyState('idle')
+        setResendNote('A new code is on its way.')
+      }, (message) => {
+        setSendState('sent')
+        setVerifyError(message || 'We couldn\u2019t send a new code. Try again in a moment.')
+        setVerifyState('error')
+      })
     } finally {
       setResending(false)
     }
@@ -237,6 +297,7 @@ export function useEmailCodeSignIn() {
     email, setEmail, code, setCode,
     sendState, sendError, verifyState, verifyError,
     pending, verifyBusy: pending || verifyState === 'verifying',
+    sendPending, sendBusy: sendPending || sendState === 'sending',
     resending, resendNote,
     send, verify, resend, reset,
   }
