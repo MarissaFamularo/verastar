@@ -117,6 +117,45 @@ describe('diagnostic accuracy bound to the named test', () => {
     expect(shown(row({ name: 'pHEART sensitivity', value: 97.1, source_quote: pheart }), `The nHEART score, ${pheart}`)).toBe(false)
   })
 
+  it('[false-verify guard] a question mark is not a declarative sentence', () => {
+    const bare = 'nHEART achieved sensitivity of 97.1% and specificity of 53.8%'
+    const asked = `${bare}?`
+    expect(shown(sens({ source_quote: asked }), asked)).toBe(false)
+    expect(verdict(sens({ source_quote: asked }), asked).tier).toBe(TIERS.LOCATED)
+    // The quote drops the mark; the source sentence still asks it.
+    expect(shown(sens({ source_quote: bare }), asked)).toBe(false)
+    expect(verdict(sens({ source_quote: bare }), asked).tier).toBe(TIERS.LOCATED)
+    expect(shown(sens({ source_quote: bare }), `${bare}?"`)).toBe(false)
+    expect(shown(sens({ source_quote: `${bare}?` }), `${bare}?"`)).toBe(false)
+    expect(shown(sens({ source_quote: bare }), `Was the score useful? ${bare}?`)).toBe(false)
+    const resp = 'pHEART achieved sensitivity and specificity of 95.7% and 69.1%, respectively?'
+    expect(shown(row({ name: 'pHEART sensitivity', value: 95.7, source_quote: resp }), resp)).toBe(false)
+    const respBare = 'pHEART achieved sensitivity and specificity of 95.7% and 69.1%, respectively'
+    expect(shown(row({ name: 'pHEART sensitivity', value: 95.7, source_quote: respBare }), `${respBare}?`)).toBe(false)
+  })
+
+  it('[false-verify guard] an exclamation, an ellipsis, or a period-plus-question stays unresolved', () => {
+    const bare = 'nHEART achieved sensitivity of 97.1% and specificity of 53.8%'
+    // "!" is not a statement: it can mark irony or a different speech act.
+    expect(shown(sens({ source_quote: `${bare}!` }), `${bare}!`)).toBe(false)
+    expect(shown(sens({ source_quote: bare }), `${bare}!`)).toBe(false)
+    expect(shown(sens({ source_quote: bare }), `${bare}...`)).toBe(false)
+    expect(shown(sens({ source_quote: `${bare}.` }), `${bare}.?`)).toBe(false)
+    expect(shown(sens({ source_quote: bare }), `${bare}.?`)).toBe(false)
+    expect(shown(sens({ source_quote: bare }), `${bare} . ?`)).toBe(false)
+  })
+
+  it('accepts a period outside the quote, a closing quote, and the end of the text', () => {
+    const bare = 'nHEART achieved sensitivity of 97.1% and specificity of 53.8%'
+    expect(shown(sens({ source_quote: bare }), `${bare}.`)).toBe(true)
+    expect(shown(sens({ source_quote: bare }), `${bare}."`)).toBe(true)
+    expect(shown(sens({ source_quote: bare }), `${bare}”.`)).toBe(true)
+    expect(shown(sens({ source_quote: bare }), bare)).toBe(true)
+    expect(shown(sens({ source_quote: NHEART }), `${NHEART} Further results were pending.`)).toBe(true)
+    expect(shown(sens({ source_quote: bare }), `Was the score useful? ${bare}.`)).toBe(true)
+    expect(shown(sens({ source_quote: `${bare}.` }), `Was the score useful? ${bare}.`)).toBe(true)
+  })
+
   it('[false-verify guard] a cut quote that hides the rest of the sentence stays unresolved', () => {
     const quote = 'nHEART achieved sensitivity of 97.1% and specificity of 53.8%'
     const src = `${quote}, whereas pHEART achieved sensitivity of 10% and specificity of 20%.`
@@ -205,6 +244,28 @@ describe('count whose denominator is printed earlier in the sentence', () => {
     ]) {
       expect(shown(prop({ source_quote: src }), src)).toBe(false)
     }
+  })
+
+  it('[false-verify guard] a question mark is not the Of-N sentence', () => {
+    const bare = 'Of 1011 patients (48.5% female; mean age, 55.7 years), 69 (6.8%) experienced MACE within 6 weeks'
+    const asked = `${bare}?`
+    expect(shown(prop({ source_quote: asked }), asked)).toBe(false)
+    expect(verdict(prop({ source_quote: asked }), asked).tier).not.toBe(TIERS.PROPORTION)
+    // The quote drops the mark; the source sentence still asks it.
+    expect(shown(prop({ source_quote: bare }), asked)).toBe(false)
+    expect(verdict(prop({ source_quote: bare }), asked).tier).not.toBe(TIERS.PROPORTION)
+    expect(shown(prop({ source_quote: bare }), `${bare}?"`)).toBe(false)
+    expect(shown(prop({ source_quote: `${bare}!` }), `${bare}!`)).toBe(false)
+    expect(shown(prop({ source_quote: bare }), `${bare}!`)).toBe(false)
+    expect(shown(prop({ source_quote: `${bare}.` }), `${bare}.?`)).toBe(false)
+  })
+
+  it('accepts a period outside the Of-N quote, and the end of the text', () => {
+    const bare = 'Of 1011 patients (48.5% female; mean age, 55.7 years), 69 (6.8%) experienced MACE within 6 weeks'
+    expect(shown(prop({ source_quote: bare }), `${bare}.`)).toBe(true)
+    expect(shown(prop({ source_quote: bare }), `${bare}).`)).toBe(true)
+    expect(shown(prop({ source_quote: bare }), bare)).toBe(true)
+    expect(shown(prop({ source_quote: MACE }), `Earlier work differed. ${MACE}`)).toBe(true)
   })
 
   it('[false-verify guard] two event counts, a missing "experienced", or a count above the cohort stays unresolved', () => {

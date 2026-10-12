@@ -8,13 +8,14 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-12.estimates-v11'
-// v11 tightens the two shapes added in v10. A sensitivity/specificity pair, and a
-// count printed as "Of N patients …, n (x%) experienced …", verify only when the
-// whole sentence is that template. A matching phrase inside a negated, attributed,
-// hypothetical, or multi-test sentence stays unresolved. v10 can false-verify
-// those, so a v10 stamp is not a subset: it is re-derived from saved source or
-// downgraded. Nothing v9 accepted is refused. All v9, v8 and v7 guarantees survive.
+export const VERIFICATION_VERSION = '2026-10-12.estimates-v12'
+// v12 refuses a question or an exclamation for the two shapes added in v10. The
+// terminator is read from the source sentence, including punctuation immediately
+// outside the quote. v11 stripped "?" and treated "?" and "!" as sentence
+// boundaries, so it can false-verify those and is not a subset. v11 also kept
+// v10's whole-sentence rule; v10 can still false-verify a matching phrase inside
+// a longer sentence. Neither stamp is compatible. Nothing v9 accepted is refused.
+// All v9, v8 and v7 guarantees survive.
 export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-12.estimates-v9', '2026-10-10.estimates-v8', '2026-10-09.estimates-v7']
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
@@ -331,7 +332,10 @@ function validateRelationship(quantity, matched, corpus, declaredType) {
 // the two percentages. A phrase that merely occurs inside a longer sentence is not
 // enough: negation, attribution, a hypothetical, another test name, or any other
 // prefix or suffix stays unresolved ("The claim was false: nHEART achieved …",
-// "The nHEART score, pHEART achieved …"). The row name must be that metric plus
+// "The nHEART score, pHEART achieved …"). The sentence must also end declaratively:
+// one period, or the end of the text, with closing quotes or brackets allowed
+// around that period. A "?" or "!" on the source sentence — inside the quote or
+// immediately outside it — stays unresolved. The row name must be that metric plus
 // that test and nothing else (function words "of"/"for"/"the"/"a"/"an" may join
 // them). This binds the metric and the test, so it earns the sentence-relationship
 // tier (endpointValidated).
@@ -356,8 +360,62 @@ function clearDiagnosticTest(raw) {
   return tokens.join(' ')
 }
 
+// Terminal punctuation is judged on the source sentence by declarativeBody.
+// Stripping "?" or "!" here would turn a question into a statement.
 function statementCore(span) {
-  return String(span || '').replace(/[.!?]+$/, '').trim()
+  return String(span || '').trim()
+}
+
+// Closing quotes and brackets may wrap the terminator ("…53.8%.", …53.8%).).
+// They are not themselves sentence endings.
+const SENTENCE_CLOSER = new Set(['"', "'", '”', '’', '“', '‘', ')', ']', '}', '»', '›'])
+const SENTENCE_OPENER = /[[a-z0-9"'‘“«‹(]/
+
+// The quote is a slice of the normalized prose. Its sentence is declarative only
+// when the source ends that sentence with a single "." or with the end of the
+// text (normalize collapses paragraph breaks, so end of paragraph is end of the
+// corpus). The mark may sit inside the quote or immediately outside it, with
+// closers and spaces in between. "?" is rejected. "!" is rejected too: an
+// exclamation is not a declarative sentence, and it can mark irony or a different
+// speech act, so it is the same class of false verify as a question.
+function declarativeBody(matched, corpus) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return null
+  const start = matched.index
+  const end = start + matched.length
+  if (start < 0 || end > corpus.length) return null
+  const span = corpus.slice(start, end)
+  if (!span || corpus.indexOf(span, start + 1) !== -1) return null
+
+  let left = start - 1
+  while (left >= 0 && (corpus[left] === ' ' || SENTENCE_CLOSER.has(corpus[left]))) left--
+  if (left >= 0 && corpus[left] !== '.' && corpus[left] !== '?' && corpus[left] !== '!') return null
+
+  let dots = 0
+  let nonDeclarative = false
+  const see = (ch) => {
+    if (ch === '.') dots += 1
+    else if (ch === '?' || ch === '!') nonDeclarative = true
+  }
+  const inCluster = (ch) => ch === ' ' || ch === '.' || ch === '?' || ch === '!' || SENTENCE_CLOSER.has(ch)
+
+  let tail = end
+  while (tail > start && inCluster(corpus[tail - 1])) {
+    see(corpus[tail - 1])
+    tail--
+  }
+  let after = end
+  while (after < corpus.length && inCluster(corpus[after])) {
+    see(corpus[after])
+    after++
+  }
+
+  if (nonDeclarative || dots > 1) return null
+  if (dots === 0) {
+    if (after !== corpus.length) return null
+  } else if (after < corpus.length && !SENTENCE_OPENER.test(corpus[after])) return null
+
+  const body = corpus.slice(start, tail).trim()
+  return body || null
 }
 
 // One complete sentence, one template. Explicit group order is test, metric,
@@ -388,20 +446,9 @@ function nameIsMetricAndTest(name, metric, test) {
   return leftover.every((word) => DIAGNOSTIC_NAME_WORD.has(word))
 }
 
-function standaloneProseSpan(matched, corpus) {
-  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return null
-  const span = corpus.slice(matched.index, matched.index + matched.length)
-  if (!span || corpus.indexOf(span, matched.index + 1) !== -1) return null
-  const before = corpus.slice(0, matched.index).trimEnd()
-  const after = corpus.slice(matched.index + matched.length).trimStart()
-  if (before && !/[.!?]$/.test(before)) return null
-  if (after && !/[.!?]$/.test(span) && !/^[.!?](?:\s|$)/.test(after)) return null
-  return span
-}
-
 function validateDiagnosticAccuracy(quantity, matched, corpus, declaredType) {
   if (declaredType !== 'single') return false
-  const span = standaloneProseSpan(matched, corpus)
+  const span = declarativeBody(matched, corpus)
   if (!span) return false
   if (quantity.ci_low != null || quantity.ci_high != null || quantity.p_value != null) return false
   const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
@@ -746,12 +793,15 @@ function validateAndPair(quantity, matched, corpus, declaredType) {
 //
 // The denominator may also open the whole sentence: "Of 1011 patients (48.5%
 // female; mean age, 55.7 years), 69 (6.8%) experienced MACE within 6 weeks."
-// The sentence must be that template end to end. Allowed slots are an optional
-// "the", a demographic parenthetical (a percent-plus-words, or "mean age, N
-// years", separated by semicolons), and a short outcome after "experienced".
+// The sentence must be that template end to end, and it must end declaratively
+// (one period, or the end of the text; "?" and "!" refused, including a mark
+// that sits just outside the quote). Allowed slots are an optional "the", a
+// demographic parenthetical (a percent-plus-words, or "mean age, N years",
+// separated by semicolons), and a short outcome after "experienced".
 // 69/1011 = 6.82… prints as 6.8. A prefix, a suffix, a negation, a second event
 // count, or a percentage that does not round from n/N stays unresolved. The
-// outcome words are not checked against the row name.
+// outcome words are not checked against the row name. The older contiguous
+// "n of N (x%)" tuple is unchanged and does not use this sentence rule.
 const PROPORTION_TUPLE = /(?<![\d.])(\d+)\s*(?:of|out of|\/)\s*(\d+)(?![\d.])((?:\s+[a-z][a-z-]*){0,4})\s*[([]\s*(\d+(?:\.\d+)?)\s*%\s*[)\]]/g
 const DEMOGRAPHIC_PART = '(?:\\d+(?:\\.\\d+)?%\\s+[a-z][a-z0-9-]*(?:\\s+[a-z][a-z0-9-]*){0,3}|mean\\s+age\\s*,\\s*\\d+(?:\\.\\d+)?\\s+years)'
 const LEADING_PROPORTION = new RegExp(
@@ -791,14 +841,15 @@ function validateProportion(quantity, matched, corpus, declaredType) {
   if (unit && unit !== '%' && unit !== 'percent') return false
   PROPORTION_TUPLE.lastIndex = 0
   const inline = [...span.matchAll(PROPORTION_TUPLE)]
-  const leading = leadingProportionStatement(span)
+  const body = declarativeBody(matched, corpus)
+  const leading = body ? leadingProportionStatement(body) : null
   if ((inline.length > 0 && leading) || inline.length > 1) return false
   let count
   let denominator
   let printed
   if (inline.length === 1) {
     ;[, count, denominator, , printed] = inline[0]
-  } else if (leading && standaloneProseSpan(matched, corpus)) {
+  } else if (leading) {
     ;({ count, denominator, printed } = leading)
   } else return false
   if (!Number.isFinite(quantity.value) || !numbersEqual(quantity.value, Number(printed))) return false
