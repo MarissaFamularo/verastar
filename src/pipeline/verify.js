@@ -8,12 +8,12 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-12.estimates-v9'
-// v9 only accepts more of what the source already prints: a ratio followed by an
-// unlabelled bracket interval, a bare OR/RR after punctuation, and a two-group
-// comparison whose quote also carries a later ratio's labelled interval. Nothing
-// v8 accepted is refused. All v8 and v7 guarantees survive.
-export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-10.estimates-v8', '2026-10-09.estimates-v7']
+export const VERIFICATION_VERSION = '2026-10-12.estimates-v10'
+// v10 only accepts more of what the source already prints: a sensitivity and
+// specificity pair bound to the named test, and a percentage whose denominator is
+// printed earlier in the same sentence ("Of N patients …, n (x%) experienced …").
+// Nothing v9 accepted is refused. All v9, v8 and v7 guarantees survive.
+export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-12.estimates-v9', '2026-10-10.estimates-v8', '2026-10-09.estimates-v7']
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
@@ -317,6 +317,153 @@ function validateRelationship(quantity, matched, corpus, declaredType) {
   } else return false
   const match = span.match(new RegExp(`^${pattern}[.!?]?$`))
   return !!match && values.every((value, index) => Number.isFinite(value) && numbersEqual(value, Number(match[index + 1])))
+}
+
+// --- Diagnostic accuracy pair bound to the named test (2026-10-12) --------------
+//
+// "nHEART achieved sensitivity of 97.1% and specificity of 53.8%."
+// "pHEART achieved sensitivity and specificity of 95.7% and 69.1%, respectively."
+//
+// Two printed percentages, each bound to the metric the sentence names and to the
+// test that achieved/had/showed them. The row is one metric: its name must be that
+// metric plus that test and nothing else (function words "of"/"for"/"the"/"a"/"an"
+// may join them). The other metric's value, a different test, a swapped
+// "respectively" order, or a sentence that names two tests for one pair stays
+// unresolved. Verbs are only achieved, had, and showed. A CI or P claimed on the
+// row is not part of this grammar. This binds the metric and the test, so it earns
+// the sentence-relationship tier (endpointValidated), not an unchecked-endpoint tier.
+const DIAGNOSTIC_WORD = '[a-z0-9]+(?:-[a-z0-9]+)*'
+const DIAGNOSTIC_TEST = `(${DIAGNOSTIC_WORD}(?:\\s+${DIAGNOSTIC_WORD}){0,4})`
+const DIAGNOSTIC_PCT = '((?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d))\\s*%'
+const DIAGNOSTIC_VERB = '(?:achieved|had|showed)'
+const DIAGNOSTIC_EXPLICIT = new RegExp(
+  `(?<![a-z0-9])${DIAGNOSTIC_TEST}\\s+${DIAGNOSTIC_VERB}\\s+(sensitivity|specificity)\\s+of\\s+${DIAGNOSTIC_PCT}\\s+and\\s+(sensitivity|specificity)\\s+of\\s+${DIAGNOSTIC_PCT}`,
+  'g',
+)
+const DIAGNOSTIC_RESPECTIVE = new RegExp(
+  `(?<![a-z0-9])${DIAGNOSTIC_TEST}\\s+${DIAGNOSTIC_VERB}\\s+(sensitivity|specificity)\\s+and\\s+(sensitivity|specificity)\\s+of\\s+${DIAGNOSTIC_PCT}\\s+and\\s+${DIAGNOSTIC_PCT}\\s*,?\\s*respectively\\b`,
+  'g',
+)
+const DIAGNOSTIC_FUNCTION = new Set(['the', 'a', 'an', 'this', 'that', 'these', 'those', 'our', 'their', 'its', 'in', 'on', 'at', 'for', 'of', 'with', 'among', 'across', 'after', 'before', 'during', 'using', 'by', 'from', 'to', 'overall', 'both', 'all'])
+const DIAGNOSTIC_PREPOSITION = new Set(['in', 'on', 'at', 'for', 'of', 'with', 'without', 'among', 'across', 'after', 'before', 'during', 'using', 'by', 'from', 'to', 'unlike', 'versus', 'vs', 'than', 'between', 'into', 'over', 'under', 'about', 'against', 'despite', 'within', 'like'])
+const DIAGNOSTIC_CONJUNCTION = new Set(['and', 'or', 'vs', 'versus', 'plus'])
+const DIAGNOSTIC_NEGATION = new Set(['not', 'no', 'without', 'never', 'neither', 'nor', 'except', 'excluding'])
+const DIAGNOSTIC_VERB_WORD = new Set(['achieved', 'had', 'showed'])
+const DIAGNOSTIC_NAME_WORD = new Set(['of', 'for', 'the', 'a', 'an'])
+
+function clearDiagnosticTest(raw) {
+  const tokens = String(raw || '').split(/\s+/).filter(Boolean)
+  if (!tokens.length || tokens.some((token) => DIAGNOSTIC_NEGATION.has(token))) return null
+  let start = 0
+  while (start < tokens.length - 1 && (DIAGNOSTIC_FUNCTION.has(tokens[start]) || tokens[start] === 'and' || tokens[start] === 'or')) start++
+  const kept = tokens.slice(start)
+  if (!kept.length || kept.every((token) => DIAGNOSTIC_FUNCTION.has(token))) return null
+  if (kept.some((token) => DIAGNOSTIC_CONJUNCTION.has(token) || DIAGNOSTIC_VERB_WORD.has(token) || token === 'sensitivity' || token === 'specificity')) return null
+  return kept.join(' ')
+}
+
+// "nHEART, pHEART achieved …" lists two subjects for one pair. A preamble
+// ("In this cohort, nHEART achieved …", "Unlike pHEART, nHEART achieved …") has a
+// preposition or more than one content word before the comma, so the subject is
+// still the test that follows.
+function bareCoSubjectBefore(span, testStart) {
+  const before = span.slice(0, testStart)
+  if (!/[a-z0-9]\s*,\s*$/.test(before)) return false
+  const segment = before.replace(/,\s*$/, '')
+  let cut = -1
+  for (let i = segment.length - 1; i >= 0; i--) {
+    if (!/[.!?]/.test(segment[i])) continue
+    if (segment[i] === '.' && /\d/.test(segment[i - 1] || '') && /\d/.test(segment[i + 1] || '')) continue
+    cut = i
+    break
+  }
+  const tokens = segment.slice(cut + 1).trim().split(/\s+/).filter(Boolean)
+  if (!tokens.length || tokens.some((token) => DIAGNOSTIC_PREPOSITION.has(token))) return false
+  const content = tokens.filter((token) => !DIAGNOSTIC_FUNCTION.has(token) && !DIAGNOSTIC_CONJUNCTION.has(token))
+  return content.length === 1
+}
+
+function diagnosticClauses(span) {
+  const clauses = []
+  let unclear = false
+  const take = (re, valueBeforeSecondMetric) => {
+    re.lastIndex = 0
+    for (const match of span.matchAll(re)) {
+      const test = clearDiagnosticTest(match[1])
+      // Explicit prints "metric of value and metric of value" (groups 2,3,4,5).
+      // Respectively prints "metric and metric of value and value" (groups 2,3,4,5
+      // with the two metrics first).
+      const metricA = match[2]
+      const metricB = valueBeforeSecondMetric ? match[4] : match[3]
+      const valueA = valueBeforeSecondMetric ? match[3] : match[4]
+      const valueB = match[5]
+      if (!test || metricA === metricB) {
+        unclear = true
+        continue
+      }
+      const local = match[1].lastIndexOf(test)
+      const testStart = match.index + (local < 0 ? 0 : local)
+      if (bareCoSubjectBefore(span, testStart)) {
+        unclear = true
+        continue
+      }
+      const first = Number(valueA)
+      const second = Number(valueB)
+      if (!Number.isFinite(first) || !Number.isFinite(second)) {
+        unclear = true
+        continue
+      }
+      clauses.push({ test, values: { [metricA]: first, [metricB]: second } })
+    }
+  }
+  take(DIAGNOSTIC_EXPLICIT, true)
+  take(DIAGNOSTIC_RESPECTIVE, false)
+  return unclear ? null : clauses
+}
+
+function nameIsMetricAndTest(name, metric, test) {
+  const normalized = normalize(name)
+  if (!normalized || /[.!?;:=]/.test(normalized)) return false
+  const other = metric === 'sensitivity' ? 'specificity' : 'sensitivity'
+  const token = (word) => new RegExp(`(?<![a-z0-9])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9])`)
+  if (token(other).test(normalized) || !token(metric).test(normalized) || !token(test).test(normalized)) return false
+  const leftover = normalized.replace(token(test), ' ').replace(token(metric), ' ').split(/[^a-z0-9]+/).filter(Boolean)
+  return leftover.every((word) => DIAGNOSTIC_NAME_WORD.has(word))
+}
+
+function standaloneProseSpan(matched, corpus) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return null
+  const span = corpus.slice(matched.index, matched.index + matched.length)
+  if (!span || corpus.indexOf(span, matched.index + 1) !== -1) return null
+  const before = corpus.slice(0, matched.index).trimEnd()
+  const after = corpus.slice(matched.index + matched.length).trimStart()
+  if (before && !/[.!?]$/.test(before)) return null
+  if (after && !/[.!?]$/.test(span) && !/^[.!?](?:\s|$)/.test(after)) return null
+  return span
+}
+
+function validateDiagnosticAccuracy(quantity, matched, corpus, declaredType) {
+  if (declaredType !== 'single') return false
+  const span = standaloneProseSpan(matched, corpus)
+  if (!span) return false
+  if (quantity.ci_low != null || quantity.ci_high != null || quantity.p_value != null) return false
+  const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
+  if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
+  const unit = normalize(quantity.unit)
+  if (unit && unit !== '%' && unit !== 'percent') return false
+  if (!Number.isFinite(quantity.value)) return false
+  const clauses = diagnosticClauses(span)
+  if (!clauses || clauses.length === 0) return false
+  const bindings = []
+  for (const clause of clauses) {
+    for (const metric of ['sensitivity', 'specificity']) {
+      if (!Object.prototype.hasOwnProperty.call(clause.values, metric)) continue
+      if (!nameIsMetricAndTest(quantity.name, metric, clause.test)) continue
+      if (!numbersEqual(quantity.value, clause.values[metric])) continue
+      bindings.push(metric + '\0' + clause.test)
+    }
+  }
+  return bindings.length === 1
 }
 
 // --- Printed ratio estimate (2026-09-24) --------------------------------------
@@ -641,7 +788,28 @@ function validateAndPair(quantity, matched, corpus, declaredType) {
 // → 93.2). A misread count, a swapped denominator, or a percentage from elsewhere in the
 // sentence fails the arithmetic. Exactly one such tuple in the span; up to four words may
 // name what was counted between the denominator and the bracket. Endpoint unchecked.
+//
+// The denominator may also be printed earlier in the same sentence, with other
+// numbers in between: "Of 1011 patients (48.5% female; mean age, 55.7 years), 69
+// (6.8%) experienced MACE within 6 weeks." The event count is the integer whose
+// own bracketed percentage follows the cohort, and the verb is "experienced".
+// 69/1011 = 6.82… prints as 6.8. A second event count, a percentage that does not
+// round from n/N, or the demographic percentage inside the parenthetical stays
+// unresolved. The outcome words are not checked.
 const PROPORTION_TUPLE = /(?<![\d.])(\d+)\s*(?:of|out of|\/)\s*(\d+)(?![\d.])((?:\s+[a-z][a-z-]*){0,4})\s*[([]\s*(\d+(?:\.\d+)?)\s*%\s*[)\]]/g
+const LEADING_PROPORTION = /\bof\s+(?:the\s+)?(\d+)\s+patients\b(?:\s*\([^)]*\))?\s*,\s*(\d+)\s*[([]\s*(\d+(?:\.\d+)?)\s*%\s*[)\]]\s+experienced\b/g
+const EVENT_PERCENT = /(?<![\d.])(\d+)\s*[([]\s*(\d+(?:\.\d+)?)\s*%\s*[)\]]/g
+
+function printedPercentageMatches(count, denominator, printed) {
+  const n = Number(count)
+  const total = Number(denominator)
+  const pct = Number(printed)
+  if (!Number.isFinite(pct) || !(total > 0) || n > total) return false
+  const decimals = (String(printed).split('.')[1] || '').length
+  const exact = (100 * n) / total
+  // Half a unit in the last printed place, plus float slack: 93.16 prints as 93.2.
+  return Math.abs(exact - pct) <= 0.5 * 10 ** -decimals + 1e-9
+}
 
 function validateProportion(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
@@ -654,18 +822,25 @@ function validateProportion(quantity, matched, corpus, declaredType) {
   if (!normalize(quantity.name)) return false
   const unit = normalize(quantity.unit)
   if (unit && unit !== '%' && unit !== 'percent') return false
-  const tuples = [...span.matchAll(PROPORTION_TUPLE)]
-  if (tuples.length !== 1) return false
-  const [, n, total, , printed] = tuples[0]
-  const count = Number(n)
-  const denominator = Number(total)
-  const pct = Number(printed)
-  if (!(denominator > 0) || count > denominator) return false
-  if (!Number.isFinite(quantity.value) || !numbersEqual(quantity.value, pct)) return false
-  const decimals = (printed.split('.')[1] || '').length
-  const exact = (100 * count) / denominator
-  // Half a unit in the last printed place, plus float slack: 93.16 prints as 93.2.
-  return Math.abs(exact - pct) <= 0.5 * 10 ** -decimals + 1e-9
+  PROPORTION_TUPLE.lastIndex = 0
+  LEADING_PROPORTION.lastIndex = 0
+  EVENT_PERCENT.lastIndex = 0
+  const inline = [...span.matchAll(PROPORTION_TUPLE)]
+  const leading = [...span.matchAll(LEADING_PROPORTION)]
+  if (inline.length + leading.length !== 1) return false
+  let count
+  let denominator
+  let printed
+  if (inline.length === 1) {
+    ;[, count, denominator, , printed] = inline[0]
+  } else {
+    const events = [...span.matchAll(EVENT_PERCENT)]
+    if (events.length !== 1) return false
+    ;[, denominator, count, printed] = leading[0]
+    if (events[0][1] !== count || events[0][2] !== printed) return false
+  }
+  if (!Number.isFinite(quantity.value) || !numbersEqual(quantity.value, Number(printed))) return false
+  return printedPercentageMatches(count, denominator, printed)
 }
 
 // --- Heterogeneity I² (2026-10-04) ---------------------------------------------
@@ -876,7 +1051,7 @@ export function verify(quantity, source, opts = {}) {
   // checked first — a registry-matched value posted by CT.gov is proven regardless of which
   // corpus located the quote.
   const matchedCorpus = matched?.corpus === 'tables' ? normTables : normProse
-  const relationshipValidated = consistent && validateRelationship(quantity, matched, matchedCorpus, declaredType)
+  const relationshipValidated = consistent && (validateRelationship(quantity, matched, matchedCorpus, declaredType) || validateDiagnosticAccuracy(quantity, matched, matchedCorpus, declaredType))
   const bracketValidated = consistent && !relationshipValidated && validateBracketInterval(quantity, matched, matchedCorpus, declaredType)
   const estimateValidated = consistent && !relationshipValidated && (validateEstimate(quantity, matched, matchedCorpus, declaredType) || bracketValidated)
   const comparisonValidated = consistent && !relationshipValidated && !estimateValidated &&
