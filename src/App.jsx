@@ -325,8 +325,8 @@ function AccountSection({ account, first = false }) {
                     aria-invalid={form.verifyState === 'error'}
                     style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
                   />
-                  <button type="submit" disabled={form.verifyState === 'verifying'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: form.verifyState === 'verifying' ? 0.6 : 1 }}>
-                    {form.verifyState === 'verifying' ? 'Checking…' : 'Continue'}
+                  <button type="submit" disabled={form.verifyBusy} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: form.verifyBusy ? 0.6 : 1 }}>
+                    {form.verifyBusy ? 'Checking…' : 'Continue'}
                   </button>
                 </div>
               </form>
@@ -415,8 +415,8 @@ function ExistingLibrarySyncGate({ onNotNow }) {
                   autoFocus
                   style={{ flex: 1, minWidth: 0, padding: '12px 15px', borderRadius: 11, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 15, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
                 />
-                <button type="submit" disabled={form.verifyState === 'verifying'} className="cursor-pointer" style={{ padding: '12px 20px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: form.verifyState === 'verifying' ? 0.6 : 1 }}>
-                  {form.verifyState === 'verifying' ? 'Checking…' : 'Secure my library'}
+                <button type="submit" disabled={form.verifyBusy} className="cursor-pointer" style={{ padding: '12px 20px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: form.verifyBusy ? 0.6 : 1 }}>
+                  {form.verifyBusy ? 'Checking…' : 'Secure my library'}
                 </button>
               </div>
             </form>

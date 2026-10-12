@@ -8,6 +8,10 @@ import {
 
 afterEach(() => { vi.useRealTimers() })
 
+async function flush() {
+  for (let i = 0; i < 20; i += 1) await Promise.resolve()
+}
+
 describe('email code failures', () => {
   it('treats expired, used, and empty sessions as invalid and stays unsuccessful', async () => {
     expect(emailCodeFailureKind(new Error('Token has expired or is invalid'))).toBe('invalid')
@@ -35,9 +39,31 @@ describe('email code failures', () => {
     await vi.advanceTimersByTimeAsync(8000)
     await expect(pending).resolves.toMatchObject({ ok: false, kind: 'timeout' })
     resolve({ id: 'user-1' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flush()
     expect(onLateSession).toHaveBeenCalledWith({ id: 'user-1' })
+  })
+
+  it('treats an existing session as signed in before a used-code or timeout failure', async () => {
+    const used = await verifyEmailCodeForSignIn('a@clinic.edu', '999999', {
+      verify: async () => { throw new Error('Token has expired or is invalid') },
+      getSession: async () => ({ data: { session: { user: { id: 'user-1' } } } }),
+    })
+    expect(used).toEqual({ ok: true, user: { id: 'user-1' } })
+
+    vi.useFakeTimers()
+    let resolve
+    const onLateSession = vi.fn()
+    const pending = verifyEmailCodeForSignIn('a@clinic.edu', '888888', {
+      timeoutMs: 8000,
+      verify: () => new Promise((r) => { resolve = r }),
+      getSession: async () => ({ id: 'user-2' }),
+      onLateSession,
+    })
+    await vi.advanceTimersByTimeAsync(8000)
+    await expect(pending).resolves.toEqual({ ok: true, user: { id: 'user-2' } })
+    resolve({ id: 'user-3' })
+    await flush()
+    expect(onLateSession).not.toHaveBeenCalled()
   })
 
   it('does not report success when a timed-out check later fails', async () => {
@@ -52,8 +78,7 @@ describe('email code failures', () => {
     await vi.advanceTimersByTimeAsync(8000)
     await expect(pending).resolves.toMatchObject({ kind: 'timeout' })
     reject(new Error('Token has expired or is invalid'))
-    await Promise.resolve()
-    await Promise.resolve()
+    await flush()
     expect(onLateSession).not.toHaveBeenCalled()
   })
 

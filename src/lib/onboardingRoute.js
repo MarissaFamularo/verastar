@@ -4,6 +4,9 @@
 // browser Back button left onboarding entirely. Each step is now a hash on the
 // same path (`#signin`, `#connect`, …). Welcome stays the bare path so the
 // landing URL does not change. Supabase magic-link hashes are left alone.
+// The NPI form is a history entry on `#connect` (`state.substep === 'npi'`), so
+// Back and Forward restore the code form or the NPI form together with the
+// heading and the other connect controls.
 
 import { useEffect, useRef, useState } from 'react'
 
@@ -44,9 +47,26 @@ function pageHistory() {
   return history
 }
 
+function routeFromLocation() {
+  const hash = pageLocation().hash
+  const step = onboardStepFromHash(hash) || 'welcome'
+  const substep = step === 'connect' && pageHistory()?.state?.substep === 'npi' ? 'npi' : null
+  return { step, substep }
+}
+
 export function useOnboardStep() {
-  const [step, setStepState] = useState(() => onboardStepFromHash(pageLocation().hash) || 'welcome')
+  const initial = routeFromLocation()
+  const [step, setStepState] = useState(initial.step)
+  const [substep, setSubstep] = useState(initial.substep)
   const stepRef = useRef(step)
+  const substepRef = useRef(substep)
+
+  function applyRoute(next) {
+    stepRef.current = next.step
+    substepRef.current = next.substep
+    setStepState(next.step)
+    setSubstep(next.substep)
+  }
 
   useEffect(() => {
     const history = pageHistory()
@@ -56,23 +76,24 @@ export function useOnboardStep() {
       if (fromHash && fromHash !== 'welcome' && history.state?.onboard !== fromHash) {
         // Put welcome behind a deep link so Back stays inside onboarding.
         history.replaceState({ onboard: 'welcome' }, '', onboardUrl(pageLocation(), 'welcome'))
-        history.pushState({ onboard: fromHash }, '', onboardUrl(pageLocation(), fromHash))
+        history.pushState({ onboard: fromHash, ...(substepRef.current ? { substep: substepRef.current } : {}) }, '', onboardUrl(pageLocation(), fromHash))
       } else if (fromHash && !history.state?.onboard) {
-        history.replaceState({ onboard: stepRef.current }, '', onboardUrl(pageLocation(), stepRef.current))
+        const state = { onboard: stepRef.current }
+        if (stepRef.current === 'connect' && substepRef.current) state.substep = substepRef.current
+        history.replaceState(state, '', onboardUrl(pageLocation(), stepRef.current))
       }
     }
     function onPop() {
       const next = onboardStepFromHash(pageLocation().hash)
       if (!next) return
-      stepRef.current = next
-      setStepState(next)
+      applyRoute({ step: next, substep: next === 'connect' && pageHistory()?.state?.substep === 'npi' ? 'npi' : null })
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
   function goStep(next, { replace = false } = {}) {
-    if (!next || (next === stepRef.current && !replace)) return
+    if (!next || (next === stepRef.current && !substepRef.current && !replace)) return
     const history = pageHistory()
     if (history) {
       const url = onboardUrl(pageLocation(), next)
@@ -80,8 +101,27 @@ export function useOnboardStep() {
       if (replace) history.replaceState(state, '', url)
       else history.pushState(state, '', url)
     }
-    stepRef.current = next
-    setStepState(next)
+    applyRoute({ step: next, substep: null })
+  }
+
+  // `npi` pushes a `#connect` entry. Closing it uses Back so Forward returns to NPI.
+  function goSubstep(next) {
+    if (stepRef.current !== 'connect') return
+    const want = next === 'npi' ? 'npi' : null
+    if ((substepRef.current || null) === want) return
+    const history = pageHistory()
+    const url = onboardUrl(pageLocation(), 'connect')
+    if (!want && history?.state?.substep === 'npi' && typeof history.back === 'function') {
+      substepRef.current = null
+      history.back()
+      return
+    }
+    const state = want ? { onboard: 'connect', substep: 'npi' } : { onboard: 'connect' }
+    if (history) {
+      if (want) history.pushState(state, '', url)
+      else history.replaceState(state, '', url)
+    }
+    applyRoute({ step: 'connect', substep: want })
   }
 
   function backStep() {
@@ -93,5 +133,5 @@ export function useOnboardStep() {
     goStep('welcome')
   }
 
-  return [step, goStep, backStep]
+  return [step, goStep, backStep, substep, goSubstep]
 }

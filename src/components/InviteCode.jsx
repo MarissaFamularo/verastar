@@ -10,7 +10,7 @@ import { canRedeem, redeemInviteCode, normalizeInviteCode, INVITE_MESSAGES } fro
 import NpiMatch from './NpiMatch.jsx'
 import { isSponsored } from '../lib/sponsor.js'
 
-export default function InviteCode({ onEnrolled, lead = false, preview = false, onNpiStep }) {
+export default function InviteCode({ onEnrolled, lead = false, preview = false, onNpiStep, npiOpen }) {
   const [phase, setPhase] = useState('code') // code | npi | confirming
   const [code, setCode] = useState('')
   const [state, setState] = useState('idle')
@@ -70,7 +70,17 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
     setState('idle')
   }
 
-  if (phase === 'confirming') {
+  // Onboarding passes npiOpen from the route. Settings leaves it unset and keeps
+  // this component's own phase. Confirming stays up only while that route still
+  // says the NPI step is open; Back/Forward otherwise win.
+  const routed = typeof npiOpen === 'boolean'
+  const screen = !routed
+    ? phase
+    : phase === 'confirming' && npiOpen
+      ? 'confirming'
+      : npiOpen ? 'npi' : 'code'
+
+  if (screen === 'confirming') {
     return (
       <div>
         <p role={state === 'busy' || !note || ok ? 'status' : 'alert'} style={{ margin: 0, fontSize: lead ? 15 : 13, lineHeight: 1.5, color: ok ? 'var(--color-verified-soft)' : state === 'busy' || !note ? 'var(--color-fg)' : 'var(--color-domain-vascular)' }}>
@@ -85,7 +95,7 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
     )
   }
 
-  if (phase === 'npi') return <NpiMatch preview={preview}
+  if (screen === 'npi') return <NpiMatch preview={preview}
     onBack={() => { showNpi(false); setNote('') }}
     onContinue={() => { void applyCode(true) }} />
 

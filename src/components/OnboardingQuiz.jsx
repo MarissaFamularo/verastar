@@ -78,7 +78,7 @@ function ChartStar({ size = 44 }) {
 }
 
 export default function OnboardingQuiz({ onDone, preview = false, account = null }) {
-  const [step, goStep, backStep] = useOnboardStep() // welcome | signin | connect | interview | review
+  const [step, goStep, backStep, substep, goSubstep] = useOnboardStep() // welcome | signin | connect | interview | review
   const [keyInput, setKeyInput] = useState('')
   const [draft, setDraft] = useState(null) // { name, northStars, projects, topics, search, rubric:{criteria,selectCount,scoreFloor} }
   // Account creation/sign-in from the welcome screen (accounts configured only).
@@ -90,7 +90,9 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   const sponsored = isSponsored()
   // With an account, the access code is the path; the personal key opens only on request.
   const [keyOpen, setKeyOpen] = useState(false)
-  const [betaNpi, setBetaNpi] = useState(false)
+  // NPI is a history substep of #connect, shared with InviteCode. A separate flag
+  // stayed true after Back/Forward remounted the code form and hid these controls.
+  const betaNpi = step === 'connect' && substep === 'npi'
 
   function connectContinue(e) {
     e.preventDefault()
@@ -219,8 +221,8 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
                   autoFocus
                   style={{ ...inputStyle, marginTop: 0, flex: 1, width: 'auto', letterSpacing: '.14em' }}
                 />
-                <button type="submit" disabled={signin.verifyState === 'verifying'} className="cursor-pointer" style={{ ...primaryBtn, opacity: signin.verifyState === 'verifying' ? 0.6 : 1 }}>
-                  {signin.verifyState === 'verifying' ? 'Checking…' : 'Continue'}
+                <button type="submit" disabled={signin.verifyBusy} className="cursor-pointer" style={{ ...primaryBtn, opacity: signin.verifyBusy ? 0.6 : 1 }}>
+                  {signin.verifyBusy ? 'Checking…' : 'Continue'}
                 </button>
               </div>
             </form>
@@ -301,7 +303,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
         </div>
         {canUseCode && (
           <div style={{ marginTop: betaNpi ? 0 : 28 }}>
-            <InviteCode onNpiStep={setBetaNpi} lead preview={preview} onEnrolled={() => setSponsorVersion((v) => v + 1)} />
+            <InviteCode npiOpen={betaNpi} onNpiStep={(open) => goSubstep(open ? 'npi' : null)} lead preview={preview} onEnrolled={() => setSponsorVersion((v) => v + 1)} />
           </div>
         )}
 

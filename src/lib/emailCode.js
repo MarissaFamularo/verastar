@@ -7,7 +7,7 @@
 // timeout message instead of spinning until the page gives up.
 
 import { useRef, useState } from 'react'
-import { sendMagicLink, verifyEmailCode } from './supabase.js'
+import { sendMagicLink, supabase, verifyEmailCode } from './supabase.js'
 
 export const EMAIL_CODE_TIMEOUT_MS = 8000
 
@@ -38,41 +38,81 @@ export function reloadAfterSignIn(loc = typeof window !== 'undefined' ? window.l
   else if (typeof loc.reload === 'function') loc.reload()
 }
 
+// A Supabase getSession() payload, a session, or a user. Null when nobody is signed in.
+export async function sessionUserFrom(getSession) {
+  if (typeof getSession !== 'function') return null
+  try {
+    const value = await getSession()
+    if (!value) return null
+    if (value.data && Object.prototype.hasOwnProperty.call(value.data, 'session')) return value.data.session?.user || null
+    if (value.session) return value.session.user || null
+    if (value.user?.id) return value.user
+    if (value.id) return value
+    return null
+  } catch {
+    return null
+  }
+}
+
+function defaultGetSession() {
+  if (!supabase?.auth?.getSession) return null
+  return supabase.auth.getSession()
+}
+
 // Resolves { ok: true, user } or { ok: false, kind, message }. Never reloads.
-// A late session after the timeout still calls onLateSession so a slow success
-// can enter the app, but a late failure cannot.
+// The code check itself keeps running after the timeout. A session that shows up
+// then — or that is already present when a check fails — is a successful sign-in.
+// A late failure cannot become a success.
 export async function verifyEmailCodeForSignIn(email, code, {
   timeoutMs = EMAIL_CODE_TIMEOUT_MS,
   verify = verifyEmailCode,
+  getSession = defaultGetSession,
   onLateSession,
+  onSettled,
 } = {}) {
   const pending = Promise.resolve().then(() => verify(email, code))
   let timer
+  let timedOut = false
+  let honored = false
   const timeout = new Promise((resolve) => {
-    timer = setTimeout(() => resolve({
-      ok: false,
-      kind: 'timeout',
-      message: EMAIL_CODE_MESSAGES.timeout,
-    }), timeoutMs)
+    timer = setTimeout(() => {
+      timedOut = true
+      resolve({
+        ok: false,
+        kind: 'timeout',
+        message: EMAIL_CODE_MESSAGES.timeout,
+      })
+    }, timeoutMs)
   })
-  try {
-    const raced = await Promise.race([
-      pending.then(
-        (user) => {
-          if (!user) return { ok: false, kind: 'invalid', message: EMAIL_CODE_MESSAGES.invalid }
-          return { ok: true, user }
-        },
-        (err) => {
-          const kind = emailCodeFailureKind(err)
-          return { ok: false, kind, message: EMAIL_CODE_MESSAGES[kind] }
-        },
-      ),
-      timeout,
-    ])
-    if (!raced.ok && raced.kind === 'timeout' && onLateSession) {
-      pending.then((user) => { if (user) onLateSession(user) }).catch(() => {})
+  const interpreted = pending.then(
+    async (user) => {
+      const sessionUser = user || await sessionUserFrom(getSession)
+      if (!sessionUser) return { ok: false, kind: 'invalid', message: EMAIL_CODE_MESSAGES.invalid }
+      return { ok: true, user: sessionUser }
+    },
+    async (err) => {
+      const sessionUser = await sessionUserFrom(getSession)
+      if (sessionUser) return { ok: true, user: sessionUser }
+      const kind = emailCodeFailureKind(err)
+      return { ok: false, kind, message: EMAIL_CODE_MESSAGES[kind] }
+    },
+  )
+  interpreted.then((result) => {
+    if (timedOut && result?.ok && !honored) {
+      honored = true
+      onLateSession?.(result.user)
     }
-    return raced
+    onSettled?.(result)
+  }).catch(() => { onSettled?.(null) })
+  try {
+    let outcome = await Promise.race([interpreted, timeout])
+    // Any failure, including the timeout, yields to a session that already exists.
+    if (!outcome.ok) {
+      const sessionUser = await sessionUserFrom(getSession)
+      if (sessionUser) outcome = { ok: true, user: sessionUser }
+    }
+    if (outcome.ok) honored = true
+    return outcome
   } finally {
     clearTimeout(timer)
   }
@@ -80,14 +120,23 @@ export async function verifyEmailCodeForSignIn(email, code, {
 
 export function useEmailCodeSignIn() {
   const attempt = useRef(0)
+  const flight = useRef(null)
+  const entered = useRef(false)
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [sendState, setSendState] = useState('idle') // idle | sending | sent | error
   const [sendError, setSendError] = useState('')
   const [verifyState, setVerifyState] = useState('idle') // idle | verifying | error
   const [verifyError, setVerifyError] = useState('')
+  const [pending, setPending] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendNote, setResendNote] = useState('')
+
+  function enter() {
+    if (entered.current) return
+    entered.current = true
+    reloadAfterSignIn()
+  }
 
   async function send(event) {
     event?.preventDefault()
@@ -106,21 +155,50 @@ export function useEmailCodeSignIn() {
   async function verify(event) {
     event?.preventDefault()
     const trimmed = code.trim()
-    if (!trimmed || verifyState === 'verifying') return
+    // One verifyOtp at a time. A retry while the first request is still in flight
+    // (including after the 8s timeout) would burn the code and then report it invalid.
+    if (!trimmed || flight.current) return
     const id = ++attempt.current
+    let release = () => {}
+    const gate = new Promise((resolve) => { release = resolve })
+    flight.current = gate
+    setPending(true)
     setVerifyState('verifying')
     setVerifyError('')
     setResendNote('')
-    const result = await verifyEmailCodeForSignIn(email.trim(), trimmed, {
-      onLateSession: () => { if (id === attempt.current) reloadAfterSignIn() },
-    })
-    if (id !== attempt.current) return
-    if (!result.ok) {
-      setVerifyError(result.message)
+    try {
+      const result = await verifyEmailCodeForSignIn(email.trim(), trimmed, {
+        onLateSession: () => enter(),
+        onSettled: (settled) => {
+          if (flight.current === gate) flight.current = null
+          release()
+          if (settled?.ok) {
+            enter()
+            return
+          }
+          if (id === attempt.current && settled && !settled.ok) {
+            setVerifyError(settled.message)
+            setVerifyState('error')
+          }
+          setPending(false)
+        },
+      })
+      if (id !== attempt.current) return
+      if (!result.ok) {
+        setVerifyError(result.message)
+        setVerifyState('error')
+        if (result.kind !== 'timeout') setPending(false)
+        return
+      }
+      enter()
+    } catch (err) {
+      if (flight.current === gate) flight.current = null
+      release()
+      setPending(false)
+      if (id !== attempt.current) return
+      setVerifyError(err?.message || EMAIL_CODE_MESSAGES.network)
       setVerifyState('error')
-      return
     }
-    reloadAfterSignIn()
   }
 
   async function resend() {
@@ -158,6 +236,7 @@ export function useEmailCodeSignIn() {
   return {
     email, setEmail, code, setCode,
     sendState, sendError, verifyState, verifyError,
+    pending, verifyBusy: pending || verifyState === 'verifying',
     resending, resendNote,
     send, verify, resend, reset,
   }
