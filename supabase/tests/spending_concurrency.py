@@ -277,6 +277,7 @@ service(f"select public.digest_claim_finish('{u}', '{token}', false, 'held')", h
 out, err = old_session.communicate(timeout=15)
 check(old_session.returncode == 0 and out.splitlines()[-1] == 'reconciled', 'old-session case: the open session reconciles the NEW attempt')
 check(sql(f"select (r.resolved_at < s.recovery_ack_at)::text from public.spend_reservations r, public.digest_schedules s where r.id='{late}' and s.user_id='{u}'") == 'true', 'old-session case: its resolved_at really is earlier than the acknowledgement')
+check(held(u) == 'unresolved_liability', 'old-session case: the account is HELD (a timestamp comparison would have released it)')
 
 # 17. Concurrent settlement and reconciliation of a released hold each write one charge.
 reset_spending()
@@ -287,13 +288,12 @@ settle_id = sql("select id from public.spend_reservations where request_id='rele
 check(service(f"select public.spend_release('{settle_id}', 'not_sent', null)->>'status'", hold=0) == 'released', 'released-settle released')
 res = parallel([f"select public.spend_settle('{settle_id}', 1234, 'claude-sonnet-5-5', 1, 1, 0, 0, null, null)->>'status'" for _ in range(6)])
 check(res.count('settled') == 1 and res.count('already_settled') == 5, 'concurrent settlement of a released row: one charge')
-check(sql(f"select count(*) || ':' || (usd * 1000000)::bigint from public.model_spend where reservation_id='{settle_id}'") == '1:1234', 'one ledger row at the confirmed amount')
+check(sql(f"select count(*) || ':' || (sum(usd) * 1000000)::bigint from public.model_spend where reservation_id='{settle_id}'") == '1:1234', 'one ledger row at the confirmed amount')
 check(service(reserve(rel, 'released-recon', 50_000), hold=0) == 'reserved', 'released-recon reserved')
 recon_id = sql("select id from public.spend_reservations where request_id='released-recon'")
 check(service(f"select public.spend_release('{recon_id}', 'not_sent', null)->>'status'", hold=0) == 'released', 'released-recon released')
 res = parallel([f"select public.spend_reconcile('{recon_id}', 800, 'concurrency test: charge confirmed after release')->>'status'" for _ in range(6)])
 check(res.count('reconciled') == 1 and res.count('already_reconciled') == 5, 'concurrent reconciliation of a released row: one charge')
-check(sql(f"select count(*) || ':' || (usd * 1000000)::bigint from public.model_spend where reservation_id='{recon_id}'") == '1:800', 'one reconciled ledger row')
-check(held(u) == 'unresolved_liability', 'old-session case: the account is HELD (a timestamp comparison would have released it)')
+check(sql(f"select count(*) || ':' || (sum(usd) * 1000000)::bigint from public.model_spend where reservation_id='{recon_id}'") == '1:800', 'one reconciled ledger row')
 
 print(f'PASS: spending_concurrency.py ({len(passed)} checks)')
