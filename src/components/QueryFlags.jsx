@@ -12,12 +12,17 @@
 
 import { useState } from 'react'
 import { checkTopics } from '../pipeline/interview.js'
-import { searchPubmed, fetchCitations, searchPaceMs } from '../pipeline/sources.js'
+import { compilePubmedQuery, fitsTopic } from '../pipeline/pubmedQuery.js'
+import { normalizeSearchDays } from '../pipeline/topics.js'
+import { citationIndicatesRetraction } from '../pipeline/retractions.js'
+import { searchPubmed, fetchCitations, fetchAbstractsByPmid, searchPaceMs } from '../pipeline/sources.js'
 
-export default function QueryFlags({ topics }) {
+export default function QueryFlags({ topics, days }) {
   const { ok, rows, list, count } = checkTopics(topics)
+  const windowDays = normalizeSearchDays(days)
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState([])
+  const [previewed, setPreviewed] = useState(false)
   const [previewError, setPreviewError] = useState('')
 
   async function previewMatches() {
@@ -29,13 +34,43 @@ export default function QueryFlags({ topics }) {
       const matches = []
       for (let i = 0; i < (topics || []).length; i++) {
         const topic = topics[i]
-        if (i > 0) await new Promise((resolve) => setTimeout(resolve, searchPaceMs()))
-        const ids = await searchPubmed(topic.query || topic.label, { retmax: 10, days: 90 })
-        matches.push({ topic: topic.label || topic.query, ids })
+        const pace = i > 0 ? searchPaceMs() : 0
+        if (pace > 0) await new Promise((resolve) => setTimeout(resolve, pace))
+        const query = topic.query || topic.label
+        // Same window and the same compiled query the digest runs. A 90-day page of raw
+        // OR text was not "the actual search", and it showed the noise before any filter.
+        const ids = await searchPubmed(compilePubmedQuery(query), { retmax: 20, days: windowDays })
+        matches.push({ topic: topic.label || topic.query, query, label: topic.label || topic.query, ids })
       }
+      const wanted = []
+      const wantedSeen = new Set()
+      for (const match of matches) {
+        for (const id of match.ids) {
+          if (id && !wantedSeen.has(String(id))) {
+            wantedSeen.add(String(id))
+            wanted.push(String(id))
+          }
+        }
+      }
+      const cites = wanted.length ? await fetchCitations(wanted) : []
+      const abstracts = wanted.length ? await fetchAbstractsByPmid(wanted).catch(() => ({})) : {}
+      const citeById = new Map(cites.map((cite) => [String(cite.pmid), cite]))
+      const onTopic = matches.map((match) => ({
+        ...match,
+        ids: match.ids.filter((id) => {
+          const cite = citeById.get(String(id))
+          if (!cite || citationIndicatesRetraction(cite)) return false
+          return fitsTopic({
+            title: cite.title,
+            abstract: abstracts?.[id] || '',
+            query: match.query,
+            label: match.label,
+          })
+        }),
+      }))
       // Round-robin so a high-volume first topic cannot consume the whole preview.
-      for (let depth = 0; found.length < 10 && matches.some((m) => depth < m.ids.length); depth++) {
-        for (const match of matches) {
+      for (let depth = 0; found.length < 10 && onTopic.some((m) => depth < m.ids.length); depth++) {
+        for (const match of onTopic) {
           const id = match.ids[depth]
           if (id && !seen.has(id) && found.length < 10) {
             seen.add(id)
@@ -43,9 +78,12 @@ export default function QueryFlags({ topics }) {
           }
         }
       }
-      const cites = found.length ? await fetchCitations(found.map((r) => r.id)) : []
       const topicById = new Map(found.map((r) => [String(r.id), r.topic]))
-      setPreview(cites.map((c) => ({ ...c, topic: topicById.get(String(c.pmid)) || '' })))
+      setPreview(found.map((row) => {
+        const cite = citeById.get(String(row.id))
+        return cite ? { ...cite, topic: topicById.get(String(cite.pmid)) || '' } : null
+      }).filter(Boolean))
+      setPreviewed(true)
     } catch (err) {
       setPreviewError(err?.message || String(err))
     } finally {
@@ -64,7 +102,13 @@ export default function QueryFlags({ topics }) {
           {preview.map((paper) => <li key={paper.pmid}>{paper.title} <span style={{ color: 'var(--color-fg-faint)' }}>— found by {paper.topic}</span></li>)}
         </ol>
       )}
-      {!previewing && !previewError && preview.length === 0 && <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>This runs the actual searches so you can spot off-topic drift before saving.</p>}
+      {!previewing && !previewError && preview.length === 0 && (
+        <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>
+          {previewed
+            ? `No on-topic matches in the last ${windowDays} day${windowDays === 1 ? '' : 's'}.`
+            : `This runs the actual ${windowDays}-day searches, then keeps papers whose title or abstract is about the topic.`}
+        </p>
+      )}
     </div>
   )
 

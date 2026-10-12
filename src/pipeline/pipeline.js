@@ -17,10 +17,12 @@ import {
   REGISTRY_OUTCOME_MAP,
   fetchCitation,
   fetchCitations,
+  fetchAbstractsByPmid,
   pmidToPmcid,
   searchPubmed,
   searchPaceMs,
 } from './sources.js'
+import { compilePubmedQuery, fitsTopic } from './pubmedQuery.js'
 import { extractQuantities, dropUnprovenLabels } from './extract.js'
 import { MODELS } from '../lib/anthropic.js'
 import { sha256Hex, cacheKeyHeader, lookupCachedExtraction, storeCachedExtraction } from './evidenceCache.js'
@@ -140,38 +142,77 @@ export async function searchCandidates({
   const retmax = overfetchFor(cap, windowDays)
   const gap = Number.isFinite(Number(paceMs)) ? Number(paceMs) : searchPaceMs()
 
-  const results = []
+  const searched = []
   for (let i = 0; i < plan.length; i++) {
     if (i > 0 && gap > 0) await sleep(gap)
     const topic = plan[i]
     try {
-      const pmids = await searchPubmed(topic.query, { retmax, days: windowDays })
-      // retmax rides along so the merge can tell "40 papers exist" from "at least 40 do".
-      results.push({ label: topic.label, pmids, retmax })
+      // Compiled [tiab] phrases, not the raw OR string. Untagged text is what let PubMed
+      // split concepts and explode MeSH into other specialties.
+      const pmids = await searchPubmed(compilePubmedQuery(topic.query), { retmax, days: windowDays })
+      searched.push({ label: topic.label, query: topic.query, pmids, retmax })
     } catch (err) {
       console.warn(`PubMed search failed for topic "${topic.label}":`, err.message)
-      results.push({ label: topic.label, error: err.message })
+      searched.push({ label: topic.label, error: err.message })
     }
   }
+
+  const union = []
+  const seenPmid = new Set()
+  for (const row of searched) {
+    for (const id of row.pmids || []) {
+      const pmid = String(id)
+      if (!pmid || seenPmid.has(pmid)) continue
+      seenPmid.add(pmid)
+      union.push(pmid)
+    }
+  }
+  // Titles and abstracts are the relevance gate. A missing abstract leaves the title rule
+  // in charge rather than dropping the morning's real matches.
+  const cites = union.length ? await fetchCitations(union) : []
+  const abstracts = union.length ? await fetchAbstractsByPmid(union).catch(() => ({})) : {}
+  const citeById = new Map(cites.map((cite) => [String(cite.pmid), cite]))
+
+  const results = searched.map((row) => {
+    if (row.error) return { label: row.label, error: row.error }
+    const kept = []
+    for (const id of row.pmids || []) {
+      const cite = citeById.get(String(id))
+      // Retracted Publication is authoritative and available before any scoring. Withdrawn
+      // papers never enter the funnel, and neither do hits that are not about this topic.
+      if (!cite || citationIndicatesRetraction(cite)) continue
+      if (!fitsTopic({
+        title: cite.title,
+        abstract: abstracts?.[cite.pmid] || '',
+        query: row.query,
+        label: row.label,
+      })) continue
+      kept.push(String(id))
+    }
+    // `fetched` is the raw esearch page, so a full page of mostly off-topic hits still
+    // reports that PubMed had more. `pmids` is what relevance kept.
+    return { label: row.label, pmids: kept, retmax: row.retmax, fetched: (row.pmids || []).length }
+  })
 
   const { pmids, topicsByPmid, counts, failed, skipped } = mergeTopicResultsForScoring(results, { skipIds })
   if (!pmids.length) return { candidates: [], counts, failed, skipped, days: windowDays, cap }
 
-  // PubMed's Retracted Publication type is authoritative and available in this metadata
-  // call, before any selection or paid extraction. Withdrawn papers never enter the funnel.
-  const cites = (await fetchCitations(pmids)).filter((citation) => !citationIndicatesRetraction(citation))
   const candidates = attachTopics(
-    cites.map((c) => ({
-      id: c.pmid,
-      pmid: c.pmid,
-      pmcid: null,
-      nct: null,
-      title: c.title,
-      journal: c.journal,
-      year: c.year,
-      author: c.author,
-      pubtypes: c.pubtypes,
-    })),
+    pmids.map((id) => citeById.get(String(id))).filter(Boolean).map((c) => {
+      const abstract = abstracts?.[c.pmid] || ''
+      return {
+        id: c.pmid,
+        pmid: c.pmid,
+        pmcid: null,
+        nct: null,
+        title: c.title,
+        journal: c.journal,
+        year: c.year,
+        author: c.author,
+        pubtypes: c.pubtypes,
+        ...(abstract ? { abstract } : {}),
+      }
+    }),
     topicsByPmid,
     steeringPlan,
   )
