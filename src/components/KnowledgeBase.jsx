@@ -38,6 +38,7 @@ import ReportBadgeButton from './ReportBadgeButton.jsx'
 import { fmtNum } from '../lib/format.js'
 import { withheldSummaryCopy } from '../lib/libraryFormat.js'
 import { evidenceVerdict, isRelationshipValidated, extractionVersionStatus, currentPaperQuantities } from '../lib/evidenceVersion.js'
+import { evidenceHeading } from '../lib/evidenceHeading.js'
 import { needsDigestDetails, refreshSavedPaperEvidence } from '../pipeline/refreshEvidence.js'
 
 const REFRESH_STAGE_LABEL = {
@@ -262,12 +263,14 @@ export default function KnowledgeBase() {
             </span>
           ) : (
             <button
+              type="button"
               onClick={() => setConfirmRefile(true)}
               title="Re-classify every saved paper into concepts + domains"
+              aria-label="Re-file with Claude"
               className="inline-flex items-center cursor-pointer"
               style={{ gap: 7, padding: '6px 12px', borderRadius: 9, border: '1px solid rgba(255,255,255,.1)', color: 'var(--color-fg-soft)', fontSize: 12.5, background: 'transparent', whiteSpace: 'nowrap' }}
             >
-              ↻ Re-file with Claude
+              <span aria-hidden="true">↻</span> Re-file with Claude
             </button>
           )
         )
@@ -368,10 +371,11 @@ export default function KnowledgeBase() {
             onClick={handleReorganize}
             disabled={reorg === 'running'}
             title="Ask Claude to reshelve the library into at most 10 categories"
+            aria-label={reorg === 'running' ? 'Reorganizing categories' : 'Reorganize categories'}
             className="cursor-pointer"
             style={{ fontSize: 11.5, color: 'var(--color-fg-muted)', background: 'transparent', border: 0, padding: 0, textUnderlineOffset: 3, textDecoration: 'underline dotted' }}
           >
-            {reorg === 'running' ? 'Reorganizing…' : '✦ Reorganize categories'}
+            {reorg === 'running' ? 'Reorganizing…' : <><span aria-hidden="true">✦</span> Reorganize categories</>}
           </button>
           {reorg && reorg !== 'running' && (
             <span style={{ fontSize: 11.5, color: 'var(--color-fg-faint)', fontFamily: 'var(--font-mono)' }}>{reorg}</span>
@@ -503,6 +507,7 @@ export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
   // Re-derived under the current verifier when the saved stamp is stale (read-time only).
   const evidenceRows = useMemo(() => currentPaperQuantities(paper), [paper])
   const verifiedCount = evidenceRows.filter((quantity) => isRelationshipValidated(quantity.verdict)).length
+  const withheldCount = evidenceRows.length - verifiedCount
   const extractionStatus = extractionVersionStatus(paper)
   const articleUrl = paper.citation?.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`
   const fullTextUrl = paper.pdfUrl || paper.oaUrl || pmcUrl(paper.pmcid)
@@ -572,11 +577,9 @@ export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
 
       {evidenceRows.length > 0 ? (
         <div style={{ marginTop: 10, borderRadius: 9, border: '1px solid rgba(127,191,154,.2)', background: 'rgba(127,191,154,.04)', padding: '8px 10px' }}>
-          <button type="button" onClick={() => setEvidenceOpen((v) => !v)} aria-expanded={evidenceOpen} style={{ padding: 0, border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>
-            {evidenceOpen ? '▾ ' : '▸ '}
-            {focused
-              ? `EVIDENCE · ${summaryQuantities.length} ${summaryQuantities.length === 1 ? 'NUMBER' : 'NUMBERS'} IN THE SUMMARY, VERIFIED`
-              : `EVIDENCE · ${verifiedCount} ${verifiedCount === 1 ? 'VALUE' : 'VALUES'} VERIFIED`}
+          <button type="button" onClick={() => setEvidenceOpen((v) => !v)} aria-expanded={evidenceOpen} aria-label={evidenceHeading({ verifiedCount, withheldCount, focused, summaryCount: summaryQuantities.length })} style={{ padding: 0, border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}>
+            <span aria-hidden="true">{evidenceOpen ? '▾ ' : '▸ '}</span>
+            {evidenceHeading({ verifiedCount, withheldCount, focused, summaryCount: summaryQuantities.length })}
           </button>
           {evidenceOpen && <>
           <ul style={{ margin: '7px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -602,8 +605,9 @@ export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
             ))}
           </ul>
           {focused && moreQuantities.length > 0 && (
-            <button type="button" onClick={() => setMoreOpen((v) => !v)} style={{ marginTop: 8, padding: 0, border: 0, background: 'transparent', fontFamily: 'inherit', fontSize: 11.5, color: 'var(--color-fg-muted)', cursor: 'pointer' }}>
-              {moreOpen ? '▾ Hide' : '▸'} {moreQuantities.length} more value{moreQuantities.length === 1 ? '' : 's'} from the paper
+            <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} aria-label={moreOpen ? 'Hide other values from the paper' : `${moreQuantities.length} more value${moreQuantities.length === 1 ? '' : 's'} from the paper`} style={{ marginTop: 8, padding: 0, border: 0, background: 'transparent', fontFamily: 'inherit', fontSize: 11.5, color: 'var(--color-fg-muted)', cursor: 'pointer' }}>
+              <span aria-hidden="true">{moreOpen ? '▾' : '▸'}</span>
+              {` ${moreOpen ? 'Hide ' : ''}${moreQuantities.length} more value${moreQuantities.length === 1 ? '' : 's'} from the paper`}
             </button>
           )}
           </>}
@@ -722,9 +726,10 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
           onClick={() => setShowDigestDetails((open) => !open)}
           aria-expanded={showDigestDetails}
           aria-controls={detailsId}
+          aria-label={showDigestDetails ? 'Hide digest details' : 'Digest details'}
           style={{ ...pill, color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)' }}
         >
-          {showDigestDetails ? '▾ Hide digest details' : '▸ Digest details'}
+          <span aria-hidden="true">{showDigestDetails ? '▾' : '▸'}</span> {showDigestDetails ? 'Hide digest details' : 'Digest details'}
         </button>
         <SharePaperButton paper={paper} />
         {canRefresh && (
@@ -733,9 +738,10 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
             onClick={createDetails}
             disabled={!canCreateDetails || !!refreshStage}
             title={!canCreateDetails ? 'Sign in or set your API key in Settings to create digest details' : 'Re-reads and verifies this paper'}
+            aria-label={refreshStage ? (REFRESH_STAGE_LABEL[refreshStage] || 'Working') : 'Create digest details'}
             style={{ ...pill, background: 'rgba(230,184,119,.12)', color: 'var(--color-abstract)', fontWeight: 600, opacity: !canCreateDetails || refreshStage ? 0.55 : 1 }}
           >
-            {refreshStage ? (REFRESH_STAGE_LABEL[refreshStage] || 'Working…') : '✦ Create digest details'}
+            {refreshStage ? (REFRESH_STAGE_LABEL[refreshStage] || 'Working…') : <><span aria-hidden="true">✦</span> Create digest details</>}
           </button>
         )}
         <button onClick={onDelete} className="cursor-pointer" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-fg-faint)', background: 'transparent', border: 0 }}>Delete</button>

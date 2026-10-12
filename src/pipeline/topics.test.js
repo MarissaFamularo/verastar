@@ -299,6 +299,14 @@ describe('mergeTopicResultsForScoring', () => {
     expect(out.counts[0]).toMatchObject({ count: 3, available: 3, more: true })
   })
 
+  it('still reports a full PubMed page when relevance filtering shortened the list', () => {
+    const out = mergeTopicResultsForScoring([
+      { label: 'Aortic', pmids: ['kept'], retmax: 4, fetched: 4 },
+    ])
+    expect(out.pmids).toEqual(['kept'])
+    expect(out.counts[0]).toMatchObject({ count: 1, available: 1, more: true })
+  })
+
   it('still removes seen papers before anything enters paid scoring', () => {
     const out = mergeTopicResultsForScoring(
       [{ label: 'AI methods', pmids: ['seen', 'newer', 'older'] }],
