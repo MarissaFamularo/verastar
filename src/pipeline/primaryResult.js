@@ -93,8 +93,17 @@ const DECLARES_SECONDARY = new RegExp(`\\bsecondary\\s+${ROLE}\\b`, 'i')
 const PRIMARY_CLAUSE = new RegExp(`\\bprimary\\s+${ROLE}\\s+(?:were|was|included|comprised|:)\\s+([^.]{4,500})`, 'i')
 const SECONDARY_CLAUSE = new RegExp(`\\bsecondary\\s+${ROLE}\\s+(?:were|was|included|comprised|:)\\s+([^.]{4,500})`, 'i')
 const LEADING_ROLE = /^(?:the\s+)?(?:incidence|rate|risk|odds|hazard|occurrence|proportion)\s+of\s+/i
-const TRAILING_CLAUSE = /\s+(?:at|after|during|following|within|between|compared|versus|vs\.?|assessed|measured|evaluated|using|defined)\s+/i
+const METHOD_START = /^(?:assessed|measured|evaluated|using|defined|compared)\b/i
+const TIME_INTRODUCER = /\s+(?:at|after|during|following|within|between|by|over|through)\b[\s\S]*$/i
+const METHOD_CLAUSE = /\s+(?:assessed|measured|evaluated|using|defined|compared|versus|vs\.?)\b[\s\S]*$/i
 const QUALIFIER_BEFORE = '(?:central|branch|secondary|composite)'
+// A follow-up time stays attached to the endpoint. "12 months" is not "1 year":
+// only the printed number and unit are kept, and a different unit does not match.
+const TIME_WORDS = {
+  one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8',
+  nine: '9', ten: '10', eleven: '11', twelve: '12', thirty: '30', sixty: '60', ninety: '90',
+}
+const TIME_NUM_SRC = 'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirty|sixty|ninety|\\d+'
 
 function escapeRegExp(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -103,23 +112,58 @@ function escapeRegExp(text) {
 function abbreviationExpansions(text) {
   const map = new Map()
   const raw = String(text || '')
-  for (const match of raw.matchAll(/\b([A-Za-z][^()]{2,80}?)\s*\(([A-Z][A-Z0-9]{1,10})\)/g)) {
-    const phrase = match[1].replace(/\s+/g, ' ').trim()
-    if (phrase && !map.has(match[2])) map.set(match[2], phrase)
+  // The words immediately before "(ABBREV)", stopping at punctuation, so a section
+  // label earlier in the sentence is not part of the expansion.
+  for (const match of raw.matchAll(/\(([A-Z][A-Z0-9]{1,10})\)/g)) {
+    if (map.has(match[1])) continue
+    const before = raw.slice(Math.max(0, match.index - 100), match.index)
+    const words = before.match(/([A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,6})\s*$/)
+    const phrase = words?.[1]?.replace(/\s+/g, ' ').trim()
+    if (phrase) map.set(match[1], phrase)
   }
   return map
 }
 
-function outcomeNeedles(clause, expansions) {
+function canonicalTime(num, unit) {
+  const word = String(num || '').toLowerCase()
+  const n = TIME_WORDS[word] || (/^\d+$/.test(word) ? String(Number(word)) : '')
+  const u = String(unit || '').toLowerCase().replace(/s$/, '')
+  if (!n || n === 'NaN' || !u) return ''
+  return `${n}-${u}`
+}
+
+function timesIn(text) {
+  const found = []
+  const re = new RegExp(`\\b(${TIME_NUM_SRC})[-\\s]?((?:day|week|month|year)s?)\\b`, 'gi')
+  for (const match of String(text || '').matchAll(re)) {
+    const time = canonicalTime(match[1], match[2])
+    if (time && !found.includes(time)) found.push(time)
+  }
+  return found
+}
+
+// A declared timepoint must be present, and a different timepoint must not be.
+// No declared timepoint does not constrain the row (a paper can still say "two-year").
+function timesAgree(declared, rowTimes) {
+  if (!declared.length) return true
+  if (!rowTimes.length) return false
+  return rowTimes.every((time) => declared.includes(time))
+}
+
+function outcomeItems(clause, expansions) {
   if (!clause) return []
-  return clause.split(/,| and | or /i).flatMap((part) => {
-    let phrase = part.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
-    phrase = phrase.replace(/^(?:and|or)\s+/i, '')
-    if (/^(?:assessed|measured|evaluated|using|defined|compared)\b/i.test(phrase)) return []
+  return clause.split(',').flatMap((part) => {
     const abbrevs = [...part.matchAll(/\(([A-Z][A-Z0-9]{1,10})\)/g)].map((m) => m[1])
-    phrase = phrase.replace(LEADING_ROLE, '').split(TRAILING_CLAUSE)[0].replace(/^(?:the|a|an)\s+/i, '').trim()
-    if (phrase.length < 3 && !abbrevs.length) return []
-    return [{ phrase, abbrevs, expansions }]
+    let phrase = part.replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim()
+    phrase = phrase.replace(/^(?:and|or)\s+/i, '')
+    if (METHOD_START.test(phrase)) return []
+    const times = timesIn(phrase)
+    phrase = phrase.replace(LEADING_ROLE, '').replace(TIME_INTRODUCER, '').replace(METHOD_CLAUSE, '')
+    phrase = phrase.replace(new RegExp(`\\b(?:${TIME_NUM_SRC})[-\\s]?(?:day|week|month|year)s?\\b`, 'gi'), ' ')
+    phrase = phrase.replace(/\s+/g, ' ').trim().replace(/^(?:the|a|an)\s+/i, '')
+    const components = phrase.split(/\s+(?:or|and)\s+/i).map((component) => component.replace(/^(?:the|a|an)\s+/i, '').trim()).filter((component) => component.length >= 3 || /^[A-Z][A-Z0-9]{1,10}$/.test(component))
+    if (!components.length && !abbrevs.length) return []
+    return [{ components, abbrevs, times, expansions }]
   })
 }
 
@@ -132,26 +176,31 @@ function phraseHit(raw, phrase) {
   return !!qualified && !qualified[1]
 }
 
-function textHits(raw, needle) {
-  const abbrevs = [...needle.abbrevs]
-  if (/^[A-Z][A-Z0-9]{1,10}$/.test(needle.phrase) && !abbrevs.includes(needle.phrase)) abbrevs.push(needle.phrase)
-  if (abbrevs.some((abbrev) => new RegExp(`\\b${escapeRegExp(abbrev)}\\b`).test(String(raw || '')))) return true
-  const phrases = [needle.phrase]
-  for (const abbrev of abbrevs) {
-    const expanded = needle.expansions.get(abbrev)
-    if (expanded) phrases.push(expanded)
-  }
-  return phrases.some((phrase) => phraseHit(raw, phrase))
+function abbrevHit(name, abbrev, expansions) {
+  if (new RegExp(`\\b${escapeRegExp(abbrev)}\\b`).test(String(name || ''))) return true
+  const expanded = expansions.get(abbrev)
+  return !!(expanded && phraseHit(name, expanded))
 }
 
-function matchesDeclared(row, primaryNeedles, secondaryNeedles) {
+function componentHit(name, component, expansions) {
+  if (phraseHit(name, component)) return true
+  if (/^[A-Z][A-Z0-9]{1,10}$/.test(component)) return abbrevHit(name, component, expansions)
+  return false
+}
+
+function itemHits(name, item) {
+  if (!timesAgree(item.times, timesIn(name))) return false
+  if (item.abbrevs.some((abbrev) => abbrevHit(name, abbrev, item.expansions))) return true
+  if (!item.components.length) return false
+  return item.components.every((component) => componentHit(name, component, item.expansions))
+}
+
+// The row's own endpoint name has to be the declared endpoint. A shared quote that
+// mentions the primary beside some other result does not make that other result primary.
+function matchesDeclared(row, primaryItems, secondaryItems) {
   const name = String(row?.quantity?.name || '')
-  const quote = String(row?.quantity?.source_quote || '')
-  const hits = (needles, text) => needles.some((needle) => textHits(text, needle))
-  if (hits(secondaryNeedles, name)) return false
-  if (hits(primaryNeedles, name)) return true
-  if (hits(secondaryNeedles, quote)) return false
-  return hits(primaryNeedles, quote)
+  if (secondaryItems.some((item) => itemHits(name, item))) return false
+  return primaryItems.some((item) => itemHits(name, item))
 }
 
 // The paper's primary result, as an EXPLICIT state — never null:
@@ -171,7 +220,9 @@ function matchesDeclared(row, primaryNeedles, secondaryNeedles) {
 //       the finding is number-free by construction (empty verified set) and model-checked.
 // rows: runPaper rows [{ quantity, verdict }]. isVerified: the call site's own predicate.
 // sourceText: the abstract or full text, when the caller has it. Omitted, an unlabelled
-// row is still unknown — position never promotes a row (REV2).
+// row is still unknown — position never promotes a row (REV2). A declared composite
+// matches only a name that carries every component, and a declared timepoint matches
+// only that timepoint. The source quote is not a second copy of the endpoint name.
 export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, sourceText = '') {
   const list = Array.isArray(rows) ? rows : []
   const none = (state) => ({ state, name: null, verified: false, indexes: [], basis: null })
@@ -194,10 +245,10 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
   const source = String(sourceText || '')
   if (!source) return none('unknown')
   const expansions = abbreviationExpansions(source)
-  const primaryNeedles = outcomeNeedles(source.match(PRIMARY_CLAUSE)?.[1], expansions)
-  const secondaryNeedles = outcomeNeedles(source.match(SECONDARY_CLAUSE)?.[1], expansions)
-  if (primaryNeedles.length) {
-    const indexes = list.flatMap((row, i) => (eligible(row) && matchesDeclared(row, primaryNeedles, secondaryNeedles) ? [i] : []))
+  const primaryItems = outcomeItems(source.match(PRIMARY_CLAUSE)?.[1], expansions)
+  const secondaryItems = outcomeItems(source.match(SECONDARY_CLAUSE)?.[1], expansions)
+  if (primaryItems.length) {
+    const indexes = list.flatMap((row, i) => (eligible(row) && matchesDeclared(row, primaryItems, secondaryItems) ? [i] : []))
     if (indexes.length) return identified(indexes, 'source')
     return none('unknown')
   }

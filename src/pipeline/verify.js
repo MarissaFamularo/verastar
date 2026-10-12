@@ -377,6 +377,23 @@ const ESTIMATE_TUPLE = new RegExp(
   'g',
 )
 const CLOSES = { '(': ')', '[': ']' }
+
+// The unlabelled interval shape validateBracketInterval accepts: the bounds sit inside
+// () or [], with optional space, joined by "-" or "to". ciLabel uses this so a shape
+// the verifier accepted is not later rendered as a confidence interval. A labelled
+// CI never reaches here; boundMarker claims it first.
+export function unlabelledIntervalWrap(text, start, end) {
+  if (typeof text !== 'string' || !Number.isInteger(start) || !Number.isInteger(end) || end <= start) return false
+  const inner = text.slice(start, end)
+  if (!/\d\s*(?:-|to)\s*\d/i.test(inner)) return false
+  let open = start - 1
+  while (open >= 0 && /\s/.test(text[open])) open--
+  let close = end
+  while (close < text.length && /\s/.test(text[close])) close++
+  if (open < 0 || close >= text.length) return false
+  return CLOSES[text[open]] === text[close]
+}
+
 // A printed P binds only when it ends its own clause, judged on the FULL corpus after the
 // P so a quote truncated before a qualifier cannot hide it (2026-10-09). "P = 0.02, for
 // interaction", "P = 0.02; interaction test" and "P = 0.02 for trend" name a different
