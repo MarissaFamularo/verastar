@@ -50,19 +50,10 @@ describe('diagnostic accuracy bound to the named test', () => {
     expect(shown(row({ name: 'pHEART specificity', value: 69.1, source_quote: flipped }), flipped)).toBe(true)
   })
 
-  it('keeps each test when the sentence binds two tests separately', () => {
+  it('[false-verify guard] two tests in one sentence are not one template', () => {
     const src = 'nHEART achieved sensitivity of 97.1% and specificity of 53.8%, and pHEART achieved sensitivity of 95.7% and specificity of 69.1%.'
-    expect(shown(sens({ source_quote: src }), src)).toBe(true)
-    expect(shown(row({ name: 'pHEART specificity', value: 69.1, source_quote: src }), src)).toBe(true)
-    expect(shown(sens({ value: 95.7, source_quote: src }), src)).toBe(false)
-  })
-
-  it('still binds the test after a prepositional preamble', () => {
-    const src = 'In this cohort, nHEART achieved sensitivity of 97.1% and specificity of 53.8%.'
-    expect(shown(sens({ source_quote: src }), src)).toBe(true)
-    const unlike = 'Unlike pHEART, nHEART achieved sensitivity of 97.1% and specificity of 53.8%.'
-    expect(shown(sens({ source_quote: unlike }), unlike)).toBe(true)
-    expect(shown(row({ name: 'pHEART sensitivity', value: 97.1, source_quote: unlike }), unlike)).toBe(false)
+    expect(shown(sens({ source_quote: src }), src)).toBe(false)
+    expect(shown(row({ name: 'pHEART specificity', value: 69.1, source_quote: src }), src)).toBe(false)
   })
 
   it('[false-verify guard] the other metric\'s percentage does not verify', () => {
@@ -98,6 +89,32 @@ describe('diagnostic accuracy bound to the named test', () => {
       expect(shown(sens({ source_quote: src }), src)).toBe(false)
       expect(shown(row({ name: 'pHEART sensitivity', value: 97.1, source_quote: src }), src)).toBe(false)
     }
+  })
+
+  it('[false-verify guard] the whole sentence must be the template', () => {
+    const clause = 'nHEART achieved sensitivity of 97.1% and specificity of 53.8%.'
+    const repros = [
+      'The claim was false: nHEART achieved sensitivity of 97.1% and specificity of 53.8%.',
+      'The nHEART score, pHEART achieved sensitivity of 97.1% and specificity of 53.8%.',
+      'It is not true that nHEART achieved sensitivity of 97.1% and specificity of 53.8%.',
+      'Prior studies reported nHEART achieved sensitivity of 97.1% and specificity of 53.8%.',
+      'Compared with nHEART, pHEART achieved sensitivity of 97.1% and specificity of 53.8%.',
+      'Unlike pHEART, nHEART achieved sensitivity of 97.1% and specificity of 53.8%.',
+      'In this cohort, nHEART achieved sensitivity of 97.1% and specificity of 53.8%.',
+      'If nHEART achieved sensitivity of 97.1% and specificity of 53.8%.',
+      'nHEART achieved sensitivity of 97.1% and specificity of 53.8% compared with pHEART.',
+      'nHEART achieved sensitivity of 97.1% and not specificity of 53.8%.',
+      'nHEART did not show sensitivity of 97.1% and specificity of 53.8%.',
+      'It was hypothesized that nHEART achieved sensitivity of 97.1% and specificity of 53.8%.',
+    ]
+    for (const src of repros) {
+      expect(shown(sens({ source_quote: src }), src)).toBe(false)
+      expect(shown(row({ name: 'pHEART sensitivity', value: 97.1, source_quote: src }), src)).toBe(false)
+      expect(verdict(sens({ source_quote: src }), src).tier).not.toBe(TIERS.ABSTRACT)
+    }
+    expect(shown(sens({ source_quote: clause }), `The claim was false: ${clause}`)).toBe(false)
+    const pheart = 'pHEART achieved sensitivity of 97.1% and specificity of 53.8%.'
+    expect(shown(row({ name: 'pHEART sensitivity', value: 97.1, source_quote: pheart }), `The nHEART score, ${pheart}`)).toBe(false)
   })
 
   it('[false-verify guard] a cut quote that hides the rest of the sentence stays unresolved', () => {
@@ -163,6 +180,31 @@ describe('count whose denominator is printed earlier in the sentence', () => {
     expect(shown(prop({ value: 69 }), MACE)).toBe(false)
     expect(shown(prop({ value: 6 }), MACE)).toBe(false)
     expect(verdict(prop({ value: 48.5 }), MACE).tier).toBe(TIERS.LOCATED)
+  })
+
+  it('[false-verify guard] the whole sentence must be the Of-N template', () => {
+    const prefixes = [
+      'It is not true that',
+      'Prior studies reported',
+      'The claim was false:',
+      'Compared with earlier cohorts,',
+      'If',
+    ]
+    for (const prefix of prefixes) {
+      const src = `${prefix} ${MACE}`
+      expect(shown(prop({ source_quote: src }), src)).toBe(false)
+      expect(shown(prop({ source_quote: MACE }), src)).toBe(false)
+      expect(verdict(prop({ source_quote: src }), src).tier).not.toBe(TIERS.PROPORTION)
+    }
+    for (const src of [
+      'Of 1011 patients, 69 (6.8%) experienced MACE within 6 weeks according to prior studies.',
+      'Of 1011 patients, 69 (6.8%) experienced no MACE within 6 weeks.',
+      'Of 1011 patients, 69 (6.8%) experienced MACE within 6 weeks, not death.',
+      'Of 1011 patients (it is not true that 48.5% were female), 69 (6.8%) experienced MACE within 6 weeks.',
+      'Would of 1011 patients, 69 (6.8%) experienced MACE within 6 weeks.',
+    ]) {
+      expect(shown(prop({ source_quote: src }), src)).toBe(false)
+    }
   })
 
   it('[false-verify guard] two event counts, a missing "experienced", or a count above the cohort stays unresolved', () => {
