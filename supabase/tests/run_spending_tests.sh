@@ -23,7 +23,8 @@ for f in supabase/tests/spending_fixture.sql \
          supabase/migrations/20260917200000_sponsor_invites.sql \
          supabase/migrations/20261009120000_beta_spending_safeguards.sql \
          supabase/migrations/20261010120000_digest_write_guard.sql \
-         supabase/migrations/20261010130000_scheduler_hold.sql; do
+         supabase/migrations/20261010130000_scheduler_hold.sql \
+         supabase/migrations/20261012180000_spend_release.sql; do
   "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { echo "migration failed: $f" >&2; "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f"; exit 1; }
 done
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/spending_contract.sql 2>&1 | grep -E "^psql.*(ERROR|FAIL)|PASS" || true

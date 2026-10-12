@@ -10,7 +10,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { handleModelRequest, CORS } from './handler.js'
-import { anthropicDispatch, makeRpcLedger, resolveProviderUrl } from '../_shared/spending.js'
+import { anthropicDispatch, anthropicTokenCounter, makeRpcLedger, resolveProviderUrl } from '../_shared/spending.js'
 
 Deno.serve((req) => {
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
@@ -33,6 +33,7 @@ Deno.serve((req) => {
     admin,
     ledger: makeRpcLedger(admin),
     dispatch: anthropicDispatch(anthropicKey, fetch, provider.url),
+    countTokens: anthropicTokenCounter(anthropicKey, fetch, provider.url),
     getUser: async (authHeader: string) => {
       const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } })
       const { data, error } = await userClient.auth.getUser()

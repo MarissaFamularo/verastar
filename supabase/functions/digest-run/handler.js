@@ -217,7 +217,7 @@ export async function handleDigestRun(req, deps) {
   // What the digest runner reads through serverRunUnresolved(): set when a DISPATCHED attempt
   // has no confirmed cost (ambiguous, or settled/marked on the provider side but not recorded).
   const run = { unresolved: null }
-  const guarded = makeGuardedFetch({ ledger: deps.ledger, dispatch: deps.dispatch, userId, claimToken: picked.token, onOutcome: (r) => {
+  const guarded = makeGuardedFetch({ ledger: deps.ledger, dispatch: deps.dispatch, countTokens: deps.countTokens, userId, claimToken: picked.token, onOutcome: (r) => {
     outcomes.push(r.reason === 'claim_lost' ? 'claim_lost' : r.outcome)
     if (r.dispatched && (r.outcome === 'ambiguous' || r.accountingFailed)) run.unresolved ??= r.outcome
   } })

@@ -71,35 +71,39 @@ beforeEach(() => {
   mem.set('profile/me', { onboarded: true, northStars: ['CLTI'], rubric: { criteria: 'x', selectCount: 5, scoreFloor: 60 } })
 })
 
-describe('an ambiguous extraction holds the run', () => {
-  it('is not stored as a read-and-failed paper, a finished digest or a ranked one; progress is kept', async () => {
+describe('a provider error releases the hold and the run continues', () => {
+  it('records the failed read, keeps going, and does not freeze the account', async () => {
     const ledger = fakeLedger()
     const provider = fakeProvider((n) => (n === 2 ? fail500 : ok(n))) // paper 102 fails after dispatch
     const { run, guarded } = tick(ledger, provider)
     const out = await runDailyDigest({ budgetMs: 60_000 })
-    expect(out).toMatchObject({ phase: 'held', read: 1 })
-    expect(run.unresolved).toBe('ambiguous')
-    expect(provider.sent.map((b) => b.messages[0].content)).toEqual(['read 101', 'read 102']) // no SDK retry, no paper 103, no ranking
-    expect(guarded.state.dispatched).toBe(2)
-    expect(triage).not.toHaveBeenCalled()
-    expect(saved().server).toMatchObject({ phase: 'reading', held: { reason: HELD_REASON } })
-    expect(saved().server.finishedAt).toBeUndefined()
-    expect(saved().processedResults.map((r) => r.paper.id)).toEqual(['101']) // 102 is NOT recorded as processed
-    expect([...ledger.rows.values()].map((r) => r.state)).toEqual(['settled', 'ambiguous'])
-  })
-
-  it('once released, the next tick reads the held paper again, finishes, and drops the held marker', async () => {
-    tick(fakeLedger(), fakeProvider((n) => (n === 2 ? fail500 : ok(n))))
-    await runDailyDigest({ budgetMs: 60_000 })
-    const provider = fakeProvider(ok)
-    tick(fakeLedger(), provider)
-    const out = await runDailyDigest({ budgetMs: 60_000 })
     expect(out.phase).toBe('done')
-    expect(searchCandidates).toHaveBeenCalledTimes(1) // resumed, not searched again
-    expect(provider.sent.map((b) => b.messages[0].content)).toEqual(['read 102', 'read 103', 'rank'])
+    expect(run.unresolved).toBeNull()
+    expect(provider.sent.map((b) => b.messages[0].content)).toEqual(['read 101', 'read 102', 'read 103', 'rank'])
+    expect(guarded.state.dispatched).toBe(4)
+    expect(guarded.state.halted).toBeNull()
     expect(saved().server.phase).toBe('done')
     expect(saved().server.held).toBeUndefined()
-    expect(saved().results.map((r) => r.paper.id)).toEqual(['101', '102', '103'])
+    expect(saved().processedResults.map((r) => [r.paper.id, !!r.error])).toEqual([['101', false], ['102', true], ['103', false]])
+    expect([...ledger.rows.values()].map((r) => r.state)).toEqual(['settled', 'released', 'settled', 'settled'])
+    expect(ledger.outstanding()).toBe(0)
+  })
+})
+
+describe('an unpriceable success still holds the run', () => {
+  const unpriceable = { body: { ...ok(1).body, usage: undefined } }
+  it('keeps the paper that came back and does not rank or finish', async () => {
+    const ledger = fakeLedger()
+    const provider = fakeProvider((n) => (n === 2 ? unpriceable : ok(n)))
+    const { run } = tick(ledger, provider)
+    const out = await runDailyDigest({ budgetMs: 60_000 })
+    expect(out).toMatchObject({ phase: 'held', read: 2 })
+    expect(run.unresolved).toBe('ambiguous')
+    expect(provider.sent.map((b) => b.messages[0].content)).toEqual(['read 101', 'read 102'])
+    expect(triage).not.toHaveBeenCalled()
+    expect(saved().server).toMatchObject({ phase: 'reading', held: { reason: HELD_REASON } })
+    expect(saved().processedResults.map((r) => r.paper.id)).toEqual(['101', '102'])
+    expect([...ledger.rows.values()].map((r) => r.state)).toEqual(['settled', 'ambiguous'])
   })
 
   it('a paper that came back while its attempt could not be recorded is kept, and the run still holds', async () => {
@@ -116,21 +120,24 @@ describe('an ambiguous extraction holds the run', () => {
   })
 })
 
-describe('an ambiguous ranking holds the run', () => {
-  it('keeps every paper read, stays in the rank phase, and is not finished', async () => {
+describe('a ranking error releases the hold', () => {
+  it('keeps every paper read, stays in the rank phase, and the next tick ranks only', async () => {
+    const ledger = fakeLedger()
     const provider = fakeProvider((n) => (n === 4 ? fail500 : ok(n)))
-    tick(fakeLedger(), provider)
-    const out = await runDailyDigest({ budgetMs: 60_000 })
-    expect(out).toMatchObject({ phase: 'held', read: 3 })
+    const { run } = tick(ledger, provider)
+    await expect(runDailyDigest({ budgetMs: 60_000 })).rejects.toThrow()
+    expect(run.unresolved).toBeNull()
     expect(provider.sent).toHaveLength(4)
-    expect(saved().server).toMatchObject({ phase: 'rank', held: { reason: HELD_REASON } })
+    expect(saved().server.phase).toBe('rank')
+    expect(saved().server.held).toBeUndefined()
     expect(saved().processedResults).toHaveLength(3)
     expect(saved().triaged).toEqual({})
-    // Released: only the ranking is sent again.
+    expect([...ledger.rows.values()].map((r) => r.state)).toEqual(['settled', 'settled', 'settled', 'released'])
     const again = fakeProvider(ok)
     tick(fakeLedger(), again)
     expect((await runDailyDigest({ budgetMs: 60_000 })).phase).toBe('done')
     expect(again.sent.map((b) => b.messages[0].content)).toEqual(['rank'])
+    expect(searchCandidates).toHaveBeenCalledTimes(1)
   })
 })
 

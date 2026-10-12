@@ -72,9 +72,11 @@ select pg_temp.ok(pg_temp.res(:A, 'req-day-0002', 1)->>'status' = 'duplicate', '
 select pg_temp.ok(pg_temp.res(:A, 'req-day-0002', 1, repeat('b', 64))->>'status' = 'mismatch', 'reused id + different fingerprint: mismatch');
 select pg_temp.ok((select count(*) = 1 from public.spend_reservations where user_id = :A and request_id = 'req-day-0002'), 'no extra reservation from reuse');
 
--- ambiguous / no release
-select pg_temp.ok(public.spend_mark_ambiguous((select id from public.spend_reservations where request_id = 'req-day-0002'), 'timeout', null)->>'status' = 'ambiguous', 'timeout marks ambiguous');
-select pg_temp.ok(to_regprocedure('public.spend_release(uuid,text,text)') is null, 'there is no release operation: post-dispatch liability is never released');
+-- An operator-marked attempt stays outstanding. spend_release does not clear it.
+select pg_temp.ok(public.spend_mark_ambiguous((select id from public.spend_reservations where request_id = 'req-day-0002'), 'unparseable_response', null)->>'status' = 'ambiguous', 'mark ambiguous keeps the hold');
+select pg_temp.ok(to_regprocedure('public.spend_release(uuid,text,text)') is not null, 'spend_release exists');
+select pg_temp.ok(public.spend_release((select id from public.spend_reservations where request_id = 'req-day-0002'), 'timeout', null)->>'status' = 'unchanged', 'spend_release refuses an ambiguous row');
+select pg_temp.ok((select state = 'ambiguous' from public.spend_reservations where request_id = 'req-day-0002'), 'the ambiguous hold is unchanged');
 select pg_temp.ok(pg_temp.reason(:A, 1) = 'cap_day', 'ambiguous liability still counts');
 -- A provider 4xx after dispatch is ambiguous; only an audited reconciliation (here: the
 -- console shows no charge) brings it to zero.
@@ -90,6 +92,21 @@ do $$ begin
 end $$;
 select pg_temp.ok(public.spend_reconcile((select id from public.spend_reservations where request_id = 'req-day-0002'), 1, 'console shows 1 micro billed')->>'status' = 'reconciled', 'reconcile ambiguous');
 select pg_temp.ok((select count(*) = 2 from public.spend_audit where action = 'reconcile' and reservation_id in (select id from public.spend_reservations where request_id in ('req-day-0002', 'req-day-0004'))), 'both reconciliations audited');
+
+-- ---------------------------------------------------------------- release an error hold
+-- B still has its 1 micro reservation. Both holds below are released before the rollover
+-- check, so B's outstanding today is that 1 micro again. A's ambiguous scenario is untouched.
+select pg_temp.ok(pg_temp.res(:B, 'req-release-01', 500000)->>'status' = 'reserved', 'reserve a hold that an error will release');
+select pg_temp.ok(public.spend_release((select id from public.spend_reservations where request_id = 'req-release-01'), 'timeout', 'req_rel')->>'status' = 'released', 'release the error hold');
+select pg_temp.ok((select state = 'released' and actual_micro = 0 and provider_request_id = 'req_rel' from public.spend_reservations where request_id = 'req-release-01'), 'released hold records no charge');
+select pg_temp.ok((select count(*) = 0 from public.model_spend where request_id = 'req-release-01'), 'release writes no ledger row');
+select pg_temp.ok(pg_temp.res(:B, 'req-release-02', 500000)->>'status' = 'reserved', 'a released hold no longer counts against the cap');
+select pg_temp.ok(public.spend_release((select id from public.spend_reservations where request_id = 'req-release-01'), 'timeout', null)->>'status' = 'already_released', 'a second release is a no-op');
+select pg_temp.ok(public.spend_settle((select id from public.spend_reservations where request_id = 'req-release-01'), 5, 'claude-sonnet-5-5', 1, 1, 0, 0, null, null)->>'status' = 'unchanged', 'a released reservation cannot be settled');
+select pg_temp.ok((select count(*) = 0 from public.model_spend where request_id = 'req-release-01'), 'settling a released row still writes no ledger row');
+select pg_temp.ok((select count(*) = 1 from public.spend_audit where action = 'release' and reservation_id = (select id from public.spend_reservations where request_id = 'req-release-01')), 'one release audit row');
+select pg_temp.ok(public.spend_release((select id from public.spend_reservations where request_id = 'req-release-02'), 'provider_status_500', null)->>'status' = 'released', 'release the second hold');
+select pg_temp.ok((select count(*) = 1 and coalesce(sum(reserved_micro), 0) = 1 from public.spend_reservations where user_id = :B and state in ('reserved', 'ambiguous')), 'B is back to its original 1 micro outstanding');
 
 -- ---------------------------------------------------------------- rollover keeps outstanding liability
 reset role;
@@ -169,6 +186,7 @@ begin
     $q$update public.evidence_cache_trusted set model='x'$q$,
     $q$delete from public.evidence_cache_trusted$q$,
     $q$select public.spend_mark_ambiguous(gen_random_uuid(),'x',null)$q$,
+    $q$select public.spend_release(gen_random_uuid(),'timeout',null)$q$,
     $q$select public.spend_reconcile(gen_random_uuid(),0,'long enough note')$q$,
     $q$select public.spend_acknowledge_overrun(1,'long enough note')$q$,
     $q$select public.spend_status('a0000000-0000-0000-0000-000000000001')$q$,

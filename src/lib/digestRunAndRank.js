@@ -157,8 +157,12 @@ export async function runAndRankDigest(papers, {
   // Found held or stopped during the run: no ranking call, no write, nothing recorded as a run.
   if (!live()) return stale()
   const ok = collected.filter((r) => !r.error)
+  const rankedIds = new Set(Object.keys(triagedNow))
+  const unranked = ok.filter((r) => !rankedIds.has(String(r.paper.id)))
   let postNow = null
-  if (ok.length) {
+  // Zero new papers to rank: papers already summarized are left as they are, and no
+  // ranking call is sent.
+  if (unranked.length) {
     ui.setRanking(true)
     try {
       // Each read is awaited, so the ticket is shown again after it: the digest can be found

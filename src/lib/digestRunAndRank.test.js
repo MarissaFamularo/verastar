@@ -112,6 +112,26 @@ describe('runAndRankDigest: an uninterrupted run is unchanged', () => {
     expect(events.map((e) => e.name)).toEqual(['digest_run'])
   })
 
+  it('sends no ranking call when every successful paper is already ranked', async () => {
+    const ranked = ranking('a')
+    const { calls, s, run } = screen({
+      state: { results: [read('a')], processedResults: [read('a')], triaged: { a: ranked } },
+    })
+    const out = await run([paper('a')], { append: true })
+    expect(calls).toEqual(['begin'])
+    expect(out.triaged).toEqual({ a: ranked })
+    expect(s.triaged).toEqual({ a: ranked })
+  })
+
+  it('sends no ranking call when the only paper failed to read', async () => {
+    const failed = read('a', { error: 'could not read' })
+    const { calls, run } = screen({
+      state: { results: [failed], processedResults: [failed], triaged: {} },
+    })
+    await run([paper('a')], { append: true })
+    expect(calls).toEqual(['begin'])
+  })
+
   it('Finish on an unranked digest reads nothing again and ranks the whole set', async () => {
     const { s, saved, calls, run } = screen({ state: unranked() })
     const out = await run([paper('a'), paper('b')], { append: true })

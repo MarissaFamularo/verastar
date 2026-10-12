@@ -282,6 +282,9 @@ export async function triage({
   model = MODELS.triage,
   maxTokens,
 }) {
+  // Nothing new to rank: do not send a model call. An empty finish, an empty rank phase,
+  // and a caller that already filtered the list all land here.
+  if (!Array.isArray(candidates) || candidates.length === 0) return []
   if (candidates.length > PILOT_DIGEST_LIMIT) throw new Error('Pilot digests are limited to 20 papers; no ranking request was sent.')
   const stars = northStars.length ? northStars.join(', ') : '(none set)'
   const projs = projects.length ? projects.join(', ') : '(none set)'

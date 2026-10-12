@@ -21,7 +21,7 @@ import { DOMParser } from 'linkedom'
 import * as app from './app.bundle.js'
 import manifest from './app.bundle.manifest.js'
 import { handleDigestRun } from './handler.js'
-import { anthropicDispatch, makeRpcLedger, resolveProviderUrl } from '../_shared/spending.js'
+import { anthropicDispatch, anthropicTokenCounter, makeRpcLedger, resolveProviderUrl } from '../_shared/spending.js'
 import { SERVER_CLIENT_TIMEOUT_MS } from '../_shared/timeouts.js'
 
 // sources.js parses PMC and PubMed XML with the browser's DOMParser; linkedom provides the
@@ -61,6 +61,7 @@ Deno.serve((req) => {
     app,
     ledger: makeRpcLedger(admin),
     dispatch: anthropicDispatch(anthropicKey, fetch, provider.url),
+    countTokens: anthropicTokenCounter(anthropicKey, fetch, provider.url),
     // The SDK's own key header is ignored: the guarded fetch dispatches with only the
     // headers the API needs. Refusals and post-dispatch errors carry x-should-retry: false,
     // so the SDK does not stack retries on an unresolved liability. The explicit timeout

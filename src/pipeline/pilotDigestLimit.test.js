@@ -11,6 +11,11 @@ it('deduplicates additions before using the remaining slots', () => {
   const processed = Array.from({ length: 19 }, (_, i) => ({ paper: { id: String(i) } }))
   expect(fitDigestPapers([{ id: '0' }, { id: '19' }, { id: '19' }, { id: '20' }], processed)).toEqual([{ id: '19' }])
 })
+it('sends no ranking call when there are no papers', async () => {
+  expect(await triage({ candidates: [] })).toEqual([])
+  expect(await triage({})).toEqual([])
+  expect(extractStructured).not.toHaveBeenCalled()
+})
 it('rejects oversized legacy ranking before any model call', async () => {
   await expect(triage({ candidates: Array.from({ length: 21 }, (_, i) => ({ id: String(i) })) })).rejects.toThrow('limited to 20')
   expect(extractStructured).not.toHaveBeenCalled()

@@ -160,6 +160,6 @@ describe('browser SDK honors proxy retry refusals', () => {
     await expect(client.messages.create(goodBody)).rejects.toMatchObject({ status })
     expect(h.provider.sent).toHaveLength(1)
     expect(h.ledger.rows.size).toBe(1)
-    expect([...h.ledger.rows.values()][0].state).toBe('ambiguous')
+    expect([...h.ledger.rows.values()][0].state).toBe('released')
   })
 })

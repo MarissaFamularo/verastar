@@ -16,6 +16,9 @@
 
 export const EDGE_IDLE_TIMEOUT_MS = 150_000
 export const PROVIDER_TIMEOUT_MS = 140_000
+// Token counting is a free preflight. It must give up quickly and fall back to the local
+// estimate; it must not consume the provider timeout of the call it is pricing.
+export const COUNT_TIMEOUT_MS = 8_000
 export const SERVER_CLIENT_TIMEOUT_MS = 150_000
 export const SPONSORED_CLIENT_TIMEOUT_MS = 150_000
 export const BYOK_CLIENT_TIMEOUT_MS = 600_000
