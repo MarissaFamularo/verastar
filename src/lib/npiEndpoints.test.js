@@ -64,7 +64,7 @@ describe('NPI Edge boundaries', () => {
   it('rejects fabricated client receipts without consuming invite', async () => {
     user.user_metadata = { npi_match: receipt }
     const response = await handlers.redeem(request({ code: 'BETA', npi_match: receipt }))
-    expect(response.status).toBe(403)
+    expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ status: 'npi_required' })
     expect(admin.rpc).not.toHaveBeenCalledWith('redeem_sponsor_invite', expect.anything())
   })

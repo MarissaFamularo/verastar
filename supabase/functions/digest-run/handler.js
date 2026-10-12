@@ -27,8 +27,12 @@
 //
 // Callable two ways: from cron with x-cron-secret, or by a signed-in user ("run mine now"),
 // which ignores the hour and the opened gate but keeps the claim and the spending checks.
+// A manual run needs a claimable schedule row. Enrollment does not create one, and
+// digest_claim only updates an enabled row, so a sponsored account with no row is given
+// the table default (on, 6:00, timezone from the request or America/New_York). Cron never
+// creates a row, and a row the reader turned off stays off.
 
-import { accountActive, localClock, digestGate } from '../model/logic.js'
+import { accountActive, localClock, digestGate, requestedTimezone } from '../model/logic.js'
 import { makeGuardedFetch } from '../_shared/spending.js'
 import { CLAIM_STALE_SECONDS } from '../_shared/timeouts.js'
 
@@ -88,6 +92,31 @@ function gateFor({ row, record, now, manual, mayRun }) {
   return digestGate({ manual, hour, hourLocal: row.hour_local, ranToday, midFlight: !!midFlight, savedToday: !!savedToday, mayRun })
 }
 
+const DEFAULT_HOUR_LOCAL = 6
+const DEFAULT_TIMEZONE = 'America/New_York'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at'
+
+// A manual "run now" from a sponsored account that has never saved a schedule. Returns
+// { created: true } when a row was inserted, { skipped: true } when there is nothing to
+// add (not sponsored, or a row already exists — including one that is turned off), or
+// { error } when a read or the insert failed.
+export async function ensureManualSchedule(admin, userId, now, timezone) {
+  const { data: account, error: accountError } = await admin.from('sponsored_accounts').select('user_id, active, ends_at').eq('user_id', userId).maybeSingle()
+  if (accountError) return { error: 'accounts unavailable' }
+  if (!accountActive(account, now)) return { skipped: true }
+  const { data: row, error: rowError } = await admin.from('digest_schedules').select('user_id, enabled').eq('user_id', userId).maybeSingle()
+  if (rowError) return { error: 'schedules unavailable' }
+  if (row) return { skipped: true }
+  const { error: insertError } = await admin.from('digest_schedules').insert({
+    user_id: userId,
+    enabled: true,
+    hour_local: DEFAULT_HOUR_LOCAL,
+    timezone: requestedTimezone(timezone) || DEFAULT_TIMEZONE,
+  })
+  if (insertError) return { error: 'schedule unavailable' }
+  return { created: true }
+}
+
 // deps: { cronSecret, getUser(authHeader), admin, ledger, dispatch, now(),
 //         app: { makeSupabaseStore, schedulerMayRun, runDailyDigest },
 //         makeClient(fetch) -> Anthropic client, runInScope(scope, fn),
@@ -110,16 +139,27 @@ export async function handleDigestRun(req, deps) {
     manual = true
   }
   let days
+  let timezone = null
   if (manual) {
     const body = await req.json().catch(() => ({}))
     const n = Number(body?.days)
     if (Number.isFinite(n) && n > 0 && n <= 30) days = n
+    timezone = body?.timezone
   }
 
-  let q = admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, claimed_at, last_run_at').eq('enabled', true)
+  let q = admin.from('digest_schedules').select(SCHEDULE_COLUMNS).eq('enabled', true)
   if (targetUserId) q = q.eq('user_id', targetUserId)
-  const { data: rows, error: rowsError } = await q
+  let { data: rows, error: rowsError } = await q
   if (rowsError) return json(503, { ran: false, reason: 'schedules unavailable' })
+  if (manual && targetUserId && !(rows || []).length) {
+    const ensured = await ensureManualSchedule(admin, targetUserId, now, timezone)
+    if (ensured.error) return json(503, { ran: false, reason: ensured.error })
+    if (ensured.created) {
+      const again = await admin.from('digest_schedules').select(SCHEDULE_COLUMNS).eq('enabled', true).eq('user_id', targetUserId)
+      if (again.error) return json(503, { ran: false, reason: 'schedules unavailable' })
+      rows = again.data
+    }
+  }
   const ids = (rows || []).map((r) => r.user_id)
   if (!ids.length) return json(200, { ran: false, reason: 'nothing due' })
   const { data: accounts, error: accountsError } = await admin.from('sponsored_accounts').select('user_id, active, ends_at').in('user_id', ids)

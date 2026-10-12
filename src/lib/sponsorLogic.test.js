@@ -7,6 +7,7 @@ import {
   cachedResponse,
   localClock,
   digestGate,
+  requestedTimezone,
 } from '../../supabase/functions/model/logic.js'
 
 // Prices, request bounds and the cap decision moved out of this file on 2026-10-09: the
@@ -46,6 +47,14 @@ describe('cache responses', () => {
     expect(res.stop_reason).toBe('end_turn')
     expect(res.usage.input_tokens).toBe(0)
     expect(JSON.parse(res.content[0].text)).toEqual({ study_id: 'x', quantities: [] })
+  })
+})
+
+describe('requested timezone', () => {
+  it('keeps a real IANA zone and refuses anything else', () => {
+    expect(requestedTimezone(' America/Los_Angeles ')).toBe('America/Los_Angeles')
+    expect(requestedTimezone('UTC')).toBe('UTC')
+    for (const bad of [null, 6, '', '   ', 'Not/AZone', 'x'.repeat(65)]) expect(requestedTimezone(bad)).toBeNull()
   })
 })
 

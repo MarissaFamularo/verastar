@@ -13,6 +13,20 @@ export function accountActive(account, now = new Date()) {
 }
 
 // Local wall-clock hour and calendar day for a timezone (the digest scheduler's clock).
+// A timezone the scheduler may store. Anything Intl rejects is refused, not guessed,
+// so a bad client value cannot change which wall clock a digest uses.
+export function requestedTimezone(value) {
+  if (typeof value !== 'string') return null
+  const zone = value.trim()
+  if (!zone || zone.length > 64) return null
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: zone }).format(0)
+    return zone
+  } catch {
+    return null
+  }
+}
+
 export function localClock(now, timezone) {
   try {
     const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)

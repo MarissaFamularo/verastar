@@ -40,11 +40,43 @@ export async function setDigestSchedule({ enabled = true, hour = DEFAULT_HOUR, t
   return row
 }
 
+// What to tell a reader when the server answered but did not start a run. Known reasons
+// are plain language; anything else keeps the server's reason so the screen is not a dead end.
+export function digestRefusalMessage(reason) {
+  if (reason === "today's digest already exists") return 'Today\u2019s digest is already here. The next run is tomorrow morning.'
+  if (reason === 'already running') return 'Your digest is already being prepared. It will be on the Digest tab in a few minutes.'
+  if (reason === 'nothing due') return 'No digest schedule is turned on for this account, so the server did not start a run.'
+  if (reason === 'not yet') return 'It is before your scheduled hour, so the automatic run has not started.'
+  if (reason === 'already ran today') return 'A digest already finished for today.'
+  if (reason === 'last digest unopened') return 'The last digest is still unopened, so a new automatic run is waiting.'
+  if (typeof reason === 'string' && reason.startsWith('spending stopped:')) {
+    const why = reason.slice('spending stopped: '.length).replaceAll('_', ' ')
+    return `The digest did not start because spending is stopped (${why}).`
+  }
+  if (reason) return `The digest server did not start a run (${reason}). Try again in a minute.`
+  return 'The digest server did not start a run. Try again in a minute.'
+}
+
+// digest_claim only takes an enabled row, and a new sponsored account has none until
+// Settings is saved. Create the table default (on, 6:00, this browser's timezone) so a
+// manual run can start. A row the reader already saved — including one turned off — is
+// left alone. A write failure is not fatal: the server can create the row itself.
+async function ensureDefaultSchedule() {
+  try {
+    const existing = await getDigestSchedule()
+    if (existing) return existing
+    return await setDigestSchedule({ enabled: true, hour: DEFAULT_HOUR, timezone: browserTimezone() })
+  } catch {
+    return null
+  }
+}
+
 // "Run mine now": the same server path the schedule takes, ignoring the hour. One call is
 // one server tick (about a minute of reading); a run that needs more resumes on the next
 // call or the next cron tick. `days` widens a fresh run's search window, this run only.
 export async function runScheduledDigestNow({ days } = {}) {
   if (!canSchedule()) return null
+  await ensureDefaultSchedule()
   const { data } = await supabase.auth.getSession()
   const token = data?.session?.access_token
   if (!token) throw new Error('Sign in again to continue.')
@@ -52,7 +84,7 @@ export async function runScheduledDigestNow({ days } = {}) {
   const res = await fetch(`${base}/functions/v1/digest-run`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify(days ? { days } : {}),
+    body: JSON.stringify({ ...(Number(days) > 0 ? { days } : {}), timezone: browserTimezone() }),
   })
   if (!res.ok) throw new Error(`Digest run failed (${res.status}).`)
   return res.json()
