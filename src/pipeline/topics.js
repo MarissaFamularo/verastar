@@ -4,11 +4,11 @@
 // 40 from a 90-day window. Three things were wrong with that, and each one is a promise the
 // digest was quietly breaking:
 //
-//   - `"limb preservation"[tiab]` only finds papers that say it that way. Quoting a phrase
-//     into [tiab] turns PubMed's automatic term mapping OFF — the MeSH expansion that finds
-//     the paper about "major amputation prevention" is exactly what the quotes suppress. Her
-//     own rule for writing a query is the opposite: short, OR-based, one or two anchor
-//     concepts, no field tags, and let PubMed expand. Long AND chains return zero.
+//   - One quoted phrase and nothing else ("limb preservation"[tiab]) misses every synonym.
+//     The query she edits stays short and OR-based, with no field tags in the saved text.
+//     Execution compiles each OR-clause into a title/abstract phrase (pubmedQuery.js) so
+//     PubMed cannot split it into single words or explode MeSH into other specialties.
+//     Long AND chains still return little.
 //   - ONE shared pool means the biggest topic wins. Aortic publishes ~30 papers in three
 //     days, carotid ~13; a single newest-40 cut can return zero carotid papers and nothing
 //     in the app would say so.
@@ -254,9 +254,12 @@ function mergeTopicRows(results, { cap = null, skipIds } = {}) {
     // normalized cap and retains its skip-then-cap behavior for existing callers.
     const ids = cap === null ? unseen : capTopicPmids(unseen, cap)
     // `more` = PubMed handed back everything we asked for, so there are papers beyond this
-    // topic's fetch. It turns "10 of 40 new" into the honest "10 of 40+ new".
+    // topic's fetch. It turns "10 of 40 new" into the honest "10 of 40+ new". `fetched` is
+    // the raw page size when relevance filtering has already shortened `pmids`.
     const asked = Number(row.retmax)
-    const more = Number.isFinite(asked) && asked > 0 && raw.length >= asked
+    const fetched = Number(row.fetched)
+    const volume = Number.isFinite(fetched) && fetched >= 0 ? fetched : raw.length
+    const more = Number.isFinite(asked) && asked > 0 && volume >= asked
     counts.push({ label, count: ids.length, available: unseen.length, more })
     lists.push({ label, ids })
   }
