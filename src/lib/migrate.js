@@ -41,7 +41,7 @@ export function chunk(rows, size = MIGRATION_BATCH_SIZE) {
 // The manifest is account-bound and retained on the device after completion.
 export function shouldOfferMigration({ localPapersCount, localProfile, userId, progress }) {
   if (progress) return (!userId || progress.userId === userId) && !progress.complete
-  return localPapersCount > 0 || Boolean(localProfile?.onboarded)
+  return localPapersCount > 0 || Boolean(localProfile?.onboarded && !localProfile?.demo)
 }
 
 export async function getMigrationProgress(userId) {

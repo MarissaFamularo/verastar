@@ -110,6 +110,13 @@ describe('shouldOfferMigration', () => {
     expect(shouldOfferMigration(base)).toBe(false)
     expect(shouldOfferMigration({ ...base, localProfile: { onboarded: false } })).toBe(false)
   })
+
+  it('does not repeatedly offer to import the sample profile after signing in', () => {
+    const localProfile = { onboarded: true, demo: true }
+    expect(shouldOfferMigration({ ...base, localProfile })).toBe(false)
+    expect(shouldOfferMigration({ ...base, localProfile, localPapersCount: 1 })).toBe(true)
+    expect(shouldOfferMigration({ ...base, localProfile, userId: USER, progress: { userId: USER, complete: false } })).toBe(true)
+  })
 })
 
 // Exercise the exported importer across real pause/resume boundaries.
