@@ -413,6 +413,26 @@ describe('holds', () => {
     expect(db.t.digest_schedules[0].last_run_at).not.toBeNull()
   })
 
+  it('a release that comes back unchanged stops the run and keeps the hold', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const orig = db.admin.rpc
+    db.admin.rpc = async (name, args) => (name === 'spend_release' ? { data: { status: 'unchanged', state: 'reserved' }, error: null } : orig(name, args))
+    const provider = fakeProvider({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'no' } } })
+    let seen = 'unset'
+    const run = async () => {
+      await attempt().catch(() => {})
+      seen = serverRunUnresolved()
+      return { phase: 'reading', papers: 0, read: 0 }
+    }
+    const out = await (await handleDigestRun(cron(), deps(db, { run, provider }).deps)).json()
+    expect(seen).toBe('release_failed')
+    expect(out.phase).toBe('held')
+    expect(out.spend).toMatchObject({ dispatched: 1, halted: 'release_failed', unresolved: 'release_failed' })
+    expect(db.t.reservations.map((r) => r.state)).toEqual(['reserved'])
+    expect(db.t.digest_schedules[0].last_run_at).toBeNull()
+    expect(provider.sent).toHaveLength(1)
+  })
+
   it('a provider error releases the hold and does not freeze the run', async () => {
     const db = memoryDb({ users: ['A'] })
     const provider = fakeProvider({ status: 500, body: { type: 'error', error: { type: 'api_error', message: 'fake provider failure' } } })

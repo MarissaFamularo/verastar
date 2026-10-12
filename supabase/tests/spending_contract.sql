@@ -102,9 +102,30 @@ select pg_temp.ok((select state = 'released' and actual_micro = 0 and provider_r
 select pg_temp.ok((select count(*) = 0 from public.model_spend where request_id = 'req-release-01'), 'release writes no ledger row');
 select pg_temp.ok(pg_temp.res(:B, 'req-release-02', 500000)->>'status' = 'reserved', 'a released hold no longer counts against the cap');
 select pg_temp.ok(public.spend_release((select id from public.spend_reservations where request_id = 'req-release-01'), 'timeout', null)->>'status' = 'already_released', 'a second release is a no-op');
-select pg_temp.ok(public.spend_settle((select id from public.spend_reservations where request_id = 'req-release-01'), 5, 'claude-sonnet-5-5', 1, 1, 0, 0, null, null)->>'status' = 'unchanged', 'a released reservation cannot be settled');
-select pg_temp.ok((select count(*) = 0 from public.model_spend where request_id = 'req-release-01'), 'settling a released row still writes no ledger row');
+select pg_temp.ok(public.spend_release(gen_random_uuid(), 'not_sent', null)->>'status' = 'not_found', 'releasing a missing row is not a success');
 select pg_temp.ok((select count(*) = 1 from public.spend_audit where action = 'release' and reservation_id = (select id from public.spend_reservations where request_id = 'req-release-01')), 'one release audit row');
+-- Stamp before the budget window so a confirmed charge does not change today's cap math.
+update public.spend_reservations set created_at = now() - interval '2 days' where request_id = 'req-release-01';
+select pg_temp.ok(public.spend_settle((select id from public.spend_reservations where request_id = 'req-release-01'), 400000, 'claude-sonnet-5-5', 10, 10, 0, 0, 'req_rel', 'msg_rel')->>'status' = 'settled', 'a released row can be settled with a confirmed charge');
+select pg_temp.ok((select state = 'settled' and actual_micro = 400000 from public.spend_reservations where request_id = 'req-release-01'), 'settlement of a released row records the actual cost');
+select pg_temp.ok((select count(*) = 1 and usd = 0.4 from public.model_spend where request_id = 'req-release-01'), 'one ledger row for the confirmed charge');
+select pg_temp.ok(public.spend_settle((select id from public.spend_reservations where request_id = 'req-release-01'), 400000, 'claude-sonnet-5-5', 10, 10, 0, 0, 'req_rel', 'msg_rel')->>'status' = 'already_settled', 'settling the same confirmed charge again is a no-op');
+select pg_temp.ok(public.spend_settle((select id from public.spend_reservations where request_id = 'req-release-01'), 1, 'claude-sonnet-5-5', 10, 10, 0, 0, 'req_rel', 'msg_rel')->>'status' = 'conflict', 'a different settlement of a released row conflicts');
+select pg_temp.ok((select count(*) = 1 from public.model_spend where request_id = 'req-release-01'), 'a conflicting settlement does not write a second ledger row');
+select pg_temp.ok(pg_temp.res(:B, 'req-release-03', 1000)->>'status' = 'reserved', 'reserve a hold that reconciliation will correct');
+select pg_temp.ok(public.spend_release((select id from public.spend_reservations where request_id = 'req-release-03'), 'not_sent', null)->>'status' = 'released', 'release the row before the console charge is known');
+update public.spend_reservations set created_at = now() - interval '2 days' where request_id = 'req-release-03';
+select pg_temp.ok(public.spend_reconcile((select id from public.spend_reservations where request_id = 'req-release-03'), 250, 'console shows 250 micro billed after release')->>'status' = 'reconciled', 'a released row can be reconciled to a confirmed charge');
+select pg_temp.ok((select state = 'reconciled' and actual_micro = 250 from public.spend_reservations where request_id = 'req-release-03'), 'reconciliation of a released row records the actual cost');
+select pg_temp.ok((select count(*) = 1 and usd = 0.00025 from public.model_spend where request_id = 'req-release-03'), 'one ledger row for the reconciled charge');
+select pg_temp.ok(public.spend_reconcile((select id from public.spend_reservations where request_id = 'req-release-03'), 250, 'console shows 250 micro billed after release')->>'status' = 'already_reconciled', 'reconciling the same charge again is a no-op');
+select pg_temp.ok(public.spend_reconcile((select id from public.spend_reservations where request_id = 'req-release-03'), 251, 'console shows a different amount')->>'status' = 'conflict', 'a different reconciliation conflicts');
+select pg_temp.ok((select count(*) = 1 from public.model_spend where request_id = 'req-release-03'), 'a conflicting reconciliation does not write a second ledger row');
+select pg_temp.ok(pg_temp.res(:B, 'req-ambig-settle', 1000)->>'status' = 'reserved', 'reserve a hold that will be marked ambiguous');
+select pg_temp.ok(public.spend_mark_ambiguous((select id from public.spend_reservations where request_id = 'req-ambig-settle'), 'interrupted_response', null)->>'status' = 'ambiguous', 'an interrupted response stays ambiguous');
+update public.spend_reservations set created_at = now() - interval '2 days' where request_id = 'req-ambig-settle';
+select pg_temp.ok(public.spend_settle((select id from public.spend_reservations where request_id = 'req-ambig-settle'), 100, 'claude-sonnet-5-5', 1, 1, 0, 0, null, null)->>'status' = 'settled', 'an ambiguous row can be settled to a confirmed charge');
+select pg_temp.ok((select count(*) = 1 and usd = 0.0001 from public.model_spend where request_id = 'req-ambig-settle'), 'settlement of an ambiguous row writes one ledger row');
 select pg_temp.ok(public.spend_release((select id from public.spend_reservations where request_id = 'req-release-02'), 'provider_status_500', null)->>'status' = 'released', 'release the second hold');
 select pg_temp.ok((select count(*) = 1 and coalesce(sum(reserved_micro), 0) = 1 from public.spend_reservations where user_id = :B and state in ('reserved', 'ambiguous')), 'B is back to its original 1 micro outstanding');
 

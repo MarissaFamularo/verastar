@@ -18,14 +18,15 @@
 //             context-window ceiling; it is not that ceiling.
 // - dispatch: one HTTP attempt to Anthropic. This module never retries; a caller's retry
 //             is a new attempt with a new request id and a new reservation.
-// - outcome:  2xx with priceable usage for the requested model -> settle (actual cost,
-//             unused hold released; above-hold actual recorded in full as an overrun).
-//             Error, timeout, or network loss -> release the hold (spend_release). No
-//             ledger charge is written. A 2xx we cannot price (unparseable body, missing
-//             or unpriceable usage, unexpected model) stays ambiguous: the provider
-//             returned a message and may have billed it, so the hold stays until an
-//             operator reconciles it (docs/SPENDING_CONTRACT.md). Refusals and released
-//             errors carry x-should-retry: false so no SDK stacks automatic retries.
+// - outcome:  2xx with priceable usage for the requested model -> settle (actual cost;
+//             above-hold actual recorded in full as an overrun).
+//             Release the hold only when Anthropic definitively did not charge: the
+//             request was never sent, the connection was refused before send, or the
+//             provider returned an explicit non-2xx error (a failed request is not
+//             billed). Any 2xx, a timeout after send, or an interrupted or otherwise
+//             ambiguous response keeps the hold (ambiguous) until reconciliation.
+//             A released row can still be settled or reconciled later if a charge is
+//             confirmed. Refusals and released errors carry x-should-retry: false.
 // Scheduler attempts carry the run's claim token; the reservation is refused unless the
 // run still owns the account (spend_reserve checks and renews the claim atomically).
 // If recording the outcome itself fails, the reservation stays 'reserved' (counted in
@@ -93,9 +94,26 @@ export function makeRpcLedger(admin) {
   }
 }
 
-// Errors and timeouts did not return priceable usage. The hold is released so it does
-// not keep blocking the cap. A 2xx we cannot price is not in this set.
-const releasesHold = (reason) => reason === 'timeout' || reason === 'network_error' || String(reason).startsWith('provider_status_')
+// Anthropic's help center: failed requests are not charged, but a client timeout or
+// disconnect in the middle of a request that was on track to succeed still is.
+// https://support.anthropic.com/en/articles/8977456-how-do-i-pay-for-my-api-usage
+// An explicit 4xx/5xx is that failed request. Anything else we cannot prove unbilled
+// keeps its hold.
+export function explicitUnbilledStatus(status) {
+  return Number.isInteger(status) && status >= 400 && status <= 599
+}
+
+// True only when the bytes never left this process. A generic fetch failure is not
+// enough: the request may already have been accepted.
+const NOT_SENT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'])
+export function providerRequestNotSent(err) {
+  if (!err || typeof err !== 'object') return false
+  if (err.sent === false) return true
+  const code = err.cause?.code || err.code
+  return NOT_SENT_CODES.has(code)
+}
+
+const RELEASED_STATUSES = new Set(['released', 'already_released'])
 
 async function tryTwice(fn) {
   try {
@@ -149,36 +167,50 @@ export async function guardedProviderCall({ ledger, dispatch, userId, body, requ
     return { outcome: 'ambiguous', reason, dispatched: true, reservationId, accountingFailed: !recorded, response }
   }
   const releaseHold = async (reason, providerRequestId, response) => {
-    let recorded = true
-    try { await tryTwice(() => ledger.release(reservationId, reason, providerRequestId)) } catch { recorded = false }
-    // A release we could not record stays reserved and still counts. The run stops.
-    if (!recorded) return { outcome: 'release_failed', reason, dispatched: true, reservationId, accountingFailed: true, response }
+    let result = null
+    try { result = await tryTwice(() => ledger.release(reservationId, reason, providerRequestId)) } catch { result = null }
+    // Only an explicit transition (or the idempotent repeat of one) drops the hold.
+    // 'unchanged', not_found, an empty result, or an error leaves it counted and stops the run.
+    if (!result || !RELEASED_STATUSES.has(result.status)) {
+      return { outcome: 'release_failed', reason, dispatched: true, reservationId, accountingFailed: true, response }
+    }
     return { outcome: 'released', reason, dispatched: true, reservationId, response }
   }
-  const closeAttempt = (reason, providerRequestId, response) => (
-    releasesHold(reason) ? releaseHold(reason, providerRequestId, response) : ambiguous(reason, providerRequestId, response)
-  )
 
   let upstream
-  let text
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     upstream = await dispatch(checked.forwardText, { signal: controller.signal })
+  } catch (err) {
+    clearTimeout(timer)
+    // The timer fired after we handed the request to the network. Anthropic may still bill it.
+    if (controller.signal.aborted) return ambiguous('timeout', null, refusal(504, 'api_error', 'The model call did not complete (timeout).'))
+    if (providerRequestNotSent(err)) return releaseHold('not_sent', null, refusal(504, 'api_error', 'The model call was not sent.'))
+    return ambiguous('network_error', null, refusal(504, 'api_error', 'The model call did not complete (network_error).'))
+  }
+  const providerRequestId = upstream.headers?.get?.('request-id') || null
+  let text
+  try {
     text = await upstream.text()
   } catch {
     clearTimeout(timer)
-    const reason = controller.signal.aborted ? 'timeout' : 'network_error'
-    return closeAttempt(reason, null, refusal(504, 'api_error', `The model call did not complete (${reason}).`))
+    // Headers arrived, the body did not. A 2xx (and any status we cannot prove unbilled)
+    // keeps the hold. An explicit error status is a failed request and is not billed.
+    if (explicitUnbilledStatus(upstream.status)) {
+      return releaseHold(`provider_status_${upstream.status}`, providerRequestId, refusal(upstream.status, 'api_error', 'The model returned an error before the body arrived.'))
+    }
+    return ambiguous('interrupted_response', providerRequestId, refusal(502, 'api_error', 'The model response was interrupted.'))
   }
   clearTimeout(timer)
-  const providerRequestId = upstream.headers?.get?.('request-id') || null
   const passthrough = { status: upstream.status, headers: { 'content-type': 'application/json' }, body: text }
 
-  if (upstream.status < 200 || upstream.status >= 300) {
+  if (explicitUnbilledStatus(upstream.status)) {
     // Passed through so the SDK keeps its typed error, but never auto-retried.
-    // The hold is released: a non-2xx is not priceable usage.
-    return closeAttempt(`provider_status_${upstream.status}`, providerRequestId, { ...passthrough, headers: { ...passthrough.headers, 'x-should-retry': 'false' } })
+    return releaseHold(`provider_status_${upstream.status}`, providerRequestId, { ...passthrough, headers: { ...passthrough.headers, 'x-should-retry': 'false' } })
+  }
+  if (upstream.status < 200 || upstream.status >= 300) {
+    return ambiguous(`provider_status_${upstream.status}`, providerRequestId, { ...passthrough, headers: { ...passthrough.headers, 'x-should-retry': 'false' } })
   }
 
   let res

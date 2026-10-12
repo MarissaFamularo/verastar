@@ -63,16 +63,21 @@ every call inside a scheduled digest (`functions/digest-run`).
 |---|---|---|---|
 | 2xx, JSON, requested model, priceable usage | `spend_settle` | `settled` | actual cost (one ledger row); unused hold drops out |
 | 2xx with actual cost above the reservation | `spend_settle` records the full amount and opens an overrun | `settled` + a `spend_overruns` row | actual cost; **all new reservations denied** until acknowledged |
-| non-2xx status (400–599, including 408, 429, 529), timeout, network loss | `spend_release` | `released` | nothing; no ledger row. The hold is dropped |
-| 2xx that is non-JSON, missing or malformed usage, an unexpected model, or server-tool / priority / geography usage | `spend_mark_ambiguous` | `ambiguous` | full reservation until reconciled |
-| an outcome RPC fails (including a release that cannot be recorded), or the worker dies | none | stays `reserved` | full reservation until reconciled |
+| explicit non-2xx (400–599), or the request was never sent (connection refused before send) | `spend_release` | `released` | nothing, until a later settlement or reconciliation records a confirmed charge |
+| any 2xx we cannot price, a timeout after send, an interrupted body, or a network error that may have been sent | `spend_mark_ambiguous` | `ambiguous` | full reservation until reconciled |
+| an outcome RPC fails, `spend_release` returns `unchanged` / `not_found`, or the worker dies | none | stays `reserved` | full reservation until reconciled; the scheduler stops |
 
 `spend_release` (`20261012180000_spend_release.sql`) accepts only a `reserved` row. It
 sets `actual_micro` to 0, writes a `spend_audit` row with action `release`, and writes
-no `model_spend` row. A second release is `already_released`. Settling or reconciling a
-released row is a no-op. An `ambiguous` row is not released: the provider returned a
-message and may have billed it. A request refused **before** dispatch (by the policy,
-auth, account check, a denial, or a duplicate) never creates a reservation.
+no `model_spend` row. A second release is `already_released`. Anything else
+(`unchanged`, `not_found`, an error) is not a release: the hold stays and the scheduler
+stops. A released or ambiguous row can still be settled or reconciled, once, under the
+same lock, if a charge is confirmed later. The same amount again is a no-op; a different
+amount conflicts and does not write a second ledger row. Anthropic bills a client
+timeout or a disconnect in the middle of a request that was on track to succeed, and
+does not bill a failed request
+(<https://support.anthropic.com/en/articles/8977456-how-do-i-pay-for-my-api-usage>).
+A request refused **before** dispatch never creates a reservation.
 
 **Request IDs.** The browser sends `x-verastar-request-id`, one UUID per HTTP attempt. The
 scheduler generates one per attempt. IDs are unique per account and bound to the SHA-256
@@ -102,7 +107,8 @@ before recording an outcome, the earlier attempt remains `reserved`.
 - an outcome is ambiguous;
 - the claim is lost.
 
-A released error does not halt the run and does not hold the account.
+A release that actually transitions the row does not halt the run. A release that
+comes back `unchanged`, `not_found`, or as an error does: the hold is still there.
 
 After a halt, later attempts are refused locally with HTTP 402 and are neither reserved
 nor dispatched. The digest stops as `capped`, with its progress kept.
@@ -291,7 +297,8 @@ databases; not deployed and not released to readers.
   Held means a `scheduler` reservation is `reserved` or `ambiguous`, or is `reconciled` and has
   not been released (`spend_reservations.recovered_at` is null). Settled attempts, released
   attempts, and denials never hold. The rule is read from the ledger, so a worker that died
-  is covered. A provider error or timeout releases its hold and does not freeze the account.
+  is covered. An explicit provider error that was not billed releases its hold. A timeout
+  after send, or a 2xx whose body was interrupted, stays ambiguous and freezes the account.
 - **Enforced twice.** `spend_status` (the scheduler's preflight, before the claim) reports
   `unresolved_liability`, so cron and "run mine now" start no phase, search included.
   `spend_reserve` refuses a scheduler attempt for a held account under the claim.
@@ -456,7 +463,8 @@ The cutover therefore deploys code first:
 - no proxy cache writes;
 - the service-role-only, no-definer migration;
 - request-sized reservations (counted input, margin, `max_tokens`), not the context-window ceiling;
-- release on error and timeout, and an ambiguous hold for an unpriceable 2xx;
+- release only for a definitive non-charge; an interrupted 2xx, a timeout, or an unchanged release stays counted;
+- a released row can still be settled or reconciled;
 - `spend_release` service-role only, with no daily-cap change in that migration;
 - claim-bound scheduler reservations;
 - trusted-only cache reads;

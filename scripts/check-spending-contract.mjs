@@ -71,7 +71,7 @@ export async function runChecks() {
   // 7 (2026-10-09 review corrections)
   const spendingSrc = read(`${FN}/_shared/spending.js`)
   check(/resolveInputTokens\(/.test(spendingSrc) && /reservationCharge\(/.test(spendingSrc) && !/micro:\s*checked\.bound\.micro/.test(spendingSrc), 'a reservation is this request\'s counted input plus margin plus max_tokens, clamped under the context-window ceiling')
-  check(/const releasesHold = \(reason\) => reason === 'timeout' \|\| reason === 'network_error' \|\| String\(reason\)\.startsWith\('provider_status_'\)/.test(spendingSrc) && /ledger\.release\(/.test(spendingSrc) && /ledger\.markAmbiguous\(/.test(spendingSrc), 'errors and timeouts release the hold; an unpriceable 2xx stays ambiguous')
+  check(/explicitUnbilledStatus/.test(spendingSrc) && /providerRequestNotSent/.test(spendingSrc) && /interrupted_response/.test(spendingSrc) && /RELEASED_STATUSES = new Set\(\['released', 'already_released'\]\)/.test(spendingSrc), 'only a definitive non-charge releases the hold; an interrupted 2xx, a timeout, or an unchanged release stays counted')
   check(/p_claim_token: r\.claimToken/.test(spendingSrc) && /claimToken: picked\.token/.test(read(`${FN}/digest-run/handler.js`)), 'scheduler reservations carry the run\'s claim token')
   const cacheReaders = [`${FN}/model/handler.js`, 'src/pipeline/evidenceCache.js'].filter((p) => /from\('evidence_cache'\)/.test(read(p)))
   check(cacheReaders.length === 0, 'shared cache reads use evidence_cache_trusted only', cacheReaders.join(', '))
@@ -107,7 +107,8 @@ export async function runChecks() {
   const releaseCreated = [...release.matchAll(/create or replace function (public\.[a-z_]+)\(/g)].map((m) => m[1])
   const releaseRevokes = release.slice(release.indexOf('foreach f in array array['))
   const releaseUnrevoked = releaseCreated.filter((f) => !releaseRevokes.includes(`'${f}(`))
-  check(releaseCreated.length === 2 && releaseUnrevoked.length === 0, 'every function the release migration creates or replaces is service-role only', releaseUnrevoked.join(', '))
+  check(releaseCreated.length === 3 && releaseUnrevoked.length === 0, 'every function the release migration creates or replaces is service-role only', releaseUnrevoked.join(', '))
+  check(/r\.state not in \('reserved', 'ambiguous', 'released'\)/.test(releaseCode) && !/r\.state = 'released' then\s+return jsonb_build_object\('status', 'unchanged'/.test(releaseCode), 'a released row can be settled and reconciled')
 
   return results
 }

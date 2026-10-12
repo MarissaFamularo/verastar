@@ -6,7 +6,7 @@
 // attempts; omit it to treat every scheduler token as current.
 // capMicro, when finite, is the account's remaining cap. Reserve, settle and release share
 // one lock, the way spend_lock serializes them, so parallel reserves cannot jointly pass it.
-export function fakeLedger({ deny = null, denyAfter = Infinity, capMicro = Infinity, reserveThrows = false, settleFails = 0, ambiguousFails = 0, releaseFails = 0, settleStatus = null, ownsClaim = null } = {}) {
+export function fakeLedger({ deny = null, denyAfter = Infinity, capMicro = Infinity, reserveThrows = false, settleFails = 0, ambiguousFails = 0, releaseFails = 0, releaseStatus = null, settleStatus = null, ownsClaim = null } = {}) {
   const rows = new Map()
   const calls = []
   let n = 0
@@ -45,8 +45,9 @@ export function fakeLedger({ deny = null, denyAfter = Infinity, capMicro = Infin
         if (settleFails-- > 0) throw new Error('settle failed')
         const row = rows.get(s.reservationId)
         if (settleStatus) return { status: settleStatus }
-        if (row.state === 'released') return { status: 'unchanged', state: row.state }
-        if (row.state === 'settled') return { status: row.actual === s.micro ? 'already_settled' : 'conflict' }
+        if (!row) return { status: 'not_found' }
+        // reserved, ambiguous, and released can all record a confirmed charge.
+        if (row.state === 'settled' || row.state === 'reconciled') return { status: row.actual === s.micro ? 'already_settled' : 'conflict' }
         row.state = 'settled'
         row.actual = s.micro
         return { status: s.micro > row.micro ? 'overrun' : 'settled' }
@@ -67,6 +68,7 @@ export function fakeLedger({ deny = null, denyAfter = Infinity, capMicro = Infin
       return locked(async () => {
         calls.push('release')
         if (releaseFails-- > 0) throw new Error('release failed')
+        if (releaseStatus) return { status: releaseStatus }
         const row = rows.get(id)
         if (!row) return { status: 'not_found' }
         if (row.state === 'released') return { status: 'already_released' }
@@ -89,6 +91,18 @@ export function fakeProvider(script) {
       return new Promise((_, reject) => signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))))
     }
     if (step === 'network') throw new TypeError('fetch failed')
+    if (step === 'refused') {
+      const err = new TypeError('fetch failed')
+      err.cause = { code: 'ECONNREFUSED' }
+      throw err
+    }
+    if (step === 'interrupt') {
+      return {
+        status: 200,
+        headers: { get: (name) => (name === 'request-id' ? 'req_cut' : null) },
+        text: async () => { throw new TypeError('terminated') },
+      }
+    }
     if (step instanceof Response) return step
     return new Response(JSON.stringify(step.body), { status: step.status ?? 200, headers: { 'content-type': 'application/json', 'request-id': 'req_test' } })
   }
