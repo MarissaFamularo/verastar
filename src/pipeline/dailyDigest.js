@@ -220,7 +220,10 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
     const ok = state.processedResults.filter((r) => !r.error && !r.retracted)
     let triaged = state.triaged || {}
     let visible = state.results
-    if (ok.length) {
+    const rankedIds = new Set(Object.keys(triaged))
+    const unranked = ok.filter((r) => !rankedIds.has(String(r.paper.id)))
+    // Already ranked, or nothing successfully read: no ranking call.
+    if (unranked.length) {
       const projects = await digestProjects(profile)
       let rankings
       try {

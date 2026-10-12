@@ -1,18 +1,20 @@
 # Sponsored spending, scheduler ownership, and cache trust — contract
 
-**Status: PROPOSED, revised 2026-10-09 after independent review.** This is implemented and
+**Status: PROPOSED, revised 2026-10-12.** Reservations are sized to the request. The daily
+cap is unchanged. This is implemented and
 tested locally against disposable PostgreSQL databases, fake providers, and plain Deno. It
 has not been applied to any linked project, deployed, or validated on a Supabase edge
 runtime or PostgREST. No amount in this document is a proposal: every dollar figure in the
 tests is a fixture.
 
 **Code:**
-- `supabase/functions/_shared/{pricing,requestPolicy,spending,timeouts}.js`
+- `supabase/functions/_shared/{pricing,requestPolicy,spending,tokenReserve,timeouts}.js`
 - `supabase/functions/model/handler.js`
 - `supabase/functions/digest-run/handler.js`
 - `src/lib/serverScope.js`
 - `src/pipeline/evidenceCache.js`
-- migration `supabase/migrations/20261009120000_beta_spending_safeguards.sql`
+- migrations `supabase/migrations/20261009120000_beta_spending_safeguards.sql`,
+  `20261010130000_scheduler_hold.sql`, `20261012180000_spend_release.sql`
 
 **Tests:**
 - vitest: `src/lib/{pricing,requestPolicy,spending,modelProxy,digestRunHandler,spendingContractCheck}.test.js`,
@@ -33,31 +35,49 @@ Every sponsor-funded provider attempt runs `guardedProviderCall` in
 every call inside a scheduled digest (`functions/digest-run`).
 
 1. **Check** the request against the policy (§3). Nothing unchecked is forwarded.
-2. **Reserve** with `spend_reserve`. This is one transaction under a global advisory
-   lock. It checks:
+2. **Count** this request's input with Anthropic's token-counting API
+   (`POST /v1/messages/count_tokens`). Counting is free and is not a reservation. The
+   count is an estimate. A failure, a timeout, a non-2xx, or a count that is not a
+   positive integer falls back to a local estimate (one token per two UTF-8 bytes of the
+   forwarded body, at least one). The fallback is never zero.
+3. **Reserve** with `spend_reserve`. The hold is the counted (or estimated) input plus a
+   safety margin, plus `max_tokens` at the output price, clamped to the context-window
+   ceiling and at least one micro-dollar (§3). This is one transaction under a global
+   advisory lock. It checks:
    - the account, configuration, pause, and overrun review;
    - per-person day and month caps;
    - the global monthly ceiling and the total beta budget;
    - the request-id binding;
    - for scheduler attempts, **the run's claim token** (§6).
 
-   Any RPC error means **no dispatch**.
-3. **Dispatch once.** The boundary never retries. Only `_shared/spending.js` addresses
-   the provider; the drift check enforces this.
-4. **Record the outcome.** Settlement is retried once, and the outcome RPCs are idempotent.
+   Any RPC error means **no dispatch**. Parallel reservations take the same lock, so they
+   cannot jointly pass a cap.
+4. **Dispatch once.** The boundary never retries. Only `_shared/spending.js` addresses
+   the provider; the drift check enforces this. The counting request is a separate fetch
+   to the count URL derived from the messages URL, so a local-stack override never counts
+   against the real provider.
+5. **Record the outcome.** Settlement and release are each retried once, and the outcome
+   RPCs are idempotent.
 
 | After dispatch | Ledger action | Reservation state | Counted as |
 |---|---|---|---|
-| 2xx, JSON, requested model, priceable usage | `spend_settle` | `settled` | actual cost (one ledger row) |
+| 2xx, JSON, requested model, priceable usage | `spend_settle` | `settled` | actual cost (one ledger row); unused hold drops out |
 | 2xx with actual cost above the reservation | `spend_settle` records the full amount and opens an overrun | `settled` + a `spend_overruns` row | actual cost; **all new reservations denied** until acknowledged |
-| **any** non-2xx status (400–599, including 408, 429, 529), timeout, network loss, non-JSON body, missing or malformed usage, unexpected model, server-tool / priority / geography usage | `spend_mark_ambiguous` | `ambiguous` | full reservation until reconciled |
-| an outcome RPC fails, or the worker dies | none | stays `reserved` | full reservation until reconciled |
+| explicit non-2xx (400–599), or the request was never sent (connection refused before send) | `spend_release` | `released` | nothing, until a later settlement or reconciliation records a confirmed charge |
+| any 2xx we cannot price, a timeout after send, an interrupted body, or a network error that may have been sent | `spend_mark_ambiguous` | `ambiguous` | full reservation until reconciled |
+| an outcome RPC fails, `spend_release` returns `unchanged` / `not_found`, or the worker dies | none | stays `reserved` | full reservation until reconciled; the scheduler stops |
 
-There is **no release operation**. The official errors documentation does not establish
-that any status is unbilled. A post-dispatch liability therefore leaves the outstanding
-total only through priced usage (`settled`) or an audited reconciliation
-(`reconciled`, §10). A request refused **before** dispatch (by the policy, auth, account
-check, a denial, or a duplicate) never creates a reservation.
+`spend_release` (`20261012180000_spend_release.sql`) accepts only a `reserved` row. It
+sets `actual_micro` to 0, writes a `spend_audit` row with action `release`, and writes
+no `model_spend` row. A second release is `already_released`. Anything else
+(`unchanged`, `not_found`, an error) is not a release: the hold stays and the scheduler
+stops. A released or ambiguous row can still be settled or reconciled, once, under the
+same lock, if a charge is confirmed later. The same amount again is a no-op; a different
+amount conflicts and does not write a second ledger row. Anthropic bills a client
+timeout or a disconnect in the middle of a request that was on track to succeed, and
+does not bill a failed request
+(<https://support.anthropic.com/en/articles/8977456-how-do-i-pay-for-my-api-usage>).
+A request refused **before** dispatch never creates a reservation.
 
 **Request IDs.** The browser sends `x-verastar-request-id`, one UUID per HTTP attempt. The
 scheduler generates one per attempt. IDs are unique per account and bound to the SHA-256
@@ -71,20 +91,24 @@ The reservation ID identifies the provider attempt. The provider's `request-id` 
 and message ID are stored on it.
 
 **SDK retries (audited).** `@anthropic-ai/sdk` 0.110 retries connection errors, 408, 409,
-429 and 5xx unless the response says `x-should-retry: false`. Every refusal **and every
-ambiguous post-dispatch response** carries that header. As a result, the SDK never stacks
-automatic retries on an unresolved liability. The scheduler's guarded fetch never throws,
-so it produces no SDK connection-error retries.
+429 and 5xx unless the response says `x-should-retry: false`. Every refusal, every
+released error, and every ambiguous post-dispatch response carries that header. As a
+result, the SDK never stacks automatic retries on an unresolved liability. The
+scheduler's guarded fetch never throws, so it produces no SDK connection-error retries.
 
 In the browser, a connection lost between the browser and the proxy can still trigger an
-SDK retry. That retry is a new request ID and a new reservation; the earlier attempt
-remains `reserved` or `ambiguous`.
+SDK retry. That retry is a new request ID and a new reservation. If the proxy already
+released or settled the earlier attempt, only the new hold counts. If the worker died
+before recording an outcome, the earlier attempt remains `reserved`.
 
 **Scheduler halts.** A scheduler run halts when any of these happens:
-- an accounting step fails;
+- an accounting step fails, including a release that could not be recorded;
 - an overrun is recorded;
 - an outcome is ambiguous;
 - the claim is lost.
+
+A release that actually transitions the row does not halt the run. A release that
+comes back `unchanged`, `not_found`, or as an error does: the hold is still there.
 
 After a halt, later attempts are refused locally with HTTP 402 and are neither reserved
 nor dispatched. The digest stops as `capped`, with its progress kept.
@@ -115,7 +139,7 @@ nor dispatched. The digest stops as `capped`, with its progress kept.
 - **Checked on every reservation:** revocation, an account `ends_at` in the past, and
   the spending pause.
 
-## 3. Request bounds and the reservation bound
+## 3. Request bounds and what is reserved
 
 **Payload limits (not billing proof):**
 - Body: at most 1,000,000 bytes, refused before or while reading.
@@ -135,14 +159,15 @@ sampling parameters, `cache_control` anywhere, and beta headers.
 
 **Models:** exact IDs only (`claude-sonnet-5-5`, `claude-haiku-4-5-20251001`).
 
-**The reservation bound is the model's documented context window plus `max_tokens`:**
+**The ceiling is the model's documented context window plus `max_tokens`.** A reservation
+is never above that ceiling. The ceiling is not what is reserved.
 
-| Model | Input bound | Input price | Output | Largest reservation (`max_tokens` 32,000) |
+| Model | Input ceiling | Input price | Output | Largest ceiling (`max_tokens` 32,000) |
 |---|---|---|---|---|
 | `claude-sonnet-5-5` | 1,000,000 tokens | $2/MTok → $2.00 | $10/MTok | **$2.32** |
 | `claude-haiku-4-5-20251001` | 200,000 tokens | $1/MTok → $0.20 | $5/MTok | **$0.36** |
 
-**Why it holds.** All of the following come from the
+**Why the ceiling holds.** All of the following come from the
 [context windows](https://platform.claude.com/docs/en/build-with-claude/context-windows)
 page, accessed 2026-10-09, unless noted:
 
@@ -155,21 +180,28 @@ page, accessed 2026-10-09, unless noted:
   request can incur here. Caching is enabled only by `cache_control`, which the policy
   refuses, and cache reads are cheaper. Neither model has a prompt-length price tier.
 - **System-added tokens.** Per the
-  [token counting](https://platform.claude.com/docs/en/build-with-claude/token-counting)
+  [token counting](https://docs.anthropic.com/en/docs/build-with-claude/token-counting)
   page, tokens Anthropic adds are not billed. The earlier "8,192 tokens for injected
   instructions" reasoning is withdrawn.
 - **Output** includes thinking and is capped by `max_tokens`.
-- **No estimate.** The bound uses no token counting or estimate (token counting is
-  documented as an estimate).
 
-**Usability cost.**
-- With a per-person daily cap `C`, any Sonnet attempt with `max_tokens = m` needs
-  `C − spent − outstanding ≥ $2.00 + m × $10/MTok` (Haiku: $0.20 + m × $5/MTok).
-- At the provisional $3 daily cap, a reader is refused new Sonnet calls once roughly
-  $0.68–$0.92 has actually been spent that day, or sooner while other calls are in flight.
-  The exact point depends on `max_tokens`: 32,000 for triage, 8,192/16,384 for extraction.
-- Settlement then returns the unused balance.
-- Choosing cap values that account for this is Marissa's decision. Caps were not raised.
+**What is reserved.** Anthropic's count is an estimate and can differ by a small amount
+from the tokens billed, so the hold is not the raw count:
+
+- counted input, or the local estimate when counting fails;
+- plus 25 percent, then 1,024 tokens;
+- clamped to the context window, and at least one token;
+- plus `max_tokens` at the output price;
+- then clamped to the ceiling above, and at least one micro-dollar.
+
+A typical Sonnet call (a few thousand input tokens, triage-sized `max_tokens`) reserves
+cents, not the $2.32 ceiling. Settlement (`spend_settle`) replaces the hold with the
+actual cost. If the actual cost is above the hold, the full amount is recorded and an
+overrun stops new spending.
+
+**Usability.** The per-person daily cap is unchanged. A call is refused when
+`spent + outstanding + this hold` exceeds the cap. Outstanding is `reserved` and
+`ambiguous` only; a `released` hold does not count. Caps were not raised.
 
 If usage ever reports a charge outside this bound (for example, cache writes that cannot
 be requested), settlement records the full amount and the overrun stops all new spending.
@@ -263,8 +295,10 @@ databases; not deployed and not released to readers.
 
 - **Rule.** An account with an unresolved scheduler attempt is not runnable by the scheduler.
   Held means a `scheduler` reservation is `reserved` or `ambiguous`, or is `reconciled` and has
-  not been released (`spend_reservations.recovered_at` is null). Settled attempts and denials
-  never hold. The rule is read from the ledger, so a worker that died is covered.
+  not been released (`spend_reservations.recovered_at` is null). Settled attempts, released
+  attempts, and denials never hold. The rule is read from the ledger, so a worker that died
+  is covered. An explicit provider error that was not billed releases its hold. A timeout
+  after send, or a 2xx whose body was interrupted, stays ambiguous and freezes the account.
 - **Enforced twice.** `spend_status` (the scheduler's preflight, before the claim) reports
   `unresolved_liability`, so cron and "run mine now" start no phase, search included.
   `spend_reserve` refuses a scheduler attempt for a held account under the claim.
@@ -420,8 +454,7 @@ The cutover therefore deploys code first:
 
 ## 11. Checks and runtime validation
 
-`node scripts/check-spending-contract.mjs` (17 checks) is deterministic and offline. It
-covers:
+`node scripts/check-spending-contract.mjs` is deterministic and offline. It covers:
 - the local bundle import;
 - bundle and manifest freshness against a rebuild;
 - priced models matching the defaults;
@@ -429,11 +462,14 @@ covers:
 - no process-global bindings;
 - no proxy cache writes;
 - the service-role-only, no-definer migration;
-- no release path;
+- request-sized reservations (counted input, margin, `max_tokens`), not the context-window ceiling;
+- release only for a definitive non-charge; an interrupted 2xx, a timeout, or an unchanged release stays counted;
+- a released row can still be settled or reconciled;
+- `spend_release` service-role only, with no daily-cap change in that migration;
 - claim-bound scheduler reservations;
 - trusted-only cache reads;
 - the contract marker matching between the migration and `redeem-invite`;
-- a context-window bound for each admitted model.
+- a context-window ceiling for each admitted model.
 
 **Bundle identity.**
 - The bundler compiles the source-set sha256 into the bundle (`BUNDLE_SOURCE_SHA256`).
@@ -452,8 +488,9 @@ provider, in two phases:
 - **Phase B, after `supabase migration up --local`:**
   - The migration lands paused, and everything is refused until configured.
   - Grants through PostgREST.
-  - The proxy's settle, 429-retention (including the browser-exposed header), cap and
-    trusted/legacy cache paths.
+  - The proxy's settle, a 429 that releases the hold (including the browser-exposed
+    header), cap and trusted/legacy cache paths. The fake provider answers
+    `/v1/messages/count_tokens` and that request is not a paid attempt.
   - The scheduler: a foreign claim blocks the tick, and a wrong-token reservation is
     denied `claim_lost` through PostgREST. Then the bundled runner finishes the synthetic
     rank-phase digest (`supabase/tests/fixtures/scheduledRankFixture.mjs`). That makes

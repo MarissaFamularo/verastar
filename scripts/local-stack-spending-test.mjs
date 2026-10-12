@@ -25,7 +25,7 @@
 //
 // Phase B — after `supabase migration up --local` applies the spending migration:
 //   - grants through PostgREST (anon/authenticated cannot reserve or read the ledger);
-//   - proxy: one settled call at the exact price, a 429 kept as ambiguous liability and
+//   - proxy: one settled call at the exact price, a 429 whose hold is released and is
 //     not retryable, a cap denial with no dispatch, legacy cache miss vs trusted hit;
 //   - scheduler, through the BUNDLED runner and PostgREST: a fresh foreign claim blocks the
 //     tick with zero dispatches; a reservation with a wrong token is denied claim_lost; then
@@ -46,7 +46,7 @@ const SPENDING_MIGRATION = '20261009120000_beta_spending_safeguards.sql'
 // Migrations dated after the spending migration are held back with it and applied after it, in
 // order: `supabase migration up` refuses a migration older than one already applied, and the
 // scheduler-hold migration replaces functions the spending migration creates.
-const AFTER_SPENDING = ['20261010120000_digest_write_guard.sql', '20261010130000_scheduler_hold.sql']
+const AFTER_SPENDING = ['20261010120000_digest_write_guard.sql', '20261010130000_scheduler_hold.sql', '20261012180000_spend_release.sql']
 let WORK = null // created only after the prerequisites pass
 const sb = (...args) => execFileSync('supabase', [...args, '--workdir', WORK], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
 const isLocal = (u) => { try { return ['127.0.0.1', 'localhost'].includes(new URL(u).hostname) } catch { return false } }
@@ -87,6 +87,11 @@ const provider = createServer((req, res) => {
   let body = ''
   req.on('data', (c) => { body += c })
   req.on('end', () => {
+    // Counting is free. Answer it and do not treat it as a paid attempt.
+    if (String(req.url).endsWith('/count_tokens')) {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      return res.end(JSON.stringify({ input_tokens: 400 }))
+    }
     const request = JSON.parse(body)
     received.push(request)
     if (mode === '429') {
@@ -184,7 +189,7 @@ try {
   base = received.length
   const err = await fetch(fn('model', '/v1/messages'), { method: 'POST', headers: { ...headers(users.alice.jwt), 'x-verastar-request-id': 'local-0000002' }, body: JSON.stringify(body) })
   check(err.status === 429 && err.headers.get('x-should-retry') === 'false' && /x-should-retry/i.test(err.headers.get('access-control-expose-headers') || ''), 'a provider 429 is passed through as not retryable, and the header is exposed to browsers')
-  check(received.length === base + 1 && psql(`select state from public.spend_reservations where request_id = 'local-0000002'`) === 'ambiguous', 'one dispatch, liability retained')
+  check(received.length === base + 1 && psql(`select state || ':' || actual_micro from public.spend_reservations where request_id = 'local-0000002'`) === 'released:0', 'one dispatch, the error hold is released')
   mode = 'ok'
   psql(`update public.sponsored_accounts set daily_cap_usd = 0.0001 where user_id = '${A}'`)
   base = received.length
@@ -192,6 +197,8 @@ try {
   check(capped.status === 402 && received.length === base, 'cap denial: 402, no provider request')
   psql(`update public.sponsored_accounts set daily_cap_usd = null where user_id = '${A}';
         select public.spend_reconcile((select id from public.spend_reservations where request_id = 'local-0000002'), 0, 'local test fixture: fake provider 429');`)
+  check(psql(`select state from public.spend_reservations where request_id = 'local-0000002'`) === 'released', 'reconciling a released hold changes nothing')
+  check(psql(`select count(*) from public.model_spend where request_id = 'local-0000002'`) === '0', 'a released hold has no ledger charge')
   const hash = 'f'.repeat(64)
   psql(`insert into public.evidence_cache (pmid, extraction_version, source_hash, source_tier, extraction, model) values ('L1', 'v-local', '${hash}', 'full_text', '{"legacy":true}', 'm')`)
   const legacy = await fetch(fn('model', '/v1/messages'), { method: 'POST', headers: { ...headers(users.alice.jwt), 'x-verastar-cache': `L1|v-local|${hash}|full_text` }, body: JSON.stringify(body) })

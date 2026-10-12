@@ -148,10 +148,11 @@ describe('rejections', () => {
   })
 })
 
-describe('the reservation bound', () => {
-  // 2026-10-09 review: input is bounded by the documented context window (the API rejects
-  // any request whose input alone exceeds it), never by an estimate from the payload.
-  it('reserves the whole context window at the base input rate plus max_tokens at the output rate', () => {
+describe('the context-window ceiling', () => {
+  // The ceiling is the documented context window (the API rejects any request whose input
+  // alone exceeds it). The amount reserved is smaller: this request's counted input, a
+  // safety margin, and max_tokens (tokenReserve.js). bound is the ceiling, not the hold.
+  it('caps input at the whole context window and output at max_tokens', () => {
     for (const [model, thinking] of [['claude-sonnet-5-5', { type: 'between_tools' }], ['claude-haiku-4-5-20251001', { type: 'disabled' }]]) {
       const r = checkPaidRequest({ ...base(), model, thinking })
       expect(r.bound.maxInputTokens).toBe(PRICES[model].contextWindowTokens)
@@ -161,13 +162,13 @@ describe('the reservation bound', () => {
     expect(checkPaidRequest(base()).bound.micro).toBe(2_000_000 + 10_240)
     expect(checkPaidRequest({ ...base(), model: 'claude-haiku-4-5-20251001', thinking: { type: 'disabled' } }).bound.micro).toBe(200_000 + 5_120)
   })
-  it('the bound does not depend on the payload: a tiny and a maximal body reserve the same', () => {
+  it('the ceiling does not depend on the payload: a tiny and a maximal body share it', () => {
     const small = checkPaidRequest(base())
     const big = checkPaidRequest({ ...base(), messages: [{ role: 'user', content: 'x'.repeat(MAX_BODY_BYTES - 600) }] })
     expect(big.ok).toBe(true)
     expect(big.bound).toEqual(small.bound)
   })
-  it('largest admissible reservations: Sonnet 5.5 $2.32, Haiku 4.5 $0.36', () => {
+  it('largest ceiling: Sonnet 5.5 $2.32, Haiku 4.5 $0.36', () => {
     expect(checkPaidRequest({ ...base(), max_tokens: MAX_OUTPUT_TOKENS }).bound.micro).toBe(2_320_000)
     expect(checkPaidRequest({ ...base(), model: 'claude-haiku-4-5-20251001', thinking: { type: 'disabled' }, max_tokens: MAX_OUTPUT_TOKENS }).bound.micro).toBe(360_000)
   })

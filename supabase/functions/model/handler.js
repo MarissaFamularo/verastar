@@ -82,7 +82,8 @@ export async function handleModelRequest(req, deps) {
   }
 
   const result = await guardedProviderCall({
-    ledger: deps.ledger, dispatch: deps.dispatch, userId: user.id, body, requestId, purpose, source: 'proxy', randomId: deps.randomId,
+    ledger: deps.ledger, dispatch: deps.dispatch, userId: user.id, body, requestId, purpose, source: 'proxy',
+    countTokens: deps.countTokens, randomId: deps.randomId,
   })
   if (result.outcome === 'denied' && result.reason?.startsWith('cap_')) {
     await deps.admin.from('events').insert({ user_id: user.id, type: 'cap_reached', payload: { scope: result.reason, purpose } }).then(() => {}, () => {})

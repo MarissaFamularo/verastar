@@ -19,14 +19,13 @@
 // stop_sequences, temperature/top_p/top_k, container, mcp_servers, cache_control anywhere,
 // and any other key.
 //
-// Reservation bound (2026-10-09 review): input is bounded by the model's documented
-// context window, not by an estimate from the payload. The API rejects any request whose
-// input alone exceeds the context window ("prompt is too long", context-windows page), so
-// input_tokens + cache reads + cache writes <= contextWindowTokens for every request that
-// can be billed. Output, including thinking, is bounded by max_tokens. MAX_BODY_BYTES is a
-// payload limit (memory, abuse), not a billing proof: no claim is made about tokens per
-// byte. The cost of this hard bound is that each attempt reserves the full-context price
-// (about $2.00 of input for Sonnet 5.5, $0.20 for Haiku 4.5) until it settles to actual.
+// Ceiling (2026-10-09 review, still the maximum): input cannot exceed the model's
+// documented context window. The API rejects any request whose input alone exceeds it
+// ("prompt is too long", context-windows page), so input_tokens + cache reads + cache
+// writes <= contextWindowTokens for every request that can be billed. Output, including
+// thinking, is bounded by max_tokens. `bound` is that ceiling. The amount actually
+// reserved is smaller: this request's counted input, a safety margin, and max_tokens
+// (tokenReserve.js). MAX_BODY_BYTES is a payload limit (memory, abuse), not a billing proof.
 
 import { PRICES, isSupportedModel, maxChargeMicro } from './pricing.js'
 

@@ -200,6 +200,34 @@ describe('runDailyDigest', () => {
     expect(mem.get('digests/daily:last-successful-scan')).toBeUndefined()
   })
 
+  it('does not rank when every successful paper is already ranked', async () => {
+    vi.mocked(triage).mockClear()
+    const paper = { id: '101', pmid: '101', title: 'Paper 101', topics: ['CLTI'] }
+    const read = { paper, citation: { pmid: '101', title: 'Paper 101' }, design: 'RCT', rows: [], error: null }
+    mem.set('digests/daily:latest', {
+      kind: 'daily', runBy: 'scheduler', ranAt: '2026-10-12T10:00:00Z', server: { phase: 'rank' },
+      candidates: [paper], selectedIds: ['101'], results: [read], processedResults: [read],
+      triaged: { 101: { score: 80, tier: 1, finding: 'f', relevance: 'r' } },
+    })
+    const out = await runDailyDigest({ now: () => 0 })
+    expect(out.phase).toBe('done')
+    expect(triage).not.toHaveBeenCalled()
+    expect(mem.get('digests/daily:latest').server.phase).toBe('done')
+  })
+
+  it('does not rank when nothing was read successfully', async () => {
+    vi.mocked(triage).mockClear()
+    const paper = { id: '101', pmid: '101', title: 'Paper 101' }
+    mem.set('digests/daily:latest', {
+      kind: 'daily', runBy: 'scheduler', ranAt: '2026-10-12T10:00:00Z', server: { phase: 'rank' },
+      candidates: [paper], selectedIds: ['101'], results: [], processedResults: [{ paper, rows: [], error: 'could not read' }],
+      triaged: {},
+    })
+    const out = await runDailyDigest({ now: () => 0 })
+    expect(out.phase).toBe('done')
+    expect(triage).not.toHaveBeenCalled()
+  })
+
   it('still records a true empty day as empty', async () => {
     vi.mocked(searchCandidates).mockResolvedValueOnce({ candidates: [], counts: [{ label: 'CLTI', found: 0 }], failed: [], skipped: 0, days: 3 })
     expect((await runDailyDigest()).phase).toBe('empty')

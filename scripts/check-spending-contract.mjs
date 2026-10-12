@@ -70,7 +70,8 @@ export async function runChecks() {
 
   // 7 (2026-10-09 review corrections)
   const spendingSrc = read(`${FN}/_shared/spending.js`)
-  check(!/spend_release|\.release\(/.test(spendingSrc) && !/spend_release/.test(mig.replace(/--[^\n]*/g, '')), 'no release path: post-dispatch liability is only settled or reconciled')
+  check(/resolveInputTokens\(/.test(spendingSrc) && /reservationCharge\(/.test(spendingSrc) && !/micro:\s*checked\.bound\.micro/.test(spendingSrc), 'a reservation is this request\'s counted input plus margin plus max_tokens, clamped under the context-window ceiling')
+  check(/explicitUnbilledStatus/.test(spendingSrc) && /providerRequestNotSent/.test(spendingSrc) && /interrupted_response/.test(spendingSrc) && /RELEASED_STATUSES = new Set\(\['released', 'already_released'\]\)/.test(spendingSrc), 'only a definitive non-charge releases the hold; an interrupted 2xx, a timeout, or an unchanged release stays counted')
   check(/p_claim_token: r\.claimToken/.test(spendingSrc) && /claimToken: picked\.token/.test(read(`${FN}/digest-run/handler.js`)), 'scheduler reservations carry the run\'s claim token')
   const cacheReaders = [`${FN}/model/handler.js`, 'src/pipeline/evidenceCache.js'].filter((p) => /from\('evidence_cache'\)/.test(read(p)))
   check(cacheReaders.length === 0, 'shared cache reads use evidence_cache_trusted only', cacheReaders.join(', '))
@@ -97,6 +98,17 @@ export async function runChecks() {
   check(/run\.unresolved \?\?= r\.outcome/.test(handlerSrc) && /serverRunUnresolved\(\)/.test(runner) && /phase: 'held'/.test(runner), 'an unresolved attempt reaches the digest runner, which stops as held')
   check(/const finished = result\.phase === 'done' \|\| result\.phase === 'empty'/.test(handlerSrc), 'only a done or empty digest marks the day finished (a held run does not)')
   check(/'scheduler_held'/.test(read('supabase/ops/spending_health.sql')), 'the health query reports held accounts')
+
+  // 9 (2026-10-12 request-sized holds). The daily cap is not in this migration.
+  const release = read('supabase/migrations/20261012180000_spend_release.sql')
+  const releaseCode = release.replace(/--[^\n]*/g, '')
+  check(/create or replace function public\.spend_release\(/.test(releaseCode) && !/daily_cap/.test(releaseCode), 'spend_release exists and the release migration does not change the daily cap')
+  check(!/security definer/i.test(releaseCode), 'no SECURITY DEFINER function in the release migration')
+  const releaseCreated = [...release.matchAll(/create or replace function (public\.[a-z_]+)\(/g)].map((m) => m[1])
+  const releaseRevokes = release.slice(release.indexOf('foreach f in array array['))
+  const releaseUnrevoked = releaseCreated.filter((f) => !releaseRevokes.includes(`'${f}(`))
+  check(releaseCreated.length === 3 && releaseUnrevoked.length === 0, 'every function the release migration creates or replaces is service-role only', releaseUnrevoked.join(', '))
+  check(/r\.state not in \('reserved', 'ambiguous', 'released'\)/.test(releaseCode) && !/r\.state = 'released' then\s+return jsonb_build_object\('status', 'unchanged'/.test(releaseCode), 'a released row can be settled and reconciled')
 
   return results
 }
