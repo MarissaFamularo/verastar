@@ -78,7 +78,7 @@ function ChartStar({ size = 44 }) {
 }
 
 export default function OnboardingQuiz({ onDone, preview = false, account = null }) {
-  const [step, goStep, backStep, substep, goSubstep, inviteCode, rememberConnect, npiDraft] = useOnboardStep() // welcome | signin | connect | interview | review
+  const [step, goStep, backStep, substep, goSubstep, inviteCode, rememberConnect, npiDraft, codeNotice] = useOnboardStep() // welcome | signin | connect | interview | review
   const [keyInput, setKeyInput] = useState('')
   const [draft, setDraft] = useState(null) // { name, northStars, projects, topics, search, rubric:{criteria,selectCount,scoreFloor} }
   // Account creation/sign-in from the welcome screen (accounts configured only).
@@ -310,6 +310,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
               onCodeChange={(next) => rememberConnect({ inviteCode: next })}
               npiDraft={npiDraft}
               onNpiDraft={(next) => rememberConnect({ npiDraft: next })}
+              codeNotice={codeNotice}
               lead
               preview={preview}
               onEnrolled={() => setSponsorVersion((v) => v + 1)}

@@ -71,7 +71,7 @@ describe('email code failures', () => {
     let resolveSession
     const onLateSession = vi.fn()
     let outcome
-    const pending = verifyEmailCodeForSignIn('a@clinic.edu', '777777', {
+    verifyEmailCodeForSignIn('a@clinic.edu', '777777', {
       timeoutMs: 8000,
       sessionMs: 2000,
       verify: () => new Promise(() => {}),
@@ -90,7 +90,7 @@ describe('email code failures', () => {
   it('does not let a stalled session check hold a bad code for the full timeout', async () => {
     vi.useFakeTimers()
     let outcome
-    const pending = verifyEmailCodeForSignIn('a@clinic.edu', '666666', {
+    verifyEmailCodeForSignIn('a@clinic.edu', '666666', {
       timeoutMs: 8000,
       sessionMs: 2000,
       verify: async () => { throw new Error('Token has expired or is invalid') },

@@ -59,10 +59,11 @@ function npiDraftFrom(value) {
 }
 
 function connectDataFrom(step, state) {
-  if (step !== 'connect') return { inviteCode: '', npiDraft: null }
+  if (step !== 'connect') return { inviteCode: '', npiDraft: null, codeNotice: '' }
   return {
     inviteCode: typeof state?.inviteCode === 'string' ? state.inviteCode : '',
     npiDraft: npiDraftFrom(state?.npiDraft),
+    codeNotice: state?.codeNotice === 'required' ? 'required' : '',
   }
 }
 
@@ -80,26 +81,31 @@ export function useOnboardStep() {
   const [substep, setSubstep] = useState(initial.substep)
   const [inviteCode, setInviteCodeState] = useState(initial.inviteCode)
   const [npiDraft, setNpiDraftState] = useState(initial.npiDraft)
+  const [codeNotice, setCodeNoticeState] = useState(initial.codeNotice)
   const stepRef = useRef(step)
   const substepRef = useRef(substep)
   const inviteCodeRef = useRef(inviteCode)
   const npiDraftRef = useRef(npiDraft)
+  const codeNoticeRef = useRef(codeNotice)
 
   function applyRoute(next) {
     stepRef.current = next.step
     substepRef.current = next.substep || null
     inviteCodeRef.current = next.inviteCode || ''
     npiDraftRef.current = next.npiDraft || null
+    codeNoticeRef.current = next.codeNotice || ''
     setStepState(next.step)
     setSubstep(next.substep || null)
     setInviteCodeState(next.inviteCode || '')
     setNpiDraftState(next.npiDraft || null)
+    setCodeNoticeState(next.codeNotice || '')
   }
 
   function connectState(substepValue = substepRef.current) {
     const state = { onboard: 'connect', inviteCode: inviteCodeRef.current }
     if (substepValue) state.substep = substepValue
     if (npiDraftRef.current) state.npiDraft = npiDraftRef.current
+    if (codeNoticeRef.current) state.codeNotice = codeNoticeRef.current
     return state
   }
 
@@ -143,15 +149,19 @@ export function useOnboardStep() {
       if (replace) history.replaceState(state, '', url)
       else history.pushState(state, '', url)
     }
-    applyRoute({ step: next, substep: null, inviteCode: '', npiDraft: null })
+    applyRoute({ step: next, substep: null, inviteCode: '', npiDraft: null, codeNotice: '' })
   }
 
   function rememberConnect(patch) {
     if (stepRef.current !== 'connect') return
-    if (Object.prototype.hasOwnProperty.call(patch, 'inviteCode')) inviteCodeRef.current = String(patch.inviteCode || '')
+    if (Object.prototype.hasOwnProperty.call(patch, 'inviteCode')) {
+      inviteCodeRef.current = String(patch.inviteCode || '')
+      if (inviteCodeRef.current.trim()) codeNoticeRef.current = ''
+    }
     if (Object.prototype.hasOwnProperty.call(patch, 'npiDraft')) npiDraftRef.current = npiDraftFrom(patch.npiDraft)
     setInviteCodeState(inviteCodeRef.current)
     setNpiDraftState(npiDraftRef.current)
+    setCodeNoticeState(codeNoticeRef.current)
     const history = pageHistory()
     if (history) history.replaceState(connectState(), '', onboardUrl(pageLocation(), 'connect'))
   }
@@ -171,12 +181,19 @@ export function useOnboardStep() {
       history.back()
       return
     }
+    if (discard && !inviteCodeRef.current.trim()) codeNoticeRef.current = 'required'
     const state = connectState(want)
     if (history) {
       if (want) history.pushState(state, '', url)
       else history.replaceState(state, '', url)
     }
-    applyRoute({ step: 'connect', substep: want, inviteCode: inviteCodeRef.current, npiDraft: npiDraftRef.current })
+    applyRoute({
+      step: 'connect',
+      substep: want,
+      inviteCode: inviteCodeRef.current,
+      npiDraft: npiDraftRef.current,
+      codeNotice: codeNoticeRef.current,
+    })
   }
 
   function backStep() {
@@ -188,5 +205,5 @@ export function useOnboardStep() {
     goStep('welcome')
   }
 
-  return [step, goStep, backStep, substep, goSubstep, inviteCode, rememberConnect, npiDraft]
+  return [step, goStep, backStep, substep, goSubstep, inviteCode, rememberConnect, npiDraft, codeNotice]
 }

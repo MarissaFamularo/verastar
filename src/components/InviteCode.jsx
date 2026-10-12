@@ -15,7 +15,7 @@ export const INVITE_REDEEM_TIMEOUT_MS = 8000
 const CODE_REQUIRED = 'Enter your invitation code to continue.'
 const REDEEM_TIMEOUT = 'Checking the code timed out. Try again.'
 
-export default function InviteCode({ onEnrolled, lead = false, preview = false, onNpiStep, npiOpen, code: codeProp, onCodeChange, npiDraft, onNpiDraft }) {
+export default function InviteCode({ onEnrolled, lead = false, preview = false, onNpiStep, npiOpen, code: codeProp, onCodeChange, npiDraft, onNpiDraft, codeNotice = '' }) {
   const [phase, setPhase] = useState('code') // code | npi | confirming
   const [uncontrolledCode, setUncontrolledCode] = useState('')
   const [state, setState] = useState('idle')
@@ -23,9 +23,19 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
   const [ok, setOk] = useState(false)
   const redeemAttempt = useRef(0)
   const onNpiStepRef = useRef(onNpiStep)
-  onNpiStepRef.current = onNpiStep
   const controlled = codeProp !== undefined
   const activeCode = controlled ? codeProp : uncontrolledCode
+  const routed = typeof npiOpen === 'boolean'
+  const missingCode = routed && npiOpen && !activeCode.trim()
+  const needCode = !activeCode.trim() && (missingCode || codeNotice === 'required')
+  const visibleNote = needCode ? CODE_REQUIRED : note
+  const visibleOk = needCode ? false : ok
+
+  useEffect(() => { onNpiStepRef.current = onNpiStep })
+  useEffect(() => {
+    if (!missingCode) return
+    onNpiStepRef.current?.(false, { discard: true })
+  }, [missingCode])
 
   function updateCode(next) {
     if (controlled) onCodeChange?.(next)
@@ -43,16 +53,6 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
     setPhase('code')
     onNpiStepRef.current?.(false, { discard: true })
   }
-
-  const routed = typeof npiOpen === 'boolean'
-  const missingCode = routed && npiOpen && !activeCode.trim()
-
-  useEffect(() => {
-    if (!missingCode) return
-    setOk(false)
-    setNote(CODE_REQUIRED)
-    onNpiStepRef.current?.(false, { discard: true })
-  }, [missingCode])
 
   if (!preview && (!canRedeem() || isSponsored())) return null
 
@@ -145,10 +145,10 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
   if (screen === 'confirming') {
     return (
       <div>
-        <p role={state === 'busy' || !note || ok ? 'status' : 'alert'} style={{ margin: 0, fontSize: lead ? 15 : 13, lineHeight: 1.5, color: ok ? 'var(--color-verified-soft)' : state === 'busy' || !note ? 'var(--color-fg)' : 'var(--color-domain-vascular)' }}>
-          {state === 'busy' || !note ? 'Confirming your access…' : note}
+        <p role={state === 'busy' || !visibleNote || visibleOk ? 'status' : 'alert'} style={{ margin: 0, fontSize: lead ? 15 : 13, lineHeight: 1.5, color: visibleOk ? 'var(--color-verified-soft)' : state === 'busy' || !visibleNote ? 'var(--color-fg)' : 'var(--color-domain-vascular)' }}>
+          {state === 'busy' || !visibleNote ? 'Confirming your access…' : visibleNote}
         </p>
-        {state !== 'busy' && note && !ok && (
+        {state !== 'busy' && visibleNote && !visibleOk && (
           <button type="button" onClick={() => { setNote(''); showNpi(false) }} style={{ marginTop: 16, border: 0, background: 'transparent', padding: 0, color: 'var(--color-fg-dim)', fontFamily: 'inherit', fontSize: 14 }}>
             Back
           </button>
@@ -191,7 +191,7 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
           {state === 'busy' ? 'Checking…' : 'Continue'}
         </button>
       </div>
-      {note && <p role={ok ? 'status' : 'alert'} style={{ margin: '8px 0 0', fontSize: big ? 13 : 12, color: ok ? 'var(--color-verified-soft)' : 'var(--color-domain-vascular)' }}>{note}</p>}
+      {visibleNote && <p role={visibleOk ? 'status' : 'alert'} style={{ margin: '8px 0 0', fontSize: big ? 13 : 12, color: visibleOk ? 'var(--color-verified-soft)' : 'var(--color-domain-vascular)' }}>{visibleNote}</p>}
     </form>
   )
 }
