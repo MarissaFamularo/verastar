@@ -136,9 +136,9 @@ describe('gap 2 — CI level and kind are bound to the quantity\'s own interval 
     }
   })
 
-  it('a 99% marker after the interval, inside the same bracket, binds; an unmarked interval stays plain', () => {
+  it('a 99% marker after the interval, inside the same bracket, binds; an unlabelled parenthesis interval is not a CI', () => {
     expect(ciLabel(q({ value: 282, ci_low: 60, ci_high: 505, source_quote: 'difference 282 m (60 to 505, 99% CI)' }))).toBe('99% CI')
-    expect(ciLabel(q({ value: 1.2, ci_low: 1.0, ci_high: 1.4, source_quote: 'HR 0.8 (90% CI 0.7-0.9); OR 1.2 (1.0-1.4)' }))).toBe('CI')
+    expect(ciLabel(q({ value: 1.2, ci_low: 1.0, ci_high: 1.4, source_quote: 'HR 0.8 (90% CI 0.7-0.9); OR 1.2 (1.0-1.4)' }))).toBe('interval')
   })
 
   it('integration: a group-pair row cannot display a separate estimate CI, in either order', () => {

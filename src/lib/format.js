@@ -8,7 +8,7 @@
 // the verified tuple; it is re-derived here from the verified quote, deterministically,
 // never model-asserted, and never invented when the quote doesn't state one.
 
-import { normalize, extractNumbersWithIndex, numbersEqual } from '../pipeline/verify.js'
+import { normalize, extractNumbersWithIndex, numbersEqual, unlabelledIntervalWrap } from '../pipeline/verify.js'
 
 // Post-NFKC operator characters the quote may state before a p-value. ⩽/⩾ (slanted
 // variants) are distinct code points NFKC does not fold, so they map here.
@@ -170,8 +170,8 @@ export function pQualifier(quantity) {
 // 2.0)"), and the first marker in the quote may belong to another result. The interval is
 // located by its own printed bounds; the marker must sit directly before it (only words,
 // commas, brackets, or "for <effect>" in between — never a ";" or ")" closing another
-// result) or directly after it inside the same bracket. No bound marker → plain "CI", as
-// when the quote prints no level at all.
+// result) or directly after it inside the same bracket. No bound marker on an
+// unlabelled () or [] interval renders "interval"; "CI" is only the bound label.
 const INTERVAL_MARKER = /(?:(\d{2}(?:\.\d+)?)\s*%\s*(?:\(\s*|\[\s*)?)?(bayesian\s+)?(confidence\s+(?:interval|limits?)|credible\s+interval|\bCrI\b|\bCI\b)/gi
 const MARKER_GAP_MAX = 45
 
@@ -219,9 +219,15 @@ function boundMarker(quantity) {
 
 export function ciLabel(quantity) {
   const m = boundMarker(quantity)
-  if (!m || m.unbound) return 'CI'
-  if (m.credible) return `${m.level ? `${m.level}% ` : ''}credible interval`
-  if (m.level && m.level !== '95') return `${m.level}% CI`
+  if (m && !m.unbound) {
+    if (m.credible) return `${m.level ? `${m.level}% ` : ''}credible interval`
+    if (m.level && m.level !== '95') return `${m.level}% CI`
+    return 'CI'
+  }
+  // Same wrap the bracket verifier accepts, including parentheses and internal spaces.
+  // "CI" is reserved for a marker bound to these bounds. Bounds the quote does not
+  // locate stay "CI" only as the historical fallback for a quote that names none.
+  if (m?.unbound && unlabelledIntervalWrap(m.text, m.span.start, m.span.end)) return 'interval'
   return 'CI'
 }
 

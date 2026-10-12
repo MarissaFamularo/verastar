@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createContinuationGate } from './digestStore.js'
 import { createContinuationTickets } from './continuationTicket.js'
-import { runAndRankDigest } from './digestRunAndRank.js'
+import { rankingFailureNote, runAndRankDigest } from './digestRunAndRank.js'
 
 // These drive the screen's real read-then-rank orchestration (the function SpineCheck calls)
 // with dependencies that resolve only when the test says so, so a hold can land in the
@@ -119,6 +119,29 @@ describe('runAndRankDigest: an uninterrupted run is unchanged', () => {
     expect(Object.keys(out.triaged)).toEqual(['a', 'b'])
     expect(Object.keys(s.triaged)).toEqual(['a', 'b'])
     expect(saved).toHaveLength(1)
+  })
+
+  it('a ranking retry that read nothing does not say zero papers were read, and success clears the banner', async () => {
+    const cap = 'You have read a lot today. New papers pick up tomorrow morning. Everything already in your library still works.'
+    expect(rankingFailureNote({ append: true, added: 0, message: cap })).not.toMatch(/0 added|\.\./)
+    expect(rankingFailureNote({ append: true, added: 0, message: cap })).toContain(cap.replace(/\.$/, ''))
+    const failed = screen({ state: { ...unranked(), scanError: 'old banner' } })
+    await failed.run([paper('a'), paper('b')], { append: true }, { triage: async () => { throw new Error(cap) } })
+    expect(failed.s.scanError).toBe(rankingFailureNote({ append: true, added: 0, message: cap }))
+    expect(failed.s.results.map((r) => r.paper.id)).toEqual(['a', 'b'])
+    const again = screen({ state: { ...unranked(), scanError: failed.s.scanError } })
+    await again.run([paper('a'), paper('b')], { append: true })
+    expect(again.s.scanError).toBe('')
+    expect(again.s.results.map((r) => r.paper.id)).toEqual(['a', 'b'])
+  })
+
+  it('a paper under the bar stays in the list', async () => {
+    const { s, run } = screen()
+    await run([paper('a'), paper('b')], {}, {
+      triage: async () => [ranking('a', 80), ranking('b', 10)],
+    })
+    expect(s.results.map((r) => r.paper.id)).toEqual(['a', 'b'])
+    expect(s.scanNote).toMatch(/below that bar and stay in the list/)
   })
 
   it('a ranking failure on a live run still says so and keeps the reading', async () => {

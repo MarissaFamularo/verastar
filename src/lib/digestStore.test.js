@@ -590,6 +590,9 @@ describe('scheduled digests that did not simply finish', () => {
   })
   it('an ordinary unfinished run and an ordinary finished one keep their existing lines', () => {
     expect(scheduledDigestStatus({ ...base, server: { phase: 'rank' } })).toMatchObject({ pending: true, held: false, delayed: false, note: expect.stringMatching(/still being prepared/) })
+    const shown = { paper: { id: 'a' } }
+    expect(scheduledDigestStatus({ ...base, results: [shown], processedResults: [shown], triaged: { a: { finding: 'ready' } }, server: { phase: 'rank' } })).toMatchObject({ pending: false, note: expect.not.stringMatching(/still being prepared/) })
+    expect(scheduledDigestStatus({ ...base, results: [shown], processedResults: [shown], triaged: {}, server: { phase: 'rank' } }).note).toMatch(/papers are here/)
     expect(scheduledDigestStatus({ ...base, server: { phase: 'done' } })).toMatchObject({ pending: false, abandoned: false, delayed: false, note: expect.stringMatching(/prepared/) })
     // A held marker left on a finished digest (the run was released and completed) means nothing.
     expect(scheduledDigestStatus({ ...base, server: { phase: 'done', held: { reason: 'x' } } })).toMatchObject({ held: false, delayed: false })

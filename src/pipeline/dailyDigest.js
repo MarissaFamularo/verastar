@@ -37,7 +37,7 @@ import { profileTopics, profileSearchDays, profileTopicCap } from './topics.js'
 import { DEFAULT_SELECT_COUNT } from './onboard.js'
 import { isRelationshipValidated } from '../lib/evidenceVersion.js'
 import { fmtNum } from '../lib/format.js'
-import { findPrimary } from './primaryResult.js'
+import { findPrimary, verificationCorpus } from './primaryResult.js'
 import { isCapReached } from '../lib/anthropic.js'
 import { serverRunUnresolved } from '../lib/serverScope.js'
 
@@ -236,7 +236,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
             topics: r.paper.topics,
             topicSteering: r.paper.topicSteering,
             summary: evidenceSummary(r),
-            primary: findPrimary(r.rows, (row) => isRelationshipValidated(row.verdict)),
+            primary: findPrimary(r.rows, (row) => isRelationshipValidated(row.verdict), verificationCorpus(r)),
             verified: r.rows.filter((row) => isRelationshipValidated(row.verdict)).map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity), quote: row.quantity.source_quote })),
           })),
         })
@@ -247,10 +247,13 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
       }
       triaged = takesById(rankings)
       const post = applyPostReadFloor(state.processedResults, triaged, profile?.rubric?.scoreFloor)
-      visible = post.kept
+      // The bar labels the card. It does not drop the paper. The browser digest keeps
+      // every non-retracted read (digestRunAndRank); a scheduled run has to as well.
+      visible = state.processedResults.filter((r) => !r.retracted)
 
-      // Coverage fallback: protected topics left empty after the floor get one more read
-      // each, once. Marks the extra candidates chosen and drops back to the reading phase.
+      // Coverage fallback: a protected topic with no paper left in the digest gets one
+      // more read, once. A paper under the bar stays in the digest, so its topic is
+      // not empty. Marks the extra candidates and drops back to the reading phase.
       if (!state.server.fallbackDone) {
         const fallback = planCoverageFallbacks({
           candidates: state.candidates,
