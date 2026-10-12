@@ -2,22 +2,31 @@
 // attempt crosses, from the browser proxy (functions/model) and the scheduled digest
 // (functions/digest-run) alike.
 //
-//   check  -> reserve -> dispatch exactly once -> settle | mark ambiguous
+//   check -> count input (or estimate) -> reserve -> dispatch exactly once
+//         -> settle | release | mark ambiguous
 //
 // - check:    requestPolicy.checkPaidRequest; nothing unchecked is forwarded.
-// - reserve:  spend_reserve RPC, one transaction under a global lock: account, config,
+// - count:    Anthropic's token-counting API for THIS request. It is an estimate. A
+//             failure, timeout, or unusable count falls back to a conservative local
+//             estimate, never to zero (tokenReserve.js). Counting is free and is not
+//             itself a reservation.
+// - reserve:  that input, plus a safety margin, plus max_tokens at the output price.
+//             spend_reserve is one transaction under a global lock: account, config,
 //             pause, overrun review, per-person day/month caps, global ceiling, total
-//             budget, and request-id binding. Any RPC error means NO dispatch.
+//             budget, and request-id binding. Parallel reservations cannot jointly pass
+//             a cap. Any RPC error means NO dispatch. The hold is clamped to the
+//             context-window ceiling; it is not that ceiling.
 // - dispatch: one HTTP attempt to Anthropic. This module never retries; a caller's retry
 //             is a new attempt with a new request id and a new reservation.
-// - outcome:  2xx with priceable usage for the requested model -> settle (actual cost,
-//             unused balance released; above-bound actual recorded in full as an overrun).
-//             Anything else after dispatch -> ambiguous: ANY non-2xx status (4xx included:
-//             no provider status is documented as proof of zero charge), timeout, network
-//             loss, unparseable body, missing or unpriceable usage, unexpected model. The
-//             FULL reservation stays counted until an operator reconciles it
-//             (docs/SPENDING_CONTRACT.md). Ambiguous responses carry x-should-retry: false
-//             so no SDK stacks automatic retries on top of an unresolved liability.
+// - outcome:  2xx with priceable usage for the requested model -> settle (actual cost;
+//             above-hold actual recorded in full as an overrun).
+//             Release the hold only when Anthropic definitively did not charge: the
+//             request was never sent, the connection was refused before send, or the
+//             provider returned an explicit non-2xx error (a failed request is not
+//             billed). Any 2xx, a timeout after send, or an interrupted or otherwise
+//             ambiguous response keeps the hold (ambiguous) until reconciliation.
+//             A released row can still be settled or reconciled later if a charge is
+//             confirmed. Refusals and released errors carry x-should-retry: false.
 // Scheduler attempts carry the run's claim token; the reservation is refused unless the
 // run still owns the account (spend_reserve checks and renews the claim atomically).
 // If recording the outcome itself fails, the reservation stays 'reserved' (counted in
@@ -25,11 +34,13 @@
 
 import { checkPaidRequest, requestFingerprint } from './requestPolicy.js'
 import { priceUsage, responseModelMatches } from './pricing.js'
-import { PROVIDER_TIMEOUT_MS } from './timeouts.js'
+import { reservationCharge, resolveInputTokens } from './tokenReserve.js'
+import { COUNT_TIMEOUT_MS, PROVIDER_TIMEOUT_MS } from './timeouts.js'
 
 export const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 export const ANTHROPIC_VERSION = '2023-06-01'
-export { PROVIDER_TIMEOUT_MS }
+export { COUNT_TIMEOUT_MS, PROVIDER_TIMEOUT_MS }
+export { reservationCharge, resolveInputTokens }
 
 export const CAP_MESSAGE = 'You have read a lot today. New papers pick up tomorrow morning. Everything already in your library still works.'
 export const PAUSE_MESSAGE = 'Sponsored reading is paused right now. Everything already in your library still works.'
@@ -79,8 +90,30 @@ export function makeRpcLedger(admin) {
       p_provider_request_id: s.providerRequestId, p_provider_message_id: s.providerMessageId,
     }),
     markAmbiguous: (id, reason, providerRequestId) => call('spend_mark_ambiguous', { p_reservation_id: id, p_reason: reason, p_provider_request_id: providerRequestId }),
+    release: (id, reason, providerRequestId) => call('spend_release', { p_reservation_id: id, p_reason: reason, p_provider_request_id: providerRequestId }),
   }
 }
+
+// Anthropic's help center: failed requests are not charged, but a client timeout or
+// disconnect in the middle of a request that was on track to succeed still is.
+// https://support.anthropic.com/en/articles/8977456-how-do-i-pay-for-my-api-usage
+// An explicit 4xx/5xx is that failed request. Anything else we cannot prove unbilled
+// keeps its hold.
+export function explicitUnbilledStatus(status) {
+  return Number.isInteger(status) && status >= 400 && status <= 599
+}
+
+// True only when the bytes never left this process. A generic fetch failure is not
+// enough: the request may already have been accepted.
+const NOT_SENT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'])
+export function providerRequestNotSent(err) {
+  if (!err || typeof err !== 'object') return false
+  if (err.sent === false) return true
+  const code = err.cause?.code || err.code
+  return NOT_SENT_CODES.has(code)
+}
+
+const RELEASED_STATUSES = new Set(['released', 'already_released'])
 
 async function tryTwice(fn) {
   try {
@@ -96,18 +129,22 @@ async function tryTwice(fn) {
 //   dispatch   (text, { signal }) => Promise<Response>  — the only network call
 //   body       the parsed request the caller sent
 //   requestId  caller-supplied id (bound to account + fingerprint), or one is generated
-export async function guardedProviderCall({ ledger, dispatch, userId, body, requestId, purpose = null, source, claimToken = null, timeoutMs = PROVIDER_TIMEOUT_MS, randomId = () => globalThis.crypto.randomUUID() }) {
+export async function guardedProviderCall({ ledger, dispatch, userId, body, requestId, purpose = null, source, claimToken = null, timeoutMs = PROVIDER_TIMEOUT_MS, countTokens = null, countTimeoutMs = COUNT_TIMEOUT_MS, randomId = () => globalThis.crypto.randomUUID() }) {
   const checked = checkPaidRequest(body)
   if (!checked.ok) return { outcome: 'invalid', dispatched: false, response: refusal(400, 'invalid_request_error', checked.error) }
 
   const rid = requestId || `srv-${randomId()}`
   const fingerprint = await requestFingerprint(checked.forwardText, purpose)
+  // Count before reserving. A failure here does not dispatch and does not reserve zero:
+  // resolveInputTokens falls back to the local estimate.
+  const counted = await resolveInputTokens(checked.forward, checked.forwardText, countTokens, { timeoutMs: countTimeoutMs })
+  const hold = reservationCharge(checked.forward.model, { rawInputTokens: counted.tokens, maxOutputTokens: checked.bound.maxOutputTokens })
 
   let reservation
   try {
     reservation = await ledger.reserve({
       userId, requestId: rid, fingerprint, model: checked.forward.model, purpose, source,
-      micro: checked.bound.micro, maxInputTokens: checked.bound.maxInputTokens, maxOutputTokens: checked.bound.maxOutputTokens,
+      micro: hold.micro, maxInputTokens: hold.maxInputTokens, maxOutputTokens: hold.maxOutputTokens,
       claimToken,
     })
   } catch {
@@ -129,25 +166,50 @@ export async function guardedProviderCall({ ledger, dispatch, userId, body, requ
     // Unrecorded is still counted: the row stays 'reserved', which is outstanding.
     return { outcome: 'ambiguous', reason, dispatched: true, reservationId, accountingFailed: !recorded, response }
   }
+  const releaseHold = async (reason, providerRequestId, response) => {
+    let result = null
+    try { result = await tryTwice(() => ledger.release(reservationId, reason, providerRequestId)) } catch { result = null }
+    // Only an explicit transition (or the idempotent repeat of one) drops the hold.
+    // 'unchanged', not_found, an empty result, or an error leaves it counted and stops the run.
+    if (!result || !RELEASED_STATUSES.has(result.status)) {
+      return { outcome: 'release_failed', reason, dispatched: true, reservationId, accountingFailed: true, response }
+    }
+    return { outcome: 'released', reason, dispatched: true, reservationId, response }
+  }
 
   let upstream
-  let text
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     upstream = await dispatch(checked.forwardText, { signal: controller.signal })
+  } catch (err) {
+    clearTimeout(timer)
+    // The timer fired after we handed the request to the network. Anthropic may still bill it.
+    if (controller.signal.aborted) return ambiguous('timeout', null, refusal(504, 'api_error', 'The model call did not complete (timeout).'))
+    if (providerRequestNotSent(err)) return releaseHold('not_sent', null, refusal(504, 'api_error', 'The model call was not sent.'))
+    return ambiguous('network_error', null, refusal(504, 'api_error', 'The model call did not complete (network_error).'))
+  }
+  const providerRequestId = upstream.headers?.get?.('request-id') || null
+  let text
+  try {
     text = await upstream.text()
   } catch {
     clearTimeout(timer)
-    const reason = controller.signal.aborted ? 'timeout' : 'network_error'
-    return ambiguous(reason, null, refusal(504, 'api_error', `The model call did not complete (${reason}).`))
+    // Headers arrived, the body did not. A 2xx (and any status we cannot prove unbilled)
+    // keeps the hold. An explicit error status is a failed request and is not billed.
+    if (explicitUnbilledStatus(upstream.status)) {
+      return releaseHold(`provider_status_${upstream.status}`, providerRequestId, refusal(upstream.status, 'api_error', 'The model returned an error before the body arrived.'))
+    }
+    return ambiguous('interrupted_response', providerRequestId, refusal(502, 'api_error', 'The model response was interrupted.'))
   }
   clearTimeout(timer)
-  const providerRequestId = upstream.headers?.get?.('request-id') || null
   const passthrough = { status: upstream.status, headers: { 'content-type': 'application/json' }, body: text }
 
-  if (upstream.status < 200 || upstream.status >= 300) {
+  if (explicitUnbilledStatus(upstream.status)) {
     // Passed through so the SDK keeps its typed error, but never auto-retried.
+    return releaseHold(`provider_status_${upstream.status}`, providerRequestId, { ...passthrough, headers: { ...passthrough.headers, 'x-should-retry': 'false' } })
+  }
+  if (upstream.status < 200 || upstream.status >= 300) {
     return ambiguous(`provider_status_${upstream.status}`, providerRequestId, { ...passthrough, headers: { ...passthrough.headers, 'x-should-retry': 'false' } })
   }
 
@@ -204,12 +266,40 @@ export function anthropicDispatch(apiKey, fetchImpl = globalThis.fetch, url = AN
   })
 }
 
+// The messages URL with /count_tokens in place of the create path. A local-stack override
+// stays on that same host, so a test never counts against the real provider.
+export function countTokensUrl(messagesUrl = ANTHROPIC_URL) {
+  return String(messagesUrl).replace(/\/v1\/messages\/?$/, '/v1/messages/count_tokens')
+}
+
+// Free preflight. Returns the counted input_tokens, or throws. Zero is unusable: the
+// caller falls back to the local estimate rather than reserving nothing.
+export function anthropicTokenCounter(apiKey, fetchImpl = globalThis.fetch, messagesUrl = ANTHROPIC_URL) {
+  const url = countTokensUrl(messagesUrl)
+  return async (forward, { signal } = {}) => {
+    const res = await fetchImpl(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION },
+      body: JSON.stringify(forward),
+      signal,
+    })
+    const text = await res.text()
+    if (!res.ok) throw new Error(`count_tokens ${res.status}`)
+    let json
+    try { json = JSON.parse(text) } catch { throw new Error('count_tokens non-JSON') }
+    const n = json?.input_tokens
+    if (!Number.isSafeInteger(n) || n <= 0) throw new Error('count_tokens unusable')
+    return n
+  }
+}
+
 // A fetch for the Anthropic SDK on the server: every request the SDK makes becomes one
 // guarded attempt for `userId`, bound to the run's `claimToken`. The run is halted — every
 // later attempt refused WITHOUT reserving or dispatching — once any accounting step fails,
-// an overrun is recorded, an outcome is ambiguous, or the claim is lost. All refusals are
-// 402 so the digest runner stops and keeps its progress.
-export function makeGuardedFetch({ ledger, dispatch, userId, claimToken = null, purpose = 'scheduled-digest', source = 'scheduler', onOutcome = () => {}, randomId }) {
+// an overrun is recorded, an outcome is ambiguous, or the claim is lost. A released
+// error does not halt: the hold is gone and the caller sees the provider error. All
+// refusals are 402 so the digest runner stops and keeps its progress.
+export function makeGuardedFetch({ ledger, dispatch, userId, claimToken = null, purpose = 'scheduled-digest', source = 'scheduler', onOutcome = () => {}, countTokens = null, randomId }) {
   const state = { halted: null, attempts: 0, dispatched: 0 }
   const toResponse = (r) => new Response(r.body, { status: r.status, headers: r.headers })
   const guardedFetch = async (url, init = {}) => {
@@ -220,7 +310,7 @@ export function makeGuardedFetch({ ledger, dispatch, userId, claimToken = null, 
     let body
     try { body = JSON.parse(typeof init.body === 'string' ? init.body : new TextDecoder().decode(init.body)) } catch { return toResponse(refusal(400, 'invalid_request_error', 'Body must be JSON.')) }
     state.attempts++
-    const result = await guardedProviderCall({ ledger, dispatch, userId, body, purpose, source, claimToken, randomId })
+    const result = await guardedProviderCall({ ledger, dispatch, userId, body, purpose, source, claimToken, countTokens, randomId })
     if (result.dispatched) state.dispatched++
     if (result.accountingFailed || result.overrun || result.outcome === 'ambiguous') state.halted = result.outcome
     if (result.outcome === 'denied' && result.reason === 'claim_lost') state.halted = 'claim_lost'

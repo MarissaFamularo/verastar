@@ -4,8 +4,9 @@
 // concurrency) is proven separately against PostgreSQL: supabase/tests/.
 import { describe, it, expect } from 'vitest'
 import Anthropic from '@anthropic-ai/sdk'
-import { guardedProviderCall, makeGuardedFetch, denialResponse, anthropicDispatch, makeRpcLedger, resolveProviderUrl, ANTHROPIC_URL } from '../../supabase/functions/_shared/spending.js'
+import { guardedProviderCall, makeGuardedFetch, denialResponse, anthropicDispatch, anthropicTokenCounter, countTokensUrl, makeRpcLedger, resolveProviderUrl, ANTHROPIC_URL } from '../../supabase/functions/_shared/spending.js'
 import * as T from '../../supabase/functions/_shared/timeouts.js'
+import { localInputTokenEstimate, reservationCharge } from '../../supabase/functions/_shared/tokenReserve.js'
 import { checkPaidRequest } from '../../supabase/functions/_shared/requestPolicy.js'
 import { isCapReached, CapReachedError } from './anthropic.js'
 import { fakeLedger, fakeProvider } from './spendingFakes.js'
@@ -28,7 +29,12 @@ describe('one paid attempt', () => {
     expect(r.micro).toBe(70) // 10 x $2 + 5 x $10 per MTok = 70 micro-dollars
     expect(ledger.outstanding()).toBe(0)
     const [row] = ledger.rows.values()
-    expect(row.micro).toBe(checkPaidRequest(body()).bound.micro)
+    const checked = checkPaidRequest(body())
+    const hold = reservationCharge(MODEL, { rawInputTokens: localInputTokenEstimate(checked.forwardText), maxOutputTokens: 100 })
+    expect(row.micro).toBe(hold.micro)
+    expect(row.micro).toBeGreaterThan(r.micro) // reconciled down to actual usage
+    expect(row.micro).toBeLessThan(20_000) // far below the $2 context-window hold
+    expect(checked.bound.micro).toBeGreaterThan(2_000_000)
   })
   it('forwards only the checked request, with only the API headers', async () => {
     const seen = []
@@ -86,11 +92,149 @@ describe('accounting failures prevent dispatch', () => {
   })
 })
 
-describe('ambiguous outcomes keep the full liability', () => {
-  const held = async (script, reason, extra = {}) => {
+describe('a hold is released only when the provider did not charge', () => {
+  const released = async (script, reason, extra = {}) => {
     const ledger = fakeLedger()
     const provider = fakeProvider(script)
     const r = await call(ledger, provider, extra)
+    expect(r.outcome).toBe('released')
+    expect(r.reason).toBe(reason)
+    const [row] = ledger.rows.values()
+    expect(row.state).toBe('released')
+    expect(ledger.outstanding()).toBe(0)
+    expect(ledger.calls).toEqual(['reserve', 'release'])
+    return r
+  }
+  it('a connection refused before send releases the hold and sends nothing', async () => {
+    const provider = fakeProvider('refused')
+    const r = await released('refused', 'not_sent')
+    expect(provider.sent).toHaveLength(0)
+    expect(r.response.headers['x-should-retry']).toBe('false')
+  })
+  it('an explicit non-2xx releases the hold', async () => {
+    await released({ status: 500, body: { type: 'error', error: { type: 'api_error' } } }, 'provider_status_500')
+    await released({ status: 529, body: { type: 'error', error: { type: 'overloaded_error' } } }, 'provider_status_529')
+  })
+  it.each([400, 401, 403, 404, 408, 409, 413, 422, 429, 500, 502, 503, 504, 529])('provider %i releases the hold and is not retryable', async (status) => {
+    const ledger = fakeLedger()
+    const provider = fakeProvider({ status, body: { type: 'error', error: { type: 'x', message: 'no' } } })
+    const r = await call(ledger, provider)
+    expect(provider.sent).toHaveLength(1)
+    expect(r.outcome).toBe('released')
+    expect(r.reason).toBe(`provider_status_${status}`)
+    expect(r.response.status).toBe(status)
+    expect(r.response.headers['x-should-retry']).toBe('false')
+    const [row] = ledger.rows.values()
+    expect(row.state).toBe('released')
+    expect(ledger.outstanding()).toBe(0)
+  })
+  it('if release fails, the row stays reserved (still counted) and the run is flagged', async () => {
+    const ledger = fakeLedger({ releaseFails: 2 })
+    const r = await call(ledger, fakeProvider({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'no' } } }))
+    const [row] = ledger.rows.values()
+    expect(r.outcome).toBe('release_failed')
+    expect(row.state).toBe('reserved')
+    expect(ledger.outstanding()).toBe(row.micro)
+    expect(r.accountingFailed).toBe(true)
+  })
+  it.each(['unchanged', 'not_found'])('a release result of %s is a failure and the scheduler must stop', async (status) => {
+    const ledger = fakeLedger({ releaseStatus: status })
+    const provider = fakeProvider({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'no' } } })
+    const g = makeGuardedFetch({ ledger, dispatch: provider.dispatch, userId: 'u1' })
+    const err = await g.fetch('https://api.anthropic.com/v1/messages', { method: 'POST', body: JSON.stringify(body()) })
+    expect(err.status).toBe(400)
+    expect(g.state.halted).toBe('release_failed')
+    const [row] = ledger.rows.values()
+    expect(row.state).toBe('reserved')
+    expect(ledger.outstanding()).toBe(row.micro)
+    const again = await g.fetch('https://api.anthropic.com/v1/messages', { method: 'POST', body: JSON.stringify(body()) })
+    expect(again.status).toBe(402)
+    expect(provider.sent).toHaveLength(1)
+  })
+  it('the RPC ledger releases through spend_release', () => {
+    const admin = { rpc: async () => ({ data: {}, error: null }) }
+    expect(Object.keys(makeRpcLedger(admin)).sort()).toEqual(['markAmbiguous', 'release', 'reserve', 'settle'])
+  })
+})
+
+describe('a possible charge keeps the hold against the cap', () => {
+  const kept = async (script, reason, extra = {}) => {
+    const ledger = fakeLedger()
+    const provider = fakeProvider(script)
+    const r = await call(ledger, provider, extra)
+    expect(r.outcome).toBe('ambiguous')
+    expect(r.reason).toBe(reason)
+    const [row] = ledger.rows.values()
+    expect(row.state).toBe('ambiguous')
+    expect(ledger.outstanding()).toBe(row.micro)
+    expect(ledger.calls).toEqual(['reserve', 'ambiguous'])
+    return { r, ledger, provider, row }
+  }
+  it('a timeout after send keeps the hold, so another call cannot pass the cap', async () => {
+    const checked = checkPaidRequest(body())
+    const hold = reservationCharge(MODEL, { rawInputTokens: localInputTokenEstimate(checked.forwardText), maxOutputTokens: 100 })
+    const ledger = fakeLedger({ capMicro: hold.micro })
+    const provider = fakeProvider('hang')
+    const r = await call(ledger, provider, { timeoutMs: 20 })
+    expect(provider.sent).toHaveLength(1)
+    expect(r.outcome).toBe('ambiguous')
+    expect(r.reason).toBe('timeout')
+    expect(r.response.headers['x-should-retry']).toBe('false')
+    expect(ledger.outstanding()).toBe(hold.micro)
+    const second = await call(ledger, fakeProvider(ok()), { requestId: 'after-timeout' })
+    expect(second.outcome).toBe('denied')
+    expect(second.reason).toBe('cap_day')
+    expect(second.dispatched).toBe(false)
+  })
+  it('a network failure that may have been sent keeps the hold', () => kept('network', 'network_error'))
+  it('an interrupted HTTP 200 keeps the hold, and another scheduled call is not allowed', async () => {
+    const checked = checkPaidRequest(body())
+    const hold = reservationCharge(MODEL, { rawInputTokens: localInputTokenEstimate(checked.forwardText), maxOutputTokens: 100 })
+    const ledger = fakeLedger({ capMicro: hold.micro })
+    const provider = fakeProvider('interrupt')
+    const g = makeGuardedFetch({ ledger, dispatch: provider.dispatch, userId: 'u1', randomId: () => '11111111-1111-1111-1111-111111111111' })
+    const first = await g.fetch('https://api.anthropic.com/v1/messages', { method: 'POST', body: JSON.stringify(body()) })
+    expect(first.status).toBe(502)
+    expect(provider.sent).toHaveLength(1)
+    const [row] = ledger.rows.values()
+    expect(row.state).toBe('ambiguous')
+    expect(row.reason).toBe('interrupted_response')
+    expect(ledger.outstanding()).toBe(hold.micro)
+    expect(g.state.halted).toBe('ambiguous')
+    const again = await g.fetch('https://api.anthropic.com/v1/messages', { method: 'POST', body: JSON.stringify(body()) })
+    expect(again.status).toBe(402)
+    expect(provider.sent).toHaveLength(1)
+  })
+  it('a released row can still record a confirmed charge, once', async () => {
+    const ledger = fakeLedger()
+    await call(ledger, fakeProvider('refused'))
+    const [id, row] = [...ledger.rows.entries()][0]
+    expect(row.state).toBe('released')
+    expect((await ledger.settle({ reservationId: id, micro: 70 })).status).toBe('settled')
+    expect(row).toMatchObject({ state: 'settled', actual: 70 })
+    expect(ledger.outstanding()).toBe(0)
+    expect(ledger.charged()).toBe(70)
+    expect((await ledger.settle({ reservationId: id, micro: 70 })).status).toBe('already_settled')
+    expect((await ledger.settle({ reservationId: id, micro: 71 })).status).toBe('conflict')
+    expect(ledger.charged()).toBe(70)
+  })
+  it('an ambiguous row can still be settled to the confirmed cost', async () => {
+    const ledger = fakeLedger()
+    await call(ledger, fakeProvider('interrupt'))
+    const [id, row] = [...ledger.rows.entries()][0]
+    expect(row.state).toBe('ambiguous')
+    expect((await ledger.settle({ reservationId: id, micro: 40 })).status).toBe('settled')
+    expect(row).toMatchObject({ state: 'settled', actual: 40 })
+    expect(ledger.outstanding()).toBe(0)
+    expect(ledger.charged()).toBe(40)
+  })
+})
+
+describe('a 2xx that cannot be priced keeps the hold', () => {
+  const held = async (script, reason) => {
+    const ledger = fakeLedger()
+    const provider = fakeProvider(script)
+    const r = await call(ledger, provider)
     expect(provider.sent).toHaveLength(1)
     expect(r.outcome).toBe('ambiguous')
     expect(r.reason).toBe(reason)
@@ -99,16 +243,6 @@ describe('ambiguous outcomes keep the full liability', () => {
     expect(ledger.outstanding()).toBe(row.micro)
     return r
   }
-  it('provider timeout', async () => {
-    const r = await held('hang', 'timeout', { timeoutMs: 20 })
-    expect(r.response.status).toBe(504)
-    expect(r.response.headers['x-should-retry']).toBe('false')
-  })
-  it('network loss / interrupted response', () => held('network', 'network_error'))
-  it('5xx and 529 overload', async () => {
-    await held({ status: 500, body: { type: 'error', error: { type: 'api_error' } } }, 'provider_status_500')
-    await held({ status: 529, body: { type: 'error', error: { type: 'overloaded_error' } } }, 'provider_status_529')
-  })
   it('a 200 with a non-JSON body', () => held(new Response('<html>', { status: 200 }), 'unparseable_response'))
   it('missing usage', () => held({ body: { ...ok().body, usage: undefined } }, 'missing_usage'))
   it('malformed usage', () => held(ok({ input_tokens: 'many', output_tokens: 1 }), 'malformed_usage'))
@@ -116,32 +250,11 @@ describe('ambiguous outcomes keep the full liability', () => {
   it('usage with charges the table does not model', () => held(ok({ input_tokens: 1, output_tokens: 1, server_tool_use: { web_search_requests: 2 } }), 'server_tool_use'))
   it('if marking ambiguous fails, the row stays reserved (still counted) and the run is flagged', async () => {
     const ledger = fakeLedger({ ambiguousFails: 2 })
-    const r = await call(ledger, fakeProvider('network'))
+    const r = await call(ledger, fakeProvider({ body: { ...ok().body, usage: undefined } }))
     const [row] = ledger.rows.values()
     expect(row.state).toBe('reserved')
     expect(ledger.outstanding()).toBe(row.micro)
     expect(r.accountingFailed).toBe(true)
-  })
-})
-
-describe('no post-dispatch status releases liability', () => {
-  // 2026-10-09 review: no provider status is documented as proof of zero charge, so every
-  // non-2xx after dispatch keeps the full reservation until an operator reconciles it.
-  it.each([400, 401, 403, 404, 408, 409, 413, 422, 429, 500, 502, 503, 504, 529])('provider %i: ambiguous, full liability kept, not retryable', async (status) => {
-    const ledger = fakeLedger()
-    const r = await call(ledger, fakeProvider({ status, body: { type: 'error', error: { type: 'x', message: 'no' } } }))
-    expect(r.outcome).toBe('ambiguous')
-    expect(r.reason).toBe(`provider_status_${status}`)
-    expect(r.response.status).toBe(status)
-    expect(r.response.headers['x-should-retry']).toBe('false')
-    const [row] = ledger.rows.values()
-    expect(row.state).toBe('ambiguous')
-    expect(ledger.outstanding()).toBe(row.micro)
-  })
-  it('the ledger has no release operation at all', () => {
-    expect(fakeLedger().release).toBeUndefined()
-    const admin = { rpc: async () => ({ data: {}, error: null }) }
-    expect(Object.keys(makeRpcLedger(admin)).sort()).toEqual(['markAmbiguous', 'reserve', 'settle'])
   })
 })
 
@@ -198,7 +311,7 @@ describe('the scheduler\'s guarded fetch with the real SDK', () => {
     expect(provider.sent).toHaveLength(1)
     expect([...ledger.rows.values()][0]).toMatchObject({ source: 'scheduler', purpose: 'scheduled-digest', state: 'settled', userId: 'u1' })
   })
-  it.each([408, 429, 529])('a %i is not retried by the SDK: one dispatch, one retained liability, run halted', async (status) => {
+  it.each([408, 429, 529])('a %i is not retried by the SDK: one dispatch, hold released, run not halted', async (status) => {
     const ledger = fakeLedger()
     const provider = fakeProvider({ status, body: { type: 'error', error: { type: 'x', message: 'busy' } } })
     const g = makeGuardedFetch({ ledger, dispatch: provider.dispatch, userId: 'u1', claimToken: 'tok' })
@@ -208,12 +321,19 @@ describe('the scheduler\'s guarded fetch with the real SDK', () => {
     expect(provider.sent).toHaveLength(1)
     const rows = [...ledger.rows.values()]
     expect(rows).toHaveLength(1)
-    expect(rows[0].state).toBe('ambiguous')
+    expect(rows[0].state).toBe('released')
+    expect(ledger.outstanding()).toBe(0)
+    expect(g.state.halted).toBeNull()
+  })
+  it('an unpriceable 2xx still halts the run and keeps the hold', async () => {
+    const ledger = fakeLedger()
+    const provider = fakeProvider({ body: { ...ok().body, usage: undefined } })
+    const g = makeGuardedFetch({ ledger, dispatch: provider.dispatch, userId: 'u1' })
+    await create(sdk(g.fetch)).catch(() => {})
+    expect([...ledger.rows.values()][0].state).toBe('ambiguous')
     expect(g.state.halted).toBe('ambiguous')
-    // The pipeline's own retry is refused locally: no reservation, no dispatch.
-    const again = await create(client).catch((e) => e)
+    const again = await create(sdk(g.fetch)).catch((e) => e)
     expect(again.status).toBe(402)
-    expect(ledger.calls.filter((c) => c === 'reserve')).toHaveLength(1)
     expect(provider.sent).toHaveLength(1)
   })
   it('a cap denial reaches the app as CapReached and is not retried', async () => {
@@ -284,9 +404,108 @@ describe('the scheduler\'s guarded fetch with the real SDK', () => {
     expect(T.PROVIDER_TIMEOUT_MS).toBeLessThan(T.SPONSORED_CLIENT_TIMEOUT_MS)
     expect(T.SERVER_CLIENT_TIMEOUT_MS).toBeLessThan(T.CLAIM_STALE_SECONDS * 1000)
     expect(T.PROVIDER_TIMEOUT_MS).toBeLessThan(T.EDGE_IDLE_TIMEOUT_MS)
+    expect(T.COUNT_TIMEOUT_MS).toBeLessThan(T.PROVIDER_TIMEOUT_MS)
   })
   it('CapReachedError is what the digest runner keys on', () => {
     expect(isCapReached(new CapReachedError())).toBe(true)
+  })
+})
+
+describe('request-sized reservations', () => {
+  const holdFor = (raw) => reservationCharge(MODEL, { rawInputTokens: raw, maxOutputTokens: 100 })
+  it('a counted typical call reserves far below $2, and settlement reconciles to actual usage', async () => {
+    const ledger = fakeLedger()
+    const r = await call(ledger, fakeProvider(ok()), { countTokens: async () => 800 })
+    const [row] = ledger.rows.values()
+    expect(row.micro).toBe(holdFor(800).micro)
+    expect(row.micro).toBeLessThan(20_000)
+    expect(row.micro).toBeGreaterThan(r.micro)
+    expect(r.outcome).toBe('settled')
+    expect(row.state).toBe('settled')
+    expect(row.actual).toBe(70)
+    expect(ledger.outstanding()).toBe(0)
+  })
+  it('a ranking-sized count plus max output is still far below the context-window ceiling', () => {
+    const ranking = reservationCharge(MODEL, { rawInputTokens: 12_000, maxOutputTokens: 8_192 })
+    expect(ranking.micro).toBeLessThan(200_000)
+    expect(ranking.micro).toBeGreaterThan(0)
+    expect(checkPaidRequest({ ...body(), max_tokens: 8192 }).bound.micro).toBeGreaterThan(2_000_000)
+  })
+  it('count timeout, error, and a zero count fall back to the local estimate, never to zero', async () => {
+    const estimate = holdFor(localInputTokenEstimate(checkPaidRequest(body()).forwardText)).micro
+    const cases = [
+      { countTokens: () => new Promise(() => {}), countTimeoutMs: 20 },
+      { countTokens: async () => { throw new Error('count down') } },
+      { countTokens: async () => 0 },
+      { countTokens: async () => 1.5 },
+    ]
+    for (const extra of cases) {
+      const ledger = fakeLedger()
+      const r = await call(ledger, fakeProvider(ok()), extra)
+      expect(r.outcome).toBe('settled')
+      const [row] = ledger.rows.values()
+      expect(row.micro).toBe(estimate)
+      expect(row.micro).toBeGreaterThan(0)
+      expect(row.micro).toBeLessThan(2_000_000)
+    }
+  })
+  it('the cap still denies a hold that does not fit, including one far below $2', async () => {
+    const fits = fakeLedger({ capMicro: 50_000 })
+    const provider = fakeProvider(ok())
+    const okCall = await call(fits, provider, { countTokens: async () => 100 })
+    expect(okCall.outcome).toBe('settled')
+    expect(provider.sent).toHaveLength(1)
+    expect([...fits.rows.values()][0].micro).toBeLessThan(50_000)
+    const tight = fakeLedger({ capMicro: 1 })
+    const denied = await call(tight, fakeProvider(ok()), { countTokens: async () => 100 })
+    expect(denied.outcome).toBe('denied')
+    expect(denied.reason).toBe('cap_day')
+    expect(tight.rows.size).toBe(0)
+  })
+  it('parallel reservations cannot jointly exceed the cap', async () => {
+    const micro = holdFor(localInputTokenEstimate(checkPaidRequest(body()).forwardText)).micro
+    const ledger = fakeLedger({ capMicro: micro * 2 })
+    let releaseGate
+    const gate = new Promise((resolve) => { releaseGate = resolve })
+    const sent = []
+    const dispatch = async (text) => {
+      sent.push(JSON.parse(text))
+      await gate
+      return new Response(JSON.stringify(ok().body), { status: 200, headers: { 'content-type': 'application/json', 'request-id': 'req_test' } })
+    }
+    const pending = Array.from({ length: 6 }, (_, i) => guardedProviderCall({
+      ledger, dispatch, userId: 'u1', body: body(), source: 'proxy', purpose: 'test', requestId: `parallel-req-${i}`,
+    }))
+    for (let i = 0; i < 50 && ledger.calls.filter((c) => c === 'reserve').length < 6; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    expect(ledger.calls.filter((c) => c === 'reserve')).toHaveLength(6)
+    expect([...ledger.rows.values()].filter((r) => r.state === 'reserved')).toHaveLength(2)
+    expect(ledger.outstanding()).toBe(micro * 2)
+    expect(sent).toHaveLength(2)
+    releaseGate()
+    const results = await Promise.all(pending)
+    expect(results.filter((r) => r.outcome === 'settled')).toHaveLength(2)
+    expect(results.filter((r) => r.outcome === 'denied' && r.reason === 'cap_day')).toHaveLength(4)
+    expect(sent).toHaveLength(2)
+    expect(ledger.outstanding()).toBe(0)
+    expect(ledger.charged()).toBe(70 * 2)
+    expect(ledger.charged()).toBeLessThanOrEqual(micro * 2)
+  })
+  it('the counting call uses the count_tokens endpoint and rejects an unusable count', async () => {
+    const seen = []
+    const fetchImpl = async (url, init) => {
+      seen.push({ url, init })
+      return new Response(JSON.stringify({ input_tokens: 42 }))
+    }
+    const n = await anthropicTokenCounter('sk-test', fetchImpl)({ model: MODEL, max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] }, {})
+    expect(n).toBe(42)
+    expect(seen[0].url).toBe(countTokensUrl(ANTHROPIC_URL))
+    expect(Object.keys(seen[0].init.headers).sort()).toEqual(['anthropic-version', 'content-type', 'x-api-key'])
+    const bad = anthropicTokenCounter('sk-test', async () => new Response(JSON.stringify({ input_tokens: 0 })))
+    await expect(bad({})).rejects.toThrow(/unusable/)
+    const down = anthropicTokenCounter('sk-test', async () => new Response('no', { status: 503 }))
+    await expect(down({})).rejects.toThrow(/503/)
   })
 })
 

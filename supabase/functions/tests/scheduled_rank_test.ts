@@ -78,6 +78,12 @@ function memoryDb(user: string) {
       return { status: 'settled' }
     },
     spend_mark_ambiguous: (a) => { t.reservations.find((x) => x.id === a.p_reservation_id)!.state = 'ambiguous'; return { status: 'ambiguous' } },
+    spend_release: (a) => {
+      const r = t.reservations.find((x) => x.id === a.p_reservation_id)!
+      r.state = 'released'
+      r.actual = 0
+      return { status: 'released' }
+    },
   }
   const from = (table: string) => {
     const filters: ((r: Row) => boolean)[] = []
