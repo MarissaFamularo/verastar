@@ -1279,10 +1279,13 @@ function windowConflict(rowText, declared) {
 // units. The qualifier stays on the noun it was written on; pooling every
 // qualifier and every noun would let it move.
 function qualifierUnits(text, expansions) {
-  const surface = endpointSurface(withoutComponentDefinitions(text), expansions, { dropExpansions: true })
+  // Split while the commas are still commas. The surface normalizer turns them
+  // into spaces, and a qualifier would then stick to whichever noun follows.
+  const prepared = stripComparison(withoutComponentDefinitions(text))
+  const parts = String(prepared).split(/\s*,\s*(?:or\s+|and\s+)?|\s+\band\s*\/\s*or\s+|\s+\bor\b\s+|\s+\band\b\s+/i)
   const units = []
-  for (const part of surface.split(/\s*(?:,|\bor\b|\band\b)\s*/)) {
-    const words = part.split(' ').filter(Boolean)
+  for (const part of parts) {
+    const words = endpointSurface(part, expansions, { dropExpansions: true }).split(' ').filter(Boolean)
     const heads = [...new Set(words.map(asHead).filter(Boolean))]
     const quals = words.filter((word) => HARD_QUALIFIER.has(word)).sort()
     for (const head of heads) units.push(`${quals.join('+')}|${head}`)
@@ -1447,8 +1450,9 @@ function readBoundPiece(part, inherited) {
   }
 }
 
-// Oxford-comma lists stay in order long enough to bind each qualifier and each
-// window to its own noun. The composite is then the multiset of those units.
+// Oxford-comma lists are split so each qualifier and each window binds to its
+// own noun. The composite is the unordered set of those complete units: written
+// order may change, and a qualifier or a window may not move to another noun.
 // A piece with two heads, no head, or an unrecognized anchor does not parse.
 function boundComponents(text) {
   const phrase = endpointPhrase(text)
@@ -1499,6 +1503,8 @@ function windowsCompatible(row, declared) {
   return boundKey({ ...row, quals: [], head: '' }) === boundKey({ ...declared, quals: [], head: '' })
 }
 
+// Order is not part of the unit. "death or stroke" is "stroke or death" when
+// each qualifier and each window, including its anchor, stays on the same noun.
 function sameBoundComponents(left, right) {
   if (left.length !== right.length) return false
   const used = new Set()

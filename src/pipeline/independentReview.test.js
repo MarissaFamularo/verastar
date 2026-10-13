@@ -1,6 +1,8 @@
 // Reproductions from the 2026-10-12 owner review of primary-outcome identification.
-// A row is the declared primary only when each component matches, qualifiers bound
-// to that component and window included. A window is relation, duration, and anchor.
+// A row is the declared primary only when each component matches. Components are an
+// unordered set of complete units: qualifiers, head noun, and time window with its
+// anchor. Written order may change. A qualifier or a window may not move onto a
+// different component. A window is relation, duration, and anchor.
 // A parenthetical or bracket is a time window, a pure abbreviation, or part of the
 // component; it is never dropped and a qualifier never moves to another outcome.
 // A window is shared only when the phrase puts one window on the whole endpoint.
@@ -316,9 +318,47 @@ function propertyCases() {
   add(perComponent, 'dropped qualifier', 'death within 30 days or stroke at one year', 'unknown')
   add(perComponent, 'subset', 'death within 30 days', 'unknown')
   add(perComponent, 'subset', 'ipsilateral stroke at one year', 'unknown')
+  add(perComponent, 'swapped windows', 'death at one year or ipsilateral stroke within 30 days', 'unknown')
   add(perComponent, 'exact', 'death within 30 days or ipsilateral stroke at one year', 'identified')
+  add(perComponent, 'exact', 'ipsilateral stroke at one year or death within 30 days', 'identified')
   add(perComponent, 'exact', 'death (within 30 days) or ipsilateral stroke at one year', 'identified')
   add(perComponent, 'exact', 'death within 30 days or 1-year ipsilateral stroke', 'identified')
+  add(
+    { label: 'reordered death or stroke', source: 'The primary end point was death or stroke.' },
+    'exact',
+    'stroke or death',
+    'identified',
+  )
+  add(
+    { label: 'reordered qualifiers', source: 'The primary end point was cardiovascular death or ipsilateral stroke.' },
+    'exact',
+    'ipsilateral stroke or cardiovascular death',
+    'identified',
+  )
+  add(
+    { label: 'reordered qualifiers', source: 'The primary end point was cardiovascular death or ipsilateral stroke.' },
+    'moved qualifier',
+    'death or ipsilateral cardiovascular stroke',
+    'unknown',
+  )
+  add(
+    {
+      label: 'reordered anchored windows',
+      source: 'The primary end point was death within 30 days after randomization or ipsilateral stroke at one year after discharge.',
+    },
+    'exact',
+    'ipsilateral stroke at one year after discharge or death within 30 days after randomization',
+    'identified',
+  )
+  add(
+    {
+      label: 'reordered anchored windows',
+      source: 'The primary end point was death within 30 days after randomization or ipsilateral stroke at one year after discharge.',
+    },
+    'swapped windows',
+    'death at one year after discharge or ipsilateral stroke within 30 days after randomization',
+    'unknown',
+  )
 
   const parenWindows = {
     label: 'parenthetical per-component windows',
@@ -1089,6 +1129,14 @@ describe('a shared passage does not make a different result the primary', () => 
 
 describe('independent-review false verifications stay closed', () => {
   const passes = (entry) => isRelationshipValidated(entry.verdict)
+  // The hazard ratio is checked on its own. A mismatched endpoint leaves the
+  // primary unidentified even when that number is accepted.
+  const unidentified = (entry, source, label) => {
+    expect(isRelationshipValidated(entry.verdict), label).toBe(true)
+    expect(findPrimary([entry], () => true, source), label).toMatchObject({
+      state: 'unknown', name: null, indexes: [], basis: null, reason: PRIMARY_UNBOUND_REASON,
+    })
+  }
   const arm = 'a primary-outcome event occurred in 129 patients (37.2%) in the PCI group and in 134 patients (38.0%) in the optimal-medical-therapy group'
   const armPair = (quote) => ({
     quantity_type: 'comparison',
@@ -1188,14 +1236,10 @@ describe('independent-review false verifications stay closed', () => {
     const quote = moved.replace(/\.$/, '')
     for (const name of ['death, cardiovascular hospitalization, or stroke', 'Primary composite outcome', 'hazard ratio']) {
       const entry = validated({ ...hr(name, quote), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
-      expect(findPrimary([entry], passes, source), name).toMatchObject({
-        state: 'unknown', verified: false, indexes: [],
-      })
+      unidentified(entry, source, name)
     }
     const fragment = validated({ ...hr('hazard ratio', 'hazard ratio, 0.74; 95% CI, 0.65 to 0.85'), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
-    expect(findPrimary([fragment], passes, source)).toMatchObject({
-      state: 'unknown', verified: false, indexes: [],
-    })
+    unidentified(fragment, source, 'hazard ratio fragment')
     const kept = 'Cardiovascular death, hospitalization, or stroke occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
     const keptSource = `Patients were randomly assigned to device or control. ${declared} ${kept}`
     const keptRow = validated({ ...hr('cardiovascular death, hospitalization, or stroke', kept.replace(/\.$/, '')), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, keptSource)
@@ -1215,16 +1259,12 @@ describe('independent-review false verifications stay closed', () => {
       const source = `Patients were randomly assigned to device or control. ${declared} ${sentence}`
       const quote = sentence.replace(/\.$/, '')
       const entry = validated({ ...hr('Primary composite outcome', quote), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
-      expect(findPrimary([entry], passes, source), sentence).toMatchObject({
-        state: 'unknown', verified: false, indexes: [],
-      })
+      unidentified(entry, source, sentence)
     }
     const named = 'Death within 30 days after diagnosis occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
     const namedSource = `Patients were randomly assigned to device or control. ${declared} ${named}`
     const namedRow = validated({ ...hr('Death within 30 days after diagnosis', named.replace(/\.$/, '')), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, namedSource)
-    expect(findPrimary([namedRow], passes, namedSource)).toMatchObject({
-      state: 'unknown', verified: false, indexes: [],
-    })
+    unidentified(namedRow, namedSource, 'named diagnosis anchor')
   })
 
   it('does not match when each component keeps the other window', () => {
@@ -1234,19 +1274,56 @@ describe('independent-review false verifications stay closed', () => {
     const quote = swapped.replace(/\.$/, '')
     for (const name of ['death at one year or stroke within 30 days', 'Primary composite outcome', 'hazard ratio']) {
       const entry = validated({ ...hr(name, quote), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
-      expect(findPrimary([entry], passes, source), name).toMatchObject({
-        state: 'unknown', verified: false, indexes: [],
-      })
+      unidentified(entry, source, name)
     }
     const fragment = validated({ ...hr('hazard ratio', 'hazard ratio, 0.74; 95% CI, 0.65 to 0.85'), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
-    expect(findPrimary([fragment], passes, source)).toMatchObject({
-      state: 'unknown', verified: false, indexes: [],
-    })
+    unidentified(fragment, source, 'hazard ratio fragment')
     const kept = 'Death within 30 days or stroke at one year occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
     const keptSource = `Patients were randomly assigned to device or control. ${declared} ${kept}`
     const keptRow = validated({ ...hr('death within 30 days or stroke at one year', kept.replace(/\.$/, '')), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, keptSource)
     expect(findPrimary([keptRow], passes, keptSource)).toMatchObject({
       state: 'identified', verified: true, indexes: [0], reason: null,
     })
+  })
+
+  it('matches the same components when only their written order changes', () => {
+    const cases = [
+      [
+        'The primary end point was death or stroke.',
+        'Stroke or death occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).',
+        'stroke or death',
+      ],
+      [
+        'The primary end point was cardiovascular death or hospitalization.',
+        'Hospitalization or cardiovascular death occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).',
+        'hospitalization or cardiovascular death',
+      ],
+      [
+        'The primary end point was cardiovascular death, hospitalization, or stroke.',
+        'Stroke, hospitalization, or cardiovascular death occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).',
+        'stroke, hospitalization, or cardiovascular death',
+      ],
+      [
+        'The primary end point was death within 30 days or stroke at one year.',
+        'Stroke at one year or death within 30 days occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).',
+        'stroke at one year or death within 30 days',
+      ],
+      [
+        'The primary end point was cardiovascular death within 30 days after randomization or disabling stroke at one year after discharge.',
+        'Disabling stroke at one year after discharge or cardiovascular death within 30 days after randomization occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).',
+        'disabling stroke at one year after discharge or cardiovascular death within 30 days after randomization',
+      ],
+    ]
+    for (const [declared, sentence, name] of cases) {
+      const source = `Patients were randomly assigned to device or control. ${declared} ${sentence}`
+      const quote = sentence.replace(/\.$/, '')
+      for (const rowName of [name, 'Primary composite outcome']) {
+        const entry = validated({ ...hr(rowName, quote), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
+        expect(isRelationshipValidated(entry.verdict), rowName).toBe(true)
+        expect(findPrimary([entry], passes, source), `${declared} / ${rowName}`).toMatchObject({
+          state: 'identified', verified: true, indexes: [0], reason: null,
+        })
+      }
+    }
   })
 })
