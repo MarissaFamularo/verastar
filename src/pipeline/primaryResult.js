@@ -45,7 +45,9 @@ export function tagResult(quantity) {
         ? 'equivalence'
         : null
   // Subgroup / cohort split, judged from the NAME only (the quote often names the whole trial).
-  // "PAD vs no PAD" and "with X vs without X" are subgroup arms, not the randomized comparison.
+  // "PAD vs no PAD" and "with X vs without X" are subgroup arms. "X vs no X" is also a
+  // subgroup unless the assignment sentence names that absence as a randomized arm;
+  // that exception needs the source, so it is applied in findPrimary, not here.
   const subgroup = has(/\bsubgroups?\b|\bsubset\b|\bstrat(?:um|a)\b|\bin patients (?:with|without)\b|\bamong (?:patients|participants|those|women|men)\b|\b[\w-]+[- ]access cohort\b|\b(?:bicuspid|tricuspid)\b|\bin (?:a)?symptomatic patients\b/i, name)
     || subgroupComparison(name)
   const secondary = has(/\bsecondary\b/i, name)
@@ -58,14 +60,55 @@ const NON_RANDOMIZED = new Set(['as-treated', 'per-protocol'])
 // test, so it is only treated as "not the randomized comparison" outside that setting.
 const nonRandomized = (t) => NON_RANDOMIZED.has(t?.population) && !(t.population === 'per-protocol' && t.hypothesis === 'noninferiority')
 
-// A comparison of a feature with its absence is not the randomized treatment comparison.
+// A comparison of a feature with its absence is not the randomized treatment comparison,
+// unless the assignment sentence itself names that absence as an arm.
+function absenceFeature(name) {
+  const text = String(name || '')
+  const vsNo = text.match(/\b([A-Za-z][\w-]*)\s+(?:versus|vs\.?)\s+no\s+\1\b/i)
+  if (vsNo) return vsNo[1]
+  const vsNon = text.match(/\b([A-Za-z][\w-]*)\s+(?:versus|vs\.?)\s+non-?\1\b/i)
+  return vsNon ? vsNon[1] : ''
+}
+
 function subgroupComparison(name) {
   const text = String(name || '')
-  if (/\b([A-Za-z][\w-]*)\s+(?:versus|vs\.?)\s+no\s+\1\b/i.test(text)) return true
-  if (/\b([A-Za-z][\w-]*)\s+(?:versus|vs\.?)\s+non-?\1\b/i.test(text)) return true
+  if (absenceFeature(text)) return true
   if (/\bwith(?:out)?\s+[A-Za-z][\w-]*\s+(?:versus|vs\.?)\s+with(?:out)?\s+[A-Za-z]/i.test(text)) return true
   if (/\bwith\s*\/\s*without\b/i.test(text)) return true
   return false
+}
+
+function featurePattern(feature) {
+  return String(feature || '').replace(/-/g, '[-\\s]')
+}
+
+// "or no beta-blocker", "or no treatment", and "or usual care without a beta-blocker"
+// name the control arm. "PAD vs no PAD" stays a subgroup when the assignment names
+// other treatments.
+function randomizationNamesAbsence(source, feature) {
+  if (!feature) return false
+  const phrase = featurePattern(feature)
+  const arm = new RegExp(
+    String.raw`(?:\bor\b|\bversus\b|\bvs\.?\b|\bto\b)\s+(?:a\s+|an\s+|the\s+)?(?:no\s+${phrase}\b|non-?${phrase}\b|no\s+treatment\b|usual\s+care\s+without\s+(?:a\s+|an\s+|the\s+)?${phrase}\b)`,
+    'i',
+  )
+  return String(source || '').split(/(?<=[.!?])\s+/).some((sentence) => (
+    /\b(?:assigned|allocated|randomly)\b/i.test(sentence) && arm.test(sentence)
+  ))
+}
+
+function subgroupBlocks(name, source) {
+  const feature = absenceFeature(name)
+  if (feature && randomizationNamesAbsence(source, feature)) {
+    const stripped = String(name || '')
+      .replace(/\b([A-Za-z][\w-]*)\s+(?:versus|vs\.?)\s+no\s+\1\b/ig, ' ')
+      .replace(/\b([A-Za-z][\w-]*)\s+(?:versus|vs\.?)\s+non-?\1\b/ig, ' ')
+    return subgroupComparison(stripped)
+      || /\bsubgroups?\b|\bsubset\b|\bstrat(?:um|a)\b|\bin patients (?:with|without)\b|\bamong (?:patients|participants|those|women|men)\b|\b[\w-]+[- ]access cohort\b|\b(?:bicuspid|tricuspid)\b|\bin (?:a)?symptomatic patients\b/i.test(stripped)
+  }
+  const text = String(name || '')
+  return subgroupComparison(text)
+    || /\bsubgroups?\b|\bsubset\b|\bstrat(?:um|a)\b|\bin patients (?:with|without)\b|\bamong (?:patients|participants|those|women|men)\b|\b[\w-]+[- ]access cohort\b|\b(?:bicuspid|tricuspid)\b|\bin (?:a)?symptomatic patients\b/i.test(text)
 }
 
 const ARM_STOP = new Set([
@@ -113,7 +156,7 @@ function rowComparisonWords(name) {
 // When the trial states its randomized arms, a row comparison that shares none of
 // those words is a different contrast (a subgroup or a component), not the primary.
 function comparisonMissesRandomizedArms(name, source) {
-  if (subgroupComparison(name)) return true
+  if (subgroupBlocks(name, source)) return true
   const arms = randomizedArmWords(source)
   const row = rowComparisonWords(name)
   if (!arms || !row) return false
@@ -1090,17 +1133,59 @@ function asHead(word) {
   return ''
 }
 
-// "MALE, defined as amputation..." lets a row that says MALE stand for those nouns.
+function termCovers(term, rowSurface, expansions) {
+  const words = endpointSurface(term, expansions).split(' ').filter((word) => word.length >= 5)
+  return words.length >= 2 && words.every((word) => rowSurface.includes(word))
+}
+
+// A parenthesis that lists the events making up a component, not a qualifier
+// such as "(leading to hospitalization)" or "(cardiovascular only)".
+function isComponentDefinition(inside) {
+  const text = String(inside || '').trim()
+  if (/^(?:leading to|requiring|resulting in|due to|causing|associated with|related to)\b/i.test(text)) return false
+  if (/\bdefined as\b/i.test(text)) return true
+  if (!/\bor\b/i.test(text)) return false
+  return /\b(?:death|stroke|infarction|bleeding|amputation|hospitali[sz]ation|rehospitali[sz]ation|healing|revascularization|reintervention)\b/i.test(text)
+}
+
+function termBeforeParen(before) {
+  const match = String(before || '').match(/([A-Za-z][\w'-]*(?:\s+[A-Za-z][\w'-]*){0,5})\s*$/)
+  if (!match) return ''
+  const stop = new Set(['of', 'or', 'and', 'was', 'were', 'a', 'an', 'the', 'composite', 'to', 'endpoint', 'end', 'point', 'outcome'])
+  const kept = []
+  for (const word of match[1].split(/\s+/).reverse()) {
+    if (stop.has(word.toLowerCase())) break
+    kept.unshift(word)
+  }
+  return kept.join(' ')
+}
+
+// "MALE, defined as amputation..." and "worsening heart failure (hospitalization
+// or an urgent visit)" let a row that names the term stand for those nouns.
 function inheritedNouns(rowText, declared, expansions) {
   const rowSurface = endpointSurface(rowText, expansions)
   const extras = []
   const re = /([a-z][^.;]{3,90}?)\s*(?:-\s*)?(?:which was\s+)?defined as\s+([^.;]{3,260})/gi
   for (const match of String(declared || '').toLowerCase().matchAll(re)) {
-    const words = endpointSurface(match[1], expansions).split(' ').filter((word) => word.length >= 5)
-    if (words.length < 2 || !words.every((word) => rowSurface.includes(word))) continue
+    if (!termCovers(match[1], rowSurface, expansions)) continue
     extras.push(match[2])
   }
+  const raw = String(declared || '')
+  for (const match of raw.matchAll(/\(([^)]{8,300})\)/g)) {
+    if (!isComponentDefinition(match[1])) continue
+    const term = termBeforeParen(raw.slice(Math.max(0, match.index - 90), match.index))
+    if (!termCovers(term, rowSurface, expansions)) continue
+    extras.push(match[1])
+  }
   return extras
+}
+
+function withoutComponentDefinitions(text) {
+  // Drop the parenthesis first. A "defined as" span does not stop at ")", so it
+  // would otherwise eat the rest of the composite ("or cardiovascular death").
+  return String(text || '')
+    .replace(/\(([^)]{8,300})\)/g, (whole, inside) => (isComponentDefinition(inside) ? ' ' : whole))
+    .replace(/(?:which was\s+)?defined as\s+[^.;]{0,300}/gi, ' ')
 }
 
 function sliceLabels(text) {
@@ -1147,7 +1232,7 @@ function componentConflict(name, declared, expansions) {
     if (rowHeads.some((word) => !declaredHeads.includes(word))) return true
     if (declaredHeads.some((word) => !rowHeads.includes(word))) return true
   }
-  const declaredQuals = contentTokens(String(declared).replace(/(?:which was\s+)?defined as\s+[^.;]{0,300}/gi, ' '), expansions)
+  const declaredQuals = contentTokens(withoutComponentDefinitions(declared), expansions)
     .filter((word) => HARD_QUALIFIER.has(word))
   // Qualifiers count only on the row's own name. A "new graft" inside an inherited
   // definition is not an extra qualifier the row claimed.
@@ -1234,8 +1319,8 @@ function mainClauseIsList(clause) {
   return parts.length >= 2
 }
 
-function nameContradicts(name, declaredClause, parsed, expansions) {
-  if (subgroupComparison(name)) return true
+function nameContradicts(name, declaredClause, parsed, expansions, source = '') {
+  if (subgroupBlocks(name, source)) return true
   if (!declaredClause || isGenericEndpointName(name, expansions)) return false
   if (sameEndpointSurface(name, declaredClause, expansions)) return false
   const rowParsed = parseDeclaration(['endpoint', 'outcome', 'was', name], expansions)
@@ -1260,7 +1345,7 @@ function evidenceBinding(row, source, declared, parsed, expansions) {
   const clause = clauseBounds(source, located.start, located.end)
   const subclause = subclauseContaining(clause.text, quote)
   if (quoteSpansConflict(subclause, declared.clause, expansions)) return null
-  if (nameContradicts(String(row?.quantity?.name || ''), declared.clause, parsed, expansions)) return null
+  if (nameContradicts(String(row?.quantity?.name || ''), declared.clause, parsed, expansions, source)) return null
   const direct = reportsDeclared(subclause, declared.clause, declared.sentence, expansions)
   if (direct) return { kind: direct, key: direct === 'role' ? 'role' : `content:${clause.start}` }
   if (continuationOk(subclause, declared.clause, expansions)) {
@@ -1296,6 +1381,9 @@ function evidenceBinding(row, source, declared, parsed, expansions) {
 //       or a per-protocol / as-treated analysis (per-protocol noninferiority is
 //       allowed). A component of that composite, a different time window, and a
 //       subgroup comparison (X vs no X, with versus without) are not those rows.
+//       X vs no X stays when the assignment sentence names no X, no treatment,
+//       or usual care without X as an arm. A component's definition does not
+//       reject a row that names the composite at that defined term.
 //       verified: any of the rows that remain passes the call site's predicate,
 //       never a verified component that was excluded.
 //   { state: 'unknown', ..., reason }  results were extracted but none is the
@@ -1314,8 +1402,9 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
   if (!list.length) return none('no-results')
   const eligible = (row) => {
     const tags = tagResult(row?.quantity)
-    return !nonRandomized(tags) && !tags.subgroup && !tags.secondary
-      && !comparisonMissesRandomizedArms(row?.quantity?.name, source)
+    const name = row?.quantity?.name
+    return !nonRandomized(tags) && !subgroupBlocks(name, source) && !tags.secondary
+      && !comparisonMissesRandomizedArms(name, source)
   }
   const identified = (indexes, basis) => ({
     state: 'identified',
@@ -1348,7 +1437,7 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
       const tags = tagResult(row?.quantity)
       if (isGenericEndpointName(name, expansions)) return []
       if (sameEndpointSurface(name, declared.clause, expansions)) {
-        if (nonRandomized(tags) || tags.subgroup || comparisonMissesRandomizedArms(name, source)) return []
+        if (nonRandomized(tags) || subgroupBlocks(name, source) || comparisonMissesRandomizedArms(name, source)) return []
         return [i]
       }
       if (!eligible(row) || primaryParsed.uncertain || !primaryParsed.endpoints.length) return []

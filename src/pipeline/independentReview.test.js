@@ -959,4 +959,53 @@ describe('subgroup arms and composite components are not the declared primary', 
       state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
     })
   })
+
+  it('keeps beta-blocker vs no beta-blocker when that absence is the randomized arm', () => {
+    const results = 'A primary end-point event occurred in 7.9% of the beta-blocker group and in 8.3% of the no beta-blocker group (hazard ratio, 0.96; 95% confidence interval, 0.79 to 1.16; P=0.64).'
+    const declared = 'The primary end point was a composite of death from any cause or new myocardial infarction.'
+    const quote = 'hazard ratio, 0.96; 95% confidence interval, 0.79 to 1.16'
+    const rowName = 'beta-blocker vs no beta-blocker'
+    for (const assignment of [
+      'In this randomized trial, we randomly assigned patients to receive either a beta-blocker or no beta-blocker treatment.',
+      'Patients were randomly assigned to a beta-blocker or no treatment.',
+      'Patients were randomly assigned to a beta-blocker or usual care without a beta-blocker.',
+    ]) {
+      const source = `${assignment} ${declared} ${results}`
+      expect(findPrimary([evidenceRow(rowName, quote)], passes, source), assignment).toMatchObject({
+        state: 'identified', verified: true, indexes: [0], reason: null,
+      })
+    }
+    const otherArms = 'Patients were randomly assigned to rivaroxaban or aspirin. The primary end point was a composite of death from any cause or new myocardial infarction. A primary end-point event occurred in 7.9% of the beta-blocker group and in 8.3% of the no beta-blocker group (hazard ratio, 0.96; 95% confidence interval, 0.79 to 1.16; P=0.64).'
+    expect(findPrimary([evidenceRow(rowName, quote)], passes, otherArms)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [],
+    })
+  })
+
+  it('keeps a composite named at the defined-term level and drops a single component', () => {
+    const dapa = [
+      'Patients were randomly assigned to dapagliflozin or placebo.',
+      'The primary outcome was a composite of worsening heart failure (hospitalization or an urgent visit resulting in intravenous therapy for heart failure) or death from cardiovascular causes.',
+      'The primary outcome occurred in 16.3% of the dapagliflozin group and in 21.2% of the placebo group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85; P<0.001).',
+    ].join(' ')
+    const deliver = [
+      'Patients were randomly assigned to dapagliflozin or placebo.',
+      'The primary end point was a composite of worsening heart failure (which was defined as either an unplanned hospitalization for heart failure or an urgent visit for heart failure) or cardiovascular death.',
+      'The primary end point occurred in 16.4% of the dapagliflozin group and in 19.5% of the placebo group (hazard ratio, 0.82; 95% CI, 0.73 to 0.92; P<0.001).',
+    ].join(' ')
+    const cases = [
+      [dapa, 'hazard ratio, 0.74'],
+      [deliver, 'hazard ratio, 0.82'],
+    ]
+    for (const [source, quote] of cases) {
+      const composite = evidenceRow('worsening heart failure or cardiovascular death, hazard ratio', quote)
+      const deathOnly = evidenceRow('cardiovascular death, hazard ratio', quote)
+      const hospitalizationOnly = evidenceRow('hospitalization for heart failure, hazard ratio', quote)
+      expect(findPrimary([composite, deathOnly, hospitalizationOnly], passes, source), quote).toMatchObject({
+        state: 'identified', verified: true, indexes: [0], reason: null,
+      })
+      expect(findPrimary([deathOnly, hospitalizationOnly], passes, source), quote).toMatchObject({
+        state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
+      })
+    }
+  })
 })
