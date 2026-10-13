@@ -239,11 +239,9 @@ describe('fix 2 — primary-result handling on saved rows', () => {
       'CAD-15': { basis: 'evidence', verified: false, indexes: [0, 1] },
       'CAR-07': { basis: 'evidence', verified: true, indexes: [0, 1, 2] },
       'CAR-10': { basis: 'evidence', verified: false, indexes: [1] },
-      'CAR-12': { basis: 'evidence', verified: false, indexes: [0, 1] },
       'CAR-13': { basis: 'evidence', verified: false, indexes: [0, 1] },
       'HF-02': { basis: 'evidence', verified: false, indexes: [0, 1] },
       'HF-04': { basis: 'evidence', verified: true, indexes: [0] },
-      'HF-09': { basis: 'evidence', verified: true, indexes: [0, 1, 2] },
       'HF-10': { basis: 'evidence', verified: true, indexes: [0, 1] },
       'HF-13': { basis: 'source', verified: true, indexes: [0] },
       'HF-14': { basis: 'evidence', verified: false, indexes: [0, 1] },
@@ -260,7 +258,7 @@ describe('fix 2 — primary-result handling on saved rows', () => {
         state: 'unspecified', basis: 'no-declared-primary', reason: null,
       })
     }
-    for (const id of ['AAA-04', 'AAA-06', 'CAR-04', 'HF-08', 'PAD-01', 'PAD-03', 'PAD-05', 'PAD-12', 'PAD-15']) {
+    for (const id of ['AAA-04', 'AAA-06', 'CAR-04', 'CAR-12', 'HF-08', 'HF-09', 'PAD-01', 'PAD-03', 'PAD-05', 'PAD-12', 'PAD-15']) {
       expect(findPrimary(load(id).rows, notFlagged, verificationCorpus(load(id))), id).toMatchObject({
         state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
       })

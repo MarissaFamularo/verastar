@@ -8,12 +8,19 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-13.estimates-v14'
+export const VERIFICATION_VERSION = '2026-10-13.estimates-v15'
+// v15 keeps the arm-percentage shape, and accepts it only when the sentence is
+// one of the enumerated affirmative templates: a result, rate, outcome, or
+// event as the subject, a finite reporting verb, and each percentage bound to
+// its arm. The only words that may precede that template are the lead-ins
+// "In the X group,", "At N days,", and "Overall,". A v14 stamp still accepts
+// any other lead ("It is untrue that", "Suppose", "didn't occur"), so it is
+// not a subset. Nothing v12 accepted is refused.
 // v14 keeps the arm-percentage shape v13 added, and refuses it unless the
 // sentence is affirmative: no negation or falsity framing, no question or
 // exclamation (including a "?" the quote dropped), no conditional or
 // hypothetical, and the template is the whole sentence. A v13 stamp can
-// false-verify those, so it is not a subset. Nothing v12 accepted is refused.
+// false-verify those, so it is not a subset.
 // v12 refuses a question or an exclamation for the two shapes added in v10. The
 // terminator is read from the source sentence, including punctuation immediately
 // outside the quote. v11 stripped "?" and treated "?" and "!" as sentence
@@ -821,24 +828,20 @@ function validateAndPair(quantity, matched, corpus, declaredType) {
 // it is not "vs". The count between the arms may be "in 134 patients" or
 // "in 408 of 711 patients". A label may be the arm stem ("LCZ696") when the
 // sentence prints "LCZ696 group". Accept only when each claimed value is the
-// percentage in its own claimed arm, in that order. The sentence must be that
-// template end to end and end declaratively (one period, or the end of the text;
-// "?" and "!" refused, including a mark the quote dropped). A prefix, a suffix,
-// a negation, a falsity claim, or a conditional or hypothetical stays unresolved.
-// A swapped arm, a value with no arm, a third percentage, "vs", a CI, or a
-// claimed P stays unresolved.
-const IN_ARM_MIDDLE = '\\s+and\\s+(?:in\\s+)?(?:\\d+\\s+(?:of\\s+\\d+\\s+)?)?(?:patients?\\s+)?'
-const AFFIRMATIVE_DENY = new Set([
-  'not', 'no', 'never', 'neither', 'nor', 'without', 'except', 'excluding', 'false', 'falsely',
-  'if', 'would', 'could', 'might', 'hypothetical', 'hypothetically', 'hypothesized',
-  'reported', 'claimed', 'suggested', 'according', 'prior', 'compared',
-  'unlike', 'cohort', 'although', 'whereas', 'despite', 'whether',
-])
-
-function affirmativeLead(text) {
-  const words = String(text || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
-  return words.every((word) => !AFFIRMATIVE_DENY.has(word))
-}
+// percentage in its own claimed arm, in that order. The sentence must be one
+// enumerated affirmative template, end to end, and end declaratively (one
+// period, or the end of the text; "?" and "!" refused, including a mark the
+// quote dropped). The subject is a result, rate, outcome, or event. The verb
+// is a finite reporting verb (occurred, had occurred, was, were, reported).
+// Nothing may precede that template except "In the X group,", "At N days,",
+// or "Overall,". Any other lead-in, negation, hypothetical, question, or
+// framing clause stays unresolved. A swapped arm, a value with no arm, a
+// third percentage, "vs", a CI, or a claimed P stays unresolved.
+const ARM_LEAD_IN = '(?:in\\s+the\\s+[a-z0-9-]+(?:\\s+[a-z0-9-]+){0,6}\\s+group|at\\s+(?:\\d+|[a-z]+)\\s+(?:day|week|month|year)s?|overall),\\s+'
+const ARM_MODIFIER = '(?:primary|composite|efficacy|safety|effectiveness|clinical|major|adverse|outcome|event|end|point)(?:-(?:primary|composite|efficacy|safety|effectiveness|clinical|major|adverse|outcome|event|end|point))*'
+const ARM_SUBJECT = `(?:(?:a|an|the)\\s+)?(?:${ARM_MODIFIER}\\s+){0,4}(?:results?|rates?|outcomes?|events?|end\\s*points?)`
+const ARM_VERB = '(?:had\\s+)?(?:occurred|was|were|reported)'
+const ARM_COUNT = '(?:\\d+\\s+(?:of\\s+\\d+\\s+)?)?(?:patients?\\s+)?'
 
 function validateInArmPair(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
@@ -861,11 +864,12 @@ function validateInArmPair(quantity, matched, corpus, declaredType) {
   const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const arm = (label) => `${escape(label)}(?:\\s+(?:group|arm))?(?![a-z0-9])`
   const pct = `[([]\\s*${PAIR_NUM}\\s*%\\s*[)\\]]`
-  const pairMatch = body.match(new RegExp(`^([\\s\\S]*?)${pct}\\s+in\\s+(?:the\\s+)?${arm(first)}${IN_ARM_MIDDLE}${pct}\\s+in\\s+(?:the\\s+)?${arm(second)}$`))
+  const pairMatch = body.match(new RegExp(
+    `^(?:${ARM_LEAD_IN})?${ARM_SUBJECT}\\s+${ARM_VERB}\\s+in\\s+${ARM_COUNT}${pct}\\s+in\\s+(?:the\\s+)?${arm(first)}\\s+and\\s+(?:in\\s+)?${ARM_COUNT}${pct}\\s+in\\s+(?:the\\s+)?${arm(second)}$`,
+  ))
   if (!pairMatch) return false
-  if (!affirmativeLead(pairMatch[1])) return false
-  const a = pairMatch[2]
-  const b = pairMatch[3]
+  const a = pairMatch[1]
+  const b = pairMatch[2]
   return numbersEqual(quantity.first_value, Number(a)) && numbersEqual(quantity.second_value, Number(b))
 }
 

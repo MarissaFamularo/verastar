@@ -1153,6 +1153,7 @@ function continuationOk(sentence, declared, expansions) {
   if (SECONDARY_ROLE.test(sentence) && !PRIMARY_ROLE.test(sentence)) return false
   if (timeConflict(declared, sentence)) return false
   if (anchorConflict(sentence, declared)) return false
+  if (structureConflict(sentence, declared)) return false
   if (unitsConflict(sentence, declared, expansions)) return false
   const residue = fragmentTokens(sentence, expansions)
   if (residue.some((word) => HEAD_WORDS.has(word) || QUALIFIER_TOKEN.has(word))) return tokensCover(declared, sentence, expansions)
@@ -1296,6 +1297,237 @@ function unitsConflict(name, declared, expansions) {
   return left.some((unit, index) => unit !== right[index])
 }
 
+// A recognized anchor is the event a duration is counted from. Anything else
+// after after/from/since is not "no anchor" and is not a match.
+const RECOGNIZED_ANCHOR = /^(?:(?:the|a|an)\s+)?(?:(?:index|time\s+of)\s+)?(?:randomi[sz]ation|surgery|discharge|procedure|enroll?ment)$/i
+
+function canonicalAnchorPhrase(phrase) {
+  const text = String(phrase || '').toLowerCase().replace(/\s+/g, ' ').trim()
+  if (!RECOGNIZED_ANCHOR.test(text)) return null
+  if (/randomi[sz]ation/.test(text)) return 'randomization'
+  if (/surgery/.test(text)) return 'surgery'
+  if (/discharge/.test(text)) return 'discharge'
+  if (/procedure/.test(text)) return 'procedure'
+  if (/enroll?ment/.test(text)) return 'enrollment'
+  return null
+}
+
+function unrecognizedTimeAnchor(text) {
+  const stripped = stripFollowUp(text)
+  const re = new RegExp(
+    String.raw`\b(?:${TIME_PHRASE})\s+(?:after|following|from|since)\s+((?:(?:the|a|an)\s+)?(?:(?:index|time\s+of)\s+)?[a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,4})`,
+    'gi',
+  )
+  for (const match of stripped.matchAll(re)) {
+    const phrase = match[1].split(/\b(?:was|were|occurred|reported|and|or|to)\b/i)[0].trim()
+    if (!canonicalAnchorPhrase(phrase)) return true
+  }
+  return false
+}
+
+const BOUND_HEADS = [
+  ['myocardial infarction', 'infarction'],
+  ['rehospitalization', 'hospitalization'],
+  ['rehospitalisation', 'hospitalization'],
+  ['hospitalisation', 'hospitalization'],
+  ['hospitalization', 'hospitalization'],
+  ['infarction', 'infarction'],
+  ['amputation', 'amputation'],
+  ['bleeding', 'bleeding'],
+  ['healing', 'healing'],
+  ['stroke', 'stroke'],
+  ['death', 'death'],
+]
+const BOUND_HARD = new Set(['cardiovascular', 'disabling', 'ischemic', 'ischaemic', 'unplanned', 'ipsilateral', 'fatal', 'new'])
+const BOUND_SOFT = new Set(['any', 'cause', 'causes', 'all', 'major'])
+const BOUND_STOP = new Set(['the', 'a', 'an', 'of', 'from', 'to', 'by', 'for', 'with', 'in', 'on', 'and', 'or', 'only', 'time'])
+const ANCHOR_TOKEN = '(?:(?:the|a|an)\\s+)?(?:(?:index|time\\s+of)\\s+)?(?:randomi[sz]ation|surgery|discharge|procedure|enroll?ment)'
+const WINDOW_TAIL = new RegExp(
+  String.raw`(?:\s+from\s+(${ANCHOR_TOKEN})\s+to)?\s+(?:(within|at|after|during|following)\s+)?(${TIME_PHRASE})(?:\s+(after|following|from|since)\s+(${ANCHOR_TOKEN}))?\s*$`,
+  'i',
+)
+
+function oneBoundTime(token) {
+  const match = String(token || '').match(new RegExp(`^(${TIME_NUM_SRC})[-\\s]?((?:day|week|month|year)s?)$`, 'i'))
+  if (!match) return ''
+  return canonicalTime(match[1], match[2])
+}
+
+function windowFromTail(match) {
+  if (!match) return null
+  const time = oneBoundTime(match[3])
+  if (!time) return undefined
+  let anchor = ''
+  if (match[4]) {
+    anchor = canonicalAnchorPhrase(match[5] || '')
+    if (!anchor) return undefined
+  }
+  let fromAnchor = ''
+  if (match[1]) {
+    fromAnchor = canonicalAnchorPhrase(match[1])
+    if (!fromAnchor) return undefined
+  }
+  const relation = fromAnchor ? 'to' : canonicalRelation(match[2] || 'at')
+  return { relation, time, anchor, fromAnchor }
+}
+
+function endpointPhrase(text) {
+  let s = String(text || '').replace(/\s+/g, ' ').trim()
+  s = withoutComponentDefinitions(s)
+  s = s.replace(/\s*\((?:hazard ratio|odds ratio|risk ratio|hr|or|rr)\b[^)]*\)/gi, ' ')
+  const verb = s.search(/\b(?:occurred|was|were|reported)\b/i)
+  if (verb > 0) s = s.slice(0, verb).trim()
+  s = s.replace(/^[a-z][a-z\s]{1,24}:\s*/i, '')
+  s = s.replace(/^(?:the\s+)?(?:estimated\s+)?(?:\d+(?:\.\d+)?[-\s]?(?:day|week|month|year)s?\s+)?(?:rate|risk|incidence|occurrence)\s+of\s+/i, '')
+  s = s.replace(/^(?:(?:a|an|the)\s+)?composite\s+of\s+/i, '')
+  s = s.replace(/^(?:the|a|an)\s+/i, '')
+  s = s.replace(/[.,;:]\s*$/g, '').trim()
+  if (!/\b(?:death|stroke|infarction|bleeding|amputation|hospitali[sz]ation|rehospitali[sz]ation|healing)\b/i.test(s)) return ''
+  return s
+}
+
+function splitBoundPieces(text) {
+  return String(text || '')
+    .split(/\s*,\s*(?:or\s+|and\s+)?|\s+\band\s*\/\s*or\s+|\s+\bor\b\s+|\s+\band\b\s+/i)
+    .map((part) => part.replace(/^(?:and\/or|and|or)\s+/i, '').replace(/\s+(?:and\/or|and|or)$/i, '').trim())
+    .filter(Boolean)
+}
+
+function boundWords(part) {
+  return String(part || '').toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9]+/).filter(Boolean)
+}
+
+function readBoundPiece(part, inherited) {
+  let text = String(part || '').replace(/\s+/g, ' ').trim()
+  let own = null
+  const tail = text.match(WINDOW_TAIL)
+  if (tail && oneBoundTime(tail[3])) {
+    const parsed = windowFromTail(tail)
+    if (parsed === undefined) return null
+    if (parsed) {
+      const rest = text.slice(0, tail.index).trim()
+      if (timesIn(rest).length) return null
+      own = parsed
+      text = rest
+    }
+  }
+  const leading = text.match(new RegExp(String.raw`^(${TIME_PHRASE})\s+`, 'i'))
+  if (leading) {
+    if (own) return null
+    const time = oneBoundTime(leading[1])
+    if (!time) return null
+    own = { relation: 'at', time, anchor: '', fromAnchor: '' }
+    text = text.slice(leading[0].length).trim()
+  }
+  const window = own || inherited || null
+  const words = boundWords(text)
+  const quals = []
+  let head = ''
+  for (let index = 0; index < words.length;) {
+    const pair = words.slice(index, index + 2).join(' ')
+    const phrase = BOUND_HEADS.find(([label]) => label === pair || label === words[index])
+    if (phrase && (phrase[0] === pair || phrase[0] === words[index])) {
+      if (head) return null
+      head = phrase[1]
+      index += phrase[0] === pair ? 2 : 1
+      continue
+    }
+    const word = words[index]
+    if (BOUND_HARD.has(word)) quals.push(word === 'ischaemic' ? 'ischemic' : word)
+    else if (BOUND_SOFT.has(word)) quals.push(word === 'causes' ? 'cause' : word)
+    else if (!BOUND_STOP.has(word)) quals.push(word)
+    index += 1
+  }
+  if (!head) return null
+  const keyWindow = window || { relation: '', time: '', anchor: '', fromAnchor: '' }
+  return {
+    head,
+    quals: [...new Set(quals)].sort(),
+    window: keyWindow,
+  }
+}
+
+// Oxford-comma lists stay in order long enough to bind each qualifier and each
+// window to its own noun. The composite is then the multiset of those units.
+// A piece with two heads, no head, or an unrecognized anchor does not parse.
+function boundComponents(text) {
+  const phrase = endpointPhrase(text)
+  if (!phrase) return { status: 'absent', components: [] }
+  if (unrecognizedTimeAnchor(phrase)) return { status: 'uncertain', components: [] }
+  let body = phrase
+  let shared = null
+  const peeled = phrase.match(WINDOW_TAIL)
+  if (peeled && oneBoundTime(peeled[3])) {
+    const rest = phrase.slice(0, peeled.index).replace(/[,\s]+$/g, '').trim()
+    if (rest && !timesIn(rest).length) {
+      const parsed = windowFromTail(peeled)
+      if (parsed === undefined) return { status: 'uncertain', components: [] }
+      if (parsed) {
+        shared = parsed
+        body = rest
+      }
+    }
+  }
+  const components = []
+  for (const part of splitBoundPieces(body)) {
+    const component = readBoundPiece(part, shared)
+    if (!component) return { status: 'uncertain', components: [] }
+    components.push(component)
+  }
+  return components.length ? { status: 'ok', components } : { status: 'uncertain', components: [] }
+}
+
+function boundKey(component) {
+  const window = component.window || {}
+  return [
+    component.quals.join('+'),
+    component.head,
+    window.relation || '',
+    window.time || '',
+    window.anchor || '',
+    window.fromAnchor || '',
+  ].join('|')
+}
+
+function windowStated(component) {
+  return Boolean(component?.window?.time)
+}
+
+function windowsCompatible(row, declared) {
+  if (!windowStated(row)) return true
+  if (!windowStated(declared)) return false
+  return boundKey({ ...row, quals: [], head: '' }) === boundKey({ ...declared, quals: [], head: '' })
+}
+
+function sameBoundComponents(left, right) {
+  if (left.length !== right.length) return false
+  const used = new Set()
+  for (const item of left) {
+    const index = right.findIndex((other, i) => (
+      !used.has(i)
+      && item.head === other.head
+      && item.quals.join('+') === other.quals.join('+')
+      && windowsCompatible(item, other)
+    ))
+    if (index < 0) return false
+    used.add(index)
+  }
+  return true
+}
+
+// The quote names outcomes. Those outcomes have to be the declared components,
+// each qualifier and each window still on its own noun. A list that does not
+// parse is not that endpoint.
+function structureConflict(text, declared) {
+  if (unrecognizedTimeAnchor(text) || unrecognizedTimeAnchor(declared)) return true
+  const row = boundComponents(text)
+  if (row.status === 'absent') return false
+  if (row.status !== 'ok') return true
+  const declaredParts = boundComponents(declared)
+  if (declaredParts.status !== 'ok') return true
+  return !sameBoundComponents(row.components, declaredParts.components)
+}
+
 // A component of a composite names some of the declared outcomes and not the rest.
 // A harder qualifier the declaration does not use (ischemic, disabling, cardiovascular)
 // is a different endpoint, and so is the same qualifier written on a different
@@ -1330,6 +1562,7 @@ function reportsDeclared(clause, declared, declarationSentence, expansions) {
   if (SECONDARY_ROLE.test(clause) && !PRIMARY_ROLE.test(clause)) return null
   if (windowConflict(clause, declared)) return null
   if (anchorConflict(clause, declared)) return null
+  if (structureConflict(clause, declared)) return null
   if (unitsConflict(clause, declared, expansions)) return null
   const population = populationPhrase(declared)
   if (population && populationPhrase(clause) !== population) return null
@@ -1458,6 +1691,7 @@ function quoteIsDifferentResult(quote, declared, expansions) {
   if (SECONDARY_ROLE.test(flat) && !PRIMARY_ROLE.test(flat)) return true
   if (thresholdConflict(flat, declared, expansions)) return true
   if (anchorConflict(flat, declared)) return true
+  if (structureConflict(flat, declared)) return true
   if (unitsConflict(flat, declared, expansions)) return true
   const declaredTokens = contentTokens(declared, expansions)
   const declaredHeads = new Set(declaredTokens.map(asHead).filter(Boolean))

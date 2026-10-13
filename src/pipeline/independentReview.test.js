@@ -1180,4 +1180,73 @@ describe('independent-review false verifications stay closed', () => {
       state: 'identified', verified: true, indexes: [0], reason: null,
     })
   })
+
+  it('does not match a qualifier that a comma moved onto another component', () => {
+    const declared = 'The primary end point was cardiovascular death, hospitalization, or stroke.'
+    const moved = 'Death, cardiovascular hospitalization, or stroke occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
+    const source = `Patients were randomly assigned to device or control. ${declared} ${moved}`
+    const quote = moved.replace(/\.$/, '')
+    for (const name of ['death, cardiovascular hospitalization, or stroke', 'Primary composite outcome', 'hazard ratio']) {
+      const entry = validated({ ...hr(name, quote), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
+      expect(findPrimary([entry], passes, source), name).toMatchObject({
+        state: 'unknown', verified: false, indexes: [],
+      })
+    }
+    const fragment = validated({ ...hr('hazard ratio', 'hazard ratio, 0.74; 95% CI, 0.65 to 0.85'), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
+    expect(findPrimary([fragment], passes, source)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [],
+    })
+    const kept = 'Cardiovascular death, hospitalization, or stroke occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
+    const keptSource = `Patients were randomly assigned to device or control. ${declared} ${kept}`
+    const keptRow = validated({ ...hr('cardiovascular death, hospitalization, or stroke', kept.replace(/\.$/, '')), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, keptSource)
+    expect(findPrimary([keptRow], passes, keptSource)).toMatchObject({
+      state: 'identified', verified: true, indexes: [0], reason: null,
+    })
+  })
+
+  it('does not match a timepoint counted from an unrecognized anchor', () => {
+    const declared = 'The primary end point was death within 30 days after randomization.'
+    const sentences = [
+      'Death within 30 days after diagnosis occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).',
+      'The primary end point occurred in 4% of the device group within 30 days after diagnosis (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).',
+      'Death within 30 days since diagnosis occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).',
+    ]
+    for (const sentence of sentences) {
+      const source = `Patients were randomly assigned to device or control. ${declared} ${sentence}`
+      const quote = sentence.replace(/\.$/, '')
+      const entry = validated({ ...hr('Primary composite outcome', quote), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
+      expect(findPrimary([entry], passes, source), sentence).toMatchObject({
+        state: 'unknown', verified: false, indexes: [],
+      })
+    }
+    const named = 'Death within 30 days after diagnosis occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
+    const namedSource = `Patients were randomly assigned to device or control. ${declared} ${named}`
+    const namedRow = validated({ ...hr('Death within 30 days after diagnosis', named.replace(/\.$/, '')), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, namedSource)
+    expect(findPrimary([namedRow], passes, namedSource)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [],
+    })
+  })
+
+  it('does not match when each component keeps the other window', () => {
+    const declared = 'The primary end point was death within 30 days or stroke at one year.'
+    const swapped = 'Death at one year or stroke within 30 days occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
+    const source = `Patients were randomly assigned to device or control. ${declared} ${swapped}`
+    const quote = swapped.replace(/\.$/, '')
+    for (const name of ['death at one year or stroke within 30 days', 'Primary composite outcome', 'hazard ratio']) {
+      const entry = validated({ ...hr(name, quote), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
+      expect(findPrimary([entry], passes, source), name).toMatchObject({
+        state: 'unknown', verified: false, indexes: [],
+      })
+    }
+    const fragment = validated({ ...hr('hazard ratio', 'hazard ratio, 0.74; 95% CI, 0.65 to 0.85'), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
+    expect(findPrimary([fragment], passes, source)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [],
+    })
+    const kept = 'Death within 30 days or stroke at one year occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
+    const keptSource = `Patients were randomly assigned to device or control. ${declared} ${kept}`
+    const keptRow = validated({ ...hr('death within 30 days or stroke at one year', kept.replace(/\.$/, '')), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, keptSource)
+    expect(findPrimary([keptRow], passes, keptSource)).toMatchObject({
+      state: 'identified', verified: true, indexes: [0], reason: null,
+    })
+  })
 })
