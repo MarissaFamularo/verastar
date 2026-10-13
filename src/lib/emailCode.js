@@ -11,6 +11,7 @@
 
 import { useRef, useState } from 'react'
 import { awaitWithin } from './deadline.js'
+import { gmailAliasDecision, lookupGmailAlias } from './gmailAlias.js'
 import { sendMagicLink, supabase, verifyEmailCode } from './supabase.js'
 
 export const EMAIL_CODE_TIMEOUT_MS = 8000
@@ -152,6 +153,10 @@ export function useEmailCodeSignIn() {
   // no longer matches and cannot hold the next code.
   const flight = useRef(null)
   const sendFlight = useRef(null)
+  // Holds the Gmail alias lookup. sendFlight starts only after that lookup, so
+  // a second click in the gap would otherwise send two codes.
+  const aliasFlight = useRef(false)
+  const emailGen = useRef(0)
   const entered = useRef(false)
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -163,6 +168,13 @@ export function useEmailCodeSignIn() {
   const [resending, setResending] = useState(false)
   const [resendNote, setResendNote] = useState('')
   const [sendPending, setSendPending] = useState(false)
+  const [aliasWarning, setAliasWarning] = useState('')
+
+  function setEmailValue(value) {
+    emailGen.current += 1
+    setAliasWarning('')
+    setEmail(value)
+  }
 
   function enter() {
     if (entered.current) return
@@ -193,12 +205,37 @@ export function useEmailCodeSignIn() {
     }
   }
 
-  async function send(event) {
-    event?.preventDefault()
-    if (!email.trim() || sendFlight.current) return
+  async function send(event, options) {
+    event?.preventDefault?.()
+    const force = options?.force === true
+    const typed = email.trim()
+    if (!typed || sendFlight.current || aliasFlight.current) return
+    const gen = emailGen.current
+    if (!force) {
+      aliasFlight.current = true
+      setSendPending(true)
+      setSendState('sending')
+      setSendError('')
+      let lookup = { match: false }
+      try {
+        lookup = await lookupGmailAlias(typed)
+      } catch {
+        lookup = { match: false }
+      }
+      const decision = gmailAliasDecision(lookup)
+      if (gen !== emailGen.current || !decision.send) {
+        aliasFlight.current = false
+        setSendState('idle')
+        setSendPending(false)
+        if (gen === emailGen.current) setAliasWarning(decision.warning)
+        return
+      }
+    }
+    setAliasWarning('')
     const id = ++attempt.current
-    const pending = sendMagicLink(email.trim())
+    const pending = sendMagicLink(typed)
     sendFlight.current = pending
+    aliasFlight.current = false
     setSendPending(true)
     setSendState('sending')
     setSendError('')
@@ -306,6 +343,7 @@ export function useEmailCodeSignIn() {
   }
 
   function reset() {
+    emailGen.current += 1
     ++attempt.current
     setPending(false)
     setSendState('idle')
@@ -315,14 +353,15 @@ export function useEmailCodeSignIn() {
     setResendNote('')
     setResending(false)
     setCode('')
+    setAliasWarning('')
   }
 
   return {
-    email, setEmail, code, setCode,
+    email, setEmail: setEmailValue, code, setCode,
     sendState, sendError, verifyState, verifyError,
     pending, verifyBusy: pending || verifyState === 'verifying',
     sendPending, sendBusy: sendPending || sendState === 'sending',
-    resending, resendNote,
+    resending, resendNote, aliasWarning,
     send, verify, resend, reset,
   }
 }

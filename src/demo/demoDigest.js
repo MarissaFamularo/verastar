@@ -3,6 +3,15 @@
 // This is deliberately separate from IndexedDB, Supabase, and the on-disk Verastar
 // Library. It contains public publication metadata and generalized editorial copy only:
 // no user profile, private projects, saved-paper state, notes, or personal rankings.
+//
+// The five metadata papers have no stored source, so their cards stay at
+// "No checked numbers". CREST and CREST-2 add a few rows the live verifier
+// accepts against passages copied from the devset fixtures (checkedExamples.js).
+
+import { isRelationshipValidated } from '../lib/evidenceVersion.js'
+import { checkedExampleResults, checkedExampleTriage } from './checkedExamples.js'
+
+const checkedResults = checkedExampleResults()
 
 const papers = [
   {
@@ -73,44 +82,52 @@ const papers = [
 ]
 
 export const DEMO_DIGEST = Object.freeze({
-  results: papers.map((paper) => ({
-    paper: {
-      id: paper.id,
-      pmid: paper.pmid,
-      pmcid: null,
-      nct: null,
-      title: paper.title,
-    },
-    citation: {
-      pmid: paper.pmid,
-      url: `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`,
-      author: paper.author,
-      journal: paper.journal,
-      year: paper.year,
-      title: paper.title,
-      verified: true,
-    },
-    source: { pmcid: null },
-    sourceDoc: { text: '', tables: '' },
-    design: paper.design,
-    rows: [],
-    oa: null,
-  })),
-  triaged: Object.fromEntries(
-    papers.map((paper) => [
-      paper.id,
-      {
-        score: paper.score,
-        tier: paper.tier,
-        finding: paper.finding,
-        relevance: paper.relevance,
+  results: [
+    ...checkedResults,
+    ...papers.map((paper) => ({
+      paper: {
+        id: paper.id,
+        pmid: paper.pmid,
+        pmcid: null,
+        nct: null,
+        title: paper.title,
       },
-    ]),
-  ),
+      citation: {
+        pmid: paper.pmid,
+        url: `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`,
+        author: paper.author,
+        journal: paper.journal,
+        year: paper.year,
+        title: paper.title,
+        verified: true,
+      },
+      source: { pmcid: null },
+      sourceDoc: { text: '', tables: '' },
+      design: paper.design,
+      rows: [],
+      oa: null,
+    })),
+  ],
+  triaged: {
+    ...checkedExampleTriage(undefined, checkedResults),
+    ...Object.fromEntries(
+      papers.map((paper) => [
+        paper.id,
+        {
+          score: paper.score,
+          tier: paper.tier,
+          finding: paper.finding,
+          relevance: paper.relevance,
+        },
+      ]),
+    ),
+  },
 })
 
+const withCheckedNumbers = DEMO_DIGEST.results.filter((result) => result.rows.some((row) => isRelationshipValidated(row.verdict)))
+
 export const DEMO_DIGEST_COUNTS = Object.freeze({
-  verified: 0, // citation metadata is present; no claim relationships were validated
+  verified: withCheckedNumbers.length,
   saved: 0,
   flagged: 0,
 })
