@@ -1,0 +1,12 @@
+# Netlify response headers. Vite copies this file into dist/.
+# CSP is limited to origins the built app actually loads. React sets style
+# attributes, so style-src allows inline styles. Scripts stay same-origin.
+# screen-wake-lock is the digest run's Screen Wake Lock; other powerful
+# features are denied.
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), browsing-topics=(), interest-cohort=(), screen-wake-lock=(self)
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://eutils.ncbi.nlm.nih.gov https://clinicaltrials.gov https://api.unpaywall.org
