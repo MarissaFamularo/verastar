@@ -25,7 +25,7 @@ import { extractStructured } from '../lib/anthropic.js'
 import { fmtNum, pQualifier, ciLabel } from '../lib/format.js'
 import { claimCheckLabel } from '../lib/claimCheck.js'
 import { selectEvidenceContext, evidenceForResult, locateQuote, EVIDENCE_CHARS } from './evidenceContext.js'
-import { findPrimary, tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary, verificationCorpus } from './primaryResult.js'
+import { findPrimary, tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary, verificationCorpus, PRIMARY_UNBOUND_REASON } from './primaryResult.js'
 import { repairNumberFree } from './numberFree.js'
 import { triage, sanitizeRanking, dedupeEstimateLabels, allowedNumbers, numbersGrounded } from './triage.js'
 import { checkFindings, NO_VERDICT_REASON, SNIPPET_CHARS } from './check.js'
@@ -219,6 +219,52 @@ describe('fix 2 — primary-result handling on saved rows', () => {
     expect(findPrimary(load('PAD-05').rows)).toMatchObject({ state: 'unknown', name: null, verified: false })
     // REV2: CAR-10's only verified "primary" rows were the symptomatic/asymptomatic subgroups
     expect(findPrimary(load('CAR-10').rows)).toMatchObject({ state: 'identified', verified: false, indexes: [0, 1, 2] })
+  })
+
+  it('saved dev papers: which primaries the quote can identify, and which stay unknown with a reason', () => {
+    const identified = {
+      'AAA-12': { basis: 'source', verified: true, indexes: [0, 1] },
+      'AAA-13': { basis: 'evidence', verified: false, indexes: [0, 1] },
+      'AAA-14': { basis: 'evidence', verified: false, indexes: [0] },
+      'AS-01': { basis: 'location', verified: false, indexes: [0, 1] },
+      'AS-02': { basis: 'source', verified: false, indexes: [0] },
+      'AS-04': { basis: 'evidence', verified: false, indexes: [0, 1, 2] },
+      'AS-05': { basis: 'evidence', verified: false, indexes: [0, 1] },
+      'AS-06': { basis: 'evidence', verified: true, indexes: [0, 1, 2] },
+      'AS-07': { basis: 'evidence', verified: false, indexes: [1] },
+      'AS-08': { basis: 'evidence', verified: false, indexes: [0, 1] },
+      'CAD-01': { basis: 'evidence', verified: true, indexes: [0] },
+      'CAD-02': { basis: 'evidence', verified: true, indexes: [0, 1] },
+      'CAD-10': { basis: 'evidence', verified: true, indexes: [0, 1] },
+      'CAD-15': { basis: 'evidence', verified: false, indexes: [0, 1] },
+      'CAR-07': { basis: 'evidence', verified: true, indexes: [0, 1, 2] },
+      'CAR-10': { basis: 'evidence', verified: false, indexes: [1] },
+      'CAR-12': { basis: 'evidence', verified: false, indexes: [0, 1] },
+      'CAR-13': { basis: 'evidence', verified: false, indexes: [0, 1] },
+      'HF-02': { basis: 'evidence', verified: false, indexes: [0, 1] },
+      'HF-04': { basis: 'evidence', verified: true, indexes: [0] },
+      'HF-09': { basis: 'evidence', verified: true, indexes: [0, 1, 2] },
+      'HF-10': { basis: 'evidence', verified: true, indexes: [0, 1] },
+      'HF-13': { basis: 'source', verified: true, indexes: [0] },
+      'HF-14': { basis: 'evidence', verified: false, indexes: [0, 1] },
+      'PAD-02': { basis: 'evidence', verified: false, indexes: [0, 1] },
+      'PAD-07': { basis: 'source', verified: true, indexes: [0] },
+      'PAD-10': { basis: 'evidence', verified: true, indexes: [0, 1, 2, 3] },
+    }
+    for (const [id, expected] of Object.entries(identified)) {
+      const primary = findPrimary(load(id).rows, notFlagged, verificationCorpus(load(id)))
+      expect(primary, id).toMatchObject({ state: 'identified', reason: null, ...expected })
+    }
+    for (const id of ['CAR-01', 'CAR-03', 'CAR-06']) {
+      expect(findPrimary(load(id).rows, notFlagged, verificationCorpus(load(id))), id).toMatchObject({
+        state: 'unspecified', basis: 'no-declared-primary', reason: null,
+      })
+    }
+    for (const id of ['AAA-04', 'AAA-06', 'CAR-04', 'HF-08', 'PAD-01', 'PAD-03', 'PAD-05', 'PAD-12', 'PAD-15']) {
+      expect(findPrimary(load(id).rows, notFlagged, verificationCorpus(load(id))), id).toMatchObject({
+        state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
+      })
+    }
   })
 
   it('per-protocol noninferiority is NOT treated as a non-randomized headline', () => {

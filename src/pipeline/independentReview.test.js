@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { verify, TIERS } from './verify.js'
-import { findPrimary } from './primaryResult.js'
+import { findPrimary, PRIMARY_AMBIGUOUS_REASON, PRIMARY_UNBOUND_REASON, PRIMARY_UNRECOGNIZED_REASON } from './primaryResult.js'
 import { isRelationshipValidated } from '../lib/evidenceVersion.js'
 
 const UNKNOWN = { state: 'unknown', name: null, verified: false, indexes: [], basis: null }
@@ -688,5 +688,156 @@ describe('identical phrases match without dropping a qualifier, component, timep
     expect(found).toMatchObject({ state: 'identified', basis: 'source', indexes: [1] })
     expect(findPrimary([secondary], () => true, source)).toMatchObject(UNKNOWN)
     expect(findPrimary([row('hospitalization for heart failure')], () => true, source)).toMatchObject(UNKNOWN)
+  })
+
+  it('strips a statistic label and the arm comparison even when the label sits before versus', () => {
+    expect(identify(
+      'death from any cause',
+      'death from any cause, hazard ratio, beta-blocker vs placebo',
+    )).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+    expect(identify('acute coronary syndrome', 'ACS')).toMatchObject({ state: 'identified', basis: 'source' })
+    expect(identify('cardiovascular death', 'CV death')).toMatchObject({ state: 'identified', basis: 'source' })
+    expect(identify('myocardial infarction', 'MI')).toMatchObject({ state: 'identified', basis: 'source' })
+    expect(identify('heart failure hospitalization', 'HF hospitalization')).toMatchObject({ state: 'identified', basis: 'source' })
+  })
+
+  it('expands MACE only when this source defines it', () => {
+    const defined = 'MACE (cardiovascular death, myocardial infarction, or stroke) was prespecified. The primary end point was cardiovascular death, myocardial infarction, or stroke.'
+    expect(findPrimary([row('MACE')], () => true, defined)).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+    expect(findPrimary(
+      [row('MACE')],
+      () => true,
+      'The primary end point was cardiovascular death, myocardial infarction, or stroke.',
+    )).toMatchObject(UNKNOWN)
+  })
+
+  it('drops a parenthetical definition from the declared phrase and keeps a clinical parenthesis', () => {
+    expect(findPrimary(
+      [row('myocardial infarction')],
+      () => true,
+      'The primary end point was myocardial infarction (defined as a rise and fall of troponin).',
+    )).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+    expect(findPrimary(
+      [row('myocardial infarction')],
+      () => true,
+      'The primary end point was myocardial infarction (MI).',
+    )).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+    expect(findPrimary(
+      [row('death')],
+      () => true,
+      'The primary end point was death (cardiovascular only).',
+    )).toMatchObject(UNKNOWN)
+  })
+})
+
+function evidenceRow(name, quote) {
+  return {
+    quantity: { ...hr(name, quote) },
+    verdict: { flagged: false },
+  }
+}
+
+describe('a verified quote can identify the declared primary without name equality', () => {
+  const passes = (row) => !row.verdict.flagged
+
+  it('matches a generic primary-composite name only through the results sentence', () => {
+    const source = 'The primary end point was death from any cause or hospitalization for heart failure. Death from any cause or hospitalization for heart failure occurred in 20% of patients.'
+    const quote = 'Death from any cause or hospitalization for heart failure occurred in 20% of patients.'
+    expect(findPrimary([row('Primary efficacy composite outcome')], () => true, source)).toMatchObject(UNKNOWN)
+    expect(findPrimary([evidenceRow('Primary efficacy composite outcome', quote)], passes, source)).toMatchObject({
+      state: 'identified', basis: 'evidence', verified: true, indexes: [0], reason: null,
+    })
+  })
+
+  it('treats one unlabelled verified quote that reports the declared outcome as the primary', () => {
+    const source = 'The primary end point was death from any cause. Death from any cause occurred in 11% of patients.'
+    const quote = 'Death from any cause occurred in 11% of patients.'
+    expect(findPrimary([evidenceRow('Between-group comparison', quote)], passes, source)).toMatchObject({
+      state: 'identified', basis: 'evidence', verified: true, indexes: [0],
+    })
+  })
+
+  it('keeps two quotes in the same results sentence and rejects two different results sentences', () => {
+    const shared = 'The primary end point was death from any cause. Death from any cause occurred in 10% of the device group and 12% of the control group.'
+    const together = findPrimary([
+      evidenceRow('Primary efficacy composite outcome', 'Death from any cause occurred in 10% of the device group'),
+      evidenceRow('Between-group comparison', '12% of the control group'),
+    ], passes, shared)
+    expect(together).toMatchObject({ state: 'identified', basis: 'evidence', indexes: [0, 1] })
+
+    const split = 'The primary end point was death from any cause. Death from any cause occurred in 10% of the device group. Death from any cause occurred in 12% of the control group.'
+    const apart = findPrimary([
+      evidenceRow('Primary efficacy composite outcome', 'Death from any cause occurred in 10% of the device group.'),
+      evidenceRow('Between-group comparison', 'Death from any cause occurred in 12% of the control group.'),
+    ], passes, split)
+    expect(apart).toMatchObject({ state: 'unknown', reason: PRIMARY_AMBIGUOUS_REASON, indexes: [] })
+  })
+
+  it('negative: a wrong component, a wrong timepoint, or a secondary quote does not bind', () => {
+    const component = 'The primary end point was death from any cause or stroke. Stroke occurred in 5% of patients.'
+    expect(findPrimary([
+      evidenceRow('Primary efficacy composite outcome', 'Stroke occurred in 5% of patients.'),
+    ], passes, component)).toMatchObject({ state: 'unknown', reason: PRIMARY_UNBOUND_REASON })
+
+    const year = 'The primary end point was death from any cause within 30 days. Death from any cause at 1 year occurred in 10% of patients.'
+    expect(findPrimary([
+      evidenceRow('Primary efficacy composite outcome', 'Death from any cause at 1 year occurred in 10% of patients.'),
+    ], passes, year)).toMatchObject({ state: 'unknown', reason: PRIMARY_UNBOUND_REASON })
+
+    const relation = 'The primary end point was death from any cause within 30 days. Death from any cause at 30 days occurred in 4% of patients.'
+    expect(findPrimary([
+      evidenceRow('Primary efficacy composite outcome', 'Death from any cause at 30 days occurred in 4% of patients.'),
+    ], passes, relation)).toMatchObject({ state: 'unknown', reason: PRIMARY_UNBOUND_REASON })
+
+    const secondary = 'The primary end point was death from any cause. The secondary outcome was death from any cause, which occurred in 8% of patients.'
+    expect(findPrimary([
+      evidenceRow('Primary efficacy composite outcome', 'The secondary outcome was death from any cause, which occurred in 8% of patients.'),
+    ], passes, secondary)).toMatchObject({ state: 'unknown', reason: PRIMARY_UNBOUND_REASON })
+    expect(findPrimary([
+      evidenceRow('Secondary outcome: death from any cause', 'Death from any cause occurred in 11% of patients.'),
+    ], passes, 'The primary end point was death from any cause. Death from any cause occurred in 11% of patients.')).toMatchObject({
+      state: 'unknown', reason: PRIMARY_UNBOUND_REASON,
+    })
+  })
+})
+
+describe('primary-outcome sentences the declaration reader can now see', () => {
+  it('reads outcome measure, an appositive, a changed measure, and a main outcome line', () => {
+    expect(findPrimary([row('death from any cause')], () => true, 'The primary outcome measure was death from any cause.')).toMatchObject({
+      state: 'identified', basis: 'source', indexes: [0],
+    })
+    expect(findPrimary([row('death from any cause')], () => true, 'The primary outcome measure is death from any cause.')).toMatchObject({
+      state: 'identified', basis: 'source', indexes: [0],
+    })
+    expect(findPrimary(
+      [row('death from any cause')],
+      () => true,
+      'Death from any cause, the primary outcome, was higher in the device group.',
+    )).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+    expect(findPrimary(
+      [row('death from any cause')],
+      () => true,
+      'In March 1993, the primary outcome measures were changed to death from any cause.',
+    )).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+    expect(findPrimary(
+      [row('death from any cause')],
+      () => true,
+      'MAIN OUTCOME MEASURES: death from any cause. Costs were a secondary concern.',
+    )).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+  })
+
+  it('treats primary objectives with no stated outcome as unspecified, even if a row is labelled primary', () => {
+    const source = 'The stated primary objectives were to compare procedural risks and long-term prevention of stroke.'
+    expect(findPrimary([row('Primary outcome: procedural death or stroke')], () => true, source)).toMatchObject({
+      state: 'unspecified', basis: 'no-declared-primary', name: null, reason: null,
+    })
+  })
+
+  it('says the outcome sentence was unreadable when a primary is mentioned but not stated', () => {
+    expect(findPrimary(
+      [row('Primary outcome: death from any cause')],
+      () => true,
+      'The primary end point will be reported separately once follow-up is complete.',
+    )).toMatchObject({ state: 'unknown', reason: PRIMARY_UNRECOGNIZED_REASON, indexes: [] })
   })
 })

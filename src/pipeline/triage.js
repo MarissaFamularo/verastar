@@ -348,7 +348,12 @@ export async function triage({
     // REV2 gap 1: results were extracted but none is the primary → the main finding is
     // withheld outright, whatever the model checker would have said.
     if (unknownPrimary.has(String(rk.id))) {
-      scope.set(String(rk.id), { verdict: 'refuted', reason: PRIMARY_UNKNOWN_REASON, withheld: 'primary-unknown' })
+      const primary = primaryById.get(String(rk.id))
+      scope.set(String(rk.id), {
+        verdict: 'refuted',
+        reason: primary?.reason || PRIMARY_UNKNOWN_REASON,
+        withheld: 'primary-unknown',
+      })
     }
   }
 

@@ -20,6 +20,7 @@
 //     cited. Uncertainty resolves to withholding, the same bias as check.js.
 
 import { normalize, extractNumbers, extractNumbersWithIndex, numbersEqual } from './verify.js'
+import { locateQuote } from './evidenceContext.js'
 
 const has = (re, s) => re.test(s)
 
@@ -91,7 +92,7 @@ export function verificationCorpus(result) {
 
 const ROLE = '(?:efficacy\\s+|safety\\s+|effectiveness\\s+|composite\\s+)?(?:end\\s?-?points?|outcomes?|analys(?:is|es)|results?)'
 const NOUN = '(end\\s?-?points?|outcomes?|analys(?:is|es)|results?)'
-const DECLARATION = (which) => new RegExp(`\\b${which}\\s+(?:efficacy\\s+|safety\\s+|effectiveness\\s+|composite\\s+)?${NOUN}\\s+(were|was|included|comprised|:)\\s+([^.]{4,500})`, 'i')
+const DECLARATION = (which) => new RegExp(`\\b${which}\\s+(?:efficacy\\s+|safety\\s+|effectiveness\\s+|composite\\s+)?${NOUN}\\s+(?:of\\s+(?:the|this|a|an)\\s+[^.]{3,60}?\\s+)?(were|was|included|comprised|:)\\s+([^.]{4,500})`, 'i')
 const PRIMARY_DECLARATION = DECLARATION('primary')
 const DECLARES_PRIMARY = new RegExp(`\\bprimary\\s+${ROLE}\\b`, 'i')
 const DECLARES_SECONDARY = new RegExp(`\\bsecondary\\s+${ROLE}\\b`, 'i')
@@ -118,6 +119,15 @@ function abbreviationExpansions(text) {
     const before = raw.slice(Math.max(0, match.index - 100), match.index)
     const words = before.match(/([A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,6})\s*$/)
     const phrase = words?.[1]?.replace(/\s+/g, ' ').trim()
+    if (phrase) map.set(match[1], phrase)
+  }
+  // "MACE (cardiovascular death, myocardial infarction, or stroke)" defines the
+  // abbreviation. A bare MACE is not expanded unless the source does this.
+  for (const match of raw.matchAll(/\b([A-Z][A-Z0-9]{1,10})\s*[([]\s*((?:defined as\s+)?[A-Za-z][^)\]]{8,240}?)\s*[\])]/g)) {
+    // MI (leading to hospitalization) is a qualifier, not a definition of MI.
+    // CV, MI, HF, and ACS already expand from the closed list. MACE does not.
+    if (map.has(match[1]) || /^(?:MI|CV|HF|ACS|MALE|RAO|HR|OR|RR|CI)$/.test(match[1]) || /\d/.test(match[2])) continue
+    const phrase = match[2].replace(/^(?:defined as|i\.e\.|that is)\s+/i, '').replace(/\s+/g, ' ').trim()
     if (phrase) map.set(match[1], phrase)
   }
   return map
@@ -727,31 +737,90 @@ function matchesDeclared(row, primaryItems) {
 
 // Words the closed outcome list does not know still match when the row prints
 // the same phrase as the declaration. Case, whitespace, and punctuation are
-// the only normalization. Role labels, a trailing "A vs B, hazard ratio", and
-// a leading "composite of" are the same structural wrappers the component
-// parser already removes; they are not clinical content. CV / HF / MI / MALE /
-// RAO expand to the phrase they already stand for. A leading "adjudicated" is
-// list-level ascertainment and drops only when the rest is still a list
-// ("adjudicated A, B, or C"). Qualifiers, components, populations, time
-// windows, and arm labels stay in the phrase, so a different one does not match.
+// the only normalization. Role labels, a statistic label (hazard ratio, odds
+// ratio, and the same family), an arm comparison ("A vs B"), and a leading
+// "composite of" are structural wrappers. CV, MI, HF, and ACS expand to the
+// phrase they already stand for. MACE expands only when this source defines it.
+// MALE / RAO stay on the closed outcome list. A leading "adjudicated" is
+// list-level ascertainment and drops only when the rest is still a list.
+// Qualifiers, components, populations, time windows, and arm labels stay in
+// the phrase, so a different one does not match.
 const SURFACE_ALIAS = new Map([
   ['cv', 'cardiovascular'],
   ['hf', 'heart failure'],
   ['mi', 'myocardial infarction'],
+  ['acs', 'acute coronary syndrome'],
   ['male', 'major adverse limb events'],
   ['rao', 'retinal artery occlusion'],
 ])
+const STAT_LABEL = /\b(?:hazard|odds|risk|rate)\s+ratios?\b|\brelative\s+risk\b|\bmean\s+difference\b|\brisk\s+difference\b|\babsolute\s+(?:risk\s+)?(?:difference|reduction)\b|\babsolute\s+difference\b/gi
+const RESIDUE_STOP = new Set([
+  'efficacy', 'safety', 'effectiveness', 'composite', 'outcome', 'outcomes', 'endpoint', 'endpoints',
+  'end', 'point', 'points', 'analysis', 'incidence', 'rate', 'rates', 'event', 'events', 'result', 'results',
+  'primary', 'co',
+])
+const CONTENT_STOP = new Set([
+  'the', 'a', 'an', 'of', 'in', 'to', 'for', 'with', 'by', 'on', 'per', 'and', 'or', 'was', 'were', 'is', 'are',
+  'from', 'within', 'at', 'after', 'during', 'following', 'between', 'over', 'through',
+  'difference', 'incidence', 'rate', 'rates', 'risk', 'occurrence', 'composite', 'change', 'measured',
+  'assessed', 'defined', 'occurring', 'compared', 'versus', 'vs', 'overall', 'total', 'number', 'proportion',
+  'mean', 'median', 'patients', 'patient', 'group', 'groups', 'study', 'trial', 'primary', 'secondary',
+  'endpoint', 'end', 'point', 'outcome', 'outcomes', 'event', 'events', 'analysis', 'similar', 'occurred',
+  'higher', 'lower', 'significantly', 'estimated', 'reduced', 'increased', 'did', 'not', 'differ',
+  'receiving', 'assigned', 'undergoing', 'due', 'up', 'than', 'into',
+  'confidence', 'interval', 'ci', 'percentage', 'points', 'percent', 'adjusted',
+  'ratio', 'ratios', 'follow',
+])
+const HEAD_WORDS = new Set(['death', 'stroke', 'infarction', 'bleeding', 'amputation', 'hospitalization', 'healing'])
+const QUALIFIER_TOKEN = new Set([
+  'any', 'cause', 'causes', 'cardiovascular', 'disabling', 'ischemic', 'ischaemic', 'unplanned',
+  'ipsilateral', 'new', 'major', 'fatal', 'all',
+])
+const OPTIONAL_TOKEN = new Set(['treatment', 'hospital', 'procedure', 'therapy', 'randomisation', 'randomization', 'index'])
+const PRIMARY_ROLE = /\b(?:composite\s+)?primary(?:[-\s](?:efficacy|safety))?[-\s](?:end\s?-?points?|outcomes?|events?|composite)|\bprimary[-\s]outcome\s+event|\brate of the primary\b|\bprimary endpoint rate\b|\bprimary events\b/i
+const SECONDARY_ROLE = /\bsecondary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?|events?)\b/i
+const RESULT_CUE = /\d|%|\b(?:occurred|incidence|rate|rates|similar|differ|higher|lower|reduced|increased)\b/i
+const OUTCOME_MENTION = /\bprimary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?)\b/i
+const OBJECTIVES_MENTION = /\bprimary\s+(?:objectives?|aims?)\b/i
+const MEASURE_DECL = /\bprimary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?)\s+measures?\s+(?:were|was|included|comprised|:|is|are)\s+([^.]{4,500})/gi
+const CHANGED_DECL = /\bprimary\s+outcome\s+measures?\s+were\s+changed\s+to\s+([^.]{4,500})/gi
+const APPOSITIVE_DECL = /([^.]{4,240}),\s+the\s+primary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?)\s*,\s+(?:was|were)\b/gi
+const MAIN_DECL = /\bMAIN\s+OUTCOME\s+MEASURES?:\s*([^.]{4,500})/gi
+const COMPOSITE_ASIDE = /\bprimary\s+(?:end\s?-?points?|outcomes?),\s+((?:a\s+)?composite\s+of\s+[^.]{4,400}?)(?:,\s+(?:using|assessed|defined|measured|analyzed|analysed|in\s+patients)\b)/gi
 
-function endpointSurface(text) {
+function dropDeclaredExpansions(text, expansions) {
   let s = String(text || '')
+  s = s.replace(/\s*[([]\s*(?:defined as|i\.e\.|ie|that is|also known as)\b[^)\]]{0,400}[)\]]/gi, ' ')
+  s = s.replace(/\s*[([]\s*[A-Z][A-Z0-9]{1,10}\s*[)\]]/g, ' ')
+  s = s.replace(/\b([A-Z][A-Z0-9]{1,10})\s*[([]\s*[^)\]]{8,300}[)\]]/g, (whole, abbrev) => (
+    expansions?.has(abbrev) ? abbrev : whole
+  ))
+  return s
+}
+
+function stripComparison(text) {
+  let s = String(text || '').replace(STAT_LABEL, ' ')
+  const vsAt = s.search(/\b(?:versus|vs\.?|compared(?:\s+with|\s+to)?)\b/i)
+  if (vsAt < 0) return s
+  const head = s.slice(0, vsAt)
+  const comma = head.lastIndexOf(',')
+  return comma >= 0 ? head.slice(0, comma) : head.replace(/(?:^|[\s,(])[A-Za-z0-9-]+\s+$/i, ' ')
+}
+
+function endpointSurface(text, expansions, { dropExpansions = false } = {}) {
+  let s = dropExpansions ? dropDeclaredExpansions(text, expansions) : String(text || '')
   s = s.replace(/^(?:the\s+)?(?:co-?)?primary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?|analysis|composite)\s*[:\-—]?\s*/i, '')
-  s = s.replace(/,\s+[^,]*\b(?:versus|vs\.?|compared(?:\s+with|\s+to)?)\b[\s\S]*$/i, '')
+  s = stripComparison(s)
   s = s.replace(/,?\s*\((?:hazard ratio|odds ratio|risk ratio|HR|OR|RR)\)\s*$/i, '')
   s = s.replace(/^(?:(?:a|an|the)\s+)?composite\s+of\s+/i, '')
   s = normalize(s).replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
   const words = []
   for (const word of s.split(' ')) {
     if (!word) continue
+    if (word === 'mace' && expansions?.has('MACE')) {
+      words.push(...endpointSurface(expansions.get('MACE'), null).split(' ').filter(Boolean))
+      continue
+    }
     const expanded = SURFACE_ALIAS.get(word)
     if (expanded) words.push(...expanded.split(' '))
     else words.push(word)
@@ -761,52 +830,334 @@ function endpointSurface(text) {
   return s
 }
 
-function sameEndpointSurface(rowName, declaredClause) {
-  const row = endpointSurface(rowName)
-  const declared = endpointSurface(declaredClause)
+function sameEndpointSurface(rowName, declaredClause, expansions) {
+  const row = endpointSurface(rowName, expansions)
+  const declared = endpointSurface(declaredClause, expansions, { dropExpansions: true })
   return Boolean(row) && row === declared
 }
 
+function isGenericEndpointName(name, expansions) {
+  const words = endpointSurface(name, expansions).split(' ').filter((word) => word && !RESIDUE_STOP.has(word))
+  return words.length === 0
+}
+
+function contentTokens(text, expansions) {
+  const stripped = String(text || '')
+    .replace(/\btime\s+of\s+(?:the\s+)?(?:randomisation|randomization|index(?:\s+\w+)?|procedure|treatment|surgery)\b/gi, ' ')
+  return endpointSurface(stripped, expansions, { dropExpansions: true })
+    .split(' ')
+    .filter((word) => word && !CONTENT_STOP.has(word) && !/^(?:\d+|day|days|week|weeks|month|months|year|years)$/.test(word))
+}
+
+// Analysis scaffolding left after a statistic label and the arm comparison are
+// removed. These words do not name an endpoint, so a sentence made only of them
+// can continue the results sentence that does.
+const STAT_RESIDUE = new Set([
+  'hazard', 'odds', 'relative', 'absolute', 'percent', 'percentage', 'point', 'points',
+  'confidence', 'interval', 'adjusted', 'unadjusted', 'covariate', 'prespecified',
+  'cox', 'model', 'analysis', 'estimated', 'kaplan', 'meier', 'cumulative',
+  'annualized', 'annualised', 'difference', 'risk', 'rate', 'rates', 'proportional',
+  'hazards', 'assumption', 'noninferiority', 'non', 'inferiority', 'superiority', 'p',
+])
+
+function explicitRelations(text) {
+  const found = new Set()
+  const re = new RegExp(`\\b(within|at)\\s+(?:(?:${TIME_NUM_SRC})[-\\s]?(?:day|week|month|year)s?)`, 'gi')
+  for (const match of String(text || '').matchAll(re)) found.add(match[1].toLowerCase())
+  return found
+}
+
+function endpointTimes(text) {
+  const stripped = String(text || '')
+    .replace(/\b(?:over|after|during)\s+(?:a\s+)?median(?:\s+\([^)]*\)|\s+follow-up)?\s+of\s+[^.;]{0,48}/gi, ' ')
+    .replace(/\bmedian(?:\s+follow-up|\s+duration|\s+of)?\s+(?:follow-up\s+)?of\s+[^.;]{0,48}/gi, ' ')
+    .replace(/\bfollow-up\s+of\s+[^.;]{0,40}/gi, ' ')
+  return timesIn(stripped)
+}
+
+function timeConflict(declared, sentence) {
+  const left = endpointTimes(declared)
+  const right = endpointTimes(sentence)
+  if (!right.length) return false
+  if (!left.length) return true
+  const ls = [...left].sort()
+  const rs = [...right].sort()
+  if (ls.length !== rs.length || ls.some((time, index) => time !== rs[index])) return true
+  const declaredRelations = explicitRelations(declared)
+  const sentenceRelations = explicitRelations(sentence)
+  if (declaredRelations.size && sentenceRelations.size) {
+    for (const relation of sentenceRelations) if (!declaredRelations.has(relation)) return true
+  }
+  return false
+}
+
+function populationPhrase(text) {
+  const match = String(text || '').match(/\bin\s+patients\s+(?:with|without)\s+[a-z0-9-]+(?:\s+[a-z0-9-]+){0,3}|\bin\s+(?:women|men)\b|\bin\s+the\s+[a-z0-9-]+(?:\s+[a-z0-9-]+){0,3}\s+(?:group|arm)\b/i)
+  return match ? normalize(match[0]) : ''
+}
+
+function stripArmTails(text) {
+  return String(text || '').replace(/\b(?:in|with|receiving)\s+the\s+[a-z0-9-]+(?:\s+[a-z0-9-]+){0,4}\s+(?:group|arm)\b/gi, ' ')
+}
+
+function tokensCover(declared, sentence, expansions) {
+  const need = contentTokens(declared, expansions)
+  const have = contentTokens(stripArmTails(sentence), expansions)
+  if (!need.length || timeConflict(declared, sentence)) return false
+  const needed = new Set(need)
+  const present = new Set(have)
+  if (!need.every((word) => present.has(word) || OPTIONAL_TOKEN.has(word))) return false
+  for (const word of have) {
+    if ((HEAD_WORDS.has(word) || QUALIFIER_TOKEN.has(word)) && !needed.has(word)) return false
+  }
+  return [...needed].filter((word) => QUALIFIER_TOKEN.has(word)).every((word) => present.has(word))
+}
+
+function roleFamily(text) {
+  if (/\bsafety\b/i.test(text)) return 'safety'
+  if (/\befficacy\b/i.test(text)) return 'efficacy'
+  return ''
+}
+
+function sameRoleFamily(sentence, declarationSentence) {
+  const sentenceRole = roleFamily(sentence)
+  const declaredRole = roleFamily(declarationSentence)
+  if (sentenceRole === 'safety' && declaredRole !== 'safety') return false
+  if (sentenceRole === 'efficacy' && declaredRole === 'safety') return false
+  return true
+}
+
+const SENTENCE_BOUNDARY = /(?<!\d)[.!?](?:\s+(?=[A-Z])|(?=[A-Z]))/g
+
+function sentenceSpans(text) {
+  const spans = []
+  let from = 0
+  SENTENCE_BOUNDARY.lastIndex = 0
+  let mark
+  while ((mark = SENTENCE_BOUNDARY.exec(text))) {
+    spans.push({ start: from, end: mark.index + 1 })
+    from = mark.index + mark[0].length
+  }
+  if (from < text.length) spans.push({ start: from, end: text.length })
+  return spans.length ? spans : [{ start: 0, end: text.length }]
+}
+
+function clauseBounds(text, start, end) {
+  const spans = sentenceSpans(text)
+  const first = spans.find((span) => start >= span.start && start < span.end) || spans[0]
+  const last = spans.find((span) => end > span.start && end <= span.end) || spans[spans.length - 1]
+  const from = Math.min(first.start, last.start)
+  const to = Math.max(first.end, last.end)
+  return { start: from, end: to, text: text.slice(from, to).replace(/\s+/g, ' ').trim() }
+}
+
+function previousClause(text, start) {
+  const spans = sentenceSpans(text)
+  const index = spans.findIndex((span) => start >= span.start && start < span.end)
+  if (index <= 0) return null
+  const span = spans[index - 1]
+  return { start: span.start, end: span.end, text: text.slice(span.start, span.end).replace(/\s+/g, ' ').trim() }
+}
+
+function quoteSpansConflict(clause, declared, expansions) {
+  const parts = clause.split(/;\s*/)
+  if (parts.length < 2) return false
+  const need = new Set(contentTokens(declared, expansions))
+  return parts.some((part) => contentTokens(part, expansions).some((word) => HEAD_WORDS.has(word) && !need.has(word)))
+}
+
+function statCue(sentence) {
+  return /\b(?:hazard|odds|risk|rate)\s+ratios?\b|\bdifference\b|\bpercentage points\b|\bcredible interval\b|\bconfidence interval\b|\bp\s*[=<]/i.test(sentence)
+}
+
+function fragmentTokens(sentence, expansions) {
+  let s = String(sentence || '')
+  s = s.replace(STAT_LABEL, ' ')
+  s = s.replace(/\b(?:in|with|for|between)\s+the\s+[a-z0-9-]+(?:\s+[a-z0-9-]+){0,4}\s+(?:group|arm|strategy|cohort)\b/gi, ' ')
+  s = s.replace(/\b(?:as\s+)?compared\s+(?:with|to)\s+(?:the\s+)?[a-z0-9-]+(?:\s+[a-z0-9-]+){0,4}\s+(?:group|arm|strategy|cohort)\b/gi, ' ')
+  return contentTokens(s, expansions)
+}
+
+function continuationOk(sentence, declared, expansions) {
+  if (!RESULT_CUE.test(sentence)) return false
+  if (!statCue(sentence)) return false
+  if (SECONDARY_ROLE.test(sentence) && !PRIMARY_ROLE.test(sentence)) return false
+  if (timeConflict(declared, sentence)) return false
+  const residue = fragmentTokens(sentence, expansions)
+  if (residue.some((word) => HEAD_WORDS.has(word) || QUALIFIER_TOKEN.has(word))) return tokensCover(declared, sentence, expansions)
+  return residue.every((word) => STAT_RESIDUE.has(word))
+}
+
+function statGlue(sentence, expansions) {
+  if (!RESULT_CUE.test(sentence)) return false
+  if (SECONDARY_ROLE.test(sentence) && !PRIMARY_ROLE.test(sentence)) return false
+  const stripped = String(sentence || '').replace(/\bp\s*[=<>]\s*[\d.]+/gi, ' ').replace(STAT_LABEL, ' ')
+  return contentTokens(stripped, expansions).length === 0
+}
+
+function subclauseContaining(sentence, quote) {
+  const parts = String(sentence || '').split(/;\s*/)
+  const opening = String(quote || '').replace(/\s+/g, ' ').trim().split(';')[0].slice(0, 40)
+  if (!opening) return sentence
+  const hit = parts.find((part) => part.replace(/\s+/g, ' ').includes(opening))
+  return hit || sentence
+}
+
+function roleWindow(sentence) {
+  const match = String(sentence || '').match(/(?:[\w-]+\s+){0,5}(?:composite\s+)?primary(?:[-\s]\w+){0,6}(?:\s+(?:at|within|after)\s+[^,;]{0,32})?/i)
+  return match ? match[0] : ''
+}
+
+function reportsDeclared(clause, declared, declarationSentence, expansions) {
+  if (!clause || !sameRoleFamily(clause, declarationSentence)) return null
+  if (SECONDARY_ROLE.test(clause) && !PRIMARY_ROLE.test(clause)) return null
+  const population = populationPhrase(declared)
+  if (population && populationPhrase(clause) !== population) return null
+  if (PRIMARY_ROLE.test(clause) && RESULT_CUE.test(clause) && !timeConflict(declared, roleWindow(clause) || clause)) {
+    const clinical = contentTokens(clause, expansions).some((word) => HEAD_WORDS.has(word) || QUALIFIER_TOKEN.has(word))
+    if (!clinical || tokensCover(declared, clause, expansions)) return 'role'
+  }
+  if (tokensCover(declared, clause, expansions) && RESULT_CUE.test(clause)) return 'content'
+  return null
+}
+
+function cleanDeclaredClause(clause) {
+  return String(clause || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^(?:the|a|an)\s+/i, '')
+    .split(/,\s+with\b(?=[^.]*\bsecondary\b)/i)[0]
+    .replace(/,?\s+as secondary outcomes?.*$/i, '')
+    .replace(/[;,:]\s*$/, '')
+    .trim()
+}
+
+function earliest(source, regex, group, { noun = null, verb = null } = {}) {
+  regex.lastIndex = 0
+  let best = null
+  for (const match of source.matchAll(regex)) {
+    const clause = cleanDeclaredClause(match[group])
+    if (clause.length < 4) continue
+    if (!best || match.index < best.index) {
+      best = {
+        index: match.index,
+        clause,
+        end: match.index + match[0].length,
+        noun: noun ? match[noun] : 'outcome',
+        verb: verb ? match[verb] : 'was',
+      }
+    }
+  }
+  return best
+}
+
+function extractDeclaration(source) {
+  const candidates = [
+    earliest(source, CHANGED_DECL, 1),
+    earliest(source, MEASURE_DECL, 1),
+    earliest(source, APPOSITIVE_DECL, 1),
+    earliest(source, COMPOSITE_ASIDE, 1),
+    earliest(source, new RegExp(PRIMARY_DECLARATION.source, 'gi'), 3, { noun: 1, verb: 2 }),
+  ].filter(Boolean)
+  candidates.sort((a, b) => a.index - b.index)
+  const chosen = candidates[0] || null
+  if (chosen) {
+    const sentence = clauseBounds(source, chosen.index, chosen.end).text
+    return { kind: 'outcome', clause: chosen.clause, sentence, noun: chosen.noun, verb: chosen.verb }
+  }
+  const main = earliest(source, MAIN_DECL, 1)
+  if (main && !OUTCOME_MENTION.test(source)) {
+    return { kind: 'outcome', clause: main.clause, sentence: clauseBounds(source, main.index, main.end).text, noun: main.noun, verb: main.verb }
+  }
+  if (OBJECTIVES_MENTION.test(source) && !OUTCOME_MENTION.test(source)) return { kind: 'objectives', clause: '', sentence: '' }
+  if (OUTCOME_MENTION.test(source) || DECLARES_PRIMARY.test(source)) return { kind: 'unrecognized', clause: '', sentence: '' }
+  if (DECLARES_SECONDARY.test(source)) return { kind: 'secondary-only', clause: '', sentence: '' }
+  return { kind: 'none', clause: '', sentence: '' }
+}
+
+function nameContradicts(name, declaredClause, parsed, expansions) {
+  if (!declaredClause || isGenericEndpointName(name, expansions)) return false
+  if (sameEndpointSurface(name, declaredClause, expansions)) return false
+  const rowParsed = parseDeclaration(['endpoint', 'outcome', 'was', name], expansions)
+  if (!parsed?.uncertain && parsed?.endpoints?.length && !rowParsed.uncertain && rowParsed.endpoints.length) {
+    if (!parsed.endpoints.some((item) => itemHits(name, item))) return true
+  }
+  const declaredTimes = endpointTimes(declaredClause)
+  const rowTimes = endpointTimes(name)
+  if (rowTimes.length && !declaredTimes.length) return true
+  if (rowTimes.some((time) => !declaredTimes.includes(time))) return true
+  const declaredRelations = explicitRelations(declaredClause)
+  const rowRelations = explicitRelations(name)
+  if (declaredRelations.size && rowRelations.size) {
+    for (const relation of rowRelations) if (!declaredRelations.has(relation)) return true
+  }
+  const declaredPopulation = populationPhrase(declaredClause)
+  const rowPopulation = populationPhrase(name)
+  if (declaredPopulation && rowPopulation && declaredPopulation !== rowPopulation) return true
+  if (!declaredPopulation && rowPopulation) return true
+  return false
+}
+
+function evidenceBinding(row, source, declared, parsed, expansions) {
+  const quote = String(row?.quantity?.source_quote || '').trim()
+  if (!quote || !declared.clause) return null
+  if (quote.length > Math.max(700, source.length * 0.85)) return null
+  const located = locateQuote(source, quote)
+  if (!located) return null
+  const clause = clauseBounds(source, located.start, located.end)
+  const subclause = subclauseContaining(clause.text, quote)
+  if (quoteSpansConflict(subclause, declared.clause, expansions)) return null
+  if (nameContradicts(String(row?.quantity?.name || ''), declared.clause, parsed, expansions)) return null
+  const direct = reportsDeclared(subclause, declared.clause, declared.sentence, expansions)
+  if (direct) return { kind: direct, key: direct === 'role' ? 'role' : `content:${clause.start}` }
+  if (continuationOk(subclause, declared.clause, expansions)) {
+    const parts = clause.text.split(/;\s*/)
+    const opening = String(quote).replace(/\s+/g, ' ').trim().split(';')[0].slice(0, 40)
+    const partIndex = parts.findIndex((part) => part.replace(/\s+/g, ' ').includes(opening))
+    let blocked = false
+    for (let earlierIndex = partIndex - 1; earlierIndex >= 0; earlierIndex--) {
+      const earlier = reportsDeclared(parts[earlierIndex], declared.clause, declared.sentence, expansions)
+      if (earlier) return { kind: 'continuation', key: earlier === 'role' ? 'role' : `content:${clause.start}` }
+      const bridge = parts[earlierIndex]
+      if (!statGlue(bridge, expansions) && !continuationOk(bridge, declared.clause, expansions)) {
+        blocked = true
+        break
+      }
+    }
+    if (blocked) return null
+    const previous = previousClause(source, clause.start)
+    if (previous) {
+      const previousKind = reportsDeclared(previous.text, declared.clause, declared.sentence, expansions)
+      if (previousKind) return { kind: 'continuation', key: previousKind === 'role' ? 'role' : `content:${previous.start}` }
+    }
+  }
+  return null
+}
+
 // The paper's primary result, as an EXPLICIT state — never null:
-//   { state: 'identified', name, verified, indexes, basis }  the row's endpoint equals
-//       the declared primary (each component, with its qualifiers and window), or — only when the source
-//       declares neither a primary nor a secondary — the row's name or location hint
-//       says primary. It is not secondary, a subgroup, or a per-protocol / as-treated
-//       analysis (per-protocol noninferiority is allowed). verified: any primary row
-//       passes the call site's verified predicate.
-//   { state: 'unknown', name: null, verified: false, indexes: [] }  results were extracted
-//       but none is the primary — the declaration does not parse, no row equals it, or
-//       the source names a primary the app cannot bind. The main finding is then
-//       WITHHELD by triage(): it cannot be weighed against a primary the app cannot name.
-//   { state: 'unspecified', ... }  the source text was supplied and it never declares a
-//       primary or a secondary endpoint (a meta-analysis that pools named outcomes, for
-//       example). Verified results may be summarized; none of them is called the primary.
-//   { state: 'no-results', name: null, verified: false, indexes: [] }  nothing was extracted
-//       (narrative review, methods paper, extraction error). There is no result to headline;
-//       the finding is number-free by construction (empty verified set) and model-checked.
-// rows: runPaper rows [{ quantity, verdict }]. isVerified: the call site's own predicate.
-// sourceText: the abstract or full text, when the caller has it. Omitted, an unlabelled
-// row is still unknown — position never promotes a row (REV2). Identification against a
-// declaration succeeds only when the row's endpoint equals the declared one:
-// an order-independent set of (component, qualifiers of that component, window)
-// tuples. A window is its relation, duration, and anchor event, and the anchor
-// has to be the same event or both absent. A component is one outcome from a
-// closed list, plus recognized qualifier phrases; an abbreviation on that list
-// is that outcome. An unfamiliar word is not split into an outcome and a
-// leftover, and it is not dropped. The same phrase on the row and in the
-// declaration still matches after case, whitespace, and punctuation are
-// normalized: qualifiers, components, populations, time windows, and arm
-// labels stay in that phrase. A token that fits none of those slots, and is
-// not the same phrase, leaves the declaration or the row unidentified. An
-// unparsed secondary declaration does not veto a primary that matched. Quote
-// text is never an identification path.
+//   { state: 'identified', name, verified, indexes, basis, reason: null }
+//       the row's endpoint equals the declared primary, or its source quote is
+//       bound to the primary-outcome sentence or the results sentence that
+//       reports that outcome. A generic "primary (efficacy) composite outcome"
+//       name matches only through that quote. It is not secondary, a subgroup,
+//       or a per-protocol / as-treated analysis (per-protocol noninferiority is
+//       allowed). verified: any primary row passes the call site's predicate.
+//   { state: 'unknown', ..., reason }  results were extracted but none is the
+//       primary. reason says which check failed. triage() withholds the finding
+//       and the card carries that reason.
+//   { state: 'unspecified', ... }  the source never states an outcome, including
+//       a paper whose only "primary" line is an objective or aim. Verified
+//       results may be summarized; none of them is called the primary.
+//   { state: 'no-results', ... }  nothing was extracted.
+// Qualifiers, components, populations, time windows, and arm labels stay put.
+// Two quote candidates that are not the same results sentence stay unknown.
+// The word "primary" inside a quote is not itself a label.
 export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, sourceText = '') {
   const list = Array.isArray(rows) ? rows : []
-  const none = (state) => ({ state, name: null, verified: false, indexes: [], basis: null })
+  const none = (state, reason = null) => ({ state, name: null, verified: false, indexes: [], basis: null, reason })
   if (!list.length) return none('no-results')
   const eligible = (row) => {
-    const t = tagResult(row?.quantity)
-    return !nonRandomized(t) && !t.subgroup && !t.secondary
+    const tags = tagResult(row?.quantity)
+    return !nonRandomized(tags) && !tags.subgroup && !tags.secondary
   }
   const identified = (indexes, basis) => ({
     state: 'identified',
@@ -814,35 +1165,55 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
     verified: indexes.some((i) => isVerified(list[i])),
     indexes,
     basis,
+    reason: null,
   })
   const source = String(sourceText || '')
-  // A declared primary is the only definition that counts. Name, location, and
-  // quote labels are not consulted, and a declaration that does not parse is
-  // unidentified rather than a reason to trust those labels.
-  if (source && (DECLARES_PRIMARY.test(source) || DECLARES_SECONDARY.test(source))) {
+  const declared = source ? extractDeclaration(source) : { kind: 'none', clause: '', sentence: '' }
+  if (declared.kind === 'objectives') {
+    const indexes = list.flatMap((row, i) => (eligible(row) ? [i] : []))
+    return {
+      state: 'unspecified',
+      name: null,
+      verified: indexes.some((i) => isVerified(list[i])),
+      indexes,
+      basis: 'no-declared-primary',
+      reason: null,
+    }
+  }
+  if (declared.kind === 'outcome' || declared.kind === 'unrecognized' || declared.kind === 'secondary-only') {
     const expansions = abbreviationExpansions(source)
-    const primaryMatch = source.match(PRIMARY_DECLARATION)
-    const primaryParsed = parseDeclaration(primaryMatch, expansions)
-    // An unparsed secondary declaration used to force this primary unidentified,
-    // and a secondary hit used to reject a row that already equalled it. Neither
-    // does that now. A row whose own name says secondary is still not eligible.
-    const declaredClause = primaryMatch?.[3] || ''
-    const indexes = list.flatMap((row, i) => {
+    const primaryParsed = declared.clause
+      ? parseDeclaration(['', declared.noun || 'outcome', declared.verb || 'was', declared.clause], expansions)
+      : { endpoints: [], uncertain: true }
+    const nameIndexes = declared.clause ? list.flatMap((row, i) => {
       const name = String(row?.quantity?.name || '')
       const tags = tagResult(row?.quantity)
-      // The endpoint phrase can contain "secondary" ("secondary to") without
-      // being a secondary result. That tag must not suppress an exact primary.
-      // A subgroup or a per-protocol / as-treated row still is not the primary.
-      if (declaredClause && sameEndpointSurface(name, declaredClause)) {
+      if (isGenericEndpointName(name, expansions)) return []
+      if (sameEndpointSurface(name, declared.clause, expansions)) {
         if (nonRandomized(tags) || tags.subgroup) return []
         return [i]
       }
-      if (!eligible(row)) return []
-      if (primaryParsed.uncertain || !primaryParsed.endpoints.length) return []
+      if (!eligible(row) || primaryParsed.uncertain || !primaryParsed.endpoints.length) return []
       return matchesDeclared(row, primaryParsed.endpoints) ? [i] : []
+    }) : []
+    if (nameIndexes.length) return identified(nameIndexes, 'source')
+    if (!declared.clause) {
+      return none('unknown', declared.kind === 'secondary-only'
+        ? PRIMARY_UNBOUND_REASON
+        : PRIMARY_UNRECOGNIZED_REASON)
+    }
+    const bound = []
+    list.forEach((row, index) => {
+      if (!eligible(row)) return
+      const hit = evidenceBinding(row, source, declared, primaryParsed, expansions)
+      if (hit) bound.push({ index, ...hit })
     })
-    if (indexes.length) return identified(indexes, 'source')
-    return none('unknown')
+    const contentKeys = new Set(bound.filter((hit) => hit.key.startsWith('content')).map((hit) => hit.key))
+    if (contentKeys.size > 1 && !bound.some((hit) => hit.key === 'role')) {
+      return none('unknown', PRIMARY_AMBIGUOUS_REASON)
+    }
+    if (bound.length) return identified(bound.map((hit) => hit.index), 'evidence')
+    return none('unknown', PRIMARY_UNBOUND_REASON)
   }
   for (const [basis, test] of LABEL_BASES) {
     const indexes = list.flatMap((row, i) => (eligible(row) && test(row?.quantity) ? [i] : []))
@@ -861,8 +1232,16 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
     verified: indexes.some((i) => isVerified(list[i])),
     indexes,
     basis: 'no-declared-primary',
+    reason: null,
   }
 }
+
+export const PRIMARY_UNBOUND_REASON =
+  "The paper states a primary outcome, but no extracted result's quote is bound to that outcome or to the results sentence that reports it."
+export const PRIMARY_AMBIGUOUS_REASON =
+  'More than one extracted result could be the primary, so none was selected.'
+export const PRIMARY_UNRECOGNIZED_REASON =
+  'The paper mentions a primary result, but the outcome sentence was not one of the forms the app can read.'
 
 export const PRIMARY_UNKNOWN_REASON =
   "Withheld: the app could not identify this study's primary result among the extracted results, so a main finding cannot be weighed against it. Read the paper's primary result before repeating a takeaway."

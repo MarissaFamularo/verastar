@@ -17,7 +17,7 @@ vi.mock('../lib/anthropic.js', () => ({
 
 import { extractStructured } from '../lib/anthropic.js'
 import { fmtNum, ciLabel } from '../lib/format.js'
-import { findPrimary, PRIMARY_UNKNOWN_REASON } from './primaryResult.js'
+import { findPrimary, PRIMARY_UNKNOWN_REASON, PRIMARY_UNBOUND_REASON } from './primaryResult.js'
 import { triage } from './triage.js'
 import { selectEvidenceContext, EVIDENCE_CHARS } from './evidenceContext.js'
 
@@ -88,6 +88,13 @@ describe('gap 1 — a missing primary is an explicit state, and the main finding
     const [take] = await triage({ candidates: [{ id: d.pmid, title: 'Cilostazol', summary: d.sourceDoc.text, verified: verifiedOf(d.rows), primary: findPrimary(d.rows, notFlagged) }] })
     expect(take.check.verdict).toBe('refuted')
     expect(take.check.withheld).toBe('primary-unknown')
+  })
+
+  it('a withheld card carries the reason the primary could not be bound', async () => {
+    mockWriterThenSupportiveChecker({ id: 'p1', score: 80, tier: 1, finding: 'Drug X reduced death from any cause.', finding_plain: 'Drug X reduced death from any cause.', design_caution: '', relevance: 'r' })
+    const primary = { state: 'unknown', name: null, verified: false, indexes: [], basis: null, reason: PRIMARY_UNBOUND_REASON }
+    const [take] = await triage({ candidates: [{ id: 'p1', title: 'T', summary: 's', verified: [], primary }] })
+    expect(take.check).toEqual({ verdict: 'refuted', reason: PRIMARY_UNBOUND_REASON, withheld: 'primary-unknown' })
   })
 
   it('an explicit null primary is treated as unknown (withheld), not as "fine"', async () => {
