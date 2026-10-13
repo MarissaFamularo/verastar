@@ -19,7 +19,7 @@
 //     per-protocol / as-treated analyses while the randomized primary is unverified or not
 //     cited. Uncertainty resolves to withholding, the same bias as check.js.
 
-import { normalize, extractNumbers, extractNumbersWithIndex, numbersEqual } from './verify.js'
+import { normalize, extractNumbers, extractNumbersWithIndex, numbersEqual, retainNumberSyntax } from './verify.js'
 import { locateQuote } from './evidenceContext.js'
 
 const has = (re, s) => re.test(s)
@@ -199,7 +199,9 @@ export function verificationCorpus(result) {
 
 const ROLE = '(?:efficacy\\s+|safety\\s+|effectiveness\\s+|composite\\s+)?(?:end\\s?-?points?|outcomes?|analys(?:is|es)|results?)'
 const NOUN = '(end\\s?-?points?|outcomes?|analys(?:is|es)|results?)'
-const DECLARATION = (which) => new RegExp(`\\b${which}\\s+(?:efficacy\\s+|safety\\s+|effectiveness\\s+|composite\\s+)?${NOUN}\\s+(?:of\\s+(?:the|this|a|an)\\s+[^.]{3,60}?\\s+)?(were|was|included|comprised|:)\\s+([^.]{4,500})`, 'i')
+// A decimal point ("1.5") is part of the clause. A sentence period is not.
+const CLAUSE_BODY = '(?:[^.]|\\.(?=\\d))'
+const DECLARATION = (which) => new RegExp(`\\b${which}\\s+(?:efficacy\\s+|safety\\s+|effectiveness\\s+|composite\\s+)?${NOUN}\\s+(?:of\\s+(?:the|this|a|an)\\s+${CLAUSE_BODY}{3,60}?\\s+)?(were|was|included|comprised|:)\\s+(${CLAUSE_BODY}{4,500})`, 'i')
 const PRIMARY_DECLARATION = DECLARATION('primary')
 const DECLARES_PRIMARY = new RegExp(`\\bprimary\\s+${ROLE}\\b`, 'i')
 const DECLARES_SECONDARY = new RegExp(`\\bsecondary\\s+${ROLE}\\b`, 'i')
@@ -843,11 +845,13 @@ function matchesDeclared(row, primaryItems) {
 }
 
 // Words the closed outcome list does not know still match when the row prints
-// the same phrase as the declaration. Case, whitespace, and punctuation are
-// the only normalization. Role labels, a statistic label (hazard ratio, odds
-// ratio, and the same family), an arm comparison ("A vs B"), and a leading
-// "composite of" are structural wrappers. CV, MI, HF, and ACS expand to the
-// phrase they already stand for. MACE expands only when this source defines it.
+// the same phrase as the declaration. Case, whitespace, and non-semantic
+// punctuation are the only normalization. Comparison operators, signs,
+// decimals, slashes, and ranges stay, so "<10%" is not ">10%" and "1.5" is
+// not "15". Role labels, a statistic label (hazard ratio, odds ratio, and the
+// same family), an arm comparison ("A vs B"), and a leading "composite of"
+// are structural wrappers. CV, MI, HF, and ACS expand to the phrase they
+// already stand for. MACE expands only when this source defines it.
 // MALE / RAO stay on the closed outcome list. A leading "adjudicated" is
 // list-level ascertainment and drops only when the rest is still a list.
 // Qualifiers, components, populations, time windows, and arm labels stay in
@@ -920,7 +924,7 @@ function endpointSurface(text, expansions, { dropExpansions = false } = {}) {
   s = stripComparison(s)
   s = s.replace(/,?\s*\((?:hazard ratio|odds ratio|risk ratio|HR|OR|RR)\)\s*$/i, '')
   s = s.replace(/^(?:(?:a|an|the)\s+)?composite\s+of\s+/i, '')
-  s = normalize(s).replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+  s = retainNumberSyntax(normalize(s), { gap: ' ' })
   const words = []
   for (const word of s.split(' ')) {
     if (!word) continue
@@ -953,7 +957,7 @@ function contentTokens(text, expansions) {
     .replace(/\btime\s+of\s+(?:the\s+)?(?:randomisation|randomization|index(?:\s+\w+)?|procedure|treatment|surgery)\b/gi, ' ')
   return endpointSurface(stripped, expansions, { dropExpansions: true })
     .split(' ')
-    .filter((word) => word && !CONTENT_STOP.has(word) && !/^(?:\d+|day|days|week|weeks|month|months|year|years)$/.test(word))
+    .filter((word) => word && !CONTENT_STOP.has(word) && !/^(?:day|days|week|weeks|month|months|year|years)$/.test(word) && !/[\d<>≤≥±%]/.test(word))
 }
 
 // Analysis scaffolding left after a statistic label and the arm comparison are
@@ -1134,7 +1138,7 @@ function asHead(word) {
 }
 
 function termCovers(term, rowSurface, expansions) {
-  const words = endpointSurface(term, expansions).split(' ').filter((word) => word.length >= 5)
+  const words = endpointSurface(term, expansions).split(' ').filter((word) => word.length >= 5 && !/[\d<>≤≥±%]/.test(word))
   return words.length >= 2 && words.every((word) => rowSurface.includes(word))
 }
 
@@ -1336,6 +1340,54 @@ function nameContradicts(name, declaredClause, parsed, expansions, source = '') 
   return false
 }
 
+const SUBGROUP_SLICE = /\bsubgroups?\b|\bsubset\b|\bstrat(?:um|a)\b|\bin patients (?:with|without)\b/i
+
+// "<10%" and ">10%" share every clinical word once the operator is dropped.
+// When both the declaration and the quote print a comparison, those tokens
+// have to be the same. A result percentage with no operator is not compared.
+function operatorTokens(text, expansions) {
+  return endpointSurface(text, expansions, { dropExpansions: true })
+    .split(' ')
+    .filter((word) => /[<>≤≥±]/.test(word))
+}
+
+function thresholdConflict(quote, declared, expansions) {
+  const left = operatorTokens(declared, expansions)
+  const right = operatorTokens(quote, expansions)
+  if (!left.length || !right.length) return false
+  if (left.length !== right.length) return true
+  const ordered = [...right].sort()
+  return [...left].sort().some((token, index) => token !== ordered[index])
+}
+
+// A different outcome, a subgroup, or a secondary result does not become the
+// primary by sharing a sentence with it. A bare percentage or a hazard ratio
+// does not name another finding.
+// A quote that leaves out a declared time or slice is not, by itself, the
+// report of that outcome. The surrounding sentence may still be.
+function quoteOmitsDeclaredWindow(quote, declared) {
+  if (windowConflict(quote, declared)) return true
+  if (endpointTimes(declared).length !== endpointTimes(quote).length) return endpointTimes(declared).length > 0
+  if (sliceLabels(declared).length !== sliceLabels(quote).length) return sliceLabels(declared).length > 0
+  return false
+}
+
+function quoteIsDifferentResult(quote, declared, expansions) {
+  const flat = String(quote || '').replace(/\s+/g, ' ').trim()
+  if (SUBGROUP_SLICE.test(flat) && !SUBGROUP_SLICE.test(declared)) return true
+  if (SECONDARY_ROLE.test(flat) && !PRIMARY_ROLE.test(flat)) return true
+  if (thresholdConflict(flat, declared, expansions)) return true
+  const declaredTokens = contentTokens(declared, expansions)
+  const declaredHeads = new Set(declaredTokens.map(asHead).filter(Boolean))
+  const declaredQuals = new Set(
+    contentTokens(withoutComponentDefinitions(declared), expansions).filter((word) => HARD_QUALIFIER.has(word)),
+  )
+  const quoteTokens = contentTokens(flat, expansions)
+  if (quoteTokens.map(asHead).filter(Boolean).some((word) => !declaredHeads.has(word))) return true
+  if (quoteTokens.some((word) => HARD_QUALIFIER.has(word) && !declaredQuals.has(word))) return true
+  return false
+}
+
 function evidenceBinding(row, source, declared, parsed, expansions) {
   const quote = String(row?.quantity?.source_quote || '').trim()
   if (!quote || !declared.clause) return null
@@ -1346,6 +1398,15 @@ function evidenceBinding(row, source, declared, parsed, expansions) {
   const subclause = subclauseContaining(clause.text, quote)
   if (quoteSpansConflict(subclause, declared.clause, expansions)) return null
   if (nameContradicts(String(row?.quantity?.name || ''), declared.clause, parsed, expansions, source)) return null
+  const flat = quote.replace(/\s+/g, ' ').trim()
+  // The quote has to be the declared outcome, not another result that merely
+  // shares the sentence or the passage. Arm wording inside a results sentence
+  // ("among patients assigned to") is not itself a subgroup.
+  if (quoteIsDifferentResult(flat, declared.clause, expansions)) return null
+  const onQuote = reportsDeclared(flat, declared.clause, declared.sentence, expansions)
+  if (onQuote && !quoteOmitsDeclaredWindow(flat, declared.clause)) {
+    return { kind: onQuote, key: onQuote === 'role' ? 'role' : `content:${clause.start}` }
+  }
   const direct = reportsDeclared(subclause, declared.clause, declared.sentence, expansions)
   if (direct) return { kind: direct, key: direct === 'role' ? 'role' : `content:${clause.start}` }
   if (continuationOk(subclause, declared.clause, expansions)) {
@@ -1374,9 +1435,11 @@ function evidenceBinding(row, source, declared, parsed, expansions) {
 
 // The paper's primary result, as an EXPLICIT state — never null:
 //   { state: 'identified', name, verified, indexes, basis, reason: null }
-//       the row's endpoint equals the declared primary, or its source quote is
-//       bound to the primary-outcome sentence or the results sentence that
-//       reports that outcome. A generic "primary (efficacy) composite outcome"
+//       the row's endpoint equals the declared primary, or its source quote
+//       reports that outcome itself (name or composite, timepoint, and arms).
+//       Sitting in a sentence or passage that mentions the primary is not
+//       enough. A statistic fragment may continue the results sentence that
+//       does report it. A generic "primary (efficacy) composite outcome"
 //       name matches only through that quote. It is not secondary, a subgroup,
 //       or a per-protocol / as-treated analysis (per-protocol noninferiority is
 //       allowed). A component of that composite, a different time window, and a

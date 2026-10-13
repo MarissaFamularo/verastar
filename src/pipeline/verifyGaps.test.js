@@ -143,6 +143,39 @@ describe('percentages bound to arms without "vs" (X in A and Y in B)', () => {
     const withCi = `${HF13} (hazard ratio, 0.99; 95% CI, 0.78 to 1.27).`
     expect(ok(pair({ source_quote: withCi }), withCi)).toBe(false)
   })
+  it('[false-verify guard] negation, falsity, a question, and a hypothetical are not this sentence', () => {
+    const clause = HF13
+    const repros = [
+      `The claim was false: ${clause}.`,
+      `It is not true that ${clause}.`,
+      `Prior studies reported ${clause}.`,
+      `If ${clause}.`,
+      `It was hypothesized that ${clause}.`,
+      `Would ${clause}.`,
+      `Unlike earlier trials, ${clause}.`,
+      `In this cohort, ${clause}.`,
+      'a primary-outcome event did not occur in 129 patients (37.2%) in the PCI group and in 134 patients (38.0%) in the optimal-medical-therapy group.',
+      `${clause}?`,
+      `${clause}!`,
+      `${clause}...`,
+      `${clause}.?`,
+      `${clause}, whereas surgery was higher.`,
+      `${clause} compared with surgery.`,
+    ]
+    for (const src of repros) {
+      expect(ok(pair({ source_quote: src }), src), src).toBe(false)
+      expect(ok(pair({ source_quote: clause }), src), src).toBe(false)
+    }
+    // The quote drops the mark; the source sentence still asks it.
+    expect(ok(pair({ source_quote: clause }), `${clause}?`)).toBe(false)
+    expect(ok(pair({ source_quote: clause }), `${clause}?"`)).toBe(false)
+  })
+  it('accepts a period outside the quote and the end of the text', () => {
+    expect(ok(pair({ source_quote: HF13 }), `${HF13}.`)).toBe(true)
+    expect(ok(pair({ source_quote: HF13 }), HF13)).toBe(true)
+    expect(ok(pair({ source_quote: HF13 }), `Earlier work differed. ${HF13}.`)).toBe(true)
+    expect(ok(pair({ source_quote: `${HF13}.` }), `${HF13}.`)).toBe(true)
+  })
 })
 
 describe('proportion recomputed from its printed count (SFA lesion crossing)', () => {
@@ -234,8 +267,10 @@ describe('heterogeneity I² (frailty meta-analysis)', () => {
 
 describe('version', () => {
   it('bumps, and keeps the previous stamps readable outside the tiers v7 tightened', () => {
-    expect(VERIFICATION_VERSION).toBe('2026-10-13.estimates-v13')
+    expect(VERIFICATION_VERSION).toBe('2026-10-13.estimates-v14')
     expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).toEqual(expect.arrayContaining(['2026-10-12.estimates-v12', '2026-10-12.estimates-v9', '2026-10-10.estimates-v8', '2026-10-09.estimates-v7']))
+    expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-13.estimates-v13')
+    expect(COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-13.estimates-v13')
     const v12 = { verificationVersion: '2026-10-12.estimates-v12', tier: TIERS.COMPARISON, relationshipValidated: true, flagged: false }
     expect(evidenceVerdict(v12)).toBe(v12)
     expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v10')
@@ -249,6 +284,8 @@ describe('version', () => {
     expect(evidenceVerdict(v10).tier).toBe('legacy-unchecked')
     const v11 = { verificationVersion: '2026-10-12.estimates-v11', tier: TIERS.FULL_TEXT, relationshipValidated: true, flagged: false }
     expect(evidenceVerdict(v11).tier).toBe('legacy-unchecked')
+    const v13 = { verificationVersion: '2026-10-13.estimates-v13', tier: TIERS.COMPARISON, relationshipValidated: true, flagged: false }
+    expect(evidenceVerdict(v13).tier).toBe('legacy-unchecked')
     const old = { ...verify(q({ name: 'x', unit: 'HR', value: 0.84, ci_low: 0.61, ci_high: 1.16, source_quote: 'HR 0.84 (95% CI 0.61-1.16)' }), 'Results: HR 0.84 (95% CI 0.61-1.16).'), verificationVersion: '2026-09-30.estimates-v3' }
     // An estimate verdict is in a tier v7 tightened (P binding), so an old stamp there is
     // no longer a subset and is downgraded; the read paths re-derive it from saved source.

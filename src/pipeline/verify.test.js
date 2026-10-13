@@ -440,6 +440,23 @@ describe('verify — extra precision guards', () => {
     expect(v.badNums).toContain(0.84)
   })
 
+  it('[false-verify guard] fuzzy match keeps operators, signs, decimals, and ranges', () => {
+    const cases = [
+      ['reduction of <10% overall', 'reduction of >10% overall', 10],
+      ['reduction of ≤10 overall', 'reduction of ≥10 overall', 10],
+      ['reduction of 1.5 percent overall', 'reduction of 15 percent overall', 1.5],
+      ['a change of -2 points overall', 'a change of 2 points overall', -2],
+      ['30-day mortality overall', '3-day mortality overall', 30],
+    ]
+    for (const [quote, source, value] of cases) {
+      const v = verify(q({ value, source_quote: quote }), source)
+      expect(v.found, `${quote} in ${source}`).toBe(false)
+      expect(v.tier).toBe(TIERS.FLAGGED)
+    }
+    const same = verify(q({ value: 10, source_quote: 'reduction of <10% overall' }), 'The reduction of <10% overall was recorded.')
+    expect(same.found).toBe(true)
+  })
+
   it('[false-verify guard] fuzzy match on a re-punctuated value: source 84, quote 8.4 -> flagged', () => {
     // Alnum-stripped forms are identical; the numbers must come from the SOURCE span,
     // where the token is 84, not the quote, where it is 8.4.

@@ -9,7 +9,8 @@
 // says "primary" does not match. A component has to be one outcome from a closed
 // list plus recognized qualifier phrases. An unfamiliar word leaves a different
 // phrase unidentified; the matcher does not turn it into another outcome. The
-// same phrase matches after case, whitespace, and punctuation are normalized.
+// same phrase matches after case, whitespace, and non-semantic punctuation are
+// normalized. Comparison operators, signs, decimals, and number boundaries stay.
 
 import { describe, it, expect } from 'vitest'
 import { verify, TIERS } from './verify.js'
@@ -711,6 +712,26 @@ describe('identical phrases match without dropping a qualifier, component, timep
     )).toMatchObject(UNKNOWN)
   })
 
+  it('keeps comparison operators, signs, decimals, and number boundaries distinct', () => {
+    const pairs = [
+      ['reduction of <10%', 'reduction of >10%'],
+      ['reduction of ≤10', 'reduction of ≥10'],
+      ['reduction of 1.5', 'reduction of 15'],
+      ['change of -2', 'change of 2'],
+      ['30-day mortality', '3-day mortality'],
+    ]
+    for (const [declared, other] of pairs) {
+      expect(identify(declared, other), `${declared} vs ${other}`).toMatchObject(UNKNOWN)
+      expect(identify(other, declared), `${other} vs ${declared}`).toMatchObject(UNKNOWN)
+      expect(identify(declared, declared), declared).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+      expect(identify(other, other), other).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+    }
+    const source = 'Patients were randomly assigned to device or control. The primary end point was a reduction of <10%. A reduction of >10% occurred in the device group.'
+    expect(findPrimary([
+      evidenceRow('reduction of >10%', 'A reduction of >10% occurred in the device group.'),
+    ], (entry) => !entry.verdict.flagged, source)).toMatchObject({ state: 'unknown', reason: PRIMARY_UNBOUND_REASON })
+  })
+
   it('drops a parenthetical definition from the declared phrase and keeps a clinical parenthesis', () => {
     expect(findPrimary(
       [row('myocardial infarction')],
@@ -1007,5 +1028,61 @@ describe('subgroup arms and composite components are not the declared primary', 
         state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
       })
     }
+  })
+})
+
+describe('a shared passage does not make a different result the primary', () => {
+  const passes = (entry) => !entry.verdict.flagged
+
+  it('does not identify a subgroup or secondary result written in the same sentence as the primary', () => {
+    const source = [
+      'Patients were randomly assigned to the device or control.',
+      'The primary end point was death from any cause at 30 days.',
+      'The primary end point occurred in 10% of the device group and 12% of the control group at 30 days, and in the subgroup of patients with diabetes the rate was 20% versus 22%, and quality of life, a secondary outcome, was 72.',
+    ].join(' ')
+    const subgroup = evidenceRow(
+      'diabetes rate',
+      'in the subgroup of patients with diabetes the rate was 20% versus 22%',
+    )
+    const secondary = evidenceRow('quality of life score', 'quality of life, a secondary outcome, was 72')
+    const primary = evidenceRow(
+      'Primary end point',
+      'The primary end point occurred in 10% of the device group and 12% of the control group at 30 days',
+    )
+    expect(findPrimary([subgroup], passes, source)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
+    })
+    expect(findPrimary([secondary], passes, source)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
+    })
+    expect(findPrimary([primary, subgroup, secondary], passes, source)).toMatchObject({
+      state: 'identified', basis: 'evidence', verified: true, indexes: [0], reason: null,
+    })
+  })
+
+  it('keeps only the declared outcome when one passage reports two results', () => {
+    const source = [
+      'Patients were randomly assigned to the device or control.',
+      'The primary end point was death from any cause.',
+      'Death from any cause occurred in 10% of patients and stroke occurred in 4% of patients.',
+    ].join(' ')
+    const death = evidenceRow('Between-group comparison', 'Death from any cause occurred in 10% of patients')
+    const stroke = evidenceRow('stroke rate', 'stroke occurred in 4% of patients')
+    const mixed = evidenceRow(
+      'mixed results',
+      'Death from any cause occurred in 10% of patients and stroke occurred in 4% of patients.',
+    )
+    expect(findPrimary([death], passes, source)).toMatchObject({
+      state: 'identified', basis: 'evidence', verified: true, indexes: [0], reason: null,
+    })
+    expect(findPrimary([stroke], passes, source)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
+    })
+    expect(findPrimary([mixed], passes, source)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
+    })
+    expect(findPrimary([death, stroke], passes, source)).toMatchObject({
+      state: 'identified', basis: 'evidence', indexes: [0], reason: null,
+    })
   })
 })

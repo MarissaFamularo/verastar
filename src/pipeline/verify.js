@@ -8,11 +8,12 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-13.estimates-v13'
-// v13 accepts one comparison shape v12 withheld: a percentage printed in one
-// arm and a percentage printed in the other, joined by "and", with no "vs".
-// Each value has to sit in its own arm. A v12 stamp never accepted that shape,
-// so it is still honest to display. Nothing v12 accepted is refused.
+export const VERIFICATION_VERSION = '2026-10-13.estimates-v14'
+// v14 keeps the arm-percentage shape v13 added, and refuses it unless the
+// sentence is affirmative: no negation or falsity framing, no question or
+// exclamation (including a "?" the quote dropped), no conditional or
+// hypothetical, and the template is the whole sentence. A v13 stamp can
+// false-verify those, so it is not a subset. Nothing v12 accepted is refused.
 // v12 refuses a question or an exclamation for the two shapes added in v10. The
 // terminator is read from the source sentence, including punctuation immediately
 // outside the quote. v11 stripped "?" and treated "?" and "!" as sentence
@@ -78,8 +79,34 @@ export function normalize(str) {
   s = s.replace(DASH_VARIANTS, '-')
   s = s.replace(INTERPUNCT_DECIMAL, '$1.$2')
   s = s.replace(THOUSANDS_GROUP, (m) => m.replace(/,/g, ''))
+  s = s.replace(/<=/g, '≤').replace(/>=/g, '≥')
   s = s.replace(/\s+/g, ' ').trim()
   return s.toLowerCase()
+}
+
+// Comparison operators, signs, decimals, slashes, and ranges stay. Dropping them
+// makes "<10%" and ">10%", "1.5" and "15", "-2" and "2" the same string.
+function keepsNumberSyntax(text, index) {
+  const ch = text[index]
+  const prev = index > 0 ? text[index - 1] : ''
+  const next = index + 1 < text.length ? text[index + 1] : ''
+  if ('<>≤≥±'.includes(ch)) return true
+  if (ch === '%' && /\d/.test(prev)) return true
+  if (ch === '.' && /\d/.test(next)) return true
+  if (ch === '/' && /\d/.test(prev) && /\d/.test(next)) return true
+  if (ch === '-' && /\d/.test(next) && !/\d/.test(prev)) return true
+  if (ch === '-' && /\d/.test(prev) && /\d/.test(next)) return true
+  return false
+}
+
+export function retainNumberSyntax(text, { gap = '' } = {}) {
+  const s = String(text || '')
+  let out = ''
+  for (let i = 0; i < s.length; i++) {
+    if (/[a-z0-9]/.test(s[i]) || keepsNumberSyntax(s, i)) out += s[i]
+    else if (gap) out += gap
+  }
+  return gap ? out.replace(/\s+/g, ' ').trim() : out
 }
 
 // --- 2. Numeric tokenization --------------------------------------------------
@@ -794,17 +821,33 @@ function validateAndPair(quantity, matched, corpus, declaredType) {
 // it is not "vs". The count between the arms may be "in 134 patients" or
 // "in 408 of 711 patients". A label may be the arm stem ("LCZ696") when the
 // sentence prints "LCZ696 group". Accept only when each claimed value is the
-// percentage in its own claimed arm, in that order. A swapped arm, a value with
-// no arm, a third percentage, "vs", a CI, or a claimed P stays unresolved.
+// percentage in its own claimed arm, in that order. The sentence must be that
+// template end to end and end declaratively (one period, or the end of the text;
+// "?" and "!" refused, including a mark the quote dropped). A prefix, a suffix,
+// a negation, a falsity claim, or a conditional or hypothetical stays unresolved.
+// A swapped arm, a value with no arm, a third percentage, "vs", a CI, or a
+// claimed P stays unresolved.
 const IN_ARM_MIDDLE = '\\s+and\\s+(?:in\\s+)?(?:\\d+\\s+(?:of\\s+\\d+\\s+)?)?(?:patients?\\s+)?'
+const AFFIRMATIVE_DENY = new Set([
+  'not', 'no', 'never', 'neither', 'nor', 'without', 'except', 'excluding', 'false', 'falsely',
+  'if', 'would', 'could', 'might', 'hypothetical', 'hypothetically', 'hypothesized',
+  'reported', 'claimed', 'suggested', 'according', 'prior', 'compared',
+  'unlike', 'cohort', 'although', 'whereas', 'despite', 'whether',
+])
+
+function affirmativeLead(text) {
+  const words = String(text || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+  return words.every((word) => !AFFIRMATIVE_DENY.has(word))
+}
 
 function validateInArmPair(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
   if (declaredType !== 'comparison') return false
-  const span = corpus.slice(matched.index, matched.index + matched.length)
-  if (corpus.indexOf(span, matched.index + 1) !== -1) return false
-  if ((span.match(COMPARATOR) || []).length !== 0) return false
-  if ((span.match(CI_CLAUSE) || []).length !== 0) return false
+  const body = declarativeBody(matched, corpus)
+  if (!body) return false
+  if (corpus.indexOf(body, matched.index + 1) !== -1 && corpus.indexOf(body) !== matched.index) return false
+  if ((body.match(COMPARATOR) || []).length !== 0) return false
+  if ((body.match(CI_CLAUSE) || []).length !== 0) return false
   if (quantity.ci_low != null || quantity.ci_high != null || quantity.p_value != null) return false
   const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
   if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
@@ -814,13 +857,15 @@ function validateInArmPair(quantity, matched, corpus, declaredType) {
   if (!first || !second || first === second || first.includes(second) || second.includes(first)) return false
   const unit = normalize(quantity.unit)
   if (unit && unit !== '%' && unit !== 'percent') return false
-  if ((span.match(BRACKETED_NUM) || []).length !== 2) return false
+  if ((body.match(BRACKETED_NUM) || []).length !== 2) return false
   const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const arm = (label) => `${escape(label)}(?:\\s+(?:group|arm))?(?![a-z0-9])`
   const pct = `[([]\\s*${PAIR_NUM}\\s*%\\s*[)\\]]`
-  const pairs = [...span.matchAll(new RegExp(`${pct}\\s+in\\s+(?:the\\s+)?${arm(first)}${IN_ARM_MIDDLE}${pct}\\s+in\\s+(?:the\\s+)?${arm(second)}`, 'g'))]
-  if (pairs.length !== 1) return false
-  const [, a, b] = pairs[0]
+  const pairMatch = body.match(new RegExp(`^([\\s\\S]*?)${pct}\\s+in\\s+(?:the\\s+)?${arm(first)}${IN_ARM_MIDDLE}${pct}\\s+in\\s+(?:the\\s+)?${arm(second)}$`))
+  if (!pairMatch) return false
+  if (!affirmativeLead(pairMatch[1])) return false
+  const a = pairMatch[2]
+  const b = pairMatch[3]
   return numbersEqual(quantity.first_value, Number(a)) && numbersEqual(quantity.second_value, Number(b))
 }
 
@@ -973,20 +1018,19 @@ function locate(normQuote, normCorpus) {
   const idx = normCorpus.indexOf(normQuote)
   if (idx !== -1) return { found: true, index: idx, length: normQuote.length }
 
-  // 2b. Fuzzy: strip both to alphanumerics and test containment. Tolerates stray
-  // punctuation and line-reflow. Require length > 6 to avoid trivial matches.
+  // 2b. Fuzzy: drop case, whitespace, and non-semantic punctuation. Comparison
+  // operators, signs, decimals, slashes, and ranges stay, so "<10%" does not
+  // locate ">10%" and "1.5" does not locate "15". Require length > 6.
   //
   // The stripped-corpus hit is mapped BACK to real offsets in the normalized corpus, so
   // the numeric check always runs against source tokens, never the model's own quote.
-  // (Stripping deletes decimal points — "0.84" and "084" and "8.4"/"84" collapse — so a
-  // quote-token fallback here false-verified truncated and re-punctuated values.)
-  const q = normQuote.replace(/[^a-z0-9]/g, '')
+  const q = retainNumberSyntax(normQuote)
   if (q.length > 6) {
-    // map[i] = offset in normCorpus of the i-th alphanumeric character.
+    // map[i] = offset in normCorpus of the i-th kept character.
     const map = []
     let stripped = ''
     for (let i = 0; i < normCorpus.length; i++) {
-      if (/[a-z0-9]/.test(normCorpus[i])) {
+      if (/[a-z0-9]/.test(normCorpus[i]) || keepsNumberSyntax(normCorpus, i)) {
         map.push(i)
         stripped += normCorpus[i]
       }
