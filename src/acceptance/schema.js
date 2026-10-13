@@ -1,20 +1,22 @@
 // acceptance/schema.js — the vocabulary the acceptance cases are written in.
 //
-// This file defines SPECIFIED BEHAVIOR: the shapes a replacement card system must accept
-// and produce for the acceptance suite to run against it. It is not an implementation and
-// it deliberately shares nothing with pipeline/verify.js's verdict taxonomy.
+// SPECIFIED BEHAVIOR: the shapes a replacement card system must accept and produce for the
+// acceptance suite to run against it. Not an implementation; shares nothing with the legacy
+// verdict taxonomy. The card reference (docs/CARD_ACCEPTANCE_REFERENCE.md) is the behavioral
+// authority; this schema and the cases are its translation and are expected to grow.
 //
-// Cases test MEANING, not wording. A card is therefore represented as a set of typed
-// claims, not as prose. How prose is produced from checked claims is the design's concern
-// (docs/CARD_REPLACEMENT_DESIGN.md); the acceptance suite judges the claim set.
+// Four separations the schema enforces:
+//   1. claim ELIGIBILITY (what a claim earned on its own evidence) is separate from DISPLAY
+//      (what the whole-card checks let the renderer show);
+//   2. the results INVENTORY records how each entry's role and linkage were established —
+//      labeled, definition-linked, adjacent-sentence, or positional — and positional
+//      classification is never a source fact;
+//   3. every FALLBACK conclusion must be an independently checked claim, never text derived
+//      from a failed estimate or from the inventory alone;
+//   4. FINAL PROSE is checked sentence by sentence against the assessment; a sentence may carry
+//      only what the claims it cites earned.
 
-/**
- * @typedef {Object} Interval
- * @property {number} low
- * @property {number} high
- * @property {'95% CI'|'97.5% CI'|'printed-bracket'|null} label  — 'printed-bracket' means the source
- *   prints [a-b] with no label; the card may show it only as printed, never as a CI.
- */
+/** @typedef {{low:number, high:number, label:'95% CI'|'97.5% CI'|'printed-bracket'|null}} Interval */
 
 /**
  * @typedef {Object} Estimate
@@ -22,113 +24,125 @@
  * @property {number} value
  * @property {Interval|null} interval
  * @property {number|null} p
- * @property {string|null} unit                       — e.g. 'metres', 'percentage points'
- * @property {{studies?: number, participants?: number}|null} sample — contributing sample when the
- *   source states one (pooled estimates); must be checked when stated.
+ * @property {string|null} unit
+ * @property {{studies?:number, participants?:number}|null} sample
  */
 
 /**
- * A claim the card wants to make. Every field that is non-null is an ASSERTION the verifier
- * must find bound to the located evidence; null means "not asserted".
- *
+ * Every non-null field is an ASSERTION the checker must bind to evidence.
  * @typedef {Object} Claim
  * @property {string} id
- * @property {'design'|'population'|'outcome-definition'|'effect'|'no-clear-difference'|'rate'|
- *            'count'|'certainty'|'limitation'|'author-statement'|'absence'} kind
- * @property {'primary'|'co-primary'|'secondary'|'component'|'subgroup'|'safety'|'design'|null} role
- * @property {string|null} population         — e.g. 'CLTI, usable single-segment GSV (cohort 1)'
- * @property {{a: string, b: string}|null} comparator — a is the arm the direction refers to
+ * @property {'design'|'population'|'outcome-definition'|'effect'|'no-clear-difference'|'rate'|'count'|'certainty'|'limitation'|'author-statement'|'absence'} kind
+ * @property {'primary'|'co-primary'|'secondary'|'component'|'subgroup'|'safety'|'design'|'reported'|null} role
+ *   'reported' = the card makes no role assertion (used when the source declares no primary).
+ * @property {string|null} population
+ * @property {{a:string, b:string}|null} comparator
  * @property {string|null} outcome
  * @property {string|null} timepoint
  * @property {'favors-a'|'favors-b'|'no-clear-difference'|'equivalent'|'non-inferior'|null} direction
  * @property {Estimate|null} estimate
- * @property {'causal'|'associational'|'none'} language — the strength of the verb the card uses
+ * @property {'causal'|'associational'|'none'} language
  * @property {'source'|'design'|'editorial'} basis
- * @property {'authors'|null} attribution     — "the authors report/attribute" — never a substitute for checking
- * @property {{quote: string, section?: string}|null} evidence — proposed anchor; the verifier re-locates it
- * @property {string} [text]                   — optional prose for human reading; never judged
+ * @property {'authors'|null} attribution
+ * @property {{quote:string, section?:string}|null} evidence
+ * @property {string} [text]
  */
 
 /**
  * @typedef {Object} PersonalClaim
  * @property {string} id
- * @property {string[]} items                  — profile item ids the connection rests on
+ * @property {string[]} items
  * @property {'topic'|'population'|'method'|'practice'|'project-aim'} connection
- *   topic: the paper's subject overlaps the item's topic (weakest, usually sufficient for a north star)
- *   population: the paper's population is one a named program/role treats (needs a practice fact)
- *   method: the paper's method is reusable for a project (needs the project to be about that method)
- *   practice: asserts something about the user's own practice or patients (needs an F-type fact)
- *   project-aim: asserts what a project is trying to do (needs the aim in the profile, not just a name)
  * @property {string} text
  */
 
+/** @typedef {{id:string, kind:'north-star'|'project'|'rubric'|'fact'|'editorial', text:string}} ProfileItem */
+
 /**
- * @typedef {Object} ProfileItem
- * @property {string} id
- * @property {'north-star'|'project'|'rubric'|'fact'|'editorial'} kind
- * @property {string} text
+ * A deliberate omission the writer declares, so the fidelity check can tell "left out on
+ * purpose, with a reason" from "forgotten". Omitting a primary is never acceptable; declaring
+ * it only makes the failure explicit.
+ * @typedef {{describes:string, reason:'secondary-not-shown'|'safety-not-shown'|'out-of-scope'|'other'}} DeclaredOmission
  */
 
 /**
  * @typedef {Object} CardDraft
  * @property {Claim[]} claims
  * @property {PersonalClaim[]} personal
- * @property {{read: 'full'|'abstract-enough'|'lower-priority', reasons: string[]}} recommendation
+ * @property {DeclaredOmission[]} [omissions]
+ * @property {{read:'full'|'abstract-enough'|'lower-priority', reasons:string[]}} recommendation
  */
 
-/**
- * @typedef {Object} SourceInput
- * @property {string} text                     — exactly the text available (may be truncated to simulate availability)
- * @property {'full_text'|'abstract_only'|'partial'} tier
- * @property {string} [tables]
- */
+/** @typedef {{text:string, tier:'full_text'|'abstract_only'|'partial', tables?:string}} SourceInput */
 
 /**
- * Harness options exist only for acceptance scenarios. `simulateEstimateFailure` forces the
- * estimate check of the named claim ids to fail WITHOUT altering the source, so the suite can
- * exercise state A explicitly (reference Card 6, state A). It must not exist in production paths.
- *
- * @typedef {Object} AssessOptions
- * @property {string[]} [simulateEstimateFailure]
+ * Acceptance-only options. `simulateEstimateFailure` forces the estimate check of the named
+ * claims to fail with the source untouched (Card 6 state A2). Must not exist in production.
+ * @typedef {{simulateEstimateFailure?:string[]}} AssessOptions
  */
 
+// ---------------------------------------------------------------------------------------
+// Results
+
 /**
- * Per-claim outcome. `elements` records which asserted fields were bound to evidence.
+ * Per-claim ELIGIBILITY — what the claim earned on its own evidence. Display is decided
+ * separately (RenderPlan). Values:
+ *   pass             every asserted element bound; estimate checked → eligible with estimate
+ *   pass-qualitative no estimate asserted (or none claimed) and qualitative elements bound
+ *   withhold         population/comparator/outcome bound, estimate failed → eligible without
+ *                    estimate; direction is NOT inherited from the failed estimate
+ *   fail             a qualitative element unbound or contradicted → ineligible
+ *   excluded         evidence section unavailable → ineligible
  *
  * @typedef {Object} ClaimResult
  * @property {string} id
- * @property {'pass'|'pass-qualitative'|'withhold'|'fail'|'excluded'} status
- *   pass            — every asserted element bound; estimate (if any) checked; shown with estimate
- *   pass-qualitative— no estimate asserted (or estimate withheld) and the qualitative elements bound
- *   withhold        — the qualitative part passes but the estimate did not check; shown without estimate
- *   fail            — an asserted element is unbound or contradicted; not shown
- *   excluded        — the evidence section is not in the available source; not shown
- * @property {Record<string, 'bound'|'unbound'|'contradicted'|'not-asserted'>} elements
- *   keys: population, comparator, outcome, timepoint, direction, value, interval, p, unit, sample, language
- * @property {string[]} reasons — stable reason codes (see REASONS)
+ * @property {'pass'|'pass-qualitative'|'withhold'|'fail'|'excluded'} eligibility
+ * @property {Record<string,'bound'|'unbound'|'contradicted'|'not-asserted'|'positional-only'>} elements
+ *   keys: population, comparator, outcome, timepoint, direction, value, interval, p, unit, sample, language, role
+ * @property {'same-sentence'|'definition-linked'|'adjacent-sentence'|'positional'|'none'} linkage
+ *   how the outcome/population named in the claim was tied to the located sentence
+ * @property {string[]} reasons
+ */
+
+/**
+ * One entry of the results inventory the system derives from the source, independent of the
+ * card. `roleBasis` says how the role was established; 'positional' entries are uncertain and
+ * may never be asserted as source facts (no "primary" wording may rest on them).
+ * @typedef {Object} InventoryEntry
+ * @property {string} id
+ * @property {'primary'|'co-primary'|'secondary'|'component'|'subgroup'|'safety'|'other'} role
+ * @property {'labeled'|'definition-linked'|'positional'|'none'} roleBasis
+ * @property {'same-sentence'|'definition-linked'|'adjacent-sentence'|'positional'} linkage
+ * @property {boolean} uncertain       — true whenever roleBasis or linkage is positional
+ * @property {string|null} population  — cohort / trial / subgroup label as printed
+ * @property {string} outcome
+ * @property {'favors-first'|'favors-second'|'no-clear-difference'|'not-reported'|'not-pooled'|'unknown'} direction
  */
 
 /**
  * @typedef {Object} FidelityResult
  * @property {'pass'|'fail'} status
  * @property {string[]} reasons
- * @property {{primaries: string[], shown: string[]}} inventory — primary results the source reports vs those the card shows
+ * @property {{entries:InventoryEntry[], primaryBasis:'labeled'|'definition-linked'|'none', uncertain:boolean}} inventory
+ * @property {{entry:string, role:string, roleBasis:string, severity:'blocking'|'noted', declared:boolean}[]} omitted
+ *   every inventory entry with no claim on the card; blocking when the role is primary/co-primary
  */
 
-/**
- * @typedef {Object} PersonalResult
- * @property {string} id
- * @property {'pass'|'fail'} status
- * @property {string[]} reasons
- */
+/** @typedef {{id:string, status:'pass'|'fail', reasons:string[]}} PersonalResult */
 
 /**
+ * DISPLAY decisions, made after fidelity. A claim may be eligible and still not shown
+ * (dropped by a fallback); a shown claim must be eligible.
  * @typedef {Object} RenderPlan
- * @property {'full'|'reduced-estimate-withheld'|'reduced-results-unavailable'} state
+ * @property {'full'|'reduced-estimate-withheld'|'reduced-results-unavailable'|'reduced-fidelity-failed'} state
+ * @property {Record<string,'shown-with-estimate'|'shown-qualitative'|'not-shown'>} display
  * @property {string[]} claimsShown
- * @property {string[]} estimatesShown         — subset of claimsShown whose estimate may print
+ * @property {string[]} estimatesShown
  * @property {string[]} personalShown
  * @property {boolean} mainResultShown
+ * @property {{kind:'estimate-withheld'|'results-unavailable'|'fidelity-rebuild', conclusionClaims:string[]}|null} fallback
+ *   conclusionClaims: the independently checked claims that state the main conclusion in a
+ *   fallback. Empty ⇒ the card may not state a direction and mainResultShown must be false.
  */
 
 /**
@@ -137,48 +151,82 @@
  * @property {FidelityResult} fidelity
  * @property {PersonalResult[]} personal
  * @property {RenderPlan} render
+ * @property {{read:string, basis:string[]}} recommendation
  */
 
-// Reason codes the suite asserts on. Implementations may add codes; they may not rename these.
+// ---------------------------------------------------------------------------------------
+// Final prose
+
+/**
+ * What the renderer produces: sentences, each tagged with the claim and personal ids it renders.
+ * @typedef {{text:string, claims:string[], personal?:string[], kind?:'finding'|'for-you'|'temper'|'read'|'header'}} Sentence
+ * @typedef {{sentences:Sentence[]}} RenderedCard
+ */
+
+/**
+ * checkProse({ rendered, assessment, claims }) → ProseResult
+ * @typedef {{index:number, status:'ok'|'reject', reasons:string[]}} SentenceResult
+ * @typedef {{status:'pass'|'fail', sentences:SentenceResult[]}} ProseResult
+ */
+
+// ---------------------------------------------------------------------------------------
+// Reason codes the suite asserts on. Implementations may add codes, never rename these.
 export const REASONS = Object.freeze({
+  // claim support — location and binding
   QUOTE_NOT_LOCATED: 'quote-not-located',
   POPULATION_UNBOUND: 'population-unbound',
   POPULATION_OVERGENERALIZED: 'population-overgeneralized',
   COMPARATOR_UNBOUND: 'comparator-unbound',
-  COMPARATOR_NOT_RANDOMIZED: 'comparator-not-randomized', // cross-trial / cross-cohort comparison
+  COMPARATOR_NOT_RANDOMIZED: 'comparator-not-randomized',
+  ARM_VALUE_MISMATCH: 'arm-value-mismatch',               // a printed value bound to the other arm
   OUTCOME_UNBOUND: 'outcome-unbound',
-  OUTCOME_SUBSTITUTED: 'outcome-substituted',             // component or different outcome named as the claimed one
+  OUTCOME_SUBSTITUTED: 'outcome-substituted',
   TIMEPOINT_UNBOUND: 'timepoint-unbound',
-  DIRECTION_UNSUPPORTED: 'direction-unsupported',         // interval includes null / P ns, but direction claimed
+  TIMEPOINT_MISMATCH: 'timepoint-mismatch',               // a printed timepoint from another result
+  DIRECTION_UNSUPPORTED: 'direction-unsupported',
   EQUIVALENCE_NOT_TESTED: 'equivalence-not-tested',
   VALUE_MISMATCH: 'value-mismatch',
   INTERVAL_MISMATCH: 'interval-mismatch',
-  INTERVAL_LABEL_INVENTED: 'interval-label-invented',     // printed bracket shown as a CI
-  MEASURE_MISMATCH: 'measure-mismatch',                   // OR reported as RR, etc.
+  INTERVAL_LABEL_INVENTED: 'interval-label-invented',
+  P_MISMATCH: 'p-mismatch',
+  MEASURE_MISMATCH: 'measure-mismatch',
   SAMPLE_MISMATCH: 'sample-mismatch',
   CAUSAL_LANGUAGE_NONRANDOMIZED: 'causal-language-nonrandomized',
   SUBGROUP_AS_WHOLE: 'subgroup-as-whole',
-  ESTIMATE_UNCHECKED: 'estimate-unchecked',               // located, not checked → withhold (publication rule)
+  ROLE_UNVERIFIED: 'role-unverified',                     // role asserted; source gives only positional support
+  LINKAGE_UNCERTAIN: 'linkage-uncertain',
+  ESTIMATE_UNCHECKED: 'estimate-unchecked',
   SECTION_UNAVAILABLE: 'section-unavailable',
   ATTRIBUTION_NOT_SUBSTITUTE: 'attribution-not-substitute',
   VALIDATION_NOT_REPORTED: 'validation-not-reported',
-  ABSENCE_OVERSCOPED: 'absence-overscoped',               // "nothing was validated" vs "not reported in the abstract"
+  ABSENCE_OVERSCOPED: 'absence-overscoped',
   // fidelity
   PRIMARY_MISSING: 'primary-missing',
   PRIMARY_AFTER_SECONDARY: 'primary-after-secondary',
   NULL_PRIMARY_OBSCURED: 'null-primary-obscured',
   COMPONENT_AS_HEADLINE: 'component-as-headline',
   CROSS_TRIAL_RANKING: 'cross-trial-ranking',
-  SECONDARY_WITHOUT_CONTEXT: 'secondary-without-context', // secondary shown without outcome/certainty/relation to primary
+  SECONDARY_WITHOUT_CONTEXT: 'secondary-without-context',
+  NO_DECLARED_PRIMARY: 'no-declared-primary',             // informational: inventory.primaryBasis === 'none'
+  // fallback
+  FALLBACK_CONCLUSION_UNCHECKED: 'fallback-conclusion-unchecked',
   // personalization
   NO_SUPPORTING_ITEM: 'no-supporting-item',
   PROJECT_AIM_ASSERTED: 'project-aim-asserted',
   PRACTICE_CLAIM_WITHOUT_FACT: 'practice-claim-without-fact',
   CONNECTION_TYPE_UNSUPPORTED: 'connection-type-unsupported',
+  // final prose
+  UNBACKED_NUMBER: 'unbacked-number',                     // number not carried by a cited pass claim
+  NUMBER_FROM_WITHHELD_ESTIMATE: 'number-from-withheld-estimate',
+  UNBACKED_COMPARATIVE: 'unbacked-comparative',           // largest / first / superior with no claim
+  DIRECTION_WORD_CONTRADICTS_CLAIM: 'direction-word-contradicts-claim',
+  UNTAGGED_ASSERTION: 'untagged-assertion',               // factual sentence with no claim ids
+  ROLE_WORD_UNBACKED: 'role-word-unbacked',               // "primary" resting on positional role
+  CLAIM_NOT_SHOWN_CITED: 'claim-not-shown-cited',
+  PROSE_INTERVAL_LABEL_INVENTED: 'prose-interval-label-invented',
+  PERSONAL_UNTAGGED: 'personal-untagged',
 })
 
-// The profile as the acceptance suite sees it: the stored Verastar profile items used by the
-// reference cards, plus the two non-profile facts the reference admits with their own kinds.
 /** @type {ProfileItem[]} */
 export const PROFILE = Object.freeze([
   { id: 'NS1', kind: 'north-star', text: 'CLTI limb preservation' },
@@ -191,6 +239,4 @@ export const PROFILE = Object.freeze([
   { id: 'E1', kind: 'editorial', text: 'BEST-CLI is a landmark trial' },
 ])
 
-// A profile WITHOUT the practice fact and editorial judgment, for cases that test what the app
-// may say from the stored profile alone.
 export const PROFILE_STORED_ONLY = Object.freeze(PROFILE.filter((p) => p.kind !== 'fact' && p.kind !== 'editorial'))

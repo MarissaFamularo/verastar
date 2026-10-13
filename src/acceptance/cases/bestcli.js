@@ -79,6 +79,15 @@ export default {
     { personal: { id: 'p-practice', items: ['NS1'], connection: 'practice', text: 'the first-revascularization choice your program makes' }, profile: PROFILE_STORED_ONLY, expect: 'fail', reasons: [R.PRACTICE_CLAIM_WITHOUT_FACT] },
   ],
 
+  // Omitted factual assertions: every inventory entry with no claim on the card is listed in
+  // fidelity.omitted with its role, how the role was established, and whether it blocks.
+  omissions: [
+    { name: 'cohort 2 omitted → listed as a blocking co-primary omission', card: [enrollment, composite, cohort1], fidelity: 'fail', omitted: { roleIn: ['co-primary', 'primary'], severity: 'blocking' } },
+    { name: 'adverse-events sentence omitted → listed, noted, not blocking', card: [enrollment, composite, cohort1, cohort2, notSeparated], fidelity: 'pass', omitted: { describes: 'adverse events', severity: 'noted' } },
+    { name: 'declared safety omission is recorded as declared', card: [enrollment, composite, cohort1, cohort2, notSeparated], declared: [{ describes: 'adverse events similar in the two groups in the two cohorts', reason: 'safety-not-shown' }], fidelity: 'pass', omitted: { describes: 'adverse events', severity: 'noted' } },
+  ],
+  fidelityFallback: { card: [enrollment, composite, cohort1] },
+
   recommendation: {
     // E1 strengthens the recommendation; without it the abstract carries the headline.
     withEditorial: { profile: PROFILE, expect: 'full' },

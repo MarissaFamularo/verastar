@@ -1,237 +1,258 @@
-# Replacement card system — design proposal (2026-10-13)
+# Replacement card system — design proposal, revision 2 (2026-10-13)
 
-Status: **proposal**. Nothing here is implemented or wired into the app. The acceptance suite
-(`src/acceptance/`, `npm run test:acceptance`) specifies the behavior; this document proposes
-the design needed to satisfy it. Reference cards: `docs/CARD_ACCEPTANCE_REFERENCE.md`.
+Status: **proposal**. Nothing here is implemented or wired into the app. Behavioral authority:
+`docs/CARD_ACCEPTANCE_REFERENCE.md` (revision 4). Executable translation:
+`src/acceptance/` (`npm run test:acceptance`); the current cases are an initial translation of
+the reference, not an exhaustive standard, and are expected to grow as the reference is applied
+to more papers.
 
-This is a replacement, not a repair. The old verifier's architecture (one `quantity` at a
-time → tier), its verdict taxonomy (`verified-estimate`, `source-located`, …) and its test
-expectations are not carried forward. Its recorded behavior is evidence of failure modes the
-new system must not reproduce.
+This is a replacement, not a repair. The legacy verifier's architecture (one quantity → one
+tier), its verdict taxonomy, and its test expectations are not carried forward; its recorded
+behavior is evidence of failure modes the new system must not reproduce.
 
-## 1. What the cards require
+## 1. What the reference requires, and what revision 2 adds
 
-From the reference and the acceptance cases, the system must be able to:
+Revision 1 of this proposal covered claim-level checking, a results inventory, fidelity,
+personalization, and failure-dependent degradation. The review of that revision asked for five
+things, now specified in `src/acceptance/schema.js` and tested:
 
-1. Check a **claim** — not a number — against source text: population, comparator, outcome,
-   timepoint, direction, magnitude, interval, p, unit, contributing sample, and the strength
-   of the verb (causal vs associational) relative to the design.
-2. Check the **whole card**: every primary result the source reports is present, before any
-   secondary, component or subgroup result; a null primary is never obscured by a favorable
-   secondary; two separately randomized trials are never ranked against each other; a
-   secondary estimate is shown only with its outcome, certainty and relation to the primary.
-3. Check **personalization**: each personal sentence cites profile items, and the connection
-   type it makes (topic, population, method, practice, project-aim) is one those items can
-   support.
-4. Degrade **by failure type**: an estimate that fails its check is withheld while the
-   independently checked conclusion stays (state A); a missing results section removes every
-   results claim, attributed or not, and leaves background and methods (state B).
-5. Admit **bounded design-based interpretation** ("residual confounding remains possible despite
-   matching") with its basis recorded, and refuse over-scoped absences ("nothing was validated").
-6. Never let attribution ("the authors report…") or number removal bypass a check.
+1. **Final-prose checks.** The rendered sentences are checked against the assessment, sentence
+   by sentence. A sentence may carry only what the claims it cites earned (§Stage 7).
+2. **Omitted factual assertions are represented.** Everything the source reports that the card
+   leaves out appears in `fidelity.omitted` with its role, how that role was established, and
+   whether the omission blocks; the writer may declare omissions with a reason (§Stage 5).
+3. **Claim eligibility is separate from whole-card display.** A claim earns an eligibility on
+   its own evidence; the render plan decides display after fidelity. A shown claim must be
+   eligible; an eligible claim may still not be shown (§Stage 6).
+4. **Every fallback conclusion is an independently checked claim.** When an estimate fails,
+   the direction is not inherited from it; the card may state a conclusion only through a
+   separate claim bound to its own located sentence. No such claim ⇒ no main result (§Stage 6).
+5. **Uncertain linkage and role classification are explicit.** The inventory records
+   `roleBasis` and `linkage`; anything positional is marked `uncertain`, can never support a
+   role word in prose, and is never promoted into a source fact (§Stage 3).
 
-## 2. Core change: the unit of verification is a claim
+## 2. One complete path, worked on BEST-CLI
 
-The old system verified a *quantity* (a number plus a quote) and let a separate model write
-prose around whatever verified. That produced the recorded failures: the only verified number
-became the headline (BASIL-2 death HR, cilostazol headache), and a correct number migrated
-to the wrong outcome or population.
+Source: the PubMed abstract of PMID 36342173 (`src/pipeline/__fixtures__/devset/PAD-10.json`,
+text only). Profile: the stored items plus F1 and E1 (see the reference).
 
-The replacement verifies a **claim**: a typed object asserting population, comparator,
-outcome, timepoint, direction, estimate, language and role (see `src/acceptance/schema.js`).
-Every non-null field is an assertion the verifier must **bind** to evidence. Prose is produced
-*from* checked claims, never checked after the fact.
+### Stage 1 — Evidence index (deterministic, no model)
 
 ```
-source text ──► evidence index (sections, sentences, outcome definitions, result sentences)
-                         │
-model ──► claim drafts ──► claim checker ──► claim results (pass / pass-qualitative / withhold / fail / excluded)
-                         │
-                         ├──► results inventory (what the source says its primaries are, and their results)
-                         │
-                         └──► fidelity checker (card vs inventory) ──► render plan ──► prose renderer ──► card
-profile ──► personalization checker ──► personal lines shown / omitted
+index = {
+  sections: [ {name:'BACKGROUND', available:true, span:[…]}, {name:'METHODS', …}, {name:'RESULTS', …}, {name:'CONCLUSIONS', …} ],
+  sentences: [ {i:0, section:'BACKGROUND', text:'Patients with chronic limb-threatening ischemia (CLTI) require…', norm:'…', numbers:[]}, …,
+               {i:6, section:'METHODS', text:'The primary outcome was a composite of a major adverse limb event - which was defined as amputation above the ankle or a major limb reintervention (…) - or death from any cause.', numbers:[]},
+               {i:7, section:'RESULTS', text:'In cohort 1, after a median follow-up of 2.7 years, a primary-outcome event occurred in 302 of 709 patients (42.6%) in the surgical group and in 408 of 711 patients (57.4%) in the endovascular group (hazard ratio, 0.68; 95% confidence interval [CI], 0.59 to 0.79; P<0.001).',
+                     numbers:[{v:2.7,role:'timepoint',unit:'years'},{v:302,role:'count',arm:'surgical'},{v:709,role:'denominator',arm:'surgical'},{v:42.6,role:'percent',arm:'surgical'},{v:408,…,arm:'endovascular'},{v:711,…},{v:57.4,role:'percent',arm:'endovascular'},{v:0.68,role:'estimate',measure:'HR'},{v:0.59,role:'ci-low'},{v:0.79,role:'ci-high'},{v:0.001,role:'p',op:'<'}]},
+               {i:8, section:'RESULTS', text:'In cohort 2, …', numbers:[…0.79 … 0.58 … 1.06 … 0.12 … 1.6 …]},
+               {i:9, section:'RESULTS', text:'The incidence of adverse events was similar in the two groups in the two cohorts.', numbers:[]} ],
+  definitions: [ {kind:'primary-outcome', sentence:6, outcomes:['major adverse limb event','death from any cause'], components:['amputation above the ankle','major limb reintervention'], qualifiers:[]} ],
+  labels: { arms:['surgical group','endovascular group'], cohorts:['cohort 1','cohort 2'], subgroups:[] },
+  design: { randomized:true, parallel:'two-cohort', blinding:null, observational:false, review:false, matched:false }
+}
 ```
 
-### 2.1 Evidence index (deterministic)
+How each part is built:
+- *Sections* from abstract labels or PMC headings; availability is per section, so a text that
+  ends before RESULTS yields `RESULTS.available:false` and state B follows without special
+  casing.
+- *Sentences* split on terminal punctuation outside brackets; normalized with the legacy
+  `normalize` (NFKC, dash and interpunct folding, whitespace) — reused because it is correct
+  and tested; nothing else from `verify.js` is reused but the number tokenizer.
+- *Number roles* are assigned by local syntax only: `n of N (p%) in the X group` binds a count,
+  denominator and percent to arm X; `hazard ratio, v; 95% CI, a to b; P…` binds an estimate
+  tuple; `median follow-up of t years` binds a timepoint; `[a-b]` after a measure with no label
+  binds a `printed-bracket`. A number whose role cannot be read from syntax gets `role:null`
+  and can never bind to a claim element.
+- *Arm and cohort labels* are the printed group names in Methods and Results; a claim's
+  comparator must use (or map to) these.
+- *Definitions* are sentences of the form "The primary outcome was…", "Primary outcomes
+  were…", "Secondary outcomes included…". If none exists, `definitions` is empty and the
+  inventory's `primaryBasis` is `none`.
 
-Built once per source, before any model call:
+### Stage 2 — Claim drafting (model, untrusted)
 
-- **Sections** — abstract labels (BACKGROUND/METHODS/FINDINGS/INTERPRETATION, OBJECTIVE/…/RESULTS/
-  CONCLUSIONS) and PMC body headings. Availability is recorded per section; a claim whose
-  evidence must come from a section that is absent is `excluded`, which is how state B arises
-  without any special casing.
-- **Sentences** with offsets, normalized the same way quotes are (NFKC, dash and interpunct
-  folding, whitespace). The old `normalize`/`extractNumbersWithIndex` in `pipeline/verify.js`
-  do this correctly and are independently justified for reuse; the tier logic around them is
-  not.
-- **Outcome definitions** — sentences of the form "The primary outcome was …", "Primary
-  outcomes were …", with the named outcomes and any timepoint and population qualifiers
-  ("intention-to-treat", "4-year").
-- **Arms and populations** — arm labels as the source prints them ("surgical group",
-  "best endovascular treatment group", "medical-therapy group") and cohort/trial/subgroup
-  labels ("cohort 1", "stenting trial", "PCB Grade 3", "bypass cohort").
-- **Design** — randomized / observational / review, blinding, matching, registry, from
-  explicit words in Methods. This feeds the language check (causal verbs need a randomized
-  contrast) and the role check (what counts as the main result in a review).
+The model receives the index (not the raw text) and the profile, and returns a `CardDraft`:
+typed claims each pointing at a sentence index, personal claims each citing item ids and a
+connection type, and declared omissions. It cannot emit a number outside `estimate`, cannot
+emit prose, and cannot assert a role the definitions do not contain except as `'reported'`.
+Example output for the headline:
 
-### 2.2 Claim checker
+```
+{ id:'cohort1', kind:'effect', role:'co-primary',
+  population:'cohort 1', comparator:{a:'surgical group', b:'endovascular group'},
+  outcome:'primary composite', timepoint:'median 2.7 years', direction:'favors-a', language:'causal',
+  estimate:{measure:'HR', value:0.68, interval:{low:0.59, high:0.79, label:'95% CI'}, p:null, unit:null, sample:null},
+  evidence:{sentence:7} }
+```
 
-For each claim, in order:
+### Stage 3 — Results inventory (deterministic)
 
-1. **Locate** the proposed evidence sentence(s). Not found → `fail` (`quote-not-located`).
-   Found in a section marked unavailable → `excluded` (`section-unavailable`).
-2. **Bind elements.** Each asserted field is matched against the located sentence plus the
-   definitions the index links to it:
-   - *population*: the sentence's cohort/trial/subgroup label, or the Methods population when
-     the sentence carries none. A claim naming a broader population than the sentence binds to
-     is `population-overgeneralized` (cohort 1 → "CLTI"; grade 3 → "peroneal runoff").
-   - *comparator*: both arms must be printed in the sentence or its definition; a pair that
-     was never randomized against each other (stenting vs endarterectomy across trials;
-     bypass vs endovascular in a series that compared runoff vessels) is
-     `comparator-not-randomized` / `comparator-unbound`.
-   - *outcome*: must be the outcome the sentence reports or its linked definition. A
-     component or different outcome named as the claimed one is `outcome-substituted`
-     ("amputation" for the MALE-or-death composite; "stroke or death" for a composite whose
-     stroke-or-death limb ends at day 44).
-   - *timepoint*: as printed ("median 2.7 years", "4-year", "at 1 year").
-   - *estimate*: measure word, value, interval bounds and label, p, unit, and sample
-     (`n studies; n participants`) each matched to tokens in the sentence, in their roles. A
-     bracket the source prints without a label binds only as `printed-bracket`; calling it a
-     CI is `interval-label-invented`. An OR claimed as RR is `measure-mismatch`. A sample
-     taken from the review's total rather than the pooled analysis is `sample-mismatch`.
-   - *direction*: derived from the bound estimate and the sentence's verb. An interval
-     including the null, or a non-significant P, supports only `no-clear-difference`;
-     `equivalent` and `non-inferior` require an equivalence or non-inferiority test in the
-     source (`equivalence-not-tested`). A direction claimed against the bound comparator
-     orientation (RR 2.38 read as favoring medical therapy) is `direction-unsupported`.
-   - *language*: `causal` requires a randomized contrast between the claimed arms;
-     otherwise `causal-language-nonrandomized`. Randomized trials may use causal language
-     **for the randomized strategy, population and outcome**; the generalization is what
-     fails, through the population/comparator/outcome binds above (reference Card 6,
-     variant 3).
-3. **Attribution** changes nothing in steps 1–2. "The authors report X" is checked as X.
-4. **Status.** All asserted elements bound → `pass` (estimate may print). No estimate asserted
-   and qualitative elements bound → `pass-qualitative`. Qualitative elements bound but an
-   estimate element unbound or contradicted → `withhold` (state A: the conclusion stays, the
-   estimate does not). Any qualitative element unbound or contradicted → `fail`. Evidence in
-   an unavailable section → `excluded`.
+Built from the index alone, before any claim is checked, so fidelity never depends on what the
+model chose to mention:
 
-**Publication rule** (reference §Reference target): an estimate prints only from a `pass`.
-There is no render state that prints a `withhold` estimate under a badge, and a
-`pass-qualitative` in the same sentence does not promote the estimate.
+| id | role | roleBasis | linkage | population | outcome | direction |
+|---|---|---|---|---|---|---|
+| inv-c1 | co-primary | definition-linked ("primary-outcome event" in s7 ↔ definition s6) | same-sentence | cohort 1 | MALE or death | favors-first (surgical) |
+| inv-c2 | co-primary | definition-linked | same-sentence | cohort 2 | MALE or death | no-clear-difference (CI crosses 1, P=0.12) |
+| inv-ae | safety | labeled ("adverse events") | same-sentence | both cohorts | adverse events | no-clear-difference ("similar") |
 
-**Absences and design-based limitations** (`basis: 'design'`) are checked for scope, not
-location: the claim must name what is absent and the text it is absent from ("not reported in
-the abstract"). An unscoped absence ("nothing was validated") is `absence-overscoped`. A design
-inference is admitted when the design word it rests on is in the index (retrospective,
-propensity-matched, open-label).
+`primaryBasis: 'definition-linked'`, `uncertain: false`.
 
-### 2.3 Results inventory and fidelity checker
+Role basis rules, in order: `labeled` (the sentence itself says primary/secondary/post hoc/
+subgroup, or names a component of a defined composite); `definition-linked` (the sentence's
+outcome matches a definition); `positional` (no label and no definition match; the entry is
+`uncertain: true`, its role is `other`, and nothing downstream may call it primary). A result
+sentence that names no outcome (CREST-2's "The absolute risk difference was 3.2 percentage
+points…") is linked `adjacent-sentence` only when the preceding sentence in the same paragraph
+reports the same comparison and no other result sentence intervenes; the linkage is recorded
+on both the inventory entry and the claim result, never silently upgraded to `same-sentence`.
 
-The inventory is built from the evidence index, independently of the model:
+When the source declares no primary (PMID 42855613 in `cases/roles.js`): `primaryBasis:'none'`,
+`uncertain:true`, every entry `role:'other'`, and fidelity reports `no-declared-primary`. The
+first result is **not** labeled primary by position.
 
-- the primary outcome(s) as defined, with their cohort/trial split where the source has one
-  (BEST-CLI's two cohorts, CREST-2's two trials, the Cochrane review's two primaries);
-- for each, the result sentence(s) and the derived direction (favors / no clear difference /
-  not reported / could not be pooled);
-- secondary, component, subgroup and safety results, tagged by role from their own wording
-  ("secondary", "post hoc", a subgroup label, a component of a defined composite).
+### Stage 4 — Claim checking (deterministic) → eligibility
 
-The fidelity checker compares the card's claim set with the inventory:
+For `cohort1`:
 
-| Condition | Reason code |
-|---|---|
-| A primary (or co-primary cohort/trial) in the inventory has no claim on the card | `primary-missing` |
-| A secondary/component/subgroup claim precedes a primary claim | `primary-after-secondary` |
-| The first effect claim is a component or secondary while a primary is null or absent | `component-as-headline`, `null-primary-obscured` |
-| A claim compares arms from different randomizations | `cross-trial-ranking` |
-| A secondary estimate lacks outcome name, certainty (where the source grades it) or a primary on the card | `secondary-without-context` |
-| A supported-but-misleading emphasis (the tipping-point sentence placed as the lead limitation beside a null primary) | `null-primary-obscured` |
-
-Fidelity is a property of the set and its order, so prose cannot satisfy it by rewording.
-
-### 2.4 Personalization checker
-
-Inputs: the stored profile as typed items (north-star, project, rubric, fact, editorial) and
-the card's personal sentences, each with the item ids it rests on and a **connection type**.
-Rules:
-
-- `topic` — admissible for a north star whose topic overlaps the source's population or
-  condition (deterministic concept overlap first; a model judgment only when the overlap is
-  not lexical, and its verdict is recorded).
-- `population` — the paper's population is one that a named program/role treats: requires a
-  `fact` item (F1) in addition to the topical item.
-- `method` — reusable for a project: requires the project item's text to name the method
-  class or the rubric's "methodologically reusable" clause; must be conditional ("if it holds
-  up elsewhere").
-- `practice` — anything about the user's own patients, decisions or program activity:
-  requires a `fact` item that states it; otherwise `practice-claim-without-fact`.
-- `project-aim` — what a project is trying to do: requires the aim in the profile, not a
-  name; otherwise `project-aim-asserted`.
-- No item supports the connection → `no-supporting-item`; the line is omitted and the card
-  still renders with no rank penalty (settled distinction 5).
-
-Editorial items (E1 "landmark") may change the recommendation only (`recommendation.basis`
-records the id); they can add no claim.
-
-### 2.5 Render plan and failure effects on the displayed card
-
-| Situation | Card |
-|---|---|
-| All checks pass | Full card: claims with estimates, personal lines, recommendation |
-| A claim `fail`s | That claim is dropped; the writer is re-run with the inventory if the drop breaks fidelity |
-| Primary estimate `withhold` (state A) | `reduced-estimate-withheld`: the conclusion sentence stays, no number, a one-line note that the size could not be confirmed; `mainResultShown: true` |
-| Results section unavailable (state B) | `reduced-results-unavailable`: design, population, primary-outcome definition, design limitation; "main result not available to the app"; `mainResultShown: false`; no counts from Findings |
-| Fidelity `fail` | Card is not shown as drafted; the writer is re-run with the inventory's primaries pinned first; if it still fails, the card falls back to the inventory's primary results stated qualitatively |
-| Personal line `fail` | Line omitted; card unaffected |
-| Editorial landmark present | `recommendation.read: 'full'` with basis E1; content unchanged |
-
-### 2.6 Where the model sits
-
-Two structured model calls, neither trusted:
-
-1. **Claim drafting** — the model is given the evidence index (sections, outcome definitions,
-   result sentences with offsets) and returns claims in the schema, each pointing at a
-   sentence. It may not return prose numbers; numbers exist only inside `estimate`.
-2. **Prose rendering** — the model turns the *checked* claim set and render plan into the
-   card's sentences, each sentence tagged with the claim ids it renders. A deterministic
-   pass rejects any sentence that carries a number not present in a `pass` claim it cites,
-   a comparative or superlative not present in a claim, or a claim id whose status is not
-   shown. Personal sentences carry item ids the same way.
-
-The personalization checker's non-lexical topic judgment is a third, small call with a
-recorded verdict.
-
-## 3. Reuse from the existing code, with justification
-
-| Module | Reuse? | Why |
+| element | how bound | result |
 |---|---|---|
-| `pipeline/verify.js` — `normalize`, `extractNumbers`, `extractNumbersWithIndex`, `numbersEqual` | yes | Correct, tested text normalization and representation-equal number comparison; the new checker needs exactly this and nothing else from the file |
-| `pipeline/verify.js` — tiers, `verify()`, version stamps | no | The quantity-at-a-time model and its taxonomy are what the replacement removes |
-| `pipeline/evidenceContext.js` — `locateQuote` | yes, as the location primitive | Already handles the normalization; section awareness is added around it |
-| `pipeline/sources.js` — PubMed/PMC fetch, `pmcSections`, `cleanAbstractText` | yes | Source acquisition is unchanged; `pmcSections` gives the section index for full text |
-| `pipeline/primaryResult.js` | no | Its declared-primary matcher is the component whose strictness withheld whole cards; the inventory replaces it with a definition index plus result-sentence linkage, and a miss degrades to `primary-missing` on the card, not to no card |
-| `pipeline/triage.js` number guard, `numberFree.js` | no | They repair prose after the fact; the renderer rejects rather than repairs |
-| `pipeline/check.js` (model prose audit) | no as a gate | Fidelity is deterministic over the claim set; a model audit may remain as advisory telemetry |
-| devset fixtures (`__fixtures__/devset/*.json`, `live-2026-10-12.json`) | source text only | Their `rows` and `recordedTake` are legacy evidence, read by the legacy suite, not by acceptance |
+| evidence | sentence 7 located | ok |
+| population | "cohort 1" is a cohort label in s7 | bound |
+| comparator | both arm labels printed in s7; order surgical→endovascular | bound |
+| outcome | "primary-outcome event" in s7 → definition s6 | bound (`definition-linked`) |
+| timepoint | "median follow-up of 2.7 years" in s7 | bound |
+| value / interval / p | 0.68, 0.59–0.79 tokens with roles estimate/ci-low/ci-high in s7; label "95% CI" printed | bound |
+| direction | HR<1 with surgical first and 42.6%<57.4%; CI excludes 1 | bound (favors-a) |
+| language | causal allowed: randomized contrast between the claimed arms | bound |
+| role | co-primary: definition-linked, two cohorts | bound |
 
-## 4. What is specified, executable, and demonstrated
+→ `eligibility:'pass'`, `linkage:'definition-linked'`.
 
-| | State |
+Eligibility values: `pass` (everything bound, estimate checked), `pass-qualitative` (no
+estimate asserted, qualitative elements bound), `withhold` (population/comparator/outcome
+bound, estimate element unbound or contradicted; **direction is set `unbound`**, because it
+was derived from the failed estimate), `fail` (a qualitative element unbound/contradicted),
+`excluded` (evidence section unavailable).
+
+What makes a correct number fail (the adversarial file, 27 cases): the token's **role and
+owner** in the sentence must match the claim's slot. 57.4 has `arm:endovascular`; a claim
+putting it on the surgical arm is `arm-value-mismatch`. 0.68 belongs to sentence 7's estimate
+tuple; a claim for cohort 2 citing sentence 8 finds 0.79 there (`value-mismatch`) and a claim
+citing sentence 7 with population "cohort 2" finds the cohort label contradicted. 1.6 years is
+a timepoint token in sentence 8 only (`timepoint-mismatch`). 42.6% is bound to the primary
+composite via the definition; "major amputation" is a component, so `outcome-substituted`.
+Sample tokens (`1722 participants; six studies`) belong to the sentence that prints them; a
+pooled estimate claiming the review's totals is `sample-mismatch`. A `printed-bracket` label is
+part of the interval token; claiming "95% CI" is `interval-label-invented`. None of this is
+heuristic: each is a role/owner comparison on the index.
+
+### Stage 5 — Fidelity (deterministic) → whole-card verdict and omissions
+
+Compare the card's claim set with the inventory:
+
+- each inventory entry with role primary/co-primary must be covered by an eligible claim
+  (`primary-missing`, `omitted[].severity:'blocking'`);
+- a secondary/component/subgroup claim may not precede a primary claim
+  (`primary-after-secondary`); the first effect claim may not be a component or secondary when a
+  primary is null or absent (`component-as-headline`, `null-primary-obscured`);
+- no claim may compare arms from different randomizations (`cross-trial-ranking`);
+- a secondary estimate must name its outcome, its certainty where the source grades it, and
+  sit beside a primary (`secondary-without-context`);
+- an author sentence placed as the lead limitation beside a null primary is
+  `null-primary-obscured` even though it is located and true (supported-but-misleading);
+- without a declared primary the ordering checks still apply to the set of reported results
+  (a card showing only the favorable results and omitting a null one fails).
+
+Every inventory entry with no covering claim is listed in `fidelity.omitted` with `role`,
+`roleBasis`, `severity` (`blocking` for primaries, `noted` otherwise) and `declared` (true when
+the writer's `omissions` names it). For the BEST-CLI reference card, `omitted` = [inv-ae,
+noted]; for the card that drops cohort 2, `omitted` = [inv-c2, blocking] and fidelity fails.
+
+### Stage 6 — Render plan → display, fallbacks
+
+Display is decided here, from eligibility and fidelity together:
+
+| condition | state | display | mainResultShown | fallback |
+|---|---|---|---|---|
+| fidelity pass, all primaries `pass` | `full` | eligible claims shown; `pass` with estimate | true | null |
+| a primary is `withhold` and a separate eligible claim states its conclusion | `reduced-estimate-withheld` | the withheld claim `shown-qualitative`; conclusion claim shown | true | `{kind:'estimate-withheld', conclusionClaims:[…]}` |
+| a primary is `withhold` and no eligible claim states its conclusion | `reduced-estimate-withheld` | withheld claim shown as "could not be confirmed"; no direction | **false** | `conclusionClaims:[]` |
+| results section unavailable | `reduced-results-unavailable` | design/population/definition/limitation only | false | `{kind:'results-unavailable', conclusionClaims:[]}` |
+| fidelity fail | `reduced-fidelity-failed` | eligible claims that do not create the failure; no main result unless a checked claim covers every primary | false unless so | `{kind:'fidelity-rebuild', conclusionClaims:⊆ eligible}` |
+
+Invariants (checked by the suite on every assessment): a shown claim is eligible; an estimate
+shown requires `pass`; `display[id]` agrees with `claimsShown`/`estimatesShown`; every
+`fallback.conclusionClaims` entry is `pass`/`pass-qualitative` with `elements.direction:'bound'`
+on its own sentence; empty `conclusionClaims` ⇒ `mainResultShown:false`.
+
+A fidelity failure may trigger one writer re-run with the inventory's primaries pinned; the
+re-run's claims go through Stage 4 again. There is no path in which inventory text reaches the
+card without becoming a checked claim.
+
+### Stage 7 — Prose rendering and final-prose check
+
+The renderer (model) turns the render plan into sentences, each tagged with the claim ids it
+renders and, for personal sentences, the item ids. `checkProse` then rejects a sentence when:
+
+| condition | reason |
 |---|---|
-| Specified behavior | Reference cards (rev. 4) and the typed cases in `src/acceptance/cases/` |
-| Executable tests | `npm run test:acceptance` — 7 case files, 103 tests, 6 `todo` for the unfilled diagnostic-validation category |
-| Demonstrated results | None. `src/cards/assess.js` is a stub that throws; on 2026-10-13 the run was 103 failed / 6 todo, every failure "not implemented". The legacy suite (`npm test`, 2,210 passed) is unchanged and excludes the acceptance directory; lint adds no new diagnostics |
+| a number in the sentence is not a token of a `pass` claim it cites (value, interval bound, p, count, timepoint, sample) | `unbacked-number` |
+| a number belongs to a claim whose display is `shown-qualitative` (a withheld estimate), with or without a badge word | `number-from-withheld-estimate` |
+| a comparative or superlative (largest, first, superior, outperformed…) with no claim asserting it | `unbacked-comparative` |
+| a direction word (reduced, improved, lower, no difference…) that contradicts the cited claims' bound direction, or rests only on a claim whose direction is `unbound` | `direction-word-contradicts-claim` |
+| a factual sentence with no claim ids | `untagged-assertion` |
+| "primary"/"secondary" when no cited claim has `role:'bound'` | `role-word-unbacked` |
+| a cited claim whose display is `not-shown` | `claim-not-shown-cited` |
+| "95% CI" (or any label) for an interval whose claim carries `printed-bracket` | `prose-interval-label-invented` |
+| a for-you sentence without personal ids, or citing an item not in `personalShown` | `personal-untagged` |
 
-## 5. Open implementation questions (not editorial)
+Number tokens in prose are extracted with the same tokenizer as Stage 1, so "0·84", "0.84" and
+"8 %" compare equal. The check is deterministic; a rejected sentence sends the renderer back
+with the reason, up to a bounded number of attempts, after which the sentence is dropped and
+fidelity is re-evaluated on what remains (a dropped primary sentence ⇒ `reduced-fidelity-failed`).
 
-- Element binding for population and comparator needs a label vocabulary per paper (arm
-  names, cohort names). The index derives it from Methods; abstracts that never name arms
-  will bind only when the result sentence names them. Expect `comparator-unbound` to be the
-  common failure on terse abstracts; that is the intended conservative behavior.
-- The inventory's "role from wording" tagging is deterministic for labeled sentences
-  ("secondary", "post hoc", "subgroup", a defined composite's component). Unlabeled
-  secondary results in abstracts are tagged by position after the primary's sentence; this
-  is a heuristic and is recorded as such in the inventory.
-- Prose-renderer rejection needs the same number tokenizer as the checker; reuse is listed above.
+Final card for BEST-CLI: the reference Card 1 text, every sentence tagged
+(`[design]`, `[cohort1, primary-def]`, `[cohort2]`, `[design + p-ns1, p-f1]`, `[primary-def,
+components-not-separated]`, read-recommendation with basis E1).
+
+## 3. Where the model sits, and where it does not
+
+| step | model | trusted? |
+|---|---|---|
+| Stage 2 claim drafting | yes (structured output, index as input) | no — every field is checked |
+| Stage 7 prose rendering | yes | no — every sentence is checked |
+| personalization topic overlap when not lexical | small structured call | verdict recorded; connection-type rules are deterministic |
+| everything else (index, inventory, claim check, fidelity, render plan, prose check) | no | — |
+
+## 4. Reuse from existing code, with justification
+
+| module | reuse | why |
+|---|---|---|
+| `pipeline/verify.js` `normalize`, `extractNumbersWithIndex`, `numbersEqual` | yes | correct, tested normalization and representation-equal comparison; the index and the prose check need exactly these |
+| `pipeline/verify.js` tiers, `verify()`, version stamps | no | the quantity-at-a-time model and taxonomy are what is replaced |
+| `pipeline/evidenceContext.js` `locateQuote` | yes, as the location primitive | section awareness added around it |
+| `pipeline/sources.js` fetch, `pmcSections`, `cleanAbstractText` | yes | source acquisition unchanged; `pmcSections` gives full-text sections |
+| `pipeline/primaryResult.js` | no | its strict declared-primary matcher withheld whole cards; the inventory's roleBasis replaces it and a miss degrades to `primary-missing`/`no-declared-primary`, never to no card |
+| `pipeline/triage.js` number guard, `numberFree.js`, `check.js` | no | repair-after-the-fact and advisory model audit; the renderer is rejected, not repaired, and fidelity is deterministic |
+| devset fixtures | source text only | recorded rows and takes are legacy evidence |
+
+## 5. Specified / executable / demonstrated
+
+| | state |
+|---|---|
+| Specified | reference rev. 4; `schema.js`; 10 case files |
+| Executable | `npm run test:acceptance` — see the run count in the suite output; 6 `todo` for the unfilled diagnostic-validation category |
+| Demonstrated | none: `assessCard` and `checkProse` are stubs; every test fails "not implemented". `npm test` (legacy, 2,210 passing) is unchanged and excludes `src/acceptance/`; lint adds no new diagnostics |
+
+## 6. Open implementation questions (not editorial)
+
+- Arm-label vocabulary on terse abstracts: when neither Methods nor the result sentence names
+  the arms, comparator binding fails (`comparator-unbound`). This is the intended conservative
+  behavior; the frequency on real digests is unknown until the index runs over the 39 fixtures.
+- Sentence splitting inside brackets and around "vs." abbreviations needs its own tests before
+  Stage 1 is trusted.
+- The renderer's retry bound and whether a dropped non-primary sentence should be reported to
+  the reader ("one result omitted: could not be rendered safely") are UI decisions.

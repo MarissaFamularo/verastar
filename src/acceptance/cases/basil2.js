@@ -44,7 +44,10 @@ const death = claim({
 })
 const openLabel = claim({ id: 'open-label', kind: 'limitation', role: 'design', evidence: { quote: Q.design }, text: 'open-label' })
 
-const fullCard = [design, followup, population, primaryDef, enrolled, primary, death, openLabel]
+// The full card carries BOTH the result claim (estimate) and the conclusion claim bound to the
+// Interpretation sentence, so a state-A fallback has an independently checked conclusion.
+const fullCard = [design, followup, population, primaryDef, enrolled, primary, primaryQualitative, death, openLabel]
+const cardWithoutConclusion = fullCard.filter((c) => c.id !== 'primary-qual')
 
 export default {
   id: 'C6-BASIL2',
@@ -125,9 +128,16 @@ export default {
       // Publication rule: no render state exists in which a withheld estimate is printed under a badge.
       neverPrinted: ['primary'],
     },
+    // State A with NO independently checked conclusion on the card: the estimate is withheld
+    // and, because the direction may not be inherited from the failed estimate, no main result
+    // can be stated. The card says the main result could not be confirmed.
+    stateA_noConclusion: {
+      source: full, card: cardWithoutConclusion, options: { simulateEstimateFailure: ['primary'] },
+      expect: { state: 'reduced-estimate-withheld', mainResultShown: false, conclusionClaims: [] },
+    },
     stateB: {
       source: restricted,
-      card: [design, followup, population, primaryDef, enrolled, primary, primaryQualitative, death, openLabel],
+      card: fullCard,
       expect: {
         state: 'reduced-results-unavailable', mainResultShown: false,
         claims: {
