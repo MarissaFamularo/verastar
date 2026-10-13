@@ -19,7 +19,11 @@ beforeEach(async () => {
       return { select: () => lookup }
     }),
     auth: { admin: { updateUserById: vi.fn(async () => ({ error: null })) } },
-    rpc: vi.fn(async (name) => name === 'spending_contract_version' ? { data: '2026-10-09.spending-v2' } : { data: { status: 'enrolled' } }),
+    rpc: vi.fn(async (name) => {
+      if (name === 'spending_contract_version') return { data: '2026-10-09.spending-v2' }
+      if (name === 'record_invite_attempt') return { data: 'allow' }
+      return { data: { status: 'enrolled' } }
+    }),
   }
   mocks.createClient.mockImplementation((url, key) => key === 'service' ? admin : { auth: { getUser: async () => ({ data: { user } }) } })
   let name = 'match'
@@ -93,16 +97,31 @@ describe('NPI Edge boundaries', () => {
     expect(admin.rpc).not.toHaveBeenCalledWith('redeem_sponsor_invite', expect.anything())
   })
   it('retains invite rate limits before preflight lookup', async () => {
-    countResult.count = 5
+    admin.rpc.mockImplementation(async (name) => {
+      if (name === 'spending_contract_version') return { data: '2026-10-09.spending-v2' }
+      if (name === 'record_invite_attempt') return { data: 'deny' }
+      return { data: { status: 'enrolled' } }
+    })
     expect((await handlers.redeem(request({ code: 'BETA' }))).status).toBe(429)
-    expect(admin.from).toHaveBeenCalledWith('invite_attempts')
+    expect(admin.rpc).toHaveBeenCalledWith('record_invite_attempt', { p_user_id: 'u1' })
+    expect(admin.from).not.toHaveBeenCalledWith('invite_attempts')
     expect(admin.from).not.toHaveBeenCalledWith('events')
+    expect(admin.from).not.toHaveBeenCalledWith('sponsor_invites')
+    admin.rpc.mockImplementation(async (name) => {
+      if (name === 'spending_contract_version') return { data: '2026-10-09.spending-v2' }
+      if (name === 'record_invite_attempt') return { error: new Error('failed') }
+      return { data: { status: 'enrolled' } }
+    })
+    expect((await handlers.redeem(request({ code: 'BETA' }))).status).toBe(503)
     expect(admin.from).not.toHaveBeenCalledWith('sponsor_invites')
   })
   it('lets final atomic redemption reject a code changed after NPI', async () => {
     user.app_metadata.npi_match = receipt
-    admin.rpc.mockImplementation(async (name) => name === 'spending_contract_version'
-      ? { data: '2026-10-09.spending-v2' } : { data: { status: 'exhausted' } })
+    admin.rpc.mockImplementation(async (name) => {
+      if (name === 'spending_contract_version') return { data: '2026-10-09.spending-v2' }
+      if (name === 'record_invite_attempt') return { data: 'allow' }
+      return { data: { status: 'exhausted' } }
+    })
     expect(await (await handlers.redeem(request({ code: 'BETA' }))).json()).toEqual({ status: 'exhausted' })
   })
   it('redeems only with persisted server-owned receipt', async () => {

@@ -3,9 +3,10 @@
 // POST { code } with the user's Supabase JWT. The code is checked and consumed by the
 // redeem_sponsor_invite database function under the service role, atomically, so two
 // redemptions of the last use cannot both succeed and a guessed code learns nothing beyond
-// "invalid". Rate limited per user by invite_attempts: five attempts per hour. That ledger
-// is not client-writable; counting events let a user delete their own rows and reset the
-// limit. The user id is always the verified JWT's; the state contract
+// "invalid". Rate limited per user: five attempts per hour. record_invite_attempt locks
+// that user, counts the hour, records the attempt, and returns allow or deny in one
+// transaction. The ledger is not client-writable; counting events let a user delete
+// their own rows and reset the limit. The user id is always the verified JWT's; the state contract
 // (already/revoked/paused/full/...) is in docs/SPENDING_CONTRACT.md § Invitations.
 
 import { createClient } from '@supabase/supabase-js'
@@ -48,13 +49,10 @@ Deno.serve(async (req) => {
   // revoked account) must not be reached, so redemption is refused as paused.
   const { data: contract, error: contractError } = await admin.rpc('spending_contract_version')
   if (contractError || contract !== EXPECTED_CONTRACT) return json(503, { status: 'paused' })
-  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-  const { count, error: countError } = await admin.from('invite_attempts').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('ts', since)
-  // The rate limit fails closed: an unreadable attempt count is not zero attempts.
-  if (countError) return json(503, { status: 'error' })
-  if ((count || 0) >= 5) return json(429, { status: 'slow_down' })
-  const { error: logError } = await admin.from('invite_attempts').insert({ user_id: user.id })
-  if (logError) return json(503, { status: 'error' })
+  // The rate limit fails closed: a failed admission call is not an allowed attempt.
+  const { data: admission, error: limitError } = await admin.rpc('record_invite_attempt', { p_user_id: user.id })
+  if (limitError) return json(503, { status: 'error' })
+  if (admission !== 'allow') return json(429, { status: 'slow_down' })
 
   if (!hasNpiMatch(user)) {
     // Non-consuming beta-code preflight. Codes are exact text primary keys in the

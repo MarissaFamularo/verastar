@@ -105,6 +105,56 @@ do $$ begin
   end if;
 end $$;
 
+-- The admission function is service-only. Five calls in the hour are allowed; the
+-- rest are denied and not stored. An old attempt no longer counts, and another user
+-- does not share the budget.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-00000000000b', true);
+do $$ begin
+  begin
+    perform public.record_invite_attempt('a0000000-0000-0000-0000-00000000000b');
+    raise exception 'FAIL: client recorded an invite attempt';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+set local role service_role;
+do $$
+declare
+  i int;
+  decision text;
+  allows int := 0;
+begin
+  for i in 1..8 loop
+    decision := public.record_invite_attempt('a0000000-0000-0000-0000-00000000000b');
+    if decision = 'allow' then
+      allows := allows + 1;
+    elsif decision is distinct from 'deny' then
+      raise exception 'FAIL: invite decision %', decision;
+    end if;
+  end loop;
+  if allows <> 5 then
+    raise exception 'FAIL: sequential invite limit admitted %', allows;
+  end if;
+  if (select count(*) from public.invite_attempts where user_id = 'a0000000-0000-0000-0000-00000000000b') <> 5 then
+    raise exception 'FAIL: denied invite attempt was stored';
+  end if;
+  if public.record_invite_attempt('a0000000-0000-0000-0000-00000000000d') is distinct from 'allow' then
+    raise exception 'FAIL: another user shared the invite budget';
+  end if;
+end $$;
+reset role;
+update public.invite_attempts
+   set ts = now() - interval '2 hours'
+ where user_id = 'a0000000-0000-0000-0000-00000000000b';
+set local role service_role;
+do $$ begin
+  if public.record_invite_attempt('a0000000-0000-0000-0000-00000000000b') is distinct from 'allow' then
+    raise exception 'FAIL: attempts outside the hour still counted';
+  end if;
+end $$;
+reset role;
+
 -- M2. Sender is auth.uid(), and the recipient shares the project or a team.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-00000000000b', true);

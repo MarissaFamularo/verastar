@@ -5,9 +5,12 @@
 -- in redeem-invite. Counting those attempts in `events` is retired.
 --
 -- `invite_attempts` has no client policies and no client grants. The redeem-invite
--- function (service role) is the writer. Rows are not deleted when a user rewrites
--- `events`. Historical attempts from the last hour are copied once so a deploy does
--- not hand everyone a fresh budget.
+-- function (service role) is the writer, and it records an attempt only through
+-- record_invite_attempt. That function locks the user, counts the last hour, inserts
+-- when the hour still has room, and returns allow or deny in the same transaction.
+-- A separate count and insert let concurrent calls all pass a limit of five.
+-- Rows are not deleted when a user rewrites `events`. Historical attempts from the
+-- last hour are copied once so a deploy does not hand everyone a fresh budget.
 --
 -- Update and delete are also removed from `events`. The client only inserts and reads
 -- its own telemetry; an update of type or ts was the same reset for any counter still
@@ -51,3 +54,34 @@ drop policy if exists "events_delete_own" on public.events;
 drop policy if exists "events_update_own" on public.events;
 
 revoke update, delete, truncate on table public.events from public, anon, authenticated;
+
+-- Five attempts per hour, counted and recorded under one per-user transaction lock.
+-- The limiter is per user; no client address is part of the check. Denied calls do
+-- not insert, so an hour that is already full stays at five rows.
+create or replace function public.record_invite_attempt(p_user_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  recent_count integer;
+begin
+  if p_user_id is null then
+    raise exception 'invite attempt requires a user' using errcode = '22023';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_user_id::text, 48217));
+  select count(*) into recent_count
+    from public.invite_attempts
+   where user_id = p_user_id
+     and ts >= pg_catalog.now() - interval '1 hour';
+  if recent_count >= 5 then
+    return 'deny';
+  end if;
+  insert into public.invite_attempts (user_id) values (p_user_id);
+  return 'allow';
+end;
+$$;
+
+revoke all on function public.record_invite_attempt(uuid) from public, anon, authenticated;
+grant execute on function public.record_invite_attempt(uuid) to service_role;
