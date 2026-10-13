@@ -8,12 +8,16 @@ insert into auth.users (id) values
   ('a0000000-0000-0000-0000-00000000000b'),
   ('a0000000-0000-0000-0000-00000000000c'),
   ('a0000000-0000-0000-0000-00000000000d'),
-  ('a0000000-0000-0000-0000-00000000000e')
+  ('a0000000-0000-0000-0000-00000000000e'),
+  ('a0000000-0000-0000-0000-00000000000f')
 on conflict do nothing;
 
 do $$ begin
   if not exists (select 1 from pg_type where typname = 'user_role') then
     create type public.user_role as enum ('admin', 'pi', 'trainee', 'viewer');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'team_role') then
+    create type public.team_role as enum ('admin', 'pi', 'trainee', 'viewer');
   end if;
   if not exists (select 1 from pg_type where typname = 'activity_action') then
     create type public.activity_action as enum (
@@ -45,6 +49,7 @@ create table if not exists public.teams (
 create table if not exists public.team_members (
   team_id uuid references public.teams(id),
   user_id uuid references auth.users(id),
+  role public.team_role not null default 'trainee',
   primary key (team_id, user_id)
 );
 create table if not exists public.project_teams (
@@ -60,6 +65,7 @@ create table if not exists public.notifications (
   actor_id uuid references auth.users(id),
   message text not null,
   read boolean not null default false,
+  metadata jsonb,
   created_at timestamptz not null default now()
 );
 create table if not exists public.activity_log (
@@ -84,11 +90,46 @@ create table if not exists public.project_tasks (
   created_by uuid not null references auth.users(id),
   completed boolean not null default false
 );
+create table if not exists public.project_manuscript_revisions (
+  id uuid primary key,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  parent_revision_id uuid,
+  content text not null,
+  file_name text,
+  reference_map jsonb not null default '[]'::jsonb,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (project_id, id),
+  foreign key (project_id, parent_revision_id)
+    references public.project_manuscript_revisions (project_id, id),
+  check (jsonb_typeof(reference_map) = 'array')
+);
 create table if not exists public.project_manuscripts (
   id uuid primary key default gen_random_uuid(),
-  project_id uuid not null references public.projects(id),
+  project_id uuid not null unique references public.projects(id) on delete cascade,
   content text not null default '',
-  uploaded_by uuid references auth.users(id)
+  file_name text,
+  uploaded_by uuid references public.profiles(id) on delete set null,
+  uploaded_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  reference_map jsonb not null default '[]'::jsonb,
+  current_revision_id uuid,
+  check (jsonb_typeof(reference_map) = 'array'),
+  foreign key (project_id, current_revision_id)
+    references public.project_manuscript_revisions (project_id, id)
+);
+create table if not exists public.team_join_requests (
+  id uuid primary key,
+  team_id uuid not null references public.teams(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  message text,
+  status text not null default 'pending',
+  reviewed_by uuid references auth.users(id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (team_id, user_id),
+  check (status = any (array['pending', 'approved', 'rejected']))
 );
 create table if not exists public.project_bot_proposals (
   id uuid primary key default gen_random_uuid(),
@@ -106,16 +147,20 @@ insert into public.profiles (id, role) values
   ('a0000000-0000-0000-0000-00000000000b', 'trainee'),
   ('a0000000-0000-0000-0000-00000000000c', 'trainee'),
   ('a0000000-0000-0000-0000-00000000000d', 'trainee'),
-  ('a0000000-0000-0000-0000-00000000000e', 'admin');
+  ('a0000000-0000-0000-0000-00000000000e', 'admin'),
+  ('a0000000-0000-0000-0000-00000000000f', 'trainee');
 insert into public.projects (id, lead_user_id) values
   ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000a');
 insert into public.project_collaborators (project_id, user_id) values
   ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000b');
 insert into public.teams (id, name) values ('c0000000-0000-0000-0000-000000000001', 'lab');
-insert into public.team_members (team_id, user_id) values
-  ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000a'),
-  ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000b'),
-  ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000c');
+insert into public.team_members (team_id, user_id, role) values
+  ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000a', 'pi'),
+  ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000b', 'trainee'),
+  ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000c', 'trainee');
+insert into public.team_join_requests (id, team_id, user_id, status) values
+  ('e0000000-0000-0000-0000-00000000000d', 'c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000d', 'pending'),
+  ('e0000000-0000-0000-0000-00000000000f', 'c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000f', 'pending');
 insert into public.project_teams (project_id, team_id) values
   ('b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001');
 
@@ -140,6 +185,15 @@ language sql stable security definer set search_path = '' as $$
     select 1 from public.project_collaborators where project_id = p_project_id and user_id = (select auth.uid())
   );
 $$;
+create or replace function public.is_team_admin_or_pi(p_team_id uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.team_members
+     where team_id = p_team_id
+       and user_id = (select auth.uid())
+       and role in ('admin', 'pi')
+  );
+$$;
 create or replace function public.can_see_project(p_project_id uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists (
@@ -155,6 +209,17 @@ alter table public.project_comments enable row level security;
 alter table public.project_tasks enable row level security;
 alter table public.project_manuscripts enable row level security;
 alter table public.project_bot_proposals enable row level security;
+alter table public.team_join_requests enable row level security;
+
+create policy team_join_requests_insert on public.team_join_requests
+  for insert to authenticated with check (user_id = auth.uid());
+create policy team_join_requests_select on public.team_join_requests
+  for select to authenticated
+  using (user_id = auth.uid() or is_team_admin_or_pi(team_id) or is_admin());
+create policy team_join_requests_update on public.team_join_requests
+  for update to authenticated
+  using (is_team_admin_or_pi(team_id) or is_admin())
+  with check (is_team_admin_or_pi(team_id) or is_admin());
 
 -- The open writes the migration has to close.
 create policy notifications_insert on public.notifications for insert to authenticated with check (true);
