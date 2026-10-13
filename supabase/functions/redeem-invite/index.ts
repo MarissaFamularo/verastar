@@ -3,9 +3,10 @@
 // POST { code } with the user's Supabase JWT. The code is checked and consumed by the
 // redeem_sponsor_invite database function under the service role, atomically, so two
 // redemptions of the last use cannot both succeed and a guessed code learns nothing beyond
-// "invalid". Rate limited per user by the events table: five attempts per hour. The user id
-// is always the verified JWT's; the state contract (already/revoked/paused/full/...) is in
-// docs/SPENDING_CONTRACT.md § Invitations.
+// "invalid". Rate limited per user by invite_attempts: five attempts per hour. That ledger
+// is not client-writable; counting events let a user delete their own rows and reset the
+// limit. The user id is always the verified JWT's; the state contract
+// (already/revoked/paused/full/...) is in docs/SPENDING_CONTRACT.md § Invitations.
 
 import { createClient } from '@supabase/supabase-js'
 import { hasNpiMatch } from '../_shared/npiMatch.js'
@@ -48,11 +49,11 @@ Deno.serve(async (req) => {
   const { data: contract, error: contractError } = await admin.rpc('spending_contract_version')
   if (contractError || contract !== EXPECTED_CONTRACT) return json(503, { status: 'paused' })
   const since = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-  const { count, error: countError } = await admin.from('events').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('type', 'invite_attempt').gte('ts', since)
+  const { count, error: countError } = await admin.from('invite_attempts').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('ts', since)
   // The rate limit fails closed: an unreadable attempt count is not zero attempts.
   if (countError) return json(503, { status: 'error' })
   if ((count || 0) >= 5) return json(429, { status: 'slow_down' })
-  const { error: logError } = await admin.from('events').insert({ user_id: user.id, type: 'invite_attempt', payload: {} })
+  const { error: logError } = await admin.from('invite_attempts').insert({ user_id: user.id })
   if (logError) return json(503, { status: 'error' })
 
   if (!hasNpiMatch(user)) {

@@ -14,7 +14,7 @@ beforeEach(async () => {
   const chain = { eq: () => chain, gte: async () => countResult }
   admin = {
     from: vi.fn((table) => {
-      if (table === 'events') return { select: () => chain, insert: vi.fn(async () => logResult) }
+      if (table === 'events' || table === 'invite_attempts') return { select: () => chain, insert: vi.fn(async () => logResult) }
       const lookup = { eq: vi.fn(() => lookup), maybeSingle: async () => table === 'sponsor_invites' ? inviteResult : accountResult }
       return { select: () => lookup }
     }),
@@ -95,6 +95,8 @@ describe('NPI Edge boundaries', () => {
   it('retains invite rate limits before preflight lookup', async () => {
     countResult.count = 5
     expect((await handlers.redeem(request({ code: 'BETA' }))).status).toBe(429)
+    expect(admin.from).toHaveBeenCalledWith('invite_attempts')
+    expect(admin.from).not.toHaveBeenCalledWith('events')
     expect(admin.from).not.toHaveBeenCalledWith('sponsor_invites')
   })
   it('lets final atomic redemption reject a code changed after NPI', async () => {
