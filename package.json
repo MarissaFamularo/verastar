@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:acceptance": "vitest run --config vitest.acceptance.config.js",
     "lint": "node scripts/lint-baseline.mjs",
     "lint:raw": "eslint .",
     "bundle:functions": "node scripts/bundle-functions.mjs"

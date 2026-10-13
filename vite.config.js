@@ -13,5 +13,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.js'],
+    // The replacement-card acceptance suite runs on its own (npm run test:acceptance).
+    exclude: ['src/acceptance/**', '**/node_modules/**'],
   },
 })
