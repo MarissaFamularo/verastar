@@ -183,6 +183,7 @@ do $$ begin
   update public.projects
      set title = 'Should not stick', is_public = true
    where id = 'b1000000-0000-0000-0000-000000000001';
+  if not found then raise exception 'FAIL: collaborator update did not see the project'; end if;
   raise exception 'FAIL: collaborator changed is_public';
 exception when insufficient_privilege then null;
 end $$;
@@ -190,6 +191,7 @@ do $$ begin
   update public.projects
      set lead_user_id = 'a1000000-0000-0000-0000-000000000004'
    where id = 'b1000000-0000-0000-0000-000000000001';
+  if not found then raise exception 'FAIL: collaborator update did not see the project'; end if;
   raise exception 'FAIL: collaborator changed lead_user_id';
 exception when insufficient_privilege then null;
 end $$;
@@ -197,6 +199,7 @@ do $$ begin
   update public.projects
      set deleted_at = timestamptz '2026-10-13 00:00:00+00'
    where id = 'b1000000-0000-0000-0000-000000000001';
+  if not found then raise exception 'FAIL: collaborator update did not see the project'; end if;
   raise exception 'FAIL: collaborator changed deleted_at';
 exception when insufficient_privilege then null;
 end $$;
@@ -205,6 +208,7 @@ do $$ begin
   update public.projects
      set is_public = true
    where id = 'b1000000-0000-0000-0000-000000000001';
+  if not found then raise exception 'FAIL: collaborator update did not see the project'; end if;
   raise exception 'FAIL: forged service_role claim changed is_public';
 exception when insufficient_privilege then null;
 end $$;
@@ -225,6 +229,7 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 do $$ begin
   update public.projects set is_public = true
    where id = 'b1000000-0000-0000-0000-000000000001';
+  if not found then raise exception 'FAIL: team admin update did not see the project'; end if;
   raise exception 'FAIL: team admin collaborator changed is_public';
 exception when insufficient_privilege then null;
 end $$;
@@ -249,6 +254,7 @@ update public.projects
 do $$ begin
   update public.projects set is_public = true
    where id = 'b1000000-0000-0000-0000-000000000001';
+  if not found then raise exception 'FAIL: former lead update did not see the project'; end if;
   raise exception 'FAIL: former lead changed is_public';
 exception when insufficient_privilege then null;
 end $$;
@@ -282,6 +288,7 @@ do $$ begin
      set lead_user_id = 'a1000000-0000-0000-0000-000000000002',
          lead_name_override = null
    where id = 'b1000000-0000-0000-0000-000000000005';
+  if not found then raise exception 'FAIL: direct claim did not see the project'; end if;
   raise exception 'FAIL: team member directly claimed the lead';
 exception when insufficient_privilege then null;
 end $$;

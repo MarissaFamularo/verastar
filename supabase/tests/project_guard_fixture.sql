@@ -167,6 +167,12 @@ alter table public.projects enable row level security;
 alter table public.project_teams enable row level security;
 alter table public.project_collaborators enable row level security;
 
+-- The projects update policy reads this table as the caller, so the caller
+-- must be able to see their own collaborator row.
+create policy collab_select_scoped on public.project_collaborators
+  for select to authenticated
+  using (user_id = (select auth.uid()) or public.is_admin());
+
 -- The open writes the migration has to close.
 create policy project_teams_insert on public.project_teams
   for insert to authenticated
