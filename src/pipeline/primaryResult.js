@@ -978,18 +978,70 @@ function explicitRelations(text) {
   return found
 }
 
-function endpointTimes(text) {
+function stripFollowUp(text) {
   // A decimal year ("2.7 years") has to be consumed whole. The span below stops
   // at a period, so it would leave ".7 years" and read a 7-year endpoint.
   const duration = String.raw`\d+(?:\.\d+)?\s*(?:day|week|month|year)s?`
-  const stripped = String(text || '')
+  return String(text || '')
     .replace(new RegExp(String.raw`\b(?:over|after|during)\s+(?:a\s+)?median(?:\s+\([^)]*\)|\s+follow-up)?\s+of\s+${duration}`, 'gi'), ' ')
     .replace(new RegExp(String.raw`\bmedian(?:\s+follow-up|\s+duration|\s+of)?\s+(?:follow-up\s+)?of\s+${duration}`, 'gi'), ' ')
     .replace(new RegExp(String.raw`\bfollow-up\s+of\s+${duration}`, 'gi'), ' ')
     .replace(/\b(?:over|after|during)\s+(?:a\s+)?median(?:\s+\([^)]*\)|\s+follow-up)?\s+of\s+[^.;]{0,48}/gi, ' ')
     .replace(/\bmedian(?:\s+follow-up|\s+duration|\s+of)?\s+(?:follow-up\s+)?of\s+[^.;]{0,48}/gi, ' ')
     .replace(/\bfollow-up\s+of\s+[^.;]{0,40}/gi, ' ')
-  return timesIn(stripped)
+}
+
+function endpointTimes(text) {
+  return timesIn(stripFollowUp(text))
+}
+
+const ANCHOR_EVENT = 'randomi[sz]ation|surgery|discharge|procedure|enroll?ment'
+
+function canonicalAnchor(word) {
+  const text = String(word || '').toLowerCase()
+  if (text === 'randomisation') return 'randomization'
+  if (text === 'enrolment') return 'enrollment'
+  return text
+}
+
+// A timepoint is the duration plus the event it is counted from. "30 days
+// after surgery" is not "30 days after randomization", and a bare "30 days"
+// is not a timepoint that was declared with an anchor.
+function timedAnchors(text) {
+  const found = []
+  const seen = new Set()
+  const re = new RegExp(
+    String.raw`\b(?:within|at|after|during|following\s+)?(${TIME_NUM_SRC})[-\s]?((?:day|week|month|year)s?)(?:\s+(?:after|following|from)\s+(?:the\s+|an?\s+)?(?:index\s+)?(${ANCHOR_EVENT}))?`,
+    'gi',
+  )
+  for (const match of stripFollowUp(text).matchAll(re)) {
+    const time = canonicalTime(match[1], match[2])
+    if (!time) continue
+    const anchor = match[3] ? canonicalAnchor(match[3]) : ''
+    const key = `${time}|${anchor}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    found.push({ time, anchor })
+  }
+  return found
+}
+
+function anchorConflict(rowText, declared) {
+  const declaredWindows = timedAnchors(declared)
+  const rowWindows = timedAnchors(rowText)
+  if (!rowWindows.length || !declaredWindows.length) return false
+  const namesAnchor = new RegExp(String.raw`\b(?:after|following|from)\s+(?:the\s+|an?\s+)?(?:index\s+)?(?:${ANCHOR_EVENT})\b`, 'i')
+  for (const row of rowWindows) {
+    const sameTime = declaredWindows.filter((item) => item.time === row.time)
+    if (!sameTime.length) continue
+    if (sameTime.some((item) => item.anchor === row.anchor)) continue
+    // "The 4-year primary end point" names the declared endpoint and does not
+    // restate its anchor. A clinical timepoint that drops or changes the
+    // anchor is a different result.
+    if (!row.anchor && !namesAnchor.test(rowText) && PRIMARY_ROLE.test(rowText)) continue
+    return true
+  }
+  return false
 }
 
 function timeConflict(declared, sentence) {
@@ -1100,6 +1152,8 @@ function continuationOk(sentence, declared, expansions) {
   if (!statCue(sentence)) return false
   if (SECONDARY_ROLE.test(sentence) && !PRIMARY_ROLE.test(sentence)) return false
   if (timeConflict(declared, sentence)) return false
+  if (anchorConflict(sentence, declared)) return false
+  if (unitsConflict(sentence, declared, expansions)) return false
   const residue = fragmentTokens(sentence, expansions)
   if (residue.some((word) => HEAD_WORDS.has(word) || QUALIFIER_TOKEN.has(word))) return tokensCover(declared, sentence, expansions)
   return residue.every((word) => STAT_RESIDUE.has(word))
@@ -1220,11 +1274,35 @@ function windowConflict(rowText, declared) {
   return false
 }
 
+// "cardiovascular death" and "cardiovascular hospitalization" are different
+// units. The qualifier stays on the noun it was written on; pooling every
+// qualifier and every noun would let it move.
+function qualifierUnits(text, expansions) {
+  const surface = endpointSurface(withoutComponentDefinitions(text), expansions, { dropExpansions: true })
+  const units = []
+  for (const part of surface.split(/\s*(?:,|\bor\b|\band\b)\s*/)) {
+    const words = part.split(' ').filter(Boolean)
+    const heads = [...new Set(words.map(asHead).filter(Boolean))]
+    const quals = words.filter((word) => HARD_QUALIFIER.has(word)).sort()
+    for (const head of heads) units.push(`${quals.join('+')}|${head}`)
+  }
+  return units.sort()
+}
+
+function unitsConflict(name, declared, expansions) {
+  const left = qualifierUnits(declared, expansions)
+  const right = qualifierUnits(name, expansions)
+  if (!left.length || !right.length || left.length !== right.length) return false
+  return left.some((unit, index) => unit !== right[index])
+}
+
 // A component of a composite names some of the declared outcomes and not the rest.
 // A harder qualifier the declaration does not use (ischemic, disabling, cardiovascular)
-// is a different endpoint. "all-cause" and "any cause" are the same unrestricted death.
+// is a different endpoint, and so is the same qualifier written on a different
+// component. "all-cause" and "any cause" are the same unrestricted death.
 // A name with no outcome word ("primary end point", "hazard ratio") does not fail here.
 function componentConflict(name, declared, expansions) {
+  if (unitsConflict(name, declared, expansions)) return true
   const declaredTokens = contentTokens(declared, expansions)
   // Inherited definition nouns are scored on their own. Concatenating them onto a
   // name that says "A vs B" lets the arm strip discard everything after "versus".
@@ -1251,6 +1329,8 @@ function reportsDeclared(clause, declared, declarationSentence, expansions) {
   if (!clause || !sameRoleFamily(clause, declarationSentence)) return null
   if (SECONDARY_ROLE.test(clause) && !PRIMARY_ROLE.test(clause)) return null
   if (windowConflict(clause, declared)) return null
+  if (anchorConflict(clause, declared)) return null
+  if (unitsConflict(clause, declared, expansions)) return null
   const population = populationPhrase(declared)
   if (population && populationPhrase(clause) !== population) return null
   if (PRIMARY_ROLE.test(clause) && RESULT_CUE.test(clause) && !timeConflict(declared, roleWindow(clause) || clause)) {
@@ -1377,6 +1457,8 @@ function quoteIsDifferentResult(quote, declared, expansions) {
   if (SUBGROUP_SLICE.test(flat) && !SUBGROUP_SLICE.test(declared)) return true
   if (SECONDARY_ROLE.test(flat) && !PRIMARY_ROLE.test(flat)) return true
   if (thresholdConflict(flat, declared, expansions)) return true
+  if (anchorConflict(flat, declared)) return true
+  if (unitsConflict(flat, declared, expansions)) return true
   const declaredTokens = contentTokens(declared, expansions)
   const declaredHeads = new Set(declaredTokens.map(asHead).filter(Boolean))
   const declaredQuals = new Set(

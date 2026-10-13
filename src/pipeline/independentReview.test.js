@@ -1086,3 +1086,98 @@ describe('a shared passage does not make a different result the primary', () => 
     })
   })
 })
+
+describe('independent-review false verifications stay closed', () => {
+  const passes = (entry) => isRelationshipValidated(entry.verdict)
+  const arm = 'a primary-outcome event occurred in 129 patients (37.2%) in the PCI group and in 134 patients (38.0%) in the optimal-medical-therapy group'
+  const armPair = (quote) => ({
+    quantity_type: 'comparison',
+    name: 'Primary-outcome event incidence, PCI vs optimal-medical-therapy group',
+    value: null,
+    unit: '%',
+    range_low: null,
+    range_high: null,
+    first_label: 'PCI group',
+    first_value: 37.2,
+    second_label: 'optimal-medical-therapy group',
+    second_value: 38,
+    ci_low: null,
+    ci_high: null,
+    p_value: null,
+    location_hint: 'Results',
+    source_quote: quote,
+  })
+
+  it('does not treat <10% as >10%', () => {
+    const source = 'Patients were randomly assigned to device or control. The primary end point was a reduction of <10%. A reduction of >10% occurred in the device group.'
+    expect(findPrimary([
+      evidenceRow('reduction of >10%', 'A reduction of >10% occurred in the device group.'),
+    ], (entry) => !entry.verdict.flagged, source)).toMatchObject({ state: 'unknown', verified: false, indexes: [] })
+    expect(findPrimary([row('reduction of >10%')], () => true, 'The primary end point was a reduction of <10%.')).toMatchObject(UNKNOWN)
+  })
+
+  it('does not verify an arm sentence prefixed by a falsity claim', () => {
+    const src = `The claim was false: ${arm}.`
+    expect(isRelationshipValidated(verify(armPair(src), src))).toBe(false)
+    expect(isRelationshipValidated(verify(armPair(arm), src))).toBe(false)
+  })
+
+  it('does not verify an arm sentence that is a question', () => {
+    const asked = `${arm}?`
+    expect(isRelationshipValidated(verify(armPair(asked), asked))).toBe(false)
+    expect(isRelationshipValidated(verify(armPair(arm), asked))).toBe(false)
+  })
+
+  it('does not match a timepoint whose anchor differs or is missing', () => {
+    const declared = 'The primary end point was death within 30 days after randomization.'
+    const cases = [
+      ['Death within 30 days after surgery occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).', 'Death within 30 days after surgery'],
+      ['Death within 30 days occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).', 'Death within 30 days'],
+      ['Death within 30 days after discharge occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).', 'Between-group comparison'],
+      ['Death within 30 days after the index procedure occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).', 'hazard ratio'],
+      ['Death within 30 days after enrollment occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).', 'Primary composite outcome'],
+    ]
+    for (const [sentence, name] of cases) {
+      const source = `Patients were randomly assigned to device or control. ${declared} ${sentence}`
+      const quote = sentence.replace(/\.$/, '')
+      const entry = validated({ ...hr(name, quote), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
+      expect(findPrimary([entry], passes, source), name).toMatchObject({
+        state: 'unknown', verified: false, indexes: [],
+      })
+    }
+    const fragmentSource = `Patients were randomly assigned to device or control. ${declared} Death within 30 days after surgery occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).`
+    const fragment = validated({ ...hr('hazard ratio', 'hazard ratio, 0.74; 95% CI, 0.65 to 0.85'), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, fragmentSource)
+    expect(findPrimary([fragment], passes, fragmentSource)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [],
+    })
+    const same = 'Death within 30 days after randomization occurred in 4% of the device group (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
+    const sameSource = `Patients were randomly assigned to device or control. ${declared} ${same}`
+    const sameRow = validated({ ...hr('Death within 30 days after randomization', same.replace(/\.$/, '')), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, sameSource)
+    expect(findPrimary([sameRow], passes, sameSource)).toMatchObject({
+      state: 'identified', verified: true, indexes: [0], reason: null,
+    })
+  })
+
+  it('does not match a qualifier that has moved onto another component', () => {
+    const declared = 'The primary end point was cardiovascular death or hospitalization.'
+    const moved = 'Death or cardiovascular hospitalization occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
+    const source = `Patients were randomly assigned to device or control. ${declared} ${moved}`
+    const quote = moved.replace(/\.$/, '')
+    for (const name of ['death or cardiovascular hospitalization', 'Primary composite outcome', 'hazard ratio']) {
+      const entry = validated({ ...hr(name, quote), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
+      expect(findPrimary([entry], passes, source), name).toMatchObject({
+        state: 'unknown', verified: false, indexes: [],
+      })
+    }
+    const fragment = validated({ ...hr('hazard ratio', 'hazard ratio, 0.74; 95% CI, 0.65 to 0.85'), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, source)
+    expect(findPrimary([fragment], passes, source)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [],
+    })
+    const kept = 'Cardiovascular death or hospitalization occurred in 10% of patients (hazard ratio, 0.74; 95% CI, 0.65 to 0.85).'
+    const keptSource = `Patients were randomly assigned to device or control. ${declared} ${kept}`
+    const keptRow = validated({ ...hr('cardiovascular death or hospitalization', kept.replace(/\.$/, '')), value: 0.74, ci_low: 0.65, ci_high: 0.85 }, keptSource)
+    expect(findPrimary([keptRow], passes, keptSource)).toMatchObject({
+      state: 'identified', verified: true, indexes: [0], reason: null,
+    })
+  })
+})
