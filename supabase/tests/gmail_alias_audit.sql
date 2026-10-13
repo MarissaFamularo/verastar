@@ -1,0 +1,134 @@
+-- Isolated test DB only. The fixture and both Gmail migrations must already be applied.
+\set ON_ERROR_STOP on
+
+create or replace function pg_temp.assert_ok(v boolean, label text) returns void language plpgsql as $$
+begin
+  if not coalesce(v, false) then
+    raise exception 'FAIL: %', label;
+  end if;
+end $$;
+
+-- (a) anon has no path into schema private. The public wrapper still answers.
+select pg_temp.assert_ok(
+  (select p.prosecdef and 'search_path=""' = any(p.proconfig)
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'gmail_alias_hint'),
+  'public wrapper is security definer with an empty search path');
+select pg_temp.assert_ok(not has_schema_privilege('anon', 'private', 'usage'), 'anon has no usage on schema private');
+select pg_temp.assert_ok(has_schema_privilege('authenticated', 'private', 'usage'), 'authenticated keeps usage on schema private');
+select pg_temp.assert_ok(not has_function_privilege('anon', 'private.gmail_alias_lookup(text)', 'execute'), 'anon cannot execute the private lookup');
+select pg_temp.assert_ok(not has_function_privilege('anon', 'private.gmail_client_ip(json)', 'execute'), 'anon cannot execute the address helper');
+
+insert into auth.users (email, created_at) values ('famularomarissa@gmail.com', now() - interval '2 days');
+
+do $$
+declare
+  v jsonb;
+begin
+  execute 'set local role anon';
+  v := public.gmail_alias_hint('famularo.marissa@gmail.com');
+  begin
+    perform private.gmail_alias_lookup('famularo.marissa@gmail.com');
+    raise exception 'anon reached the private lookup';
+  exception when insufficient_privilege then
+    null;
+  end;
+  begin
+    perform count(*) from private.gmail_alias_limits;
+    raise exception 'anon read the private limit table';
+  exception when insufficient_privilege then
+    null;
+  end;
+  execute 'reset role';
+  if v is distinct from jsonb_build_object('match', true, 'hint', 'f…@gmail.com') then
+    raise exception 'FAIL: anon wrapper hint, got %', v;
+  end if;
+end $$;
+
+-- (b) A dotted spelling still warns. The canonical spelling does not reveal an account.
+select pg_temp.assert_ok(
+  public.gmail_alias_hint('famularomarissa+notes@gmail.com') = jsonb_build_object('match', true, 'hint', 'f…@gmail.com'),
+  'a plus tag on a canonical account still returns the one-character hint');
+truncate private.gmail_alias_limits;
+select pg_temp.assert_ok(
+  public.gmail_alias_hint('famularomarissa@gmail.com') = jsonb_build_object('match', false),
+  'the exact canonical address returns no hint');
+
+-- Replace the canonical account with a dotted one. Probing the canonical form
+-- must look like "no account".
+delete from auth.users where email = 'famularomarissa@gmail.com';
+insert into auth.users (email, created_at) values ('famularo.marissa@gmail.com', now() - interval '1 day');
+truncate private.gmail_alias_limits;
+select pg_temp.assert_ok(
+  public.gmail_alias_hint('famularomarissa@gmail.com') = jsonb_build_object('match', false),
+  'typing the canonical address does not reveal a dotted account');
+truncate private.gmail_alias_limits;
+select pg_temp.assert_ok(
+  public.gmail_alias_hint('famularo.marissa+x@gmail.com') = jsonb_build_object('match', true, 'hint', 'f…@gmail.com'),
+  'a tagged spelling of a dotted account still returns the one-character hint');
+select pg_temp.assert_ok(
+  position('famularo.marissa@gmail.com' in public.gmail_alias_hint('famularo.marissa+y@googlemail.com')::text) = 0,
+  'the stored address is not in the response');
+
+-- Those two tagged lookups spent the inbox. The third hint is the cap; the fourth is silent.
+select pg_temp.assert_ok(
+  public.gmail_alias_hint('f.amularomarissa@gmail.com') = jsonb_build_object('match', true, 'hint', 'f…@gmail.com'),
+  'third inbox lookup in the hour still returns a hint');
+select pg_temp.assert_ok(
+  public.gmail_alias_hint('fa.mularomarissa@gmail.com') = jsonb_build_object('match', false),
+  'fourth inbox lookup in the hour returns no hint');
+
+-- Canonical probes of a dotted account burn the same inbox cap.
+delete from auth.users;
+insert into auth.users (email, created_at) values ('dotted.only@gmail.com', now() - interval '1 day');
+truncate private.gmail_alias_limits;
+select public.gmail_alias_hint('dottedonly@gmail.com');
+select public.gmail_alias_hint('dottedonly@gmail.com');
+select public.gmail_alias_hint('dottedonly@gmail.com');
+select pg_temp.assert_ok(
+  public.gmail_alias_hint('dotted.only+z@gmail.com') = jsonb_build_object('match', false),
+  'canonical probes consume the inbox cap before a later variant can hint');
+
+-- Eight client addresses per hour, counted on the trusted connecting address.
+delete from auth.users;
+insert into auth.users (email, created_at)
+select 'ipuser' || g.n || '@gmail.com', now() - interval '1 day'
+from generate_series(1, 9) as g(n);
+truncate private.gmail_alias_limits;
+select set_config('request.headers', '{"cf-connecting-ip":"192.0.2.10","x-forwarded-for":"203.0.113.9, 198.51.100.20","x-real-ip":"198.51.100.8"}', false);
+create temp table ip_results (result jsonb);
+insert into ip_results (result)
+select public.gmail_alias_hint('ip.user' || g.n || '@gmail.com')
+from generate_series(1, 9) as g(n);
+select pg_temp.assert_ok((select count(*) = 8 from ip_results where result ->> 'match' = 'true'), 'eight of nine lookups from one connecting address return a hint');
+select pg_temp.assert_ok((select count(*) = 1 from ip_results where result ->> 'match' = 'false'), 'the ninth lookup from that address returns no hint');
+select pg_temp.assert_ok((select hits = 9 from private.gmail_alias_limits where bucket = 'ip:192.0.2.10'), 'the bucket is the cf-connecting-ip, not the forged forwarding hop');
+select pg_temp.assert_ok(not exists (select 1 from private.gmail_alias_limits where bucket like 'ip:203.0.113.9%'), 'the forged first forwarding hop is not a bucket');
+select pg_temp.assert_ok(not exists (select 1 from private.gmail_alias_limits where bucket = 'ip:198.51.100.8'), 'x-real-ip is not the client bucket when cf-connecting-ip is present');
+
+-- (c) Address selection, including the path the lookup writes into the cap.
+select pg_temp.assert_ok(private.gmail_client_ip('{"cf-connecting-ip":"192.0.2.10","x-forwarded-for":"203.0.113.9, 198.51.100.20"}'::json) = '192.0.2.10', 'cf-connecting-ip wins over forwarding hops');
+select pg_temp.assert_ok(private.gmail_client_ip('{"x-forwarded-for":"203.0.113.9, 198.51.100.20"}'::json) = '198.51.100.20', 'without cf-connecting-ip the rightmost hop is used');
+select pg_temp.assert_ok(private.gmail_client_ip('{"x-forwarded-for":"203.0.113.9"}'::json) = '203.0.113.9', 'a single forwarding hop is that hop');
+select pg_temp.assert_ok(private.gmail_client_ip('{"x-forwarded-for":"203.0.113.9, 198.51.100.7, 192.0.2.44"}'::json) = '192.0.2.44', 'three hops keep only the last');
+select pg_temp.assert_ok(private.gmail_client_ip('{"x-forwarded-for":"203.0.113.9, 2001:db8::1"}'::json) = '2001:db8::1', 'an IPv6 rightmost hop is kept');
+select pg_temp.assert_ok(private.gmail_client_ip('{"cf-connecting-ip":"not-an-ip","x-forwarded-for":"203.0.113.9, 198.51.100.20"}'::json) = '198.51.100.20', 'a non-address cf-connecting-ip falls through to the rightmost hop');
+select pg_temp.assert_ok(private.gmail_client_ip('{"x-real-ip":"198.51.100.8","x-forwarded-for":"203.0.113.9, 192.0.2.10"}'::json) = '192.0.2.10', 'x-real-ip does not override the rightmost hop');
+select pg_temp.assert_ok(private.gmail_client_ip('{"x-real-ip":"198.51.100.8"}'::json) is null, 'x-real-ip alone is not a client address');
+select pg_temp.assert_ok(private.gmail_client_ip('{}'::json) is null, 'no forwarding header means no client address');
+
+truncate private.gmail_alias_limits;
+select set_config('request.headers', '{"x-forwarded-for":"203.0.113.9, 198.51.100.20","x-real-ip":"198.51.100.8"}', false);
+select public.gmail_alias_hint('ip.user1@gmail.com');
+select pg_temp.assert_ok(
+  exists (select 1 from private.gmail_alias_limits where bucket = 'ip:198.51.100.20'),
+  'the lookup records the rightmost hop when cf-connecting-ip is absent');
+select pg_temp.assert_ok(
+  not exists (select 1 from private.gmail_alias_limits where bucket = 'ip:203.0.113.9'),
+  'the lookup does not record the first forwarding hop');
+
+-- Leave a clean slate for the concurrency test that follows.
+delete from auth.users;
+truncate private.gmail_alias_limits;
+select set_config('request.headers', '', false);

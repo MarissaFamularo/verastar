@@ -1,8 +1,8 @@
 """Parallel calls against a disposable local database.
 
-Twelve overlapping lookups for one inbox must return at most eight hints.
-Twenty-four overlapping lookups from one client address, each for a different
-inbox, must return at most twenty. Each call holds its transaction open so the
+Six overlapping lookups for one inbox must return at most three hints.
+Twelve overlapping lookups from one client address, each for a different
+inbox, must return at most eight. Each call holds its transaction open so the
 callers actually overlap; the bucket row lock is what serializes the count.
 
 Run only via supabase/tests/run_gmail_alias_tests.sh.
@@ -81,18 +81,18 @@ def check(cond, label, detail=''):
 
 sql("insert into auth.users (email, created_at) values ('famularomarissa@gmail.com', now() - interval '2 days')")
 
-inbox = parallel(['famularo.marissa@gmail.com'] * 12)
-check(len(hints(inbox)) == 8, 'one inbox: exactly 8 of 12 overlapping lookups return a hint', '\n'.join(inbox))
-check(len(misses(inbox)) == 4, 'one inbox: the other 4 return match false', '\n'.join(inbox))
+inbox = parallel(['famularo.marissa@gmail.com'] * 6)
+check(len(hints(inbox)) == 3, 'one inbox: exactly 3 of 6 overlapping lookups return a hint', '\n'.join(inbox))
+check(len(misses(inbox)) == 3, 'one inbox: the other 3 return match false', '\n'.join(inbox))
 check(all('f…@gmail.com' in row for row in hints(inbox)), 'one inbox: every hint is the one-character mask')
 check(all('hint' not in row for row in misses(inbox)), 'one inbox: a limited lookup carries no hint')
 check('famularomarissa@gmail.com' not in '\n'.join(inbox), 'one inbox: the stored address is not in the response')
 
 sql('truncate private.gmail_alias_limits')
-stored = ','.join(f"('u{i:02d}@gmail.com', now() - interval '1 day')" for i in range(24))
+stored = ','.join(f"('u{i:02d}@gmail.com', now() - interval '1 day')" for i in range(12))
 sql(f'insert into auth.users (email, created_at) values {stored}')
-clients = parallel([f'u.{i:02d}@gmail.com' for i in range(24)])
-check(len(hints(clients)) == 20, 'one client address: exactly 20 of 24 overlapping lookups return a hint', '\n'.join(clients))
+clients = parallel([f'u.{i:02d}@gmail.com' for i in range(12)])
+check(len(hints(clients)) == 8, 'one client address: exactly 8 of 12 overlapping lookups return a hint', '\n'.join(clients))
 check(len(misses(clients)) == 4, 'one client address: the other 4 return match false', '\n'.join(clients))
 check(all('u…@gmail.com' in row for row in hints(clients)), 'one client address: every hint is the one-character mask')
 

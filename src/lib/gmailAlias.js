@@ -1,7 +1,9 @@
 // Gmail treats dots and +tags as the same inbox, and googlemail.com as gmail.com.
 // Signing in with a different spelling must not silently open a second account.
 // The server reports only whether a different account already normalizes to this
-// inbox, plus a one-character hint. This module never receives the other address.
+// inbox, plus a one-character hint. Typing the canonical address itself gets no
+// hint, so that spelling does not reveal a dotted or tagged account. This module
+// never receives the other address.
 
 import { awaitWithin } from './deadline.js'
 import { supabase } from './supabase.js'
