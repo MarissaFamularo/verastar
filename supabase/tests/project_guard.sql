@@ -170,6 +170,83 @@ exception when insufficient_privilege then null;
 end $$;
 reset role;
 
+-- The bypass: a team member who can edit the project writes the placeholder
+-- flag, claims the lead, then changes visibility and deletion.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000004', true);
+do $$ begin
+  update public.projects
+     set lead_name_override = 'Claim me'
+   where id = 'b1000000-0000-0000-0000-000000000001';
+  if not found then raise exception 'FAIL: claim bypass did not see the project'; end if;
+  raise exception 'FAIL: collaborator made the project claimable';
+exception when insufficient_privilege then null;
+end $$;
+do $$ begin
+  perform public.claim_project('b1000000-0000-0000-0000-000000000001');
+  raise exception 'FAIL: collaborator claimed the lead';
+exception
+  when insufficient_privilege then null;
+  when raise_exception then
+    if sqlerrm <> 'Project does not have a placeholder lead' then raise; end if;
+end $$;
+do $$ begin
+  update public.projects
+     set is_public = true,
+         deleted_at = timestamptz '2026-10-13 04:00:00+00'
+   where id = 'b1000000-0000-0000-0000-000000000001';
+  if not found then raise exception 'FAIL: claim bypass did not see the project'; end if;
+  raise exception 'FAIL: collaborator changed visibility and deletion after the claim attempt';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+select pg_temp.ok(
+  (select lead_user_id = 'a1000000-0000-0000-0000-000000000001'
+      and lead_name_override is null
+      and not is_public
+      and deleted_at is null
+      and title = 'Led by team PI'
+   from public.projects where id = 'b1000000-0000-0000-0000-000000000001'),
+  'writing the placeholder, claiming, and editing visibility or deletion all failed');
+
+-- A claimable project is still not enough. This editor is not on a linked team.
+insert into public.project_collaborators (project_id, user_id)
+values ('b1000000-0000-0000-0000-000000000005', 'a1000000-0000-0000-0000-000000000007');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000007', true);
+do $$ begin
+  perform public.claim_project('b1000000-0000-0000-0000-000000000005');
+  raise exception 'FAIL: outsider claimed a placeholder';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+select pg_temp.ok(
+  (select lead_user_id = 'a1000000-0000-0000-0000-000000000008'
+      and lead_name_override = 'Placeholder PI'
+   from public.projects where id = 'b1000000-0000-0000-0000-000000000005'),
+  'a claimable project stays with its placeholder when the caller is not a team member or admin');
+
+-- A lead may open a claim. A team member may then take it.
+insert into public.project_teams (project_id, team_id)
+values ('b1000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000003', true);
+update public.projects
+   set lead_name_override = 'Open seat'
+ where id = 'b1000000-0000-0000-0000-000000000002';
+select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000002', true);
+select public.claim_project('b1000000-0000-0000-0000-000000000002');
+reset role;
+select pg_temp.ok(
+  (select lead_user_id = 'a1000000-0000-0000-0000-000000000002'
+      and lead_name_override is null
+   from public.projects where id = 'b1000000-0000-0000-0000-000000000002')
+  and (select count(*) = 1 from public.activity_log
+       where project_id = 'b1000000-0000-0000-0000-000000000002'
+         and user_id = 'a1000000-0000-0000-0000-000000000002'
+         and metadata->>'type' = 'lead_claimed'),
+  'a lead can open a claim and a linked team member can take it');
+
 -- H2. Collaborator edits the title, including a no-op write of the locked columns.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000004', true);
@@ -177,7 +254,8 @@ update public.projects
    set title = 'Collaborator title',
        is_public = is_public,
        lead_user_id = lead_user_id,
-       deleted_at = deleted_at
+       deleted_at = deleted_at,
+       lead_name_override = lead_name_override
  where id = 'b1000000-0000-0000-0000-000000000001';
 do $$ begin
   update public.projects
@@ -217,8 +295,9 @@ reset role;
 select pg_temp.ok(
   (select title = 'Collaborator title' and not is_public and deleted_at is null
       and lead_user_id = 'a1000000-0000-0000-0000-000000000001'
+      and lead_name_override is null
    from public.projects where id = 'b1000000-0000-0000-0000-000000000001'),
-  'collaborator title edit stuck; visibility, lead, and deletion did not');
+  'collaborator title edit stuck; visibility, lead, deletion, and the placeholder did not');
 
 -- A team admin who is only a collaborator is not the admin the trigger means.
 insert into public.project_collaborators (project_id, user_id)
@@ -266,7 +345,8 @@ select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000005
 update public.projects
    set is_public = true,
        deleted_at = timestamptz '2026-10-13 01:00:00+00',
-       lead_user_id = 'a1000000-0000-0000-0000-000000000005'
+       lead_user_id = 'a1000000-0000-0000-0000-000000000005',
+       lead_name_override = 'Opened by admin'
  where id = 'b1000000-0000-0000-0000-000000000002';
 reset role;
 
@@ -277,8 +357,9 @@ select pg_temp.ok(
    from public.projects where id = 'b1000000-0000-0000-0000-000000000001')
   and (select is_public and deleted_at = timestamptz '2026-10-13 01:00:00+00'
           and lead_user_id = 'a1000000-0000-0000-0000-000000000005'
+          and lead_name_override = 'Opened by admin'
    from public.projects where id = 'b1000000-0000-0000-0000-000000000002'),
-  'the current lead and a global admin can change visibility, lead, and deletion');
+  'the current lead and a global admin can change visibility, lead, deletion, and the placeholder');
 
 -- Direct client change of a placeholder lead is rejected. claim_project is not.
 set local role authenticated;
@@ -305,13 +386,15 @@ select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000004
 update public.projects
    set is_public = true,
        deleted_at = timestamptz '2026-10-13 02:00:00+00',
-       lead_user_id = 'a1000000-0000-0000-0000-000000000004'
+       lead_user_id = 'a1000000-0000-0000-0000-000000000004',
+       lead_name_override = 'Opened by service'
  where id = 'b1000000-0000-0000-0000-000000000003';
 reset role;
 select pg_temp.ok(
   (select is_public and deleted_at = timestamptz '2026-10-13 02:00:00+00'
       and lead_user_id = 'a1000000-0000-0000-0000-000000000004'
+      and lead_name_override = 'Opened by service'
    from public.projects where id = 'b1000000-0000-0000-0000-000000000003'),
-  'service_role can change visibility, lead, and deletion');
+  'service_role can change visibility, lead, deletion, and the placeholder');
 
 rollback;

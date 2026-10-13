@@ -32,7 +32,8 @@ create table public.projects (
   lead_user_id uuid not null references auth.users (id),
   is_public boolean not null default false,
   deleted_at timestamptz,
-  lead_name_override text
+  lead_name_override text,
+  updated_at timestamptz not null default now()
 );
 create table public.project_collaborators (
   project_id uuid not null references public.projects (id),
@@ -49,6 +50,19 @@ create table public.team_members (
   user_id uuid not null references auth.users (id),
   role public.team_role not null default 'trainee',
   primary key (team_id, user_id)
+);
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'activity_action') then
+    create type public.activity_action as enum ('edited');
+  end if;
+end $$;
+create table public.activity_log (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null,
+  user_id uuid not null,
+  action public.activity_action not null,
+  metadata jsonb,
+  created_at timestamptz not null default now()
 );
 create table public.project_teams (
   project_id uuid not null references public.projects (id),
