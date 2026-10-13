@@ -25,7 +25,7 @@ import { extractStructured } from '../lib/anthropic.js'
 import { fmtNum, pQualifier, ciLabel } from '../lib/format.js'
 import { claimCheckLabel } from '../lib/claimCheck.js'
 import { selectEvidenceContext, evidenceForResult, locateQuote, EVIDENCE_CHARS } from './evidenceContext.js'
-import { findPrimary, tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary } from './primaryResult.js'
+import { findPrimary, tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary, verificationCorpus } from './primaryResult.js'
 import { repairNumberFree } from './numberFree.js'
 import { triage, sanitizeRanking, dedupeEstimateLabels, allowedNumbers, numbersGrounded } from './triage.js'
 import { checkFindings, NO_VERDICT_REASON, SNIPPET_CHARS } from './check.js'
@@ -193,6 +193,14 @@ describe('fix 2 — primary-result handling on saved rows', () => {
     const d = load('AS-04')
     expect(tagResult(d.rows[3].quantity).subgroup).toBe(true)
     expect(tagResult(d.rows[2].quantity)).toMatchObject({ subgroup: false, hypothesis: 'noninferiority' })
+  })
+
+  it.each(['HF-13', 'PAD-07'])('%s: the declared phrase matches the primary row when the source is supplied', (id) => {
+    const d = load(id)
+    const primary = findPrimary(d.rows, notFlagged, verificationCorpus(d))
+    expect(primary).toMatchObject({ state: 'identified', basis: 'source', verified: true })
+    expect(primary.indexes).toContain(0)
+    expect(primary.name).toMatch(/primary/i)
   })
 
   it.each(['CAD-01', 'HF-04', 'HF-08', 'HF-13', 'PAD-07', 'CAR-07'])('%s: primary verified → a number-led finding is left alone', (id) => {

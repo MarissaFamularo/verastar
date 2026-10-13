@@ -8,7 +8,11 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-12.estimates-v12'
+export const VERIFICATION_VERSION = '2026-10-13.estimates-v13'
+// v13 accepts one comparison shape v12 withheld: a percentage printed in one
+// arm and a percentage printed in the other, joined by "and", with no "vs".
+// Each value has to sit in its own arm. A v12 stamp never accepted that shape,
+// so it is still honest to display. Nothing v12 accepted is refused.
 // v12 refuses a question or an exclamation for the two shapes added in v10. The
 // terminator is read from the source sentence, including punctuation immediately
 // outside the quote. v11 stripped "?" and treated "?" and "!" as sentence
@@ -16,7 +20,7 @@ export const VERIFICATION_VERSION = '2026-10-12.estimates-v12'
 // v10's whole-sentence rule; v10 can still false-verify a matching phrase inside
 // a longer sentence. Neither stamp is compatible. Nothing v9 accepted is refused.
 // All v9, v8 and v7 guarantees survive.
-export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-12.estimates-v9', '2026-10-10.estimates-v8', '2026-10-09.estimates-v7']
+export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-12.estimates-v12', '2026-10-12.estimates-v9', '2026-10-10.estimates-v8', '2026-10-09.estimates-v7']
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
@@ -782,6 +786,44 @@ function validateAndPair(quantity, matched, corpus, declaredType) {
   return numbersEqual(quantity.first_value, Number(a)) && numbersEqual(quantity.second_value, Number(b))
 }
 
+// --- "X in A and Y in B", no "vs" (2026-10-13) -----------------------------------
+//
+// "a primary-outcome event occurred in 129 patients (37.2%) in the PCI group and
+// in 134 patients (38.0%) in the optimal-medical-therapy group." Each percentage
+// is printed in its own arm. This is not "label (value) and label (value)" and
+// it is not "vs". The count between the arms may be "in 134 patients" or
+// "in 408 of 711 patients". A label may be the arm stem ("LCZ696") when the
+// sentence prints "LCZ696 group". Accept only when each claimed value is the
+// percentage in its own claimed arm, in that order. A swapped arm, a value with
+// no arm, a third percentage, "vs", a CI, or a claimed P stays unresolved.
+const IN_ARM_MIDDLE = '\\s+and\\s+(?:in\\s+)?(?:\\d+\\s+(?:of\\s+\\d+\\s+)?)?(?:patients?\\s+)?'
+
+function validateInArmPair(quantity, matched, corpus, declaredType) {
+  if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (declaredType !== 'comparison') return false
+  const span = corpus.slice(matched.index, matched.index + matched.length)
+  if (corpus.indexOf(span, matched.index + 1) !== -1) return false
+  if ((span.match(COMPARATOR) || []).length !== 0) return false
+  if ((span.match(CI_CLAUSE) || []).length !== 0) return false
+  if (quantity.ci_low != null || quantity.ci_high != null || quantity.p_value != null) return false
+  const supportedFields = new Set(['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'])
+  if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
+  if (!normalize(quantity.name)) return false
+  const first = normalize(quantity.first_label)
+  const second = normalize(quantity.second_label)
+  if (!first || !second || first === second || first.includes(second) || second.includes(first)) return false
+  const unit = normalize(quantity.unit)
+  if (unit && unit !== '%' && unit !== 'percent') return false
+  if ((span.match(BRACKETED_NUM) || []).length !== 2) return false
+  const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const arm = (label) => `${escape(label)}(?:\\s+(?:group|arm))?(?![a-z0-9])`
+  const pct = `[([]\\s*${PAIR_NUM}\\s*%\\s*[)\\]]`
+  const pairs = [...span.matchAll(new RegExp(`${pct}\\s+in\\s+(?:the\\s+)?${arm(first)}${IN_ARM_MIDDLE}${pct}\\s+in\\s+(?:the\\s+)?${arm(second)}`, 'g'))]
+  if (pairs.length !== 1) return false
+  const [, a, b] = pairs[0]
+  return numbersEqual(quantity.first_value, Number(a)) && numbersEqual(quantity.second_value, Number(b))
+}
+
 // --- Printed proportion, recomputed (2026-10-04) --------------------------------
 //
 // "Successful lesion crossing was achieved in 109 of 117 CTOs (93.2%)." The one result
@@ -1068,7 +1110,7 @@ export function verify(quantity, source, opts = {}) {
   const bracketValidated = consistent && !relationshipValidated && validateBracketInterval(quantity, matched, matchedCorpus, declaredType)
   const estimateValidated = consistent && !relationshipValidated && (validateEstimate(quantity, matched, matchedCorpus, declaredType) || bracketValidated)
   const comparisonValidated = consistent && !relationshipValidated && !estimateValidated &&
-    (validateComparison(quantity, matched, matchedCorpus, declaredType) || validateAndPair(quantity, matched, matchedCorpus, declaredType))
+    (validateComparison(quantity, matched, matchedCorpus, declaredType) || validateAndPair(quantity, matched, matchedCorpus, declaredType) || validateInArmPair(quantity, matched, matchedCorpus, declaredType))
   const proportionValidated = consistent && !relationshipValidated && !estimateValidated && !comparisonValidated && validateProportion(quantity, matched, matchedCorpus, declaredType)
   const heterogeneityValidated = consistent && !relationshipValidated && !estimateValidated && !comparisonValidated && !proportionValidated && validateHeterogeneity(quantity, matched, matchedCorpus, declaredType)
   const regRow = relationshipValidated ? registryMatch(quantity, opts.registry) : null

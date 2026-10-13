@@ -74,6 +74,77 @@ describe('two groups joined by "and" (SFA technical success)', () => {
   })
 })
 
+describe('percentages bound to arms without "vs" (X in A and Y in B)', () => {
+  const HF13 = 'a primary-outcome event occurred in 129 patients (37.2%) in the PCI group and in 134 patients (38.0%) in the optimal-medical-therapy group'
+  const pair = (fields) => q({
+    name: 'Primary-outcome event incidence, PCI vs optimal-medical-therapy group',
+    quantity_type: 'comparison',
+    value: null,
+    unit: '%',
+    first_label: 'PCI group',
+    first_value: 37.2,
+    second_label: 'optimal-medical-therapy group',
+    second_value: 38,
+    source_quote: HF13,
+    ...fields,
+  })
+
+  it('verifies the REVIVED sentence: each percentage is in its own arm', () => {
+    const v = verify(pair(), HF13, { sourceTier: 'abstract_only' })
+    expect(v.tier).toBe(TIERS.COMPARISON)
+    expect(v.endpointValidated).toBe(false)
+    expect(v.relationshipStatus).toBe('comparison-validated')
+  })
+  it('accepts a count of a denominator and an arm stem that the sentence finishes with "group"', () => {
+    const src = 'a primary-outcome event occurred in 302 of 709 patients (42.6%) in the surgical group and in 408 of 711 patients (57.4%) in the endovascular group'
+    expect(ok(pair({
+      name: 'Cohort 1 primary-outcome events',
+      first_label: 'surgical group',
+      first_value: 42.6,
+      second_label: 'endovascular group',
+      second_value: 57.4,
+      source_quote: src,
+    }), src)).toBe(true)
+    const stem = 'the primary outcome had occurred in 914 patients (21.8%) in the LCZ696 group and 1117 patients (26.5%) in the enalapril group'
+    expect(ok(pair({
+      name: 'Primary composite outcome incidence',
+      first_label: 'LCZ696',
+      first_value: 21.8,
+      second_label: 'enalapril',
+      second_value: 26.5,
+      source_quote: stem,
+    }), stem)).toBe(true)
+  })
+  it('negative: swapped arms do not verify', () => {
+    expect(ok(pair({ first_label: 'optimal-medical-therapy group', first_value: 37.2, second_label: 'PCI group', second_value: 38 }), HF13)).toBe(false)
+    expect(ok(pair({ first_label: 'optimal-medical-therapy group', first_value: 38, second_label: 'PCI group', second_value: 37.2 }), HF13)).toBe(false)
+  })
+  it('negative: swapped values do not verify', () => {
+    expect(ok(pair({ first_value: 38, second_value: 37.2 }), HF13)).toBe(false)
+  })
+  it('negative: an ambiguous comparison does not verify', () => {
+    const bothOrders = 'Events occurred in 129 patients (37.2%) in the PCI group and in 134 patients (38.0%) in the optimal-medical-therapy group, or in 134 patients (38.0%) in the PCI group and in 129 patients (37.2%) in the optimal-medical-therapy group.'
+    expect(ok(pair({ source_quote: bothOrders }), bothOrders)).toBe(false)
+    const unbound = 'Events occurred in (37.2%) and (38.0%) in the PCI group and the optimal-medical-therapy group.'
+    expect(ok(pair({ source_quote: unbound }), unbound)).toBe(false)
+    const oneValue = 'Events occurred in 129 patients (37.2%) in the PCI group and in the optimal-medical-therapy group.'
+    expect(ok(pair({ source_quote: oneValue }), oneValue)).toBe(false)
+    const third = 'Events occurred in 129 patients (37.2%) in the PCI group and in 134 patients (38.0%) in the optimal-medical-therapy group and in 10 patients (4.0%) in the surgery group.'
+    expect(ok(pair({ source_quote: third }), third)).toBe(false)
+    const endpoints = 'Death was (5%) in year 1 and stroke was (3%) in the hospital.'
+    expect(ok(pair({ first_label: 'year 1', first_value: 5, second_label: 'the hospital', second_value: 3, source_quote: endpoints }), endpoints)).toBe(false)
+    const receiving = 'in 751 of 6930 patients (10.8%) receiving ticagrelor and in 740 of 6955 (10.6%) receiving clopidogrel'
+    expect(ok(pair({ first_label: 'ticagrelor', first_value: 10.8, second_label: 'clopidogrel', second_value: 10.6, source_quote: receiving }), receiving)).toBe(false)
+    const versus = 'Events occurred in 37.2% vs 38.0%.'
+    expect(ok(pair({ source_quote: versus, unit: null }), versus)).toBe(false)
+  })
+  it('negative: a claimed P or CI has nothing in this shape to bind to', () => {
+    expect(ok(pair({ p_value: 0.96 }), HF13)).toBe(false)
+    const withCi = `${HF13} (hazard ratio, 0.99; 95% CI, 0.78 to 1.27).`
+    expect(ok(pair({ source_quote: withCi }), withCi)).toBe(false)
+  })
+})
+
 describe('proportion recomputed from its printed count (SFA lesion crossing)', () => {
   const SRC = 'Successful lesion crossing was achieved in 109 of 117 CTOs (93.2%).'
   const prop = (fields) => q({ name: 'Successful lesion crossing', unit: '%', value: 93.2, source_quote: SRC, ...fields })
@@ -163,8 +234,10 @@ describe('heterogeneity I² (frailty meta-analysis)', () => {
 
 describe('version', () => {
   it('bumps, and keeps the previous stamps readable outside the tiers v7 tightened', () => {
-    expect(VERIFICATION_VERSION).toBe('2026-10-12.estimates-v12')
-    expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).toEqual(expect.arrayContaining(['2026-10-12.estimates-v9', '2026-10-10.estimates-v8', '2026-10-09.estimates-v7']))
+    expect(VERIFICATION_VERSION).toBe('2026-10-13.estimates-v13')
+    expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).toEqual(expect.arrayContaining(['2026-10-12.estimates-v12', '2026-10-12.estimates-v9', '2026-10-10.estimates-v8', '2026-10-09.estimates-v7']))
+    const v12 = { verificationVersion: '2026-10-12.estimates-v12', tier: TIERS.COMPARISON, relationshipValidated: true, flagged: false }
+    expect(evidenceVerdict(v12)).toBe(v12)
     expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v10')
     expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v11')
     expect(COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v10')

@@ -7,8 +7,9 @@
 // "within" is not "at". A named anchor is not an absent or different anchor.
 // A subset, a superset, a different window, or a quote/name/location that merely
 // says "primary" does not match. A component has to be one outcome from a closed
-// list plus recognized qualifier phrases. An unfamiliar word leaves the primary
-// unidentified; the matcher does not turn it into another outcome.
+// list plus recognized qualifier phrases. An unfamiliar word leaves a different
+// phrase unidentified; the matcher does not turn it into another outcome. The
+// same phrase matches after case, whitespace, and punctuation are normalized.
 
 import { describe, it, expect } from 'vitest'
 import { verify, TIERS } from './verify.js'
@@ -393,7 +394,9 @@ describe('a qualifier stays on its outcome, and a window keeps its anchor', () =
   it('does not treat leading to hospitalization as an outcome that can move', () => {
     const declared = 'MI leading to hospitalization, or stroke'
     expect(check(declared, 'MI, or stroke leading to hospitalization')).toMatchObject(UNKNOWN)
-    expect(check(declared, declared)).toMatchObject(UNKNOWN)
+    expect(check(declared, declared)).toMatchObject({
+      state: 'identified', basis: 'source', verified: true, indexes: [0],
+    })
     expect(check('MI, leading to hospitalization, or stroke', 'MI, or stroke, leading to hospitalization')).toMatchObject(UNKNOWN)
     expect(check('MI (leading to hospitalization), or stroke', 'MI or stroke (leading to hospitalization)')).toMatchObject(UNKNOWN)
     expect(check('MI [leading to hospitalization], or stroke', 'MI, or stroke [leading to hospitalization]')).toMatchObject(UNKNOWN)
@@ -427,17 +430,25 @@ const UNFAMILIAR_CONNECTORS = [
   'characterized by',
 ]
 
-describe('an unfamiliar connecting phrase leaves the primary unidentified', () => {
+describe('an unfamiliar connecting phrase matches only when the phrase is the same', () => {
   it.each(UNFAMILIAR_CONNECTORS)('%s', (connector) => {
     const inline = `MI ${connector} hospitalization, or stroke`
     const inlineSource = `The primary end point was ${inline}.`
-    expect(findPrimary([row(inline)], () => true, inlineSource), inline).toMatchObject(UNKNOWN)
+    expect(findPrimary([row(inline)], () => true, inlineSource), inline).toMatchObject({
+      state: 'identified', basis: 'source', indexes: [0],
+    })
     expect(findPrimary([row(`MI, or stroke ${connector} hospitalization`)], () => true, inlineSource)).toMatchObject(UNKNOWN)
     const comma = `MI, ${connector} hospitalization, or stroke`
     const commaSource = `The primary end point was ${comma}.`
+    expect(findPrimary([row(comma)], () => true, commaSource)).toMatchObject({
+      state: 'identified', basis: 'source', indexes: [0],
+    })
     expect(findPrimary([row(`MI, or stroke, ${connector} hospitalization`)], () => true, commaSource)).toMatchObject(UNKNOWN)
     const paren = `MI (${connector} hospitalization), or stroke`
     const parenSource = `The primary end point was ${paren}.`
+    expect(findPrimary([row(paren)], () => true, parenSource)).toMatchObject({
+      state: 'identified', basis: 'source', indexes: [0],
+    })
     expect(findPrimary([row(`MI or stroke (${connector} hospitalization)`)], () => true, parenSource)).toMatchObject(UNKNOWN)
   })
 })
@@ -596,5 +607,86 @@ describe('one-slot perturbations of a parsed endpoint are unidentified', () => {
     } else {
       expect(primary, name).toMatchObject(UNKNOWN)
     }
+  })
+})
+
+describe('identical phrases match without dropping a qualifier, component, timepoint, population, or arm', () => {
+  const identify = (declared, name) => findPrimary(
+    [row(name)],
+    () => true,
+    `The primary end point was ${declared}.`,
+  )
+
+  it('matches death from any cause, new myocardial infarction, and hospitalization for heart failure when the phrase is the same', () => {
+    for (const phrase of ['death from any cause', 'new myocardial infarction', 'hospitalization for heart failure', 'Death from any cause.', 'NEW myocardial infarction']) {
+      const declared = phrase.replace(/\.$/, '')
+      expect(identify(declared, phrase), phrase).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+    }
+    expect(identify(
+      'death from any cause or hospitalization for heart failure',
+      'Primary composite outcome (death from any cause or hospitalization for heart failure), PCI vs optimal medical therapy, hazard ratio',
+    )).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+    expect(identify(
+      'a composite of adjudicated cardiovascular death, myocardial infarction, or ischemic stroke',
+      'Primary efficacy end point (CV death, MI, or ischemic stroke), ticagrelor vs clopidogrel, hazard ratio',
+    )).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+  })
+
+  it('negative: a different qualifier does not match', () => {
+    expect(identify('death from any cause', 'death')).toMatchObject(UNKNOWN)
+    expect(identify('death from any cause at 1 year', 'death at 1 year')).toMatchObject(UNKNOWN)
+    expect(identify('death from any cause at 1 year', '1-year death')).toMatchObject(UNKNOWN)
+    expect(identify('death from any cause', 'death from cardiovascular causes')).toMatchObject(UNKNOWN)
+    expect(identify('new myocardial infarction', 'myocardial infarction')).toMatchObject(UNKNOWN)
+    expect(identify('new myocardial infarction', 'old myocardial infarction')).toMatchObject(UNKNOWN)
+    expect(identify('ischemic stroke', 'stroke')).toMatchObject(UNKNOWN)
+    expect(identify('hospitalization for heart failure', 'hospitalization')).toMatchObject(UNKNOWN)
+    expect(identify('hospitalization for heart failure', 'hospitalization for stroke')).toMatchObject(UNKNOWN)
+    expect(identify('CV death', 'death')).toMatchObject(UNKNOWN)
+    expect(identify('death or adjudicated stroke', 'death or stroke')).toMatchObject(UNKNOWN)
+  })
+
+  it('negative: a different component does not match', () => {
+    const declared = 'death from any cause or hospitalization for heart failure'
+    expect(identify(declared, 'death from any cause')).toMatchObject(UNKNOWN)
+    expect(identify(declared, 'hospitalization for heart failure')).toMatchObject(UNKNOWN)
+    expect(identify(declared, 'death from any cause or stroke')).toMatchObject(UNKNOWN)
+    expect(identify(declared, 'death from any cause or hospitalization for heart failure or stroke')).toMatchObject(UNKNOWN)
+    expect(identify(
+      'cardiovascular death, myocardial infarction, or ischemic stroke',
+      'CV death or MI',
+    )).toMatchObject(UNKNOWN)
+  })
+
+  it('negative: a different timepoint does not match', () => {
+    expect(identify('death from any cause at 1 year', 'death from any cause at 30 days')).toMatchObject(UNKNOWN)
+    expect(identify('death from any cause at 1 year', 'death from any cause')).toMatchObject(UNKNOWN)
+    expect(identify('death from any cause', 'death from any cause at 1 year')).toMatchObject(UNKNOWN)
+    expect(identify('new myocardial infarction at 30 days', 'new myocardial infarction at 1 year')).toMatchObject(UNKNOWN)
+    expect(identify('hospitalization for heart failure within 30 days', 'hospitalization for heart failure at 30 days')).toMatchObject(UNKNOWN)
+  })
+
+  it('negative: a different population does not match', () => {
+    expect(identify('death from any cause in patients with diabetes', 'death from any cause in patients without diabetes')).toMatchObject(UNKNOWN)
+    expect(identify('death from any cause in patients with diabetes', 'death from any cause')).toMatchObject(UNKNOWN)
+    expect(identify('death from any cause', 'death from any cause in patients with diabetes')).toMatchObject(UNKNOWN)
+    expect(identify('new myocardial infarction in women', 'new myocardial infarction in men')).toMatchObject(UNKNOWN)
+  })
+
+  it('negative: a different treatment arm does not match', () => {
+    expect(identify('death from any cause in the PCI group', 'death from any cause in the medical therapy group')).toMatchObject(UNKNOWN)
+    expect(identify('death from any cause in the PCI group', 'death from any cause')).toMatchObject(UNKNOWN)
+    expect(identify('death from any cause', 'death from any cause in the PCI group')).toMatchObject(UNKNOWN)
+    expect(identify('hospitalization for heart failure in the device arm', 'hospitalization for heart failure in the control arm')).toMatchObject(UNKNOWN)
+  })
+
+  it('an unparsed secondary declaration does not veto an identical primary, and a secondary row does not replace it', () => {
+    const source = 'The primary composite outcome was death from any cause or hospitalization for heart failure. Major secondary outcomes were left ventricular ejection fraction at 6 and 12 months and quality-of-life scores.'
+    const secondary = row('Secondary outcome: left ventricular ejection fraction at 6 months')
+    const primary = row('Primary composite outcome (death from any cause or hospitalization for heart failure), PCI vs optimal medical therapy, hazard ratio')
+    const found = findPrimary([secondary, primary], () => true, source)
+    expect(found).toMatchObject({ state: 'identified', basis: 'source', indexes: [1] })
+    expect(findPrimary([secondary], () => true, source)).toMatchObject(UNKNOWN)
+    expect(findPrimary([row('hospitalization for heart failure')], () => true, source)).toMatchObject(UNKNOWN)
   })
 })

@@ -93,7 +93,6 @@ const ROLE = '(?:efficacy\\s+|safety\\s+|effectiveness\\s+|composite\\s+)?(?:end
 const NOUN = '(end\\s?-?points?|outcomes?|analys(?:is|es)|results?)'
 const DECLARATION = (which) => new RegExp(`\\b${which}\\s+(?:efficacy\\s+|safety\\s+|effectiveness\\s+|composite\\s+)?${NOUN}\\s+(were|was|included|comprised|:)\\s+([^.]{4,500})`, 'i')
 const PRIMARY_DECLARATION = DECLARATION('primary')
-const SECONDARY_DECLARATION = DECLARATION('secondary')
 const DECLARES_PRIMARY = new RegExp(`\\bprimary\\s+${ROLE}\\b`, 'i')
 const DECLARES_SECONDARY = new RegExp(`\\bsecondary\\s+${ROLE}\\b`, 'i')
 const LEADING_ROLE = /^(?:the\s+)?(?:incidence|rate|risk|odds|hazard|occurrence|proportion)\s+of\s+/i
@@ -719,10 +718,53 @@ function itemHits(name, item) {
 // Equality is a set of (component, qualifiers, window) tuples. A qualifier stays
 // on the component it was written on. A window is relation, duration, and anchor
 // event; a named anchor is not the same as a missing or different one.
-function matchesDeclared(row, primaryItems, secondaryItems) {
+// A secondary endpoint that happens to use the same components does not veto a
+// row that already equals the primary. A secondary-only row is not the primary.
+function matchesDeclared(row, primaryItems) {
   const name = String(row?.quantity?.name || '')
-  if (secondaryItems.some((item) => itemHits(name, item))) return false
   return primaryItems.some((item) => itemHits(name, item))
+}
+
+// Words the closed outcome list does not know still match when the row prints
+// the same phrase as the declaration. Case, whitespace, and punctuation are
+// the only normalization. Role labels, a trailing "A vs B, hazard ratio", and
+// a leading "composite of" are the same structural wrappers the component
+// parser already removes; they are not clinical content. CV / HF / MI / MALE /
+// RAO expand to the phrase they already stand for. A leading "adjudicated" is
+// list-level ascertainment and drops only when the rest is still a list
+// ("adjudicated A, B, or C"). Qualifiers, components, populations, time
+// windows, and arm labels stay in the phrase, so a different one does not match.
+const SURFACE_ALIAS = new Map([
+  ['cv', 'cardiovascular'],
+  ['hf', 'heart failure'],
+  ['mi', 'myocardial infarction'],
+  ['male', 'major adverse limb events'],
+  ['rao', 'retinal artery occlusion'],
+])
+
+function endpointSurface(text) {
+  let s = String(text || '')
+  s = s.replace(/^(?:the\s+)?(?:co-?)?primary\s+(?:efficacy\s+|safety\s+|effectiveness\s+|composite\s+)?(?:end\s?-?points?|outcomes?|analysis|composite)\s*[:\-—]?\s*/i, '')
+  s = s.replace(/,\s+[^,]*\b(?:versus|vs\.?|compared(?:\s+with|\s+to)?)\b[\s\S]*$/i, '')
+  s = s.replace(/,?\s*\((?:hazard ratio|odds ratio|risk ratio|HR|OR|RR)\)\s*$/i, '')
+  s = s.replace(/^(?:(?:a|an|the)\s+)?composite\s+of\s+/i, '')
+  s = normalize(s).replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const words = []
+  for (const word of s.split(' ')) {
+    if (!word) continue
+    const expanded = SURFACE_ALIAS.get(word)
+    if (expanded) words.push(...expanded.split(' '))
+    else words.push(word)
+  }
+  s = words.join(' ')
+  if (/^adjudicated\b/.test(s) && /\b(?:or|and)\b/.test(s)) s = s.replace(/^(?:adjudicated\s+)+/, '').trim()
+  return s
+}
+
+function sameEndpointSurface(rowName, declaredClause) {
+  const row = endpointSurface(rowName)
+  const declared = endpointSurface(declaredClause)
+  return Boolean(row) && row === declared
 }
 
 // The paper's primary result, as an EXPLICIT state — never null:
@@ -751,9 +793,13 @@ function matchesDeclared(row, primaryItems, secondaryItems) {
 // has to be the same event or both absent. A component is one outcome from a
 // closed list, plus recognized qualifier phrases; an abbreviation on that list
 // is that outcome. An unfamiliar word is not split into an outcome and a
-// leftover, and it is not dropped. A token that fits none of those slots leaves
-// the declaration or the row unidentified. Quote text is never an identification
-// path.
+// leftover, and it is not dropped. The same phrase on the row and in the
+// declaration still matches after case, whitespace, and punctuation are
+// normalized: qualifiers, components, populations, time windows, and arm
+// labels stay in that phrase. A token that fits none of those slots, and is
+// not the same phrase, leaves the declaration or the row unidentified. An
+// unparsed secondary declaration does not veto a primary that matched. Quote
+// text is never an identification path.
 export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, sourceText = '') {
   const list = Array.isArray(rows) ? rows : []
   const none = (state) => ({ state, name: null, verified: false, indexes: [], basis: null })
@@ -775,10 +821,26 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
   // unidentified rather than a reason to trust those labels.
   if (source && (DECLARES_PRIMARY.test(source) || DECLARES_SECONDARY.test(source))) {
     const expansions = abbreviationExpansions(source)
-    const primaryParsed = parseDeclaration(source.match(PRIMARY_DECLARATION), expansions)
-    const secondaryParsed = parseDeclaration(source.match(SECONDARY_DECLARATION), expansions)
-    if (primaryParsed.uncertain || secondaryParsed.uncertain || !primaryParsed.endpoints.length) return none('unknown')
-    const indexes = list.flatMap((row, i) => (eligible(row) && matchesDeclared(row, primaryParsed.endpoints, secondaryParsed.endpoints) ? [i] : []))
+    const primaryMatch = source.match(PRIMARY_DECLARATION)
+    const primaryParsed = parseDeclaration(primaryMatch, expansions)
+    // An unparsed secondary declaration used to force this primary unidentified,
+    // and a secondary hit used to reject a row that already equalled it. Neither
+    // does that now. A row whose own name says secondary is still not eligible.
+    const declaredClause = primaryMatch?.[3] || ''
+    const indexes = list.flatMap((row, i) => {
+      const name = String(row?.quantity?.name || '')
+      const tags = tagResult(row?.quantity)
+      // The endpoint phrase can contain "secondary" ("secondary to") without
+      // being a secondary result. That tag must not suppress an exact primary.
+      // A subgroup or a per-protocol / as-treated row still is not the primary.
+      if (declaredClause && sameEndpointSurface(name, declaredClause)) {
+        if (nonRandomized(tags) || tags.subgroup) return []
+        return [i]
+      }
+      if (!eligible(row)) return []
+      if (primaryParsed.uncertain || !primaryParsed.endpoints.length) return []
+      return matchesDeclared(row, primaryParsed.endpoints) ? [i] : []
+    })
     if (indexes.length) return identified(indexes, 'source')
     return none('unknown')
   }
