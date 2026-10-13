@@ -840,4 +840,123 @@ describe('primary-outcome sentences the declaration reader can now see', () => {
       'The primary end point will be reported separately once follow-up is complete.',
     )).toMatchObject({ state: 'unknown', reason: PRIMARY_UNRECOGNIZED_REASON, indexes: [] })
   })
+
+  it('does not declare a MAIN OUTCOME MEASURES list that names no single primary', () => {
+    const source = 'MAIN OUTCOME MEASURES: All-cause mortality, myocardial infarction, stroke, and major bleeding.'
+    expect(findPrimary([
+      row('All-cause mortality, myocardial infarction, stroke, and major bleeding'),
+      row('Death'),
+    ], (entry) => !entry.verdict.flagged, source)).toMatchObject({
+      state: 'unspecified', basis: 'no-declared-primary', name: null, verified: false, reason: null,
+    })
+  })
+
+  it('still reads a MAIN line that states one composite', () => {
+    expect(findPrimary(
+      [row('death, myocardial infarction, or stroke')],
+      () => true,
+      'MAIN OUTCOME MEASURES: a composite of death, myocardial infarction, or stroke.',
+    )).toMatchObject({ state: 'identified', basis: 'source', indexes: [0] })
+  })
+})
+
+describe('subgroup arms and composite components are not the declared primary', () => {
+  const passes = (entry) => !entry.verdict.flagged
+  const padSource = [
+    'Patients were randomly assigned to rivaroxaban or aspirin.',
+    'The primary end point was cardiovascular death, myocardial infarction, or stroke.',
+    'The primary end point occurred in 4.1% of the rivaroxaban group and 5.4% of the aspirin group.',
+    'The absolute risk reduction for the primary end point was 3.5% in patients with PAD and 1.6% in patients with no PAD.',
+  ].join(' ')
+
+  it('does not identify PAD vs no PAD because the quote mentions the primary end point', () => {
+    const treatment = {
+      quantity: {
+        ...hr(
+          'cardiovascular death, myocardial infarction, or stroke, rivaroxaban vs aspirin',
+          'The primary end point occurred in 4.1% of the rivaroxaban group and 5.4% of the aspirin group.',
+        ),
+      },
+      verdict: { flagged: true },
+    }
+    const subgroup = evidenceRow(
+      'absolute risk reduction for primary end point, PAD vs no PAD, 3.5% vs 1.6%',
+      'The absolute risk reduction for the primary end point was 3.5% in patients with PAD and 1.6% in patients with no PAD.',
+    )
+    const primary = findPrimary([treatment, subgroup], passes, padSource)
+    expect(primary).toMatchObject({ state: 'identified', verified: false, indexes: [0], reason: null })
+    expect(findPrimary([subgroup], passes, padSource)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
+    })
+  })
+
+  it('rejects with versus without, with/without, and a comparison that is not the randomized arms', () => {
+    const quote = 'The absolute risk reduction for the primary end point was 3.5% in patients with PAD and 1.6% in patients with no PAD.'
+    for (const name of [
+      'absolute risk reduction for primary end point, with PAD vs without PAD',
+      'absolute risk reduction for primary end point, with/without PAD',
+      'cardiovascular death, myocardial infarction, or stroke, bypass surgery vs stenting',
+    ]) {
+      expect(findPrimary([evidenceRow(name, quote)], passes, padSource), name).toMatchObject({
+        state: 'unknown', verified: false, indexes: [],
+      })
+    }
+  })
+
+  it('does not let a verified component of the composite set primary.verified', () => {
+    const source = [
+      'Patients were randomly assigned to treatment or placebo.',
+      'The primary end point was a composite of death, stroke, or cardiovascular hospitalization.',
+      'The primary end point occurred in 12% of the treatment group and 15% of the placebo group (hazard ratio, 0.76; 95% CI, 0.65 to 0.89).',
+    ].join(' ')
+    const composite = {
+      quantity: {
+        ...hr(
+          'Primary end point',
+          'The primary end point occurred in 12% of the treatment group and 15% of the placebo group',
+        ),
+      },
+      verdict: { flagged: true },
+    }
+    const components = [
+      'Death, hazard ratio',
+      'Stroke, hazard ratio',
+      'Cardiovascular hospitalization, hazard ratio',
+      'HF hospitalization, hazard ratio',
+    ].map((name) => evidenceRow(name, 'hazard ratio, 0.76'))
+    expect(findPrimary([composite, ...components], passes, source)).toMatchObject({
+      state: 'identified', verified: false, indexes: [0], reason: null,
+    })
+    expect(findPrimary(components, passes, source)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
+    })
+  })
+
+  it('keeps the declared 4-year rate and drops the periprocedural rate of the same end point', () => {
+    const source = [
+      'Patients were randomly assigned to stenting or endarterectomy.',
+      'The primary end point was a composite of any stroke, myocardial infarction, or death during the periprocedural period or ipsilateral stroke within 4 years after randomization.',
+      'The estimated 4-year rate of the primary end point was 5.5%.',
+      'The periprocedural primary end point occurred in 2.3% of patients.',
+    ].join(' ')
+    const fourYear = {
+      quantity: {
+        ...hr(
+          'Estimated 4-year rate of primary end point',
+          'The estimated 4-year rate of the primary end point was 5.5%.',
+        ),
+      },
+      verdict: { flagged: true },
+    }
+    const periprocedural = evidenceRow(
+      'Periprocedural rate of the primary end point',
+      'The periprocedural primary end point occurred in 2.3% of patients.',
+    )
+    expect(findPrimary([fourYear, periprocedural], passes, source)).toMatchObject({
+      state: 'identified', verified: false, indexes: [0], reason: null,
+    })
+    expect(findPrimary([periprocedural], passes, source)).toMatchObject({
+      state: 'unknown', verified: false, indexes: [], reason: PRIMARY_UNBOUND_REASON,
+    })
+  })
 })

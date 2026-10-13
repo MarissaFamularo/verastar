@@ -45,7 +45,9 @@ export function tagResult(quantity) {
         ? 'equivalence'
         : null
   // Subgroup / cohort split, judged from the NAME only (the quote often names the whole trial).
+  // "PAD vs no PAD" and "with X vs without X" are subgroup arms, not the randomized comparison.
   const subgroup = has(/\bsubgroups?\b|\bsubset\b|\bstrat(?:um|a)\b|\bin patients (?:with|without)\b|\bamong (?:patients|participants|those|women|men)\b|\b[\w-]+[- ]access cohort\b|\b(?:bicuspid|tricuspid)\b|\bin (?:a)?symptomatic patients\b/i, name)
+    || subgroupComparison(name)
   const secondary = has(/\bsecondary\b/i, name)
   const primary = !secondary && has(/\b(?:co-?)?primary\b/i, name)
   return { population, hypothesis, subgroup, primary, secondary }
@@ -55,6 +57,68 @@ const NON_RANDOMIZED = new Set(['as-treated', 'per-protocol'])
 // A per-protocol analysis is a legitimate (often co-primary) analysis of a NONINFERIORITY
 // test, so it is only treated as "not the randomized comparison" outside that setting.
 const nonRandomized = (t) => NON_RANDOMIZED.has(t?.population) && !(t.population === 'per-protocol' && t.hypothesis === 'noninferiority')
+
+// A comparison of a feature with its absence is not the randomized treatment comparison.
+function subgroupComparison(name) {
+  const text = String(name || '')
+  if (/\b([A-Za-z][\w-]*)\s+(?:versus|vs\.?)\s+no\s+\1\b/i.test(text)) return true
+  if (/\b([A-Za-z][\w-]*)\s+(?:versus|vs\.?)\s+non-?\1\b/i.test(text)) return true
+  if (/\bwith(?:out)?\s+[A-Za-z][\w-]*\s+(?:versus|vs\.?)\s+with(?:out)?\s+[A-Za-z]/i.test(text)) return true
+  if (/\bwith\s*\/\s*without\b/i.test(text)) return true
+  return false
+}
+
+const ARM_STOP = new Set([
+  'the', 'and', 'with', 'from', 'that', 'were', 'was', 'for', 'patients', 'patient', 'either',
+  'receive', 'received', 'receiving', 'undergo', 'undergoing', 'group', 'groups', 'arm', 'arms',
+  'therapy', 'treatment', 'alone', 'plus', 'into', 'who', 'had', 'been', 'their', 'this', 'after',
+  'before', 'daily', 'twice', 'dose', 'oral', 'strategy', 'assigned', 'allocated', 'randomized',
+  'randomised', 'randomly', 'ratio', 'continue', 'continued', 'transition', 'including',
+])
+
+function armWords(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((word) => word.length >= 3 && !ARM_STOP.has(word))
+}
+
+function stemsOverlap(left, right) {
+  if (left === right) return true
+  if (left.length >= 4 && right.length >= 4 && left.slice(0, 4) === right.slice(0, 4)) return true
+  return false
+}
+
+// The first "randomly assigned ... to A or B" clause. Null when the trial is not
+// randomized here or the two treatment arms are not both written in that clause.
+function randomizedArmWords(source) {
+  const text = String(source || '')
+  if (!/\brandom(?:ly|i[sz]ed)\b/i.test(text)) return null
+  const match = text.match(/\brandom(?:ly|i[sz]ed)\s+(?:assigned|allocated)\b[^.]{0,320}?\bto\b\s+([^.]{0,260})/i)
+  if (!match) return null
+  const parts = match[1].split(/\s+(?:or|versus|vs\.?)\s+/i).map((part) => part.trim()).filter(Boolean)
+  if (parts.length < 2) return null
+  const words = parts.slice(0, 2).flatMap(armWords)
+  return words.length >= 2 ? words : null
+}
+
+function rowComparisonWords(name) {
+  const match = String(name || '').match(/\b([^,;()]{2,80}?)\s+(?:versus|vs\.?)\s+([^,;()]{2,80})/i)
+  if (!match) return null
+  const words = [match[1], match[2]].flatMap(armWords)
+  return words.length ? words : null
+}
+
+// When the trial states its randomized arms, a row comparison that shares none of
+// those words is a different contrast (a subgroup or a component), not the primary.
+function comparisonMissesRandomizedArms(name, source) {
+  if (subgroupComparison(name)) return true
+  const arms = randomizedArmWords(source)
+  const row = rowComparisonWords(name)
+  if (!arms || !row) return false
+  return !row.some((token) => arms.some((arm) => stemsOverlap(token, arm)))
+}
 
 // Human-readable tags for the writer's prompt. Words only — no digits, so the number guard's
 // allowed set is unaffected.
@@ -868,7 +932,13 @@ function explicitRelations(text) {
 }
 
 function endpointTimes(text) {
+  // A decimal year ("2.7 years") has to be consumed whole. The span below stops
+  // at a period, so it would leave ".7 years" and read a 7-year endpoint.
+  const duration = String.raw`\d+(?:\.\d+)?\s*(?:day|week|month|year)s?`
   const stripped = String(text || '')
+    .replace(new RegExp(String.raw`\b(?:over|after|during)\s+(?:a\s+)?median(?:\s+\([^)]*\)|\s+follow-up)?\s+of\s+${duration}`, 'gi'), ' ')
+    .replace(new RegExp(String.raw`\bmedian(?:\s+follow-up|\s+duration|\s+of)?\s+(?:follow-up\s+)?of\s+${duration}`, 'gi'), ' ')
+    .replace(new RegExp(String.raw`\bfollow-up\s+of\s+${duration}`, 'gi'), ' ')
     .replace(/\b(?:over|after|during)\s+(?:a\s+)?median(?:\s+\([^)]*\)|\s+follow-up)?\s+of\s+[^.;]{0,48}/gi, ' ')
     .replace(/\bmedian(?:\s+follow-up|\s+duration|\s+of)?\s+(?:follow-up\s+)?of\s+[^.;]{0,48}/gi, ' ')
     .replace(/\bfollow-up\s+of\s+[^.;]{0,40}/gi, ' ')
@@ -1008,9 +1078,90 @@ function roleWindow(sentence) {
   return match ? match[0] : ''
 }
 
+const COMPONENT_NOUN = new Set(['revascularization', 'reintervention'])
+const HARD_QUALIFIER = new Set([
+  'cardiovascular', 'disabling', 'ischemic', 'ischaemic', 'unplanned', 'ipsilateral', 'fatal', 'new',
+])
+
+function asHead(word) {
+  if (HEAD_WORDS.has(word)) return word
+  if (COMPONENT_NOUN.has(word)) return word
+  for (const head of HEAD_WORDS) if (word.includes(head)) return head
+  return ''
+}
+
+// "MALE, defined as amputation..." lets a row that says MALE stand for those nouns.
+function inheritedNouns(rowText, declared, expansions) {
+  const rowSurface = endpointSurface(rowText, expansions)
+  const extras = []
+  const re = /([a-z][^.;]{3,90}?)\s*(?:-\s*)?(?:which was\s+)?defined as\s+([^.;]{3,260})/gi
+  for (const match of String(declared || '').toLowerCase().matchAll(re)) {
+    const words = endpointSurface(match[1], expansions).split(' ').filter((word) => word.length >= 5)
+    if (words.length < 2 || !words.every((word) => rowSurface.includes(word))) continue
+    extras.push(match[2])
+  }
+  return extras
+}
+
+function sliceLabels(text) {
+  const found = []
+  if (/\bperi-?procedural\b/i.test(text)) found.push('periprocedural')
+  if (/\bperi-?operative\b/i.test(text)) found.push('perioperative')
+  if (/\bpost-?procedural\b/i.test(text)) found.push('postprocedural')
+  if (/\bin-hospital\b/i.test(text)) found.push('in-hospital')
+  return found
+}
+
+// A row or a sentence that names a different duration, or only the periprocedural
+// slice of an endpoint whose horizon is longer, is not that endpoint.
+function windowConflict(rowText, declared) {
+  const declaredTimes = endpointTimes(declared)
+  const rowTimes = endpointTimes(rowText)
+  if (rowTimes.length && !declaredTimes.length) return true
+  if (rowTimes.some((time) => !declaredTimes.includes(time))) return true
+  const rowSlices = sliceLabels(rowText)
+  const declaredSlices = sliceLabels(declared)
+  if (rowSlices.some((label) => !declaredSlices.includes(label))) return true
+  if (rowSlices.length && declaredTimes.length && !rowTimes.length) return true
+  const declaredRelations = explicitRelations(declared)
+  const rowRelations = explicitRelations(rowText)
+  if (declaredRelations.size && rowRelations.size) {
+    for (const relation of rowRelations) if (!declaredRelations.has(relation)) return true
+  }
+  return false
+}
+
+// A component of a composite names some of the declared outcomes and not the rest.
+// A harder qualifier the declaration does not use (ischemic, disabling, cardiovascular)
+// is a different endpoint. "all-cause" and "any cause" are the same unrestricted death.
+// A name with no outcome word ("primary end point", "hazard ratio") does not fail here.
+function componentConflict(name, declared, expansions) {
+  const declaredTokens = contentTokens(declared, expansions)
+  // Inherited definition nouns are scored on their own. Concatenating them onto a
+  // name that says "A vs B" lets the arm strip discard everything after "versus".
+  const rowTokens = contentTokens(name, expansions)
+  const inheritedTokens = inheritedNouns(name, declared, expansions).flatMap((piece) => contentTokens(piece, expansions))
+  const declaredHeads = [...new Set(declaredTokens.map(asHead).filter(Boolean))]
+  const rowHeads = [...new Set([...rowTokens, ...inheritedTokens].map(asHead).filter(Boolean))]
+  if (rowHeads.length && declaredHeads.length >= 2) {
+    if (rowHeads.some((word) => !declaredHeads.includes(word))) return true
+    if (declaredHeads.some((word) => !rowHeads.includes(word))) return true
+  }
+  const declaredQuals = contentTokens(String(declared).replace(/(?:which was\s+)?defined as\s+[^.;]{0,300}/gi, ' '), expansions)
+    .filter((word) => HARD_QUALIFIER.has(word))
+  // Qualifiers count only on the row's own name. A "new graft" inside an inherited
+  // definition is not an extra qualifier the row claimed.
+  const rowQuals = rowTokens.filter((word) => HARD_QUALIFIER.has(word))
+  if (!rowHeads.length) return false
+  if (rowQuals.some((word) => !declaredQuals.includes(word))) return true
+  if (declaredQuals.some((word) => !rowQuals.includes(word))) return true
+  return false
+}
+
 function reportsDeclared(clause, declared, declarationSentence, expansions) {
   if (!clause || !sameRoleFamily(clause, declarationSentence)) return null
   if (SECONDARY_ROLE.test(clause) && !PRIMARY_ROLE.test(clause)) return null
+  if (windowConflict(clause, declared)) return null
   const population = populationPhrase(declared)
   if (population && populationPhrase(clause) !== population) return null
   if (PRIMARY_ROLE.test(clause) && RESULT_CUE.test(clause) && !timeConflict(declared, roleWindow(clause) || clause)) {
@@ -1065,7 +1216,10 @@ function extractDeclaration(source) {
     return { kind: 'outcome', clause: chosen.clause, sentence, noun: chosen.noun, verb: chosen.verb }
   }
   const main = earliest(source, MAIN_DECL, 1)
-  if (main && !OUTCOME_MENTION.test(source)) {
+  // A MAIN OUTCOME MEASURES list of several endpoints is not one declared primary.
+  // One outcome, or an explicit composite, still is. "30 day mortality, with ... as
+  // secondary outcomes" has already been cut down to the single outcome.
+  if (main && !OUTCOME_MENTION.test(source) && !mainClauseIsList(main.clause)) {
     return { kind: 'outcome', clause: main.clause, sentence: clauseBounds(source, main.index, main.end).text, noun: main.noun, verb: main.verb }
   }
   if (OBJECTIVES_MENTION.test(source) && !OUTCOME_MENTION.test(source)) return { kind: 'objectives', clause: '', sentence: '' }
@@ -1074,22 +1228,22 @@ function extractDeclaration(source) {
   return { kind: 'none', clause: '', sentence: '' }
 }
 
+function mainClauseIsList(clause) {
+  if (/\bcomposite\b/i.test(clause)) return false
+  const parts = String(clause || '').split(/\s*,\s*|\s+\band\b\s+/i).map((part) => part.trim()).filter((part) => /[a-z]/i.test(part))
+  return parts.length >= 2
+}
+
 function nameContradicts(name, declaredClause, parsed, expansions) {
+  if (subgroupComparison(name)) return true
   if (!declaredClause || isGenericEndpointName(name, expansions)) return false
   if (sameEndpointSurface(name, declaredClause, expansions)) return false
   const rowParsed = parseDeclaration(['endpoint', 'outcome', 'was', name], expansions)
   if (!parsed?.uncertain && parsed?.endpoints?.length && !rowParsed.uncertain && rowParsed.endpoints.length) {
     if (!parsed.endpoints.some((item) => itemHits(name, item))) return true
   }
-  const declaredTimes = endpointTimes(declaredClause)
-  const rowTimes = endpointTimes(name)
-  if (rowTimes.length && !declaredTimes.length) return true
-  if (rowTimes.some((time) => !declaredTimes.includes(time))) return true
-  const declaredRelations = explicitRelations(declaredClause)
-  const rowRelations = explicitRelations(name)
-  if (declaredRelations.size && rowRelations.size) {
-    for (const relation of rowRelations) if (!declaredRelations.has(relation)) return true
-  }
+  if (componentConflict(name, declaredClause, expansions)) return true
+  if (windowConflict(name, declaredClause)) return true
   const declaredPopulation = populationPhrase(declaredClause)
   const rowPopulation = populationPhrase(name)
   if (declaredPopulation && rowPopulation && declaredPopulation !== rowPopulation) return true
@@ -1140,7 +1294,10 @@ function evidenceBinding(row, source, declared, parsed, expansions) {
 //       reports that outcome. A generic "primary (efficacy) composite outcome"
 //       name matches only through that quote. It is not secondary, a subgroup,
 //       or a per-protocol / as-treated analysis (per-protocol noninferiority is
-//       allowed). verified: any primary row passes the call site's predicate.
+//       allowed). A component of that composite, a different time window, and a
+//       subgroup comparison (X vs no X, with versus without) are not those rows.
+//       verified: any of the rows that remain passes the call site's predicate,
+//       never a verified component that was excluded.
 //   { state: 'unknown', ..., reason }  results were extracted but none is the
 //       primary. reason says which check failed. triage() withholds the finding
 //       and the card carries that reason.
@@ -1158,6 +1315,7 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
   const eligible = (row) => {
     const tags = tagResult(row?.quantity)
     return !nonRandomized(tags) && !tags.subgroup && !tags.secondary
+      && !comparisonMissesRandomizedArms(row?.quantity?.name, source)
   }
   const identified = (indexes, basis) => ({
     state: 'identified',
@@ -1190,7 +1348,7 @@ export function findPrimary(rows, isVerified = (row) => !row?.verdict?.flagged, 
       const tags = tagResult(row?.quantity)
       if (isGenericEndpointName(name, expansions)) return []
       if (sameEndpointSurface(name, declared.clause, expansions)) {
-        if (nonRandomized(tags) || tags.subgroup) return []
+        if (nonRandomized(tags) || tags.subgroup || comparisonMissesRandomizedArms(name, source)) return []
         return [i]
       }
       if (!eligible(row) || primaryParsed.uncertain || !primaryParsed.endpoints.length) return []
