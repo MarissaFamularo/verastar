@@ -11,6 +11,8 @@
 //   4. Only _shared/spending.js talks to the provider; no usage-callback accounting remains.
 //   5. The proxy never writes the shared evidence cache.
 //   6. Every function in the spending migration has EXECUTE revoked from client roles.
+//   10. The 2026-10-14 server repairs: invite end date, scheduler fairness, OTP ticket burn,
+//       distinct 402 wordings, verify_jwt pins, and the shared-cache column grants.
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -109,6 +111,61 @@ export async function runChecks() {
   const releaseUnrevoked = releaseCreated.filter((f) => !releaseRevokes.includes(`'${f}(`))
   check(releaseCreated.length === 3 && releaseUnrevoked.length === 0, 'every function the release migration creates or replaces is service-role only', releaseUnrevoked.join(', '))
   check(/r\.state not in \('reserved', 'ambiguous', 'released'\)/.test(releaseCode) && !/r\.state = 'released' then\s+return jsonb_build_object\('status', 'unchanged'/.test(releaseCode), 'a released row can be settled and reconciled')
+
+  // 10 (2026-10-14 beta audit, docs/BETA_TEST_PLAN.md § H). Each migration keeps the
+  // service-role-only rule; the handlers use what the migrations add.
+  const serviceRoleOnly = (file, expectCount) => {
+    const sql = read(file)
+    const made = [...sql.matchAll(/create or replace function (public\.[a-z_]+)\(/g)].map((m) => m[1])
+    const block = sql.slice(sql.indexOf('foreach f in array array['))
+    const missing = made.filter((f) => !block.includes(`'${f}(`))
+    check(made.length === expectCount && missing.length === 0, `${file.split('/').pop()}: every function is service-role only`, missing.join(', ') || `${made.length} function(s)`)
+    check(!/security definer/i.test(sql.replace(/--[^\n]*/g, '')), `${file.split('/').pop()}: no SECURITY DEFINER function`)
+  }
+  const inviteMig = 'supabase/migrations/20261014120000_invite_ends_at.sql'
+  serviceRoleOnly(inviteMig, 1)
+  const inviteCode = read(inviteMig).replace(/--[^\n]*/g, '')
+  const endsAt = inviteCode.indexOf('v_inv.ends_at is not null and v_inv.ends_at <= now()')
+  check(endsAt > 0 && endsAt < inviteCode.indexOf('insert into public.sponsored_accounts') && endsAt < inviteCode.indexOf('set uses = uses + 1'), 'redeem_sponsor_invite answers expired for an ended code before any insert or use count')
+  check(/ends_at/.test(read(`${FN}/redeem-invite/index.ts`).match(/\.select\('([^']*)'\)\.eq\('code'/)?.[1] || ''), 'the redeem-invite preflight reads ends_at too')
+
+  const attemptsMig = 'supabase/migrations/20261014121000_digest_attempts.sql'
+  serviceRoleOnly(attemptsMig, 3)
+  const attemptsCode = read(attemptsMig).replace(/--[^\n]*/g, '')
+  const finishBody = attemptsCode.slice(attemptsCode.indexOf('function public.digest_claim_finish'), attemptsCode.indexOf('function public.digest_claim_release'))
+  check(/last_attempt_at = now\(\)/.test(finishBody) && /attempts_today = case when attempt_day = public\.digest_local_day\(timezone\)/.test(finishBody) && !/case when p_finished then now\(\) else last_run_at end[\s\S]*last_attempt_at = case/.test(finishBody), 'digest_claim_finish stamps last_attempt_at and counts the attempt on every finish, finished or not')
+  check(!/last_attempt_at|attempts_today|attempt_day/.test(attemptsCode.slice(attemptsCode.indexOf('function public.digest_claim_release'), attemptsCode.indexOf('do $$'))), 'digest_claim_release stamps nothing')
+  check(!/grant (select|update)[^;]*(last_attempt_at|attempts_today|attempt_day)[^;]*to authenticated/.test(attemptsCode), 'the attempt columns are server-owned (no client grant)')
+  const handlerNow = read(`${FN}/digest-run/handler.js`)
+  check(/export const ATTEMPTS_PER_DAY = \d+/.test(handlerNow) && /attemptsToday\(row, now\) >= ATTEMPTS_PER_DAY/.test(handlerNow) && /!manual && attemptsToday/.test(handlerNow), 'cron skips an account at the per-day attempt cap (manual runs are not capped)')
+  check(/rows = manual \? rows \|\| \[\] : orderByAttempt\(rows\)/.test(handlerNow) && /\.order\('last_attempt_at', \{ ascending: true, nullsFirst: true \}\)/.test(handlerNow), 'cron considers accounts least-recently-attempted first (never attempted first of all)')
+  check(!/p_finished: false, p_result: null/.test(handlerNow) && (handlerNow.match(/rpc\('digest_claim_release'/g) || []).length === 2, 'a claim taken but not run is released through digest_claim_release, not finished')
+
+  const otpMig = read('supabase/migrations/20261014122000_gmail_otp_failures.sql')
+  check(/revoke all on function public\.gmail_alias_fail_verify\(uuid\) from public, anon, authenticated;/.test(otpMig) && /grant execute on function public\.gmail_alias_fail_verify\(uuid\) to service_role;/.test(otpMig) && /revoke all on function private\.gmail_alias_fail_verify\(uuid\) from public, anon, authenticated, service_role;/.test(otpMig), 'gmail_alias_fail_verify is service-role only through the public wrapper')
+  check(/c_max_failures constant integer := 5/.test(otpMig) && /delete from private\.gmail_alias_permits where ticket = p_ticket/.test(otpMig), 'the fifth wrong code deletes the verify ticket')
+  const otpHandler = read(`${FN}/gmail-canonical-otp/handler.js`)
+  check(/export const MAX_VERIFY_FAILURES = 5/.test(otpHandler) && /deps\.failVerify\(verifyTicketValue\)/.test(otpHandler) && /rpc\('gmail_alias_fail_verify'/.test(read(`${FN}/gmail-canonical-otp/index.ts`)), 'every refused code is counted on the ticket')
+
+  const spendingNow = read(`${FN}/_shared/spending.js`)
+  check(/export function denialMessage\(reason\)/.test(spendingNow) && /reason === 'overrun_review'\) return refusal\(402, 'overrun_review', OVERRUN_MESSAGE/.test(spendingNow) && /reason === 'unresolved_liability'\) return refusal\(402, 'scheduler_held', HELD_MESSAGE/.test(spendingNow), 'paused, overrun review and held are distinct 402s, apart from the per-user cap')
+  const { CAP_MESSAGE, PAUSE_MESSAGE, OVERRUN_MESSAGE, HELD_MESSAGE } = await import('../supabase/functions/_shared/spending.js')
+  const wordings = [CAP_MESSAGE, PAUSE_MESSAGE, OVERRUN_MESSAGE, HELD_MESSAGE]
+  check(new Set(wordings).size === 4 && wordings.every((m) => !/\$|\d|dollar|usd/i.test(m)), 'the four 402 sentences differ and carry no amount')
+  check(/denialReason\(err\)/.test(read('src/lib/anthropic.js')) && /sponsoredRefusalMessage\(reason\)/.test(read('src/lib/anthropic.js')), 'the app words a 402 from its denial reason, not from server text')
+
+  const toml = read('supabase/config.toml')
+  const pin = (fn) => (toml.match(new RegExp(`\\[functions\\.${fn}\\][^\\[]*verify_jwt = (true|false)`)) || [])[1]
+  check(pin('model') === 'false' && pin('digest-run') === 'false' && pin('redeem-invite') === 'false' && pin('match-npi') === 'false', 'config.toml pins verify_jwt = false for model, digest-run, redeem-invite and match-npi', ['model', 'digest-run', 'redeem-invite', 'match-npi'].map((f) => `${f}=${pin(f)}`).join(' '))
+  check(pin('gmail-canonical-otp') === 'true', 'config.toml pins verify_jwt = true for gmail-canonical-otp')
+  check((toml.match(/import_map = "\.\/functions\/deno\.json"/g) || []).length === 5, 'every function deploys with the shared import map')
+
+  const grants = read('supabase/migrations/20261014123000_evidence_cache_column_grants.sql').replace(/--[^\n]*/g, '')
+  for (const table of ['evidence_cache_trusted', 'evidence_cache']) {
+    const cols = (grants.match(new RegExp(`grant select \\(([^)]*)\\)\\s+on public\\.${table} to authenticated`)) || [])[1]
+    check(new RegExp(`revoke select on public\\.${table} from authenticated`).test(grants) && !!cols && !/created_by/.test(cols) && /extraction/.test(cols), `${table}: authenticated reads named columns without created_by`, cols ? cols.replace(/\s+/g, ' ') : 'no column grant')
+  }
+  check(!/select\('\*'\)|select\(\)/.test(read('src/pipeline/evidenceCache.js')) && /\.select\('extraction, model, source_tier, provenance'\)/.test(read('src/pipeline/evidenceCache.js')), 'the app reads the trusted cache by named columns (a select * would now be refused)')
 
   return results
 }

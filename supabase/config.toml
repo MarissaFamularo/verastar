@@ -1,0 +1,46 @@
+# Supabase CLI project config. Committed so `supabase functions deploy` reproduces the
+# live gateway settings instead of the CLI default (verify_jwt = true), which would break
+# the pg_cron call into digest-run and the SDK's CORS preflight into model
+# (docs/SPONSORED_ACCESS_DEPLOY.md § Deploy order). Only the function section is set; the
+# local-stack defaults for everything else are unchanged.
+#
+# verify_jwt = false: the function checks the caller itself (auth.getUser on the Supabase
+# JWT, or the x-cron-secret header) and must answer OPTIONS without a token.
+# verify_jwt = true: the gateway requires a valid JWT; gmail-canonical-otp is called with
+# the anon key by signed-out readers and does its own ticket checks after that.
+#
+# import_map points every function at the shared map so the CLI uploads it (the deploy
+# failed with "Relative import path 'linkedom' not prefixed" without --import-map before
+# this file existed).
+
+project_id = "verastar"
+
+[functions.model]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/model/index.ts"
+
+[functions.digest-run]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/digest-run/index.ts"
+
+[functions.redeem-invite]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/redeem-invite/index.ts"
+
+[functions.match-npi]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/match-npi/index.ts"
+
+[functions.gmail-canonical-otp]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/gmail-canonical-otp/index.ts"

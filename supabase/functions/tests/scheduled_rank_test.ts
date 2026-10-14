@@ -9,7 +9,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import Anthropic from '@anthropic-ai/sdk'
 import * as app from '../digest-run/app.bundle.js'
-import { handleDigestRun } from '../digest-run/handler.js'
+import { handleDigestRun, ATTEMPTS_PER_DAY } from '../digest-run/handler.js'
 import { makeRpcLedger } from '../_shared/spending.js'
 import { SERVER_CLIENT_TIMEOUT_MS } from '../_shared/timeouts.js'
 import { profileFixture, rankPhaseDigest, fakeProviderReply, EXPECTED, PAPER_ID } from '../../tests/fixtures/scheduledRankFixture.mjs'
@@ -25,7 +25,7 @@ type Row = Record<string, any>
 
 function memoryDb(user: string) {
   const t: Record<string, Row[]> = {
-    digest_schedules: [{ user_id: user, enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null }],
+    digest_schedules: [{ user_id: user, enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0 }],
     sponsored_accounts: [{ user_id: user, active: true, ends_at: null }],
     kv: [
       { user_id: user, collection: 'profile', key: 'me', value: profileFixture() },
@@ -46,10 +46,19 @@ function memoryDb(user: string) {
       row.claim_token = `tok-${++tokens}`
       return row.claim_token
     },
+    // Every finish stamps the attempt (20261014121000_digest_attempts.sql).
     digest_claim_finish: ({ p_user_id, p_token, p_finished, p_result }) => {
       const row = t.digest_schedules.find((r) => r.user_id === p_user_id && r.claim_token === p_token)
       if (!row) return false
-      Object.assign(row, { claimed_at: null, claim_token: null, ...(p_finished ? { last_run_at: new Date().toISOString() } : {}), ...(p_result ? { last_result: p_result } : {}) })
+      const day = new Date().toISOString().slice(0, 10)
+      Object.assign(row, { claimed_at: null, claim_token: null, ...(p_finished ? { last_run_at: new Date().toISOString() } : {}), ...(p_result ? { last_result: p_result } : {}),
+        last_attempt_at: new Date().toISOString(), attempts_today: row.attempt_day === day ? row.attempts_today + 1 : 1, attempt_day: day })
+      return true
+    },
+    digest_claim_release: ({ p_user_id, p_token }) => {
+      const row = t.digest_schedules.find((r) => r.user_id === p_user_id && r.claim_token === p_token)
+      if (!row) return false
+      Object.assign(row, { claimed_at: null, claim_token: null })
       return true
     },
     scheduler_kv_write: ({ p_user_id, p_token, p_collection, p_key, p_value, p_delete }) => {
@@ -170,4 +179,22 @@ Deno.test('a fresh claim held elsewhere: the tick does not run and nothing is di
   const out = await tick()
   assert(out.ran === false && out.reason === 'already running', JSON.stringify(out))
   assert(sent.length === 0 && db.t.reservations.length === 0, 'no paid attempt')
+})
+
+Deno.test('a cohort mate that has used its attempts for the day is skipped and the account tried least recently runs, through the real bundle', async () => {
+  const { db, sent, tick } = harness()
+  const today = new Date().toISOString().slice(0, 10)
+  // A failing account that cron would otherwise reach first (listed first, tried most recently, at the cap).
+  db.t.digest_schedules.unshift({ user_id: 'always-failing', enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: 'error: x', last_attempt_at: new Date().toISOString(), attempt_day: today, attempts_today: ATTEMPTS_PER_DAY })
+  db.t.sponsored_accounts.push({ user_id: 'always-failing', active: true, ends_at: null })
+  const out = await tick()
+  assert(out.ran === true && out.user_id === 'synthetic-user' && out.phase === 'done', `unexpected result ${JSON.stringify(out)}`)
+  assert(sent.length === 2, `the healthy account's two paid attempts went out (${sent.length})`)
+  const ran = db.t.digest_schedules.find((r) => r.user_id === 'synthetic-user')!
+  assert(ran.last_attempt_at && ran.attempts_today === 1 && ran.attempt_day === today, `attempt stamped ${JSON.stringify(ran)}`)
+  const capped = db.t.digest_schedules.find((r) => r.user_id === 'always-failing')!
+  assert(capped.attempts_today === ATTEMPTS_PER_DAY && capped.claim_token === null, 'the capped account was not claimed')
+  ran.enabled = false
+  const again = await tick()
+  assert(again.ran === false && again.reason === 'attempt cap reached', `second tick ${JSON.stringify(again)}`)
 })

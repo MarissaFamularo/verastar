@@ -199,6 +199,14 @@ Access panel says to sign in before entering a code instead of showing only the 
 
 ### Server findings not fixed here (need a migration or function deploy, so her call)
 
+*Update 2026-10-14, later the same day:* all but the first bullet are now implemented as
+local code and migration files (`supabase/migrations/20261014*`, `supabase/config.toml`),
+covered by vitest, the Deno tests, `spending_contract.sql`, `gmail_alias_audit.sql` and
+`scripts/check-spending-contract.mjs`. Nothing is deployed or applied; the order is in
+[SPONSORED_ACCESS_DEPLOY.md](SPONSORED_ACCESS_DEPLOY.md) § 0. The first bullet stays with
+PR 22. Not done: `gmail_alias_prepare` still answers an alias query for an existing inbox,
+and `spending_health.sql` is still not wired to an alert.
+
 - Invite and NPI rate limits are counted in user-editable `events` rows and are not atomic;
   open PR 22 (invite-attempt ledger) addresses the invite half. Merge it before opening
   enrollment and make sure the beta code is high-entropy.

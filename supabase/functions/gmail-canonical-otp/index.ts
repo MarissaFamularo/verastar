@@ -40,6 +40,10 @@ Deno.serve(async (req) => {
     consumeVerify: async (ticket: string) => {
       await admin.rpc('gmail_alias_consume_verify', { p_ticket: ticket })
     },
+    failVerify: async (ticket: string) => {
+      const { data, error } = await admin.rpc('gmail_alias_fail_verify', { p_ticket: ticket })
+      return error || typeof data !== 'number' ? 0 : data
+    },
     sendOtp: async (email: string, redirectTo: string) => {
       const options: { shouldCreateUser: boolean, emailRedirectTo?: string } = { shouldCreateUser: false }
       if (redirectTo) options.emailRedirectTo = redirectTo

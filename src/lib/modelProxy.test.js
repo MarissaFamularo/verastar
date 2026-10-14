@@ -133,6 +133,53 @@ describe('shared cache trust', () => {
 })
 
 describe('caps reached', () => {
+  const message = async (res) => (await res.json()).error.message
+  const NO_MONEY = /\$|\d|dollar|usd/i
+
+  it.each(['spending_paused', 'config_missing', 'config_invalid'])('a %s denial is a 402 worded as a pause, not as the reader\'s cap, and no cap event', async (reason) => {
+    const h = harness({ ledger: fakeLedger({ deny: reason }) })
+    const res = await handleModelRequest(request(), h.deps)
+    expect(res.status).toBe(402)
+    expect(res.headers.get('x-verastar-denial')).toBe(reason)
+    const body = await res.clone().json()
+    expect(body.error.type).toBe('spending_paused')
+    expect(body.error.message).toMatch(/paused right now/)
+    expect(body.error.message).not.toMatch(/read a lot today/)
+    expect(body.error.message).not.toMatch(NO_MONEY)
+    expect(h.admin.ops.find((o) => o.table === 'events')).toBeUndefined()
+    expect(h.provider.sent).toHaveLength(0)
+  })
+  it('an overrun review is a 402 that says a billing check is in progress', async () => {
+    const h = harness({ ledger: fakeLedger({ deny: 'overrun_review' }) })
+    const res = await handleModelRequest(request(), h.deps)
+    expect(res.status).toBe(402)
+    expect(res.headers.get('x-verastar-denial')).toBe('overrun_review')
+    const body = await res.json()
+    expect(body.error.type).toBe('overrun_review')
+    expect(body.error.message).toMatch(/billing check/)
+    expect(body.error.message).not.toMatch(/read a lot today|paused right now/)
+    expect(body.error.message).not.toMatch(NO_MONEY)
+  })
+  it('a held account is a 402 that says the run is held for review', async () => {
+    const h = harness({ ledger: fakeLedger({ deny: 'unresolved_liability' }) })
+    const res = await handleModelRequest(request(), h.deps)
+    expect(res.status).toBe(402)
+    expect(res.headers.get('x-verastar-denial')).toBe('unresolved_liability')
+    const body = await res.json()
+    expect(body.error.type).toBe('scheduler_held')
+    expect(body.error.message).toMatch(/held for a quick review/)
+    expect(body.error.message).not.toMatch(/read a lot today|paused right now|billing check/)
+    expect(body.error.message).not.toMatch(NO_MONEY)
+  })
+  it('the four 402 wordings are distinct, and only the caps use the cap sentence', async () => {
+    const texts = {}
+    for (const reason of ['cap_day', 'cap_month', 'cap_global', 'budget_total', 'spending_paused', 'overrun_review', 'unresolved_liability']) {
+      texts[reason] = await message(await handleModelRequest(request(), harness({ ledger: fakeLedger({ deny: reason }) }).deps))
+    }
+    expect(new Set([texts.cap_day, texts.cap_month, texts.cap_global, texts.budget_total]).size).toBe(1)
+    expect(new Set([texts.cap_day, texts.spending_paused, texts.overrun_review, texts.unresolved_liability]).size).toBe(4)
+    for (const t of Object.values(texts)) expect(t).not.toMatch(NO_MONEY)
+  })
   it('a cap denial is a 402 the app maps to CapReached, with a cap event', async () => {
     const h = harness({ ledger: fakeLedger({ deny: 'cap_month' }) })
     const res = await handleModelRequest(request(), h.deps)

@@ -31,6 +31,14 @@
 // digest_claim only updates an enabled row, so a sponsored account with no row is given
 // the table default (on, 6:00, timezone from the request or America/New_York). Cron never
 // creates a row, and a row the reader turned off stays off.
+//
+// Fairness (20261014121000_digest_attempts.sql): every finished run, error included, stamps
+// digest_schedules.last_attempt_at, and a cron tick considers accounts in the order
+// coalesce(last_attempt_at, 'epoch') ascending, so the account tried most recently waits
+// behind everyone else and a never-tried account goes first. A cron tick also skips an
+// account that has already finished ATTEMPTS_PER_DAY runs this local day, so one account
+// whose run errors every tick cannot occupy the scheduler all morning. A manual run is
+// neither reordered (it names one account) nor capped.
 
 import { accountActive, localClock, digestGate, requestedTimezone } from '../model/logic.js'
 import { makeGuardedFetch } from '../_shared/spending.js'
@@ -43,6 +51,10 @@ export const BUDGET_MS = 75_000
 // every admitted paid attempt (spend_reserve with the claim token) renews it, and an
 // admitted attempt cannot outlive the provider timeout, which is shorter (timeouts.js).
 export { CLAIM_STALE_SECONDS }
+// Finished runs (done, empty, error, held, capped...) one account may make per local day
+// before cron leaves it alone until its next day. A normal digest finishes in two or three
+// ticks; a long one with a fallback read in five or six. A manual run is not counted here.
+export const ATTEMPTS_PER_DAY = 12
 
 const HELD_NOTE = 'A paid step ended without a confirmed outcome; the run is held for operator review.'
 
@@ -94,7 +106,22 @@ function gateFor({ row, record, now, manual, mayRun }) {
 
 const DEFAULT_HOUR_LOCAL = 6
 const DEFAULT_TIMEZONE = 'America/New_York'
-const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at, last_attempt_at, attempt_day, attempts_today'
+
+// Finished runs this account has made today, local time. attempt_day is the date the
+// database stamped in the row's timezone on the last finish; another day means zero.
+export function attemptsToday(row, now) {
+  if (!row?.attempt_day) return 0
+  const today = localClock(now, row.timezone).day
+  return String(row.attempt_day).slice(0, 10) === today ? Number(row.attempts_today) || 0 : 0
+}
+
+// Cron's queue: least recently attempted first, never attempted before everyone. Stable, so
+// ties keep the database order. Pure; exported for tests.
+export function orderByAttempt(rows) {
+  const at = (r) => (r.last_attempt_at ? new Date(r.last_attempt_at).getTime() || 0 : 0)
+  return [...(rows || [])].map((r, i) => [r, i]).sort((a, b) => at(a[0]) - at(b[0]) || a[1] - b[1]).map(([r]) => r)
+}
 
 // A manual "run now" from a sponsored account that has never saved a schedule. Returns
 // { created: true } when a row was inserted, { skipped: true } when there is nothing to
@@ -147,7 +174,7 @@ export async function handleDigestRun(req, deps) {
     timezone = body?.timezone
   }
 
-  let q = admin.from('digest_schedules').select(SCHEDULE_COLUMNS).eq('enabled', true)
+  let q = admin.from('digest_schedules').select(SCHEDULE_COLUMNS).eq('enabled', true).order('last_attempt_at', { ascending: true, nullsFirst: true })
   if (targetUserId) q = q.eq('user_id', targetUserId)
   let { data: rows, error: rowsError } = await q
   if (rowsError) return json(503, { ran: false, reason: 'schedules unavailable' })
@@ -160,7 +187,8 @@ export async function handleDigestRun(req, deps) {
       rows = again.data
     }
   }
-  const ids = (rows || []).map((r) => r.user_id)
+  rows = manual ? rows || [] : orderByAttempt(rows)
+  const ids = rows.map((r) => r.user_id)
   if (!ids.length) return json(200, { ran: false, reason: 'nothing due' })
   const { data: accounts, error: accountsError } = await admin.from('sponsored_accounts').select('user_id, active, ends_at').in('user_id', ids)
   if (accountsError) return json(503, { ran: false, reason: 'accounts unavailable' })
@@ -171,6 +199,7 @@ export async function handleDigestRun(req, deps) {
   for (const row of rows) {
     if (!accountActive(accountById.get(row.user_id), now)) continue
     if (row.claimed_at && now.getTime() - new Date(row.claimed_at).getTime() < CLAIM_STALE_SECONDS * 1000) { reason = 'already running'; continue }
+    if (!manual && attemptsToday(row, now) >= ATTEMPTS_PER_DAY) { reason = 'attempt cap reached'; continue }
     let record
     try { record = await readLatest(admin, row.user_id) } catch { reason = 'storage unavailable'; continue }
     const gate = gateFor({ row, record, now, manual, mayRun: app.schedulerMayRun(record) })
@@ -197,13 +226,14 @@ export async function handleDigestRun(req, deps) {
       if (error || !again) throw new Error('schedule unavailable')
       fresh = { row: again, record: await readLatest(admin, row.user_id) }
     } catch {
-      await admin.rpc('digest_claim_finish', { p_user_id: row.user_id, p_token: token, p_finished: false, p_result: null }).then(() => {}, () => {})
+      // Nothing ran: release the claim without stamping an attempt.
+      await admin.rpc('digest_claim_release', { p_user_id: row.user_id, p_token: token }).then(() => {}, () => {})
       reason = 'storage unavailable'
       continue
     }
     const regate = gateFor({ row: fresh.row, record: fresh.record, now, manual, mayRun: app.schedulerMayRun(fresh.record) })
     if (!regate.run) {
-      await admin.rpc('digest_claim_finish', { p_user_id: row.user_id, p_token: token, p_finished: false, p_result: null }).then(() => {}, () => {})
+      await admin.rpc('digest_claim_release', { p_user_id: row.user_id, p_token: token }).then(() => {}, () => {})
       reason = regate.reason
       continue
     }

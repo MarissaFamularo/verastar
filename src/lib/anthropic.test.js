@@ -23,7 +23,11 @@ import {
   getUsageSummary,
   parseStructuredResponse,
   StructuredOutputError,
+  denialReason,
+  sponsoredRefusalMessage,
+  CapReachedError,
 } from './anthropic.js'
+import { CAP_MESSAGE, PAUSE_MESSAGE, OVERRUN_MESSAGE, HELD_MESSAGE } from '../../supabase/functions/_shared/spending.js'
 
 function memStorage() {
   const m = new Map()
@@ -199,5 +203,47 @@ describe('thinkingParam', () => {
   it('the Sonnet lanes run Sonnet 5.5 at the Sonnet 5 price', () => {
     for (const lane of ['extraction', 'triage', 'interview']) expect(MODELS[lane]).toBe('claude-sonnet-5-5')
     expect(modelRates('claude-sonnet-5-5')).toEqual({ input: 2, output: 10 })
+  })
+})
+
+// A 402 from the sponsored proxy is worded by its reason: the reader's own cap (stop, resume
+// tomorrow) reads differently from a pause, a billing review, or a held scheduled run,
+// none of which the reader caused. Never a dollar figure. The reason comes from the exposed
+// x-verastar-denial header, or from the error body's type when a client cannot see headers.
+describe('sponsored 402 wording', () => {
+  const apiError = (type, denial) => ({ status: 402, headers: new Headers(denial ? { 'x-verastar-denial': denial } : {}), error: { type: 'error', error: { type, message: 'server text with $9.99 in it' } } })
+
+  it('reads the denial reason from the header first, then the body type', () => {
+    expect(denialReason(apiError('cap_reached', 'cap_month'))).toBe('cap_month')
+    expect(denialReason(apiError('spending_paused', 'overrun_review'))).toBe('overrun_review')
+    expect(denialReason(apiError('scheduler_held', 'halted:ambiguous'))).toBe('halted:ambiguous')
+    expect(denialReason(apiError('cap_reached'))).toBe('cap_day')
+    expect(denialReason(apiError('scheduler_held'))).toBe('unresolved_liability')
+    expect(denialReason(apiError('overrun_review'))).toBe('overrun_review')
+    expect(denialReason(apiError('spending_paused'))).toBe('spending_paused')
+    expect(denialReason({ status: 402, headers: { 'x-verastar-denial': 'cap_global' } })).toBe('cap_global')
+    expect(denialReason({ status: 402 })).toBeNull()
+    expect(denialReason(null)).toBeNull()
+  })
+
+  it('maps each reason to its own sentence and never shows server text or money', () => {
+    expect(sponsoredRefusalMessage('cap_day')).toBe(CAP_MESSAGE)
+    expect(sponsoredRefusalMessage('budget_total')).toBe(CAP_MESSAGE)
+    expect(sponsoredRefusalMessage('spending_paused')).toBe(PAUSE_MESSAGE)
+    expect(sponsoredRefusalMessage('overrun_review')).toBe(OVERRUN_MESSAGE)
+    expect(sponsoredRefusalMessage('unresolved_liability')).toBe(HELD_MESSAGE)
+    expect(sponsoredRefusalMessage('halted:release_failed')).toBe(HELD_MESSAGE)
+    expect(sponsoredRefusalMessage(null)).toBe(PAUSE_MESSAGE)
+    expect(sponsoredRefusalMessage('something_new')).toBe(PAUSE_MESSAGE)
+    expect(new Set([CAP_MESSAGE, PAUSE_MESSAGE, OVERRUN_MESSAGE, HELD_MESSAGE]).size).toBe(4)
+    for (const m of [CAP_MESSAGE, PAUSE_MESSAGE, OVERRUN_MESSAGE, HELD_MESSAGE]) expect(m).not.toMatch(/\$|\d|dollar|usd/i)
+  })
+
+  it('CapReachedError keeps the reason and the chosen sentence', () => {
+    const err = new CapReachedError(sponsoredRefusalMessage('overrun_review'), { reason: 'overrun_review' })
+    expect(err.capReached).toBe(true)
+    expect(err.reason).toBe('overrun_review')
+    expect(err.message).toBe(OVERRUN_MESSAGE)
+    expect(new CapReachedError().message).toBe(CAP_MESSAGE)
   })
 })

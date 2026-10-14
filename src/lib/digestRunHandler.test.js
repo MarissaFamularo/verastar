@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import Anthropic from '@anthropic-ai/sdk'
-import { handleDigestRun, fencedStore } from '../../supabase/functions/digest-run/handler.js'
+import { handleDigestRun, fencedStore, orderByAttempt, attemptsToday, ATTEMPTS_PER_DAY } from '../../supabase/functions/digest-run/handler.js'
 import { checkPaidRequest, requestFingerprint } from '../../supabase/functions/_shared/requestPolicy.js'
 import { installServerScope, serverRunUnresolved } from './serverScope.js'
 import { store, getProfile } from './store.js'
@@ -26,7 +26,7 @@ afterAll(() => installServerScope(null))
 // --- an in-memory database with the claim/fence semantics of the migration --------------
 function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
   const t = {
-    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null })),
+    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0 })),
     sponsored_accounts: users.map((u) => ({ user_id: u, active: true, ends_at: null })),
     kv: users.map((u) => ({ user_id: u, collection: 'profile', key: 'me', value: { onboarded: true, name: u } })),
     evidence_cache_trusted: [],
@@ -70,10 +70,25 @@ function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
       row.claim_token = `tok-${++tokens}`
       return row.claim_token
     },
+    // Every finish stamps the attempt (20261014121000_digest_attempts.sql): last_attempt_at,
+    // and attempts_today reset on the first finish of a new local day.
     digest_claim_finish: ({ p_user_id, p_token, p_finished, p_result }) => {
       const row = t.digest_schedules.find((r) => r.user_id === p_user_id && r.claim_token === p_token)
       if (!row) return false
-      Object.assign(row, { claimed_at: null, claim_token: null, ...(p_finished ? { last_run_at: new Date().toISOString() } : {}), ...(p_result ? { last_result: p_result } : {}) })
+      const now = new Date()
+      const day = now.toISOString().slice(0, 10)
+      Object.assign(row, {
+        claimed_at: null, claim_token: null,
+        ...(p_finished ? { last_run_at: now.toISOString() } : {}), ...(p_result ? { last_result: p_result } : {}),
+        last_attempt_at: now.toISOString(), attempts_today: row.attempt_day === day ? (row.attempts_today || 0) + 1 : 1, attempt_day: day,
+      })
+      return true
+    },
+    // A claim taken but not used: cleared, nothing stamped.
+    digest_claim_release: ({ p_user_id, p_token }) => {
+      const row = t.digest_schedules.find((r) => r.user_id === p_user_id && r.claim_token === p_token)
+      if (!row) return false
+      Object.assign(row, { claimed_at: null, claim_token: null })
       return true
     },
     scheduler_kv_write: ({ p_user_id, p_token, p_collection, p_key, p_value, p_delete }) => {
@@ -469,6 +484,90 @@ describe('holds', () => {
       expect(db.rpcCalls).not.toContain('digest_claim')
       expect(d.provider.sent).toHaveLength(0)
     }
+  })
+})
+
+describe('fairness across the cohort', () => {
+  const today = new Date().toISOString().slice(0, 10)
+  const ago = (min) => new Date(Date.now() - min * 60_000).toISOString()
+
+  it('orders never-attempted accounts first, then least recently attempted, keeping database order on ties', () => {
+    const rows = [{ user_id: 'C', last_attempt_at: ago(5) }, { user_id: 'A', last_attempt_at: ago(60) }, { user_id: 'N1', last_attempt_at: null }, { user_id: 'N2' }, { user_id: 'B', last_attempt_at: ago(60) }]
+    expect(orderByAttempt(rows).map((r) => r.user_id)).toEqual(['N1', 'N2', 'A', 'B', 'C'])
+    expect(orderByAttempt(undefined)).toEqual([])
+  })
+
+  it('counts today\'s attempts only in the account\'s own day', () => {
+    const now = new Date('2026-10-14T12:00:00Z')
+    expect(attemptsToday({ timezone: 'UTC', attempt_day: '2026-10-14', attempts_today: 4 }, now)).toBe(4)
+    expect(attemptsToday({ timezone: 'UTC', attempt_day: '2026-10-13', attempts_today: 4 }, now)).toBe(0)
+    // 12:00 UTC is still 13 October in Honolulu? No: it is 02:00 on the 14th. In Auckland it is 01:00 on the 15th.
+    expect(attemptsToday({ timezone: 'Pacific/Auckland', attempt_day: '2026-10-14', attempts_today: 4 }, now)).toBe(0)
+    expect(attemptsToday({ timezone: 'Pacific/Auckland', attempt_day: '2026-10-15', attempts_today: 4 }, now)).toBe(4)
+    expect(attemptsToday({ timezone: 'UTC', attempt_day: null, attempts_today: 9 }, now)).toBe(0)
+    expect(attemptsToday(null, now)).toBe(0)
+  })
+
+  it('a cron tick stamps every finish, errors included, and the failing account goes to the back of the queue', async () => {
+    const db = memoryDb({ users: ['A', 'B'] })
+    const h = deps(db, { run: async () => { throw new Error('boom') } })
+    const first = await (await handleDigestRun(cron(), h.deps)).json()
+    expect(first).toMatchObject({ ran: true, user_id: 'A', phase: 'error' })
+    const a = db.t.digest_schedules.find((r) => r.user_id === 'A')
+    expect(a.last_attempt_at).toBeTruthy()
+    expect(a).toMatchObject({ attempts_today: 1, attempt_day: today, last_run_at: null })
+    const second = await (await handleDigestRun(cron(), h.deps)).json()
+    expect(second).toMatchObject({ ran: true, user_id: 'B', phase: 'error' })
+    const third = await (await handleDigestRun(cron(), h.deps)).json()
+    expect(third.user_id).toBe('A')
+    expect(db.t.digest_schedules.find((r) => r.user_id === 'A').attempts_today).toBe(2)
+  })
+
+  it('a claim released after the post-claim re-check is not an attempt', async () => {
+    const db = memoryDb({ users: ['A'] })
+    db.admin.rpc = ((orig) => async (name, args) => {
+      if (name === 'digest_claim') db.t.kv.push({ user_id: 'A', collection: 'digests', key: 'daily:latest', value: { results: [{}], ranAt: new Date().toISOString(), runBy: 'scheduler', server: { phase: 'done' } } })
+      return orig(name, args)
+    })(db.admin.rpc)
+    const out = await (await handleDigestRun(cron(), deps(db, { run: async () => { throw new Error('must not run') } }).deps)).json()
+    expect(out.ran).toBe(false)
+    expect(db.rpcCalls).toContain('digest_claim_release')
+    expect(db.rpcCalls).not.toContain('digest_claim_finish')
+    expect(db.t.digest_schedules[0]).toMatchObject({ claim_token: null, last_attempt_at: null, attempts_today: 0 })
+  })
+
+  it('an account at the day\'s attempt cap is skipped by cron so the cohort still runs, and reached again on a manual press', async () => {
+    const db = memoryDb({ users: ['A', 'B'] })
+    Object.assign(db.t.digest_schedules[0], { last_attempt_at: ago(3), attempt_day: today, attempts_today: ATTEMPTS_PER_DAY })
+    let ranFor = []
+    const h = deps(db, { user: { id: 'A' }, run: async () => { ranFor.push(await getProfile().then((p) => p.name)); return { phase: 'done', papers: 1, read: 1 } } })
+    const out = await (await handleDigestRun(cron(), h.deps)).json()
+    expect(out).toMatchObject({ ran: true, user_id: 'B' })
+    expect(ranFor).toEqual(['B'])
+    // With the cohort done for the day, the capped account is the reason, not 'nothing due'.
+    db.t.digest_schedules[1].enabled = false
+    const again = await (await handleDigestRun(cron(), h.deps)).json()
+    expect(again).toMatchObject({ ran: false, reason: 'attempt cap reached' })
+    expect(db.rpcCalls.filter((n) => n === 'digest_claim')).toHaveLength(1)
+    // The reader's own press is not capped.
+    const mine = await (await handleDigestRun(manual(), h.deps)).json()
+    expect(mine).toMatchObject({ ran: true, user_id: 'A' })
+    expect(db.t.digest_schedules[0].attempts_today).toBe(ATTEMPTS_PER_DAY + 1)
+  })
+
+  it('one short of the cap still runs', async () => {
+    const db = memoryDb({ users: ['A'] })
+    Object.assign(db.t.digest_schedules[0], { attempt_day: today, attempts_today: ATTEMPTS_PER_DAY - 1 })
+    const out = await (await handleDigestRun(cron(), deps(db, { run: async () => ({ phase: 'reading', papers: 0, read: 1 }) }).deps)).json()
+    expect(out).toMatchObject({ ran: true, user_id: 'A' })
+  })
+
+  it('yesterday\'s attempts do not count', async () => {
+    const db = memoryDb({ users: ['A'] })
+    Object.assign(db.t.digest_schedules[0], { attempt_day: '2000-01-01', attempts_today: 99 })
+    const out = await (await handleDigestRun(cron(), deps(db, { run: async () => ({ phase: 'done', papers: 0, read: 0 }) }).deps)).json()
+    expect(out).toMatchObject({ ran: true, user_id: 'A' })
+    expect(db.t.digest_schedules[0]).toMatchObject({ attempts_today: 1, attempt_day: today })
   })
 })
 

@@ -1,6 +1,10 @@
 // Sends a one-time code to the account behind a Gmail alias ticket, then checks
 // that code. The stored address is an argument to the injected database calls
 // and is never copied onto the HTTP response.
+//
+// A verify ticket answers at most MAX_VERIFY_FAILURES wrong codes. Each refusal is
+// counted on the ticket (deps.failVerify, 20261014122000_gmail_otp_failures.sql);
+// the fifth deletes it, and every later check is refused before Auth is asked.
 
 export const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +13,7 @@ export const CORS = {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const MAX_VERIFY_FAILURES = 5
 
 export function safeRedirect(value) {
   if (typeof value !== 'string' || value.length > 200) return ''
@@ -62,7 +67,21 @@ async function verifyTicket(payload, deps) {
   const email = await deps.readVerify(verifyTicketValue)
   if (typeof email !== 'string' || !email.includes('@')) return json(400, { status: 'invalid' })
   const session = await deps.verifyOtp(email, code)
-  if (!session?.access_token || !session?.refresh_token) return json(400, { status: 'invalid' })
+  if (!session?.access_token || !session?.refresh_token) {
+    // Count the miss on the ticket. A counter that cannot be recorded burns the ticket
+    // too (fail closed): the caller starts over from the alias hint.
+    let left = 0
+    try {
+      left = Number(await deps.failVerify(verifyTicketValue))
+    } catch {
+      left = 0
+    }
+    if (!Number.isFinite(left) || left <= 0) {
+      try { await deps.consumeVerify(verifyTicketValue) } catch { /* already gone */ }
+      return json(400, { status: 'locked' })
+    }
+    return json(400, { status: 'invalid' })
+  }
   try {
     await deps.consumeVerify(verifyTicketValue)
   } catch {

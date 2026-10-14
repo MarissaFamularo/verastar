@@ -468,6 +468,11 @@ The cutover therefore deploys code first:
 - `spend_release` service-role only, with no daily-cap change in that migration;
 - claim-bound scheduler reservations;
 - trusted-only cache reads;
+- the 2026-10-14 repairs: an ended invite answers `expired` before any insert; every
+  finished scheduler run stamps `last_attempt_at` and cron orders by it and caps attempts
+  per local day; the OTP verify ticket burns at five misses; paused, overrun-review and
+  held are distinct 402 sentences from the cap, none with an amount; `config.toml` pins
+  `verify_jwt`; `created_by` is not readable by `authenticated` on either cache table;
 - the contract marker matching between the migration and `redeem-invite`;
 - a context-window ceiling for each admitted model.
 

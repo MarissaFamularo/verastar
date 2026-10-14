@@ -6,6 +6,7 @@
 
 import { supabase, supabaseConfigured, currentUser, isSignedIn } from './supabase.js'
 import { isSponsored, CAP_MESSAGE } from './sponsor.js'
+import { denialMessage } from '../../supabase/functions/_shared/spending.js'
 
 export const DEFAULT_HOUR = 6
 
@@ -49,9 +50,10 @@ export function digestRefusalMessage(reason) {
   if (reason === 'not yet') return 'It is before your scheduled hour, so the automatic run has not started.'
   if (reason === 'already ran today') return 'A digest already finished for today.'
   if (reason === 'last digest unopened') return 'The last digest is still unopened, so a new automatic run is waiting.'
+  if (reason === 'attempt cap reached') return 'The server has already tried this digest several times today. It will try again tomorrow morning.'
+  // The scheduler's preflight names the same denial reasons as the proxy; same sentences.
   if (typeof reason === 'string' && reason.startsWith('spending stopped:')) {
-    const why = reason.slice('spending stopped: '.length).replaceAll('_', ' ')
-    return `The digest did not start because spending is stopped (${why}).`
+    return denialMessage(reason.slice('spending stopped: '.length).trim())
   }
   if (reason) return `The digest server did not start a run (${reason}). Try again in a minute.`
   return 'The digest server did not start a run. Try again in a minute.'

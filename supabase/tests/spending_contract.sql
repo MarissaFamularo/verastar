@@ -214,6 +214,14 @@ begin
     $q$select public.spend_denial_reason('a0000000-0000-0000-0000-000000000001',1)$q$,
     $q$select public.digest_claim('a0000000-0000-0000-0000-000000000001',240)$q$,
     $q$select public.digest_claim_finish('a0000000-0000-0000-0000-000000000001',gen_random_uuid(),true,'x')$q$,
+    $q$select public.digest_claim_release('a0000000-0000-0000-0000-000000000001',gen_random_uuid())$q$,
+    $q$select public.digest_local_day('UTC')$q$,
+    $q$select last_attempt_at, attempt_day, attempts_today from public.digest_schedules$q$,
+    $q$update public.digest_schedules set attempts_today = 0 where user_id = 'a0000000-0000-0000-0000-000000000001'$q$,
+    $q$select created_by from public.evidence_cache_trusted$q$,
+    $q$select created_by from public.evidence_cache$q$,
+    $q$select * from public.evidence_cache_trusted$q$,
+    $q$select * from public.evidence_cache$q$,
     $q$select public.scheduler_kv_write('a0000000-0000-0000-0000-000000000001',gen_random_uuid(),'digests','k','{}',false)$q$,
     $q$select public.redeem_sponsor_invite('X','a0000000-0000-0000-0000-000000000001')$q$,
     $q$select count(*) from public.spend_reservations$q$,
@@ -298,12 +306,32 @@ end $$;
 select pg_temp.ok(public.digest_claim_finish(:A, (select tok from t_claim2), true, 'done: 3 papers'), 'owner finishes');
 select pg_temp.ok((select claim_token is null and claimed_at is null and last_run_at is not null and last_result = 'done: 3 papers' from public.digest_schedules where user_id = :A), 'finish clears claim and records the run');
 
+-- ---------------------------------------------------------------- attempt stamps (20261014121000_digest_attempts.sql)
+select pg_temp.ok((select last_attempt_at is not null and attempts_today = 1 and attempt_day = (now() at time zone 'UTC')::date from public.digest_schedules where user_id = :A), 'a finished run stamps last_attempt_at and counts one attempt today');
+create temp table t_attempt as select public.digest_claim(:A, 240) as tok;
+select pg_temp.ok(public.digest_claim_finish(:A, (select tok from t_attempt), false, 'error: boom'), 'an unfinished (error) run still finishes');
+select pg_temp.ok((select attempts_today = 2 and last_result = 'error: boom' and claim_token is null from public.digest_schedules where user_id = :A), 'an error counts as an attempt and records its result');
+create temp table t_release as select public.digest_claim(:A, 240) as tok;
+select pg_temp.ok(public.digest_claim_release(:A, (select tok from t_release)), 'a claim taken but not used can be released');
+select pg_temp.ok((select claim_token is null and attempts_today = 2 from public.digest_schedules where user_id = :A), 'release clears the claim and stamps nothing');
+select pg_temp.ok(not public.digest_claim_release(:A, gen_random_uuid()), 'a wrong token releases nothing');
+reset role;
+update public.digest_schedules set attempt_day = (now() at time zone 'UTC')::date - 1, attempts_today = 11, timezone = 'Not/AZone' where user_id = :A;
+set local role service_role;
+create temp table t_newday as select public.digest_claim(:A, 240) as tok;
+select pg_temp.ok(public.digest_claim_finish(:A, (select tok from t_newday), false, 'reading'), 'finish survives a timezone PostgreSQL rejects');
+select pg_temp.ok((select attempts_today = 1 and attempt_day = (now() at time zone 'UTC')::date from public.digest_schedules where user_id = :A), 'a new day starts the count over (UTC fallback for a bad zone)');
+reset role;
+update public.digest_schedules set timezone = 'UTC' where user_id = :A;
+set local role service_role;
+
 -- ---------------------------------------------------------------- invitation state table
 reset role;
 insert into public.sponsor_invites (code, cohort, max_uses, expires_at) values
   ('BETA-OK', 'beta-test', 2, null), ('BETA-OTHER', 'other-cohort', 5, null),
   ('BETA-EXPIRED', 'beta-test', 5, now() - interval '1 minute'), ('BETA-ONE', 'beta-test', 1, null);
 insert into public.sponsor_invites (code, cohort, max_uses, revoked_at) values ('BETA-REVOKED', 'beta-test', 5, now());
+insert into public.sponsor_invites (code, cohort, max_uses, ends_at) values ('BETA-ENDED', 'beta-test', 5, now() - interval '1 minute'), ('BETA-ENDS-LATER', 'later-cohort', 5, now() + interval '30 days');
 update public.sponsored_accounts set daily_cap_usd = 7, cohort = 'founder' where user_id = :A;
 update public.sponsor_config set enrollment_paused = true, enrollment_limit = null;
 set local role service_role;
@@ -323,6 +351,17 @@ select pg_temp.ok(public.redeem_sponsor_invite('BETA-OTHER', 'a0000000-0000-0000
 select pg_temp.ok((select daily_cap_usd = 7 and cohort = 'founder' and ends_at is null from public.sponsored_accounts where user_id = 'a0000000-0000-0000-0000-000000000001'), 'existing account keeps cap/cohort/end');
 select pg_temp.ok(public.redeem_sponsor_invite('BETA-EXPIRED', 'a0000000-0000-0000-0000-000000000005')->>'status' = 'expired', 'expired code');
 select pg_temp.ok(public.redeem_sponsor_invite('BETA-REVOKED', 'a0000000-0000-0000-0000-000000000005')->>'status' = 'inactive', 'revoked code');
+-- 20261014120000_invite_ends_at.sql: a code whose study has ended enrolls nobody.
+select pg_temp.ok(public.redeem_sponsor_invite('BETA-ENDED', 'a0000000-0000-0000-0000-000000000005')->>'status' = 'expired', 'ended code: expired');
+select pg_temp.ok((select uses = 0 from public.sponsor_invites where code = 'BETA-ENDED'), 'ended code consumed no use');
+select pg_temp.ok(not exists (select 1 from public.sponsored_accounts where user_id = 'a0000000-0000-0000-0000-000000000005'), 'ended code created no account');
+select pg_temp.ok(public.redeem_sponsor_invite('BETA-ENDED', 'a0000000-0000-0000-0000-000000000004')->>'status' = 'already', 'an active account still answers already before the end-date check');
+select pg_temp.ok(public.redeem_sponsor_invite('BETA-ENDS-LATER', 'a0000000-0000-0000-0000-000000000005')->>'status' = 'enrolled', 'a code ending in the future enrolls');
+select pg_temp.ok((select ends_at > now() and cohort = 'later-cohort' from public.sponsored_accounts where user_id = 'a0000000-0000-0000-0000-000000000005'), 'the enrolled account carries the future end date');
+reset role;
+delete from public.sponsored_accounts where user_id = 'a0000000-0000-0000-0000-000000000005';
+update public.sponsor_invites set uses = 0 where code = 'BETA-ENDS-LATER';
+set local role service_role;
 select pg_temp.ok(public.redeem_sponsor_invite('BETA-ONE', 'a0000000-0000-0000-0000-000000000005')->>'status' = 'enrolled', 'last use');
 select pg_temp.ok(public.redeem_sponsor_invite('BETA-OTHER', 'a0000000-0000-0000-0000-000000000006')->>'status' = 'full', 'enrollment limit reached'); -- 5 active
 reset role;
@@ -586,6 +625,24 @@ begin
   end loop;
 end $$;
 select pg_temp.ok((select recovery_ack_at is not null and pg_temp.status('e0000000-0000-0000-0000-000000000001') = 'unresolved_liability' from public.digest_schedules where user_id = :H1), 'the held account''s own user cannot recover it: still held');
+
+-- ---------------------------------------------------------------- shared cache columns (20261014123000_evidence_cache_column_grants.sql)
+reset role;
+select pg_temp.ok(not has_column_privilege('authenticated', 'public.evidence_cache_trusted', 'created_by', 'select'), 'authenticated cannot read evidence_cache_trusted.created_by');
+select pg_temp.ok(not has_column_privilege('authenticated', 'public.evidence_cache', 'created_by', 'select'), 'authenticated cannot read evidence_cache.created_by');
+select pg_temp.ok(not has_table_privilege('authenticated', 'public.evidence_cache_trusted', 'select'), 'no table-wide select on evidence_cache_trusted');
+select pg_temp.ok((select bool_and(has_column_privilege('authenticated', 'public.evidence_cache_trusted', c, 'select')) from unnest(array['pmid','extraction_version','source_hash','source_tier','citation','extraction','model','provenance','created_at']) c), 'authenticated reads every other evidence_cache_trusted column');
+select pg_temp.ok((select bool_and(has_column_privilege('authenticated', 'public.evidence_cache', c, 'select')) from unnest(array['pmid','extraction_version','source_hash','source_tier','citation','extraction','model','created_at']) c), 'authenticated reads every other evidence_cache column');
+select pg_temp.ok(has_table_privilege('service_role', 'public.evidence_cache_trusted', 'insert'), 'the scheduler still writes the trusted cache');
+insert into public.evidence_cache_trusted (pmid, extraction_version, source_hash, source_tier, extraction, model, provenance, created_by)
+  values ('1', 'v', repeat('a', 64), 'full_text', '{}', 'claude-sonnet-5-5', jsonb_build_object('writer', 'digest-run', 'bundle_source_sha256', repeat('b', 64)), :A);
+do $$ begin
+  execute 'set local role authenticated';
+  perform set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000002', true);
+  perform extraction, model, source_tier, provenance from public.evidence_cache_trusted where pmid = '1';
+  execute 'reset role';
+end $$;
+select pg_temp.ok(true, 'the app''s named-column read still works for a signed-in reader');
 
 select 'PASS: spending_contract.sql' as result;
 rollback;

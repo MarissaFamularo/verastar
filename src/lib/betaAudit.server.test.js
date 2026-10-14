@@ -1,6 +1,8 @@
 // Server-side beta audit probes (2026-10-14). Every test PINS CURRENT BEHAVIOR that the audit
 // report calls a defect or a risk, so the file is green today and a test goes red when the
 // behavior is fixed (update or delete it then). Names start with the report's defect id.
+// Updated later on 2026-10-14 for the repairs that landed as local code and migrations
+// (D-2, D-4, D-10, D-11, D-12: now pinned as FIXED); the rest still pin the open state.
 // Pure: fakes only (spendingFakes.js), no network, no database. The SQL-level facts that
 // need PostgreSQL (events delete resets limits, past ends_at enrolls a dead account, alias
 // enumeration, in-flight digest write refusal) were reproduced on a disposable local
@@ -14,7 +16,7 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: mocks.createClient }))
 vi.mock('../../supabase/functions/_shared/npiMatch.js', async (original) => ({ ...await original(), lookupNpi: mocks.lookupNpi }))
 
 import { handleModelRequest } from '../../supabase/functions/model/handler.js'
-import { handleDigestRun } from '../../supabase/functions/digest-run/handler.js'
+import { handleDigestRun, ATTEMPTS_PER_DAY } from '../../supabase/functions/digest-run/handler.js'
 import { handleGmailCanonicalOtp, safeRedirect } from '../../supabase/functions/gmail-canonical-otp/handler.js'
 import { hasNpiMatch } from '../../supabase/functions/_shared/npiMatch.js'
 import { reservationCharge, localInputTokenEstimate } from '../../supabase/functions/_shared/tokenReserve.js'
@@ -131,10 +133,11 @@ describe('model proxy', () => {
 // ---------------------------------------------------------------------------------------
 // digest-run
 // ---------------------------------------------------------------------------------------
-// A tiny in-memory database for the handler: rows in registration order, no ORDER BY.
+// A tiny in-memory database for the handler: rows in registration order; .order() is a
+// no-op here, so the handler's own orderByAttempt is what the D-2 test exercises.
 function digestDb({ rows, accounts = null, record = null }) {
   const t = {
-    digest_schedules: rows.map((r) => ({ enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, ...r })),
+    digest_schedules: rows.map((r) => ({ enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_attempt_at: null, attempt_day: null, attempts_today: 0, ...r })),
     sponsored_accounts: (accounts || rows.map((r) => ({ user_id: r.user_id, active: true, ends_at: null }))),
     kv: record ? [{ user_id: record.user_id, collection: 'digests', key: 'daily:latest', value: record.value }] : [],
     events: [],
@@ -153,16 +156,28 @@ function digestDb({ rows, accounts = null, record = null }) {
     digest_claim_finish: ({ p_user_id, p_token, p_finished }) => {
       const row = t.digest_schedules.find((r) => r.user_id === p_user_id && r.claim_token === p_token)
       if (!row) return false
-      Object.assign(row, { claimed_at: null, claim_token: null, ...(p_finished ? { last_run_at: '2026-10-14T10:00:00Z' } : {}) })
+      // 20261014121000_digest_attempts.sql: every finish stamps the attempt. A fake clock
+      // that advances per finish keeps the ordering observable.
+      const stamp = new Date(Date.parse('2026-10-14T10:00:00Z') + ++stamps * 1000).toISOString()
+      Object.assign(row, { claimed_at: null, claim_token: null, ...(p_finished ? { last_run_at: '2026-10-14T10:00:00Z' } : {}),
+        last_attempt_at: stamp, attempts_today: row.attempt_day === '2026-10-14' ? row.attempts_today + 1 : 1, attempt_day: '2026-10-14' })
+      return true
+    },
+    digest_claim_release: ({ p_user_id, p_token }) => {
+      const row = t.digest_schedules.find((r) => r.user_id === p_user_id && r.claim_token === p_token)
+      if (!row) return false
+      Object.assign(row, { claimed_at: null, claim_token: null })
       return true
     },
   }
+  let stamps = 0
   const from = (table) => {
     const filters = []
     let payload = null
     const rowsNow = () => t[table].filter((r) => filters.every((f) => f(r)))
     const chain = {
       select: () => chain,
+      order: () => chain,
       eq: (k, v) => { filters.push((r) => r[k] === v); return chain },
       in: (k, vs) => { filters.push((r) => vs.includes(r[k])); return chain },
       is: (k, v) => { filters.push((r) => (r[k] ?? null) === v); return chain },
@@ -205,14 +220,23 @@ const cronReq = () => new Request('https://fn/digest-run', { method: 'POST', hea
 const userReq = (body = {}) => new Request('https://fn/digest-run', { method: 'POST', headers: { authorization: 'Bearer u' }, body: JSON.stringify(body) })
 
 describe('digest-run', () => {
-  it('D-2 (medium): no ORDER BY and no failure backoff, so a persistently failing account is re-picked every tick and starves the rest', async () => {
+  it('D-2 FIXED: a persistently failing account alternates with the rest (ordered by last attempt) and is left alone at the day\'s attempt cap', async () => {
     const db = digestDb({ rows: [{ user_id: 'P' }, { user_id: 'Q' }] })
     const h = digestDeps(db, { run: async () => ({ phase: 'error', note: 'PubMed search failed for 2 topics' }) })
     const picked = []
     for (let i = 0; i < 6; i++) picked.push((await (await handleDigestRun(cronReq(), h.deps)).json()).user_id)
-    expect(picked).toEqual(['P', 'P', 'P', 'P', 'P', 'P'])
-    expect(db.t.digest_schedules.find((r) => r.user_id === 'Q').last_run_at).toBeNull()
-    expect(read('supabase/functions/digest-run/handler.js')).not.toMatch(/\.order\(/)
+    expect(picked).toEqual(['P', 'Q', 'P', 'Q', 'P', 'Q'])
+    expect(db.t.digest_schedules.map((r) => r.attempts_today)).toEqual([3, 3])
+    expect(db.t.digest_schedules.every((r) => r.last_attempt_at && r.last_run_at === null)).toBe(true)
+    // Q recovers and finishes; P keeps failing until its cap, then the tick has nothing to do.
+    const q = db.t.digest_schedules.find((r) => r.user_id === 'Q')
+    q.enabled = false
+    const more = []
+    for (let i = 0; i < ATTEMPTS_PER_DAY; i++) more.push((await (await handleDigestRun(cronReq(), h.deps)).json()))
+    expect(more.filter((o) => o.ran).map((o) => o.user_id)).toEqual(Array(ATTEMPTS_PER_DAY - 3).fill('P'))
+    expect(more.filter((o) => !o.ran).every((o) => o.reason === 'attempt cap reached')).toBe(true)
+    expect(db.t.digest_schedules.find((r) => r.user_id === 'P').attempts_today).toBe(ATTEMPTS_PER_DAY)
+    expect(read('supabase/functions/digest-run/handler.js')).toMatch(/\.order\('last_attempt_at'/)
   })
 
   it('B-OK: a wrong cron secret falls through to user auth and is refused; an unset secret silently disables cron', async () => {
@@ -270,22 +294,29 @@ const VERIFY = '22222222-2222-4222-8222-222222222222'
 const otpReq = (body) => new Request('https://fn/otp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 
 describe('gmail-canonical-otp', () => {
-  it('D-4 (medium): a verify ticket has no attempt counter; wrong codes are retried for the whole 15 minutes and the next correct one signs in', async () => {
+  it('D-4 FIXED: a verify ticket burns at the fifth wrong code; the 500-guess sweep asks Auth five times and the right code afterwards is refused', async () => {
     let attempts = 0
+    let failures = 0
+    let alive = true
     const deps = {
-      readVerify: vi.fn(async () => 'victim@gmail.com'),
-      consumeVerify: vi.fn(async () => {}),
+      readVerify: vi.fn(async () => (alive ? 'victim@gmail.com' : '')),
+      consumeVerify: vi.fn(async () => { alive = false }),
+      failVerify: vi.fn(async () => { failures++; if (failures >= 5) alive = false; return Math.max(0, 5 - failures) }),
       verifyOtp: vi.fn(async (_email, code) => { attempts++; return code === '000500' ? { access_token: 'a', refresh_token: 'r' } : null }),
     }
+    const statuses = []
     for (let i = 0; i < 500; i++) {
       const res = await handleGmailCanonicalOtp(otpReq({ action: 'verify', verifyTicket: VERIFY, code: String(i).padStart(6, '0') }), deps)
       expect(res.status).toBe(400)
+      statuses.push((await res.json()).status)
     }
-    expect(deps.readVerify).toHaveBeenCalledTimes(500)
-    expect(deps.consumeVerify).not.toHaveBeenCalled()
-    const ok = await handleGmailCanonicalOtp(otpReq({ action: 'verify', verifyTicket: VERIFY, code: '000500' }), deps)
-    expect(ok.status).toBe(200)
-    expect(attempts).toBe(501)
+    expect(statuses.slice(0, 5)).toEqual(['invalid', 'invalid', 'invalid', 'invalid', 'locked'])
+    expect(new Set(statuses.slice(5))).toEqual(new Set(['invalid']))
+    expect(attempts).toBe(5)
+    expect(deps.failVerify).toHaveBeenCalledTimes(5)
+    const late = await handleGmailCanonicalOtp(otpReq({ action: 'verify', verifyTicket: VERIFY, code: '000500' }), deps)
+    expect(late.status).toBe(400)
+    expect(attempts).toBe(5)
   })
 
   it('D-9 (low): safeRedirect keeps the origin of any http(s) URL, so the only open-redirect guard is the Supabase Auth allow-list', () => {
@@ -383,10 +414,15 @@ describe('migration and deploy facts', () => {
     return sql.slice(start, sql.indexOf('$$;', sql.indexOf('as $$', start) + 5))
   }
 
-  it('D-10 (medium): redeem_sponsor_invite never compares the invite ends_at to now, so a code redeemed after the cohort end enrolls an already-ended account, burns a use, and later codes answer revoked', () => {
+  it('D-10 FIXED: 20261014120000_invite_ends_at.sql replaces redeem_sponsor_invite with an ends_at check before any insert or use count', () => {
     const body = fnBody(spending, 'public.redeem_sponsor_invite')
-    expect(body).toMatch(/values \(p_user_id, true, v_inv\.cohort, v_inv\.daily_cap_usd, v_inv\.monthly_cap_usd, v_inv\.ends_at/)
-    expect(body).not.toMatch(/v_inv\.ends_at\s*(<=|<|>=|>)/)
+    expect(body).not.toMatch(/v_inv\.ends_at\s*(<=|<|>=|>)/) // the original still lacks it; the later migration wins
+    const fixed = fnBody(read('supabase/migrations/20261014120000_invite_ends_at.sql'), 'public.redeem_sponsor_invite')
+    const at = fixed.indexOf("v_inv.ends_at is not null and v_inv.ends_at <= now() then return jsonb_build_object('status', 'expired')")
+    expect(at).toBeGreaterThan(0)
+    expect(at).toBeLessThan(fixed.indexOf('insert into public.sponsored_accounts'))
+    expect(at).toBeLessThan(fixed.indexOf('set uses = uses + 1'))
+    expect(at).toBeGreaterThan(fixed.indexOf("return jsonb_build_object('status', 'revoked')"))
     for (const f of ['20261010120000_digest_write_guard', '20261010130000_scheduler_hold', '20261012180000_spend_release']) {
       expect(read(`supabase/migrations/${f}.sql`)).not.toMatch(/function public\.redeem_sponsor_invite/)
     }
@@ -398,18 +434,26 @@ describe('migration and deploy facts', () => {
     expect(spending).not.toMatch(/update public\.sponsored_accounts[^;]*revoked/i)
   })
 
-  it('D-11 (medium): evidence_cache_trusted and evidence_cache are table-wide readable by every signed-in user, created_by included', () => {
-    expect(spending).toMatch(/created_by\s+uuid,/)
-    expect(spending).toMatch(/grant select on public\.evidence_cache_trusted to authenticated;/)
-    expect(spending).not.toMatch(/grant select \([^)]*\) on public\.evidence_cache_trusted/)
-    const legacy = read('supabase/migrations/20260917180000_sponsored_access.sql')
-    expect(legacy).toMatch(/grant select on public\.evidence_cache to authenticated;/)
-    expect(legacy).toMatch(/created_by\s+uuid references auth\.users/)
+  it('D-11 FIXED: 20261014123000_evidence_cache_column_grants.sql replaces the table-wide read with named columns that leave created_by out', () => {
+    expect(spending).toMatch(/grant select on public\.evidence_cache_trusted to authenticated;/) // the original grant, since revoked
+    const grants = read('supabase/migrations/20261014123000_evidence_cache_column_grants.sql')
+    for (const table of ['evidence_cache_trusted', 'evidence_cache']) {
+      expect(grants).toMatch(new RegExp(`revoke select on public\\.${table} from authenticated;`))
+      const cols = grants.match(new RegExp(`grant select \\(([^)]*)\\)\\s+on public\\.${table} to authenticated;`))?.[1]
+      expect(cols).toBeTruthy()
+      expect(cols).not.toMatch(/created_by/)
+      expect(cols).toMatch(/\bextraction\b/)
+    }
+    expect(read('src/pipeline/evidenceCache.js')).not.toMatch(/select\('\*'\)/)
   })
 
-  it('D-12 (medium): no supabase/config.toml, so verify_jwt is a deploy-flag convention and a plain `functions deploy` silently turns the gateway check back on', () => {
-    expect(existsSync(root('supabase/config.toml'))).toBe(false)
-    expect(read('docs/SPONSORED_ACCESS_DEPLOY.md')).toMatch(/--no-verify-jwt/)
+  it('D-12 FIXED: supabase/config.toml pins verify_jwt per function, so a plain `functions deploy` reproduces the live gateway settings', () => {
+    expect(existsSync(root('supabase/config.toml'))).toBe(true)
+    const toml = read('supabase/config.toml')
+    const pin = (fn) => toml.match(new RegExp(`\\[functions\\.${fn}\\][^\\[]*verify_jwt = (true|false)`))?.[1]
+    expect(['model', 'digest-run', 'redeem-invite', 'match-npi'].map(pin)).toEqual(['false', 'false', 'false', 'false'])
+    expect(pin('gmail-canonical-otp')).toBe('true')
+    expect(read('docs/SPONSORED_ACCESS_DEPLOY.md')).toMatch(/config\.toml/)
   })
 
   it('D-13 (medium): the Gmail alias answer is suppressed only for the canonical spelling; any dotted or +tagged probe of a stored inbox confirms an account', () => {

@@ -19,6 +19,7 @@ import { supabase, supabaseConfigured } from './supabase.js'
 import { isSponsored, CAP_MESSAGE } from './sponsor.js'
 import { currentServerScope } from './serverScope.js'
 import { isSupportedModel, priceUsage, microToUsd } from '../../supabase/functions/_shared/pricing.js'
+import { denialMessage } from '../../supabase/functions/_shared/spending.js'
 import { BYOK_CLIENT_TIMEOUT_MS, SPONSORED_CLIENT_TIMEOUT_MS } from '../../supabase/functions/_shared/timeouts.js'
 
 const KEY_STORAGE = 'verastar.anthropic_key'
@@ -294,18 +295,47 @@ function getSponsoredClient() {
   return _sponsoredClient
 }
 
-// Thrown when the proxy declines a sponsored call because a spending cap was reached.
-// Carries the one user-facing sentence; nothing about amounts.
+// Thrown when the proxy declines a sponsored call with a 402: a spending cap, a pause, a
+// billing review, or a held scheduled run. Carries the one user-facing sentence for that
+// reason (never an amount) and the reason itself, so a screen can tell a cap (stop, resume
+// tomorrow) from a pause or a hold (nothing the reader did).
 export class CapReachedError extends Error {
-  constructor(message = CAP_MESSAGE) {
+  constructor(message = CAP_MESSAGE, { reason = null } = {}) {
     super(message)
     this.name = 'CapReachedError'
     this.capReached = true
+    this.reason = reason
   }
 }
 
 export function isCapReached(err) {
   return err?.capReached === true || err?.status === 402
+}
+
+// Why the proxy said 402. The x-verastar-denial header is exposed to the browser and names
+// the reservation denial (cap_day, spending_paused, overrun_review, unresolved_liability,
+// halted:...); the error body's type is the fallback for a client that cannot see headers.
+// Pure; exported for tests.
+export function denialReason(err) {
+  const headers = err?.headers
+  let fromHeader = null
+  try {
+    fromHeader = typeof headers?.get === 'function' ? headers.get('x-verastar-denial') : headers?.['x-verastar-denial']
+  } catch {
+    fromHeader = null
+  }
+  if (typeof fromHeader === 'string' && fromHeader) return fromHeader
+  const type = err?.error?.error?.type || err?.error?.type
+  if (type === 'cap_reached') return 'cap_day'
+  if (type === 'scheduler_held') return 'unresolved_liability'
+  if (type === 'overrun_review' || type === 'spending_paused') return type
+  return null
+}
+
+// The sentence for a 402, chosen on the client from the reason so the proxy's wording and
+// the app's agree (both call denialMessage) and no server text reaches the screen.
+export function sponsoredRefusalMessage(reason) {
+  return denialMessage(reason)
 }
 
 // Every proxied call passes through here so a 402 becomes a CapReachedError whatever the
@@ -314,7 +344,10 @@ async function guarded(fn) {
   try {
     return await fn()
   } catch (err) {
-    if (err?.status === 402) throw new CapReachedError(err?.error?.error?.message || err?.message || CAP_MESSAGE)
+    if (err?.status === 402) {
+      const reason = denialReason(err)
+      throw new CapReachedError(sponsoredRefusalMessage(reason), { reason })
+    }
     throw err
   }
 }

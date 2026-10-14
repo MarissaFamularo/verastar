@@ -7,6 +7,57 @@ shared Verastar / PaperTrellis Supabase project.*
 project from this session. Still to do by hand: the two function secrets (step 3), the
 first smoke test, enrollment, and the reference collection.
 
+## 0. Deploy order for the 2026-10-14 server repairs (not yet executed)
+
+The beta audit's server findings (docs/BETA_TEST_PLAN.md § H) are implemented as local code
+and migration files; nothing has been deployed or applied. Same shape as the spending
+cutover ([SPENDING_CONTRACT.md](SPENDING_CONTRACT.md) § 10): **functions first, then
+migrations, fail-closed in between.** Before starting, `npm test`, `npm run lint`,
+`node scripts/check-spending-contract.mjs` and the Deno tests must be green on the commit
+being deployed, and `supabase/tests/run_spending_tests.sh` plus
+`run_gmail_alias_tests.sh` must pass on a disposable local database.
+
+1. **Deploy the functions** from the repo root, with the committed `supabase/config.toml`
+   (it pins `verify_jwt` and the import map per function, so no `--no-verify-jwt` or
+   `--import-map` flag is needed; passing them anyway is harmless):
+
+   ```bash
+   supabase functions deploy model digest-run redeem-invite gmail-canonical-otp --project-ref lahahztitoqjumrxjcim
+   ```
+
+   Between this step and step 3 the new code fails closed against the old schema:
+   - `digest-run` calls `digest_claim_release`, which does not exist yet, only on the
+     "claimed but nothing to run" path; that call is swallowed and the claim goes stale
+     (240 s) instead of being released. Ticks still run. `last_attempt_at`,
+     `attempt_day` and `attempts_today` are missing from the schedule read, so the
+     select fails and every tick answers `schedules unavailable` (503, nothing runs)
+     until the migration lands. Deploy during a quiet hour, or `cron.unschedule` first.
+   - `gmail-canonical-otp` calls `gmail_alias_fail_verify` after a wrong code; the RPC
+     error reads as zero attempts left, so a single wrong code burns the ticket (stricter
+     than the final behavior, never looser).
+   - `redeem-invite` reads `sponsor_invites.ends_at`, which already exists; the RPC still
+     ignores it until step 3, so the preflight is the only end-date check for that window.
+   - `model` wording changes need no schema.
+2. **Drain** at least the paid-plan wall clock (400 s) so no old isolate is mid-run.
+3. **Apply the four migrations**, in file order, each in its own transaction:
+   `20261014120000_invite_ends_at.sql`, `20261014121000_digest_attempts.sql`,
+   `20261014122000_gmail_otp_failures.sql`, `20261014123000_evidence_cache_column_grants.sql`.
+   The column-grant migration refuses a client `select *` on either cache table; the
+   deployed app (commit 189c78a or later) reads named columns, so deploy the frontend
+   first if it is older than that.
+4. **Verify**: `has_function_privilege('authenticated', ...)` is false for
+   `redeem_sponsor_invite`, `digest_claim_finish`, `digest_claim_release`,
+   `digest_local_day` and `gmail_alias_fail_verify`;
+   `has_column_privilege('authenticated', 'public.evidence_cache_trusted', 'created_by', 'select')`
+   is false; the next cron tick answers 200 with `ran`; `supabase/ops/spending_health.sql`
+   shows nothing new. Compare the deployed `digest-run` bundle with the manifest's
+   `bundleSha256` as in the contract's § 10 step 5.
+5. **Rollback** is forward-only, as for the spending cutover: re-run the previous
+   definition of a function from its earlier migration (each new migration's header
+   names it); never redeploy an older function.
+
+Not in this release: the invite-attempt ledger is open PR 22 and lands separately.
+
 ## 1. Apply the migrations
 
 `supabase/migrations/20260917180000_sponsored_access.sql`,
@@ -40,7 +91,11 @@ supabase functions deploy model --no-verify-jwt
 ```
 
 `--no-verify-jwt` because the function verifies the user itself (`auth.getUser()`) and must
-be able to answer the SDK's CORS preflight. Smoke test with a signed-in sponsored account:
+be able to answer the SDK's CORS preflight. Since 2026-10-14 the committed
+`supabase/config.toml` records this per function (`verify_jwt = false` for `model`,
+`digest-run`, `redeem-invite`, `match-npi`; `true` for `gmail-canonical-otp`), so a plain
+`supabase functions deploy <name>` reproduces the live gateway settings; the flag is kept
+in these commands as a belt-and-braces reminder. Smoke test with a signed-in sponsored account:
 the Settings "Test connection" ping should return `pong`, and `model_spend` should gain a
 row with `purpose = 'ping'`. A non-sponsored account must get a 403.
 
@@ -60,9 +115,10 @@ row with `purpose = 'ping'`. A non-sponsored account must get a 403.
 supabase functions deploy digest-run --no-verify-jwt --import-map supabase/functions/deno.json --project-ref lahahztitoqjumrxjcim
 ```
 
-`--import-map` is required: there is no `supabase/config.toml`, so without it the CLI does
-not upload the shared `deno.json` and the deploy fails with `Relative import path
-"linkedom" not prefixed with / or ./ or ../` (2026-09-30). Deploy from a checkout of
+`--import-map` was required while there was no `supabase/config.toml`: without it the CLI
+did not upload the shared `deno.json` and the deploy failed with `Relative import path
+"linkedom" not prefixed with / or ./ or ../` (2026-09-30). The committed config now sets
+`import_map = "./functions/deno.json"` for every function; the flag is redundant but harmless. Deploy from a checkout of
 current `main` (`git pull` first) so the pinned bundle below is the one you just committed.
 
 All functions share `supabase/functions/deno.json` (the import map). `digest-run` needs the

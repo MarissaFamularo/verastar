@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     // current schema. The atomic RPC below remains the only consumer, and checks
     // these states again after NPI entry (a code may expire or fill in between).
     const { data: invite, error: inviteError } = await admin.from('sponsor_invites')
-      .select('revoked_at, expires_at, uses, max_uses').eq('code', code).maybeSingle()
+      .select('revoked_at, expires_at, ends_at, uses, max_uses').eq('code', code).maybeSingle()
     if (inviteError) return json(503, { status: 'error' })
     if (!invite) return json(200, { status: 'invalid' })
     // Match the RPC's precedence for existing accounts; no new enrollment occurs.
@@ -77,6 +77,12 @@ Deno.serve(async (req) => {
       const expiry = Date.parse(invite.expires_at)
       if (!Number.isFinite(expiry)) return json(503, { status: 'error' })
       if (expiry <= Date.now()) return json(200, { status: 'expired' })
+    }
+    // A code whose study has already ended enrolls nobody (the RPC answers the same).
+    if (invite.ends_at != null) {
+      const ended = Date.parse(invite.ends_at)
+      if (!Number.isFinite(ended)) return json(503, { status: 'error' })
+      if (ended <= Date.now()) return json(200, { status: 'expired' })
     }
     if (!Number.isInteger(invite.uses) || !Number.isInteger(invite.max_uses)) return json(503, { status: 'error' })
     if (invite.uses >= invite.max_uses) return json(200, { status: 'exhausted' })

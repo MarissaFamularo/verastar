@@ -248,6 +248,29 @@ select pg_temp.assert_ok(
   public.gmail_alias_take_send((select (prepared ->> 'ticket')::uuid from prepare_third)) = 'famularo.marissa@gmail.com',
   'a third spelling is sent to the oldest account, not the tagged one');
 
+-- (h) A verify ticket burns after five wrong codes (20261014122000_gmail_otp_failures.sql).
+truncate private.gmail_alias_permits;
+create temp table verify_ticket as select public.gmail_alias_keep_verify('famularo.marissa@gmail.com') as t;
+select pg_temp.assert_ok((select public.gmail_alias_read_verify(t) = 'famularo.marissa@gmail.com' from verify_ticket), 'a fresh verify ticket reads back');
+select pg_temp.assert_ok((select public.gmail_alias_fail_verify(t) = 4 from verify_ticket), 'first miss: four attempts left');
+select pg_temp.assert_ok((select public.gmail_alias_fail_verify(t) = 3 from verify_ticket), 'second miss: three left');
+select pg_temp.assert_ok((select public.gmail_alias_fail_verify(t) = 2 from verify_ticket), 'third miss: two left');
+select pg_temp.assert_ok((select public.gmail_alias_fail_verify(t) = 1 from verify_ticket), 'fourth miss: one left');
+select pg_temp.assert_ok((select public.gmail_alias_read_verify(t) = 'famularo.marissa@gmail.com' from verify_ticket), 'the ticket still reads back before the fifth miss');
+select pg_temp.assert_ok((select public.gmail_alias_fail_verify(t) = 0 from verify_ticket), 'fifth miss burns the ticket');
+select pg_temp.assert_ok((select public.gmail_alias_read_verify(t) is null from verify_ticket), 'a burned ticket no longer reads back');
+select pg_temp.assert_ok((select count(*) = 0 from private.gmail_alias_permits), 'the burned ticket row is gone');
+select pg_temp.assert_ok((select public.gmail_alias_fail_verify(t) = 0 from verify_ticket), 'a burned or unknown ticket reports zero, not an error');
+select pg_temp.assert_ok(public.gmail_alias_fail_verify(gen_random_uuid()) = 0, 'an unknown ticket reports zero');
+-- An expired ticket cannot be failed into existence either, and a send ticket is not a verify ticket.
+insert into private.gmail_alias_permits (email, kind, expires_at) values ('famularo.marissa@gmail.com', 'send', now() + interval '2 minutes');
+select pg_temp.assert_ok((select public.gmail_alias_fail_verify(ticket) = 0 from private.gmail_alias_permits), 'a send ticket has no verify counter');
+select pg_temp.assert_ok((select failures = 0 from private.gmail_alias_permits), 'and is left untouched');
+select pg_temp.assert_ok(not has_function_privilege('anon', 'public.gmail_alias_fail_verify(uuid)', 'execute'), 'anon cannot burn tickets');
+select pg_temp.assert_ok(not has_function_privilege('authenticated', 'public.gmail_alias_fail_verify(uuid)', 'execute'), 'authenticated cannot burn tickets');
+select pg_temp.assert_ok(has_function_privilege('service_role', 'public.gmail_alias_fail_verify(uuid)', 'execute'), 'the edge function (service role) can');
+select pg_temp.assert_ok(not has_function_privilege('service_role', 'private.gmail_alias_fail_verify(uuid)', 'execute'), 'the private body is reachable only through the wrapper');
+
 -- Leave a clean slate for the concurrency test that follows.
 delete from auth.users;
 truncate private.gmail_alias_limits;

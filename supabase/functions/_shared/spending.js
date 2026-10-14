@@ -44,8 +44,20 @@ export { reservationCharge, resolveInputTokens }
 
 export const CAP_MESSAGE = 'You have read a lot today. New papers pick up tomorrow morning. Everything already in your library still works.'
 export const PAUSE_MESSAGE = 'Sponsored reading is paused right now. Everything already in your library still works.'
+export const OVERRUN_MESSAGE = 'Sponsored reading is on hold while a billing check completes. Nothing is wrong with your account. Everything already in your library still works.'
+export const HELD_MESSAGE = 'Your sponsored reading is held for a quick review. Nothing is wrong with your account. Everything already in your library still works.'
 
 const SPEND_STOPS = new Set(['cap_day', 'cap_month', 'cap_global', 'budget_total'])
+// Every 402 the proxy or the scheduler's guarded fetch can answer, by denial reason, with the
+// one plain-language sentence the reader sees. No amounts, no dollar figures. The client
+// (src/lib/anthropic.js) picks the same sentence from the x-verastar-denial header, so a
+// browser that cannot read the body still words the reason correctly. Pure.
+export function denialMessage(reason) {
+  if (SPEND_STOPS.has(reason)) return CAP_MESSAGE
+  if (reason === 'overrun_review') return OVERRUN_MESSAGE
+  if (reason === 'unresolved_liability' || String(reason || '').startsWith('halted:')) return HELD_MESSAGE
+  return PAUSE_MESSAGE
+}
 
 // An Anthropic-shaped error so the SDK surfaces a typed APIError. x-should-retry: false
 // stops the SDK from retrying a refusal (it would only be refused again).
@@ -64,6 +76,8 @@ export function denialResponse(reason) {
   if (reason === 'claim_lost') return refusal(402, 'spending_paused', 'This scheduled run no longer owns the account; nothing was sent.', { 'x-verastar-denial': 'claim_lost' })
   if (reason === 'account_inactive') return refusal(403, 'permission_error', 'This account is not on sponsored access.')
   if (SPEND_STOPS.has(reason)) return refusal(402, 'cap_reached', CAP_MESSAGE, { 'x-verastar-denial': reason })
+  if (reason === 'overrun_review') return refusal(402, 'overrun_review', OVERRUN_MESSAGE, { 'x-verastar-denial': reason })
+  if (reason === 'unresolved_liability') return refusal(402, 'scheduler_held', HELD_MESSAGE, { 'x-verastar-denial': reason })
   return refusal(402, 'spending_paused', PAUSE_MESSAGE, { 'x-verastar-denial': reason || 'unknown' })
 }
 
@@ -306,7 +320,7 @@ export function makeGuardedFetch({ ledger, dispatch, userId, claimToken = null, 
     if (!String(url).endsWith('/v1/messages') || String(init.method || 'GET').toUpperCase() !== 'POST') {
       return toResponse(refusal(404, 'not_found_error', 'Only POST /v1/messages is available to the scheduler.'))
     }
-    if (state.halted) return toResponse(refusal(402, 'spending_paused', PAUSE_MESSAGE, { 'x-verastar-denial': `halted:${state.halted}` }))
+    if (state.halted) return toResponse(refusal(402, 'scheduler_held', HELD_MESSAGE, { 'x-verastar-denial': `halted:${state.halted}` }))
     let body
     try { body = JSON.parse(typeof init.body === 'string' ? init.body : new TextDecoder().decode(init.body)) } catch { return toResponse(refusal(400, 'invalid_request_error', 'Body must be JSON.')) }
     state.attempts++
