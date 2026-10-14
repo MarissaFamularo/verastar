@@ -17,7 +17,7 @@ vi.mock('../lib/anthropic.js', () => ({
 
 import { extractStructured } from '../lib/anthropic.js'
 import { fmtNum, ciLabel } from '../lib/format.js'
-import { findPrimary, PRIMARY_UNKNOWN_REASON } from './primaryResult.js'
+import { findPrimary } from './primaryResult.js'
 import { triage } from './triage.js'
 import { selectEvidenceContext, EVIDENCE_CHARS } from './evidenceContext.js'
 
@@ -39,7 +39,7 @@ function mockWriterThenSupportiveChecker(ranking) {
 }
 
 // ---------------------------------------------------------------------------------------
-describe('gap 1 — a missing primary is an explicit state, and the main finding is withheld', () => {
+describe('gap 1 — a missing primary is an explicit state, and the main finding goes number-free', () => {
   const SECONDARY_ONLY = [ // SYNTHETIC
     { quantity: q({ name: 'Secondary outcome: HF hospitalization (hazard ratio)', value: 0.8, ci_low: 0.7, ci_high: 0.9, source_quote: 'hazard ratio, 0.80; 95% CI, 0.70 to 0.90' }), verdict: { flagged: false } },
     { quantity: q({ name: 'Secondary outcome: CV death (hazard ratio)', value: 0.95, source_quote: 'hazard ratio, 0.95' }), verdict: { flagged: true } },
@@ -71,29 +71,49 @@ describe('gap 1 — a missing primary is an explicit state, and the main finding
     expect(findPrimary(subgroup)).toMatchObject({ state: 'unknown' })
   })
 
-  it('REAL triage flow, SUPPORTIVE checker: secondary-only rows → finding withheld (refuted, never sent to checker)', async () => {
+  // 2026-10-13 beta policy: an unknown primary no longer withholds the summary. The
+  // finding loses its numbers (the primary is not verified, so any cited number is a
+  // non-primary result), the writer is told not to headline any listed result, and the
+  // number-free sentence is still audited by the model checker.
+  it('REAL triage flow, SUPPORTIVE checker: secondary-only rows → number-free finding, model-checked, not withheld', async () => {
     mockWriterThenSupportiveChecker({ id: 'p1', score: 80, tier: 1, finding: 'Drug X reduced HF hospitalization (HR 0.80 (CI 0.70–0.90)).', finding_plain: 'Drug X reduced HF hospitalization.', design_caution: 'Open-label design.', relevance: 'r' })
     const [take] = await triage({ candidates: [{ id: 'p1', title: 'T', summary: 'hazard ratio, 0.80; 95% CI, 0.70 to 0.90', verified: verifiedOf(SECONDARY_ONLY), primary: findPrimary(SECONDARY_ONLY, notFlagged) }] })
-    expect(take.check).toEqual({ verdict: 'refuted', reason: PRIMARY_UNKNOWN_REASON, withheld: 'primary-unknown' })
+    expect(take.finding).toBe('Drug X reduced HF hospitalization.')
+    expect(take.check).toEqual({ verdict: 'supported', reason: 'supported' })
+    expect(take.check.withheld).toBeUndefined()
     expect(extractStructured.mock.calls[0][0].content).toContain('Primary result: NOT identified by the app')
     const checkerPrompt = extractStructured.mock.calls[1][0].content
-    expect(checkerPrompt).not.toContain('[p1] CLAIM')
-    expect(take.cautionCheck.verdict).toBe('supported') // the caution is still checked normally
+    expect(checkerPrompt).toContain('[p1] CLAIM')
+    expect(take.cautionCheck.verdict).toBe('supported')
   })
 
-  it('REAL triage flow on a SAVED row (PAD-05: no row labelled primary), SUPPORTIVE checker → withheld', async () => {
+  it('REAL triage flow on a SAVED row (PAD-05: no row labelled primary), SUPPORTIVE checker → rendered number-free', async () => {
     const d = load('PAD-05')
     expect(findPrimary(d.rows, notFlagged).state).toBe('unknown')
     mockWriterThenSupportiveChecker({ id: d.pmid, score: 50, tier: 1, finding: d.recordedTake.finding, finding_plain: d.recordedTake.finding, design_caution: d.recordedTake.designCaution, relevance: d.recordedTake.relevance })
     const [take] = await triage({ candidates: [{ id: d.pmid, title: 'Cilostazol', summary: d.sourceDoc.text, verified: verifiedOf(d.rows), primary: findPrimary(d.rows, notFlagged) }] })
-    expect(take.check.verdict).toBe('refuted')
-    expect(take.check.withheld).toBe('primary-unknown')
+    expect(take.check.verdict).toBe('supported')
+    expect(take.check.withheld).toBeUndefined()
+    expect(take.finding).not.toBe('')
+    expect(take.finding).not.toMatch(/\d/)
   })
 
-  it('an explicit null primary is treated as unknown (withheld), not as "fine"', async () => {
-    mockWriterThenSupportiveChecker({ id: 'p1', score: 1, tier: 2, finding: 'Improved outcomes.', finding_plain: 'Improved outcomes.', design_caution: '', relevance: '' })
-    const [take] = await triage({ candidates: [{ id: 'p1', title: 'T', summary: 's', verified: [], primary: null }] })
-    expect(take.check.withheld).toBe('primary-unknown')
+  it('an explicit null primary is treated as unknown (number-free, checked), not as "fine"', async () => {
+    mockWriterThenSupportiveChecker({ id: 'p1', score: 1, tier: 2, finding: 'Improved outcomes (HR 0.80 (CI 0.70–0.90)).', finding_plain: 'Improved outcomes.', design_caution: '', relevance: '' })
+    const [take] = await triage({ candidates: [{ id: 'p1', title: 'T', summary: 's', verified: [{ name: 'HF hospitalization (hazard ratio)', value: '0.80 hazard ratio (CI 0.70–0.90)', quote: 'hazard ratio, 0.80' }], primary: null }] })
+    expect(take.finding).toBe('Improved outcomes.')
+    expect(take.check.withheld).toBeUndefined()
+    expect(extractStructured.mock.calls[0][0].content).toContain('Primary result: NOT identified by the app')
+  })
+
+  it('a refuting checker still withholds an unknown-primary finding', async () => {
+    extractStructured
+      .mockResolvedValueOnce({ rankings: [{ id: 'p1', score: 80, tier: 1, finding: 'Drug X reduced HF hospitalization.', finding_plain: 'Drug X reduced HF hospitalization.', design_caution: '', relevance: '' }] })
+      .mockImplementation(async (args) => ({
+        verdicts: [...String(args?.content || '').matchAll(/^\[([^\]]+)\] CLAIM/gm)].map((m) => ({ id: m[1], supported: false, reason: 'overstates the direction' })),
+      }))
+    const [take] = await triage({ candidates: [{ id: 'p1', title: 'T', summary: 's', verified: verifiedOf(SECONDARY_ONLY), primary: findPrimary(SECONDARY_ONLY, notFlagged) }] })
+    expect(take.check.verdict).toBe('refuted')
   })
 
   it('an identified primary still goes to the checker (supported stays supported)', async () => {

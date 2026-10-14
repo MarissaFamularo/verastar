@@ -17,7 +17,7 @@ import { extractStructured, MODELS } from '../lib/anthropic.js'
 import { normalize, extractNumbers, extractNumbersWithIndex, numbersEqual } from './verify.js'
 import { checkFindings, SNIPPET_CHARS } from './check.js'
 import { repairNumberFree } from './numberFree.js'
-import { tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary, PRIMARY_UNKNOWN_REASON } from './primaryResult.js'
+import { tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary } from './primaryResult.js'
 import { journalPreferenceText } from './journals.js'
 
 export const TRIAGE_SCHEMA = {
@@ -257,7 +257,7 @@ function buildSystem(rubric) {
 }
 
 // Primary state for a candidate. findPrimary() never returns null; an explicit null from a
-// caller is treated as UNKNOWN (withheld), never as "fine". Only a candidate that omits the
+// caller is treated as UNKNOWN (number-free finding), never as "fine". Only a candidate that omits the
 // key entirely (callers predating the primary contract, and unit tests of other behaviour)
 // keeps the old behaviour; every production call site passes findPrimary(...).
 function primaryState(c) {
@@ -328,8 +328,10 @@ export async function triage({
   // set before any caller can render it. An id the model invented gets an empty verified
   // set, so any number it carries is dropped too.
   const verifiedById = new Map(candidates.map((c) => [String(c.id), c.verified || []]))
-  const primaryById = new Map(candidates.map((c) => [String(c.id), c.primary || null]))
-  const unknownPrimary = new Set(candidates.filter((c) => primaryState(c) === 'unknown').map((c) => String(c.id)))
+  // A caller that supplied the key with an explicit null gets the unknown state (number-free
+  // finding); only a caller that omits the key keeps the pre-contract behaviour.
+  const UNKNOWN_PRIMARY = { state: 'unknown', name: null, verified: false, indexes: [], basis: null }
+  const primaryById = new Map(candidates.map((c) => [String(c.id), 'primary' in (c || {}) ? c.primary || UNKNOWN_PRIMARY : null]))
   const sanitized = (result.rankings ?? []).map((rk) =>
     sanitizeRanking(rk, verifiedById.get(String(rk?.id)) || [], { primary: primaryById.get(String(rk?.id)) })
   )
@@ -345,11 +347,13 @@ export async function triage({
       primary: primaryById.get(String(rk.id)),
     })
     if (verdict) scope.set(String(rk.id), { verdict: verdict.verdict, reason: verdict.reason })
-    // REV2 gap 1: results were extracted but none is the primary → the main finding is
-    // withheld outright, whatever the model checker would have said.
-    if (unknownPrimary.has(String(rk.id))) {
-      scope.set(String(rk.id), { verdict: 'refuted', reason: PRIMARY_UNKNOWN_REASON, withheld: 'primary-unknown' })
-    }
+    // An UNKNOWN primary (results extracted, none bound to the declared primary endpoint)
+    // does not withhold the summary. 2026-10-12 → 10-13 it did, and the deterministic
+    // endpoint matcher left 34 of the 39 saved development papers unknown, so most
+    // randomized trials rendered "Summary withheld". Instead the finding degrades to its
+    // number-free form (sanitizeRanking: headlinesNonPrimary holds because the primary is
+    // not verified), the writer was told not to present any listed result as the main
+    // result, and the model prose check still audits the sentence against the snippet.
   }
 
   // The prose gate (pipeline/check.js) — an adversarial second model audits each
