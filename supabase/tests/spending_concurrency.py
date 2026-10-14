@@ -296,4 +296,10 @@ res = parallel([f"select public.spend_reconcile('{recon_id}', 800, 'concurrency 
 check(res.count('reconciled') == 1 and res.count('already_reconciled') == 5, 'concurrent reconciliation of a released row: one charge')
 check(sql(f"select count(*) || ':' || (sum(usd) * 1000000)::bigint from public.model_spend where reservation_id='{recon_id}'") == '1:800', 'one reconciled ledger row')
 
+# 18. Overlapping invite attempts for one user admit exactly the hourly limit.
+[inv] = users(1)
+res = parallel([f"select public.record_invite_attempt('{inv}')" for _ in range(20)])
+check(res.count('allow') == 5 and res.count('deny') == 15, 'invite limit: exactly 5 of 20 overlapping attempts are admitted')
+check(sql(f"select count(*) from public.invite_attempts where user_id='{inv}'") == '5', 'invite limit: denied attempts are not recorded')
+
 print(f'PASS: spending_concurrency.py ({len(passed)} checks)')
