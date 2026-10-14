@@ -2,11 +2,11 @@
 //
 // The inventory is what the SOURCE reports, derived from the evidence index alone: one entry
 // per results sentence that carries a comparison, with the role the source gives it and how
-// that role was established (labeled in the sentence, linked to a definition, or merely
-// positional — in which case the entry is uncertain, its role is 'other', and nothing may
-// call it primary). Fidelity compares the card's eligible claims with the inventory: every
-// primary covered, primaries before secondaries, a null primary never obscured, every
-// uncovered entry listed as an omission with its severity.
+// that role was established (labeled in the sentence, linked to a definition's core or to
+// one of its components, or merely positional — in which case the entry is uncertain, its
+// role is 'other', and nothing may call it primary). Fidelity compares the card's eligible
+// claims with the inventory: every primary covered, primaries before secondaries, a null
+// primary never obscured, every uncovered entry listed as an omission with its severity.
 
 import { normalize, tokenSet, overlap, acronyms } from './text.js'
 import { REASONS as R } from '../acceptance/schema.js'
@@ -23,6 +23,13 @@ function tupleDirection(t) {
   if (t.p) return t.p.value < 0.05 ? (t.value < nul ? 'favors-first' : 'favors-second') : 'no-clear-difference'
   return 'unknown'
 }
+// A phrase names a definition's composite when it covers every disjunct of the core (or of
+// the components when the core is a single term defined by its components).
+function coversComposite(phrase, def) {
+  const disj = def.coreDisjuncts.length >= 2 ? def.coreDisjuncts : def.componentDisjuncts
+  if (disj.length >= 2) return disj.every((d) => overlap(phrase.tokens, d).length > 0)
+  return overlap(phrase.tokens, def.coreTokens).length >= Math.max(1, Math.ceil([...def.coreTokens].filter((t) => t.length > 2).length / 2))
+}
 
 export function buildInventory(index) {
   const entries = []
@@ -36,36 +43,38 @@ export function buildInventory(index) {
     if (!hasComparison && !safety) continue
     const text = s.text
     const population = s.cohortsMentioned[0] || null
+    const phrase = (s.tuples[0] && s.tuples[0].owner) || s.phrases[0] || null
     const refersPrimary = /\bprimary[- ](?:outcome|end ?point)\b/.test(text)
     const refersSecondary = /\bsecondary[- ](?:outcome|end ?point)\b|\bsecondary\b/.test(text)
-    const sTokens = tokenSet(text)
-    let role = 'other', roleBasis = 'positional', linkage = 'positional', outcomeTokens = sTokens, outcomeText = text.slice(0, 80)
+    let role = 'other', roleBasis = 'positional', linkage = 'positional', outcomeTokens = phrase ? phrase.tokens : tokenSet(text), outcomeText = phrase ? phrase.text : text.slice(0, 80), endpointKey = null
+    const primaryRole = () => (multiCohort && population ? 'co-primary' : 'primary')
     if (refersPrimary && primaryDefs[0]) {
-      role = multiCohort && population ? 'co-primary' : 'primary'; roleBasis = 'labeled'; linkage = 'definition-linked'
-      outcomeTokens = primaryDefs[0].headTokens; outcomeText = primaryDefs[0].text
-    } else if (refersPrimary) {
-      role = 'primary'; roleBasis = 'labeled'; linkage = 'same-sentence'
-    } else if (refersSecondary) {
-      role = 'secondary'; roleBasis = 'labeled'; linkage = 'same-sentence'
-    } else if (safety && !s.tuples.length) {
-      role = 'safety'; roleBasis = 'labeled'; linkage = 'same-sentence'; outcomeText = 'adverse events'
-      outcomeTokens = new Set(['adverse', 'safety', 'complication'])
-    } else {
-      const def = index.definitions.find((d) => overlap(d.headTokens, sTokens).length >= 1)
-      if (def) { role = def.role === 'secondary' ? 'secondary' : multiCohort && population ? 'co-primary' : 'primary'; roleBasis = 'definition-linked'; linkage = 'definition-linked'; outcomeTokens = def.headTokens; outcomeText = def.text }
+      role = primaryRole(); roleBasis = 'labeled'; linkage = 'definition-linked'; outcomeTokens = primaryDefs[0].coreTokens; outcomeText = primaryDefs[0].core; endpointKey = `def:${primaryDefs[0].sentence.i}:${primaryDefs[0].role}`
+    } else if (refersPrimary) { role = 'primary'; roleBasis = 'labeled'; linkage = 'same-sentence' }
+    else if (refersSecondary) { role = 'secondary'; roleBasis = 'labeled'; linkage = 'same-sentence' }
+    else if (safety && !s.tuples.length) { role = 'safety'; roleBasis = 'labeled'; linkage = 'same-sentence'; outcomeText = 'adverse events'; outcomeTokens = new Set(['adverse', 'safety', 'complication']) }
+    else if (phrase) {
+      const composite = index.definitions.find((d) => coversComposite(phrase, d) && overlap(phrase.tokens, d.allTokens).length >= 1)
+      const component = composite ? null : index.definitions.find((d) => overlap(phrase.tokens, d.componentTokens).length >= 1 && overlap(phrase.tokens, d.coreTokens).length === 0)
+      if (composite) { role = composite.role === 'secondary' ? 'secondary' : primaryRole(); roleBasis = 'definition-linked'; linkage = 'definition-linked'; outcomeTokens = composite.coreTokens; outcomeText = composite.core; endpointKey = `def:${composite.sentence.i}:${composite.role}` }
+      else if (component) { role = 'component'; roleBasis = 'definition-linked'; linkage = 'same-sentence'; endpointKey = `phrase:${s.i}:${[...phrase.tokens].sort().join('+')}` }
       else {
         const prev = index.sentences[s.i - 1]
         if (prev && prev.section === s.section && !prev.tuples.length && /\bprimary[- ](?:outcome|end ?point)\b/.test(prev.text) && primaryDefs[0]) {
-          role = multiCohort && population ? 'co-primary' : 'primary'; roleBasis = 'labeled'; linkage = 'adjacent-sentence'; outcomeTokens = primaryDefs[0].headTokens; outcomeText = primaryDefs[0].text
+          role = primaryRole(); roleBasis = 'labeled'; linkage = 'adjacent-sentence'; outcomeTokens = primaryDefs[0].coreTokens; outcomeText = primaryDefs[0].core; endpointKey = `def:${primaryDefs[0].sentence.i}:${primaryDefs[0].role}`
         }
+      }
+    } else {
+      const prev = index.sentences[s.i - 1]
+      if (prev && prev.section === s.section && !prev.tuples.length && /\bprimary[- ](?:outcome|end ?point)\b/.test(prev.text) && primaryDefs[0]) {
+        role = primaryRole(); roleBasis = 'labeled'; linkage = 'adjacent-sentence'; outcomeTokens = primaryDefs[0].coreTokens; outcomeText = primaryDefs[0].core; endpointKey = `def:${primaryDefs[0].sentence.i}:${primaryDefs[0].role}`
       }
     }
     const t = s.tuples[0] || null
     const direction = t ? tupleDirection(t) : NULLISH.test(text) ? 'no-clear-difference' : 'unknown'
     entries.push({
       id: `inv-${n++}`, sentence: s.i, role, roleBasis, linkage, uncertain: roleBasis === 'positional' || linkage === 'positional',
-      population, outcome: outcomeText, outcomeTokens: new Set(outcomeTokens), direction, text,
-      favorable: direction === 'favors-first' || direction === 'favors-second',
+      population, outcome: outcomeText, outcomeTokens: new Set(outcomeTokens), endpointKey, direction, text,
     })
   }
   const primaryBasis = entries.some((e) => (e.role === 'primary' || e.role === 'co-primary') && e.roleBasis === 'labeled') ? 'labeled'
@@ -76,15 +85,15 @@ export function buildInventory(index) {
 function claimCovers(claim, result, entry, index) {
   if (!RESULT_CLAIM_KINDS.has(claim.kind)) return false
   if (!['pass', 'pass-qualitative', 'withhold'].includes(result.eligibility)) return false
-  // population: the entry's cohort must be the claim's cohort (both unlabelled also matches)
   const claimCohorts = index.labels.cohorts.filter((c) => normalize(claim.population || '').includes(c))
   if (entry.population && !claimCohorts.includes(entry.population)) return false
   if (!entry.population && claimCohorts.length && index.labels.cohorts.length >= 2) return false
+  // identity by resolved endpoint when both sides have one
+  if (result.bound?.endpointKey && entry.endpointKey) return result.bound.endpointKey === entry.endpointKey
   const want = tokenSet(claim.outcome || '')
   for (const a of acronyms(claim.outcome || '')) want.add(a)
-  if (overlap(want, entry.outcomeTokens).length >= 1) return true
-  // a primary-role claim covers a primary entry of the same cohort
-  return (claim.role === 'primary' || claim.role === 'co-primary') && (entry.role === 'primary' || entry.role === 'co-primary')
+  if (overlap(want, entry.outcomeTokens).length >= 1 && (entry.role !== 'component' || claim.role === 'component' || claim.role === 'secondary')) return true
+  return (claim.role === 'primary' || claim.role === 'co-primary') && (entry.role === 'primary' || entry.role === 'co-primary') && !result.bound?.endpointKey
 }
 
 export function checkFidelity({ claims, results, inventory, card, index }) {
@@ -92,19 +101,17 @@ export function checkFidelity({ claims, results, inventory, card, index }) {
   const add = (c) => { if (!reasons.includes(c)) reasons.push(c) }
   const byId = new Map(results.map((r) => [r.id, r]))
   const eligible = claims.filter((c) => ['pass', 'pass-qualitative', 'withhold'].includes(byId.get(c.id)?.eligibility))
+  const covers = (claim, entry) => claimCovers(claim, byId.get(claim.id), entry, index)
 
-  // coverage and omissions
   const omitted = []
   for (const e of inventory.entries) {
-    const covered = eligible.some((c) => claimCovers(c, byId.get(c.id), e, index))
-    if (covered) continue
+    if (eligible.some((c) => covers(c, e))) continue
     const declared = (card.omissions || []).some((o) => overlap(tokenSet(o.describes), tokenSet(e.text)).length >= 2)
     const blocking = e.role === 'primary' || e.role === 'co-primary'
     omitted.push({ entry: e.outcome || e.text, role: e.role, roleBasis: e.roleBasis, severity: blocking ? 'blocking' : 'noted', declared })
     if (blocking) add(R.PRIMARY_MISSING)
   }
 
-  // order among result claims, in card order
   const resultClaims = eligible.filter((c) => RESULT_CLAIM_KINDS.has(c.kind))
   const isPrimary = (c) => c.role === 'primary' || c.role === 'co-primary'
   const isSub = (c) => ['secondary', 'component', 'subgroup', 'safety'].includes(c.role)
@@ -114,36 +121,30 @@ export function checkFidelity({ claims, results, inventory, card, index }) {
   const primaryEntries = inventory.entries.filter((e) => e.role === 'primary' || e.role === 'co-primary')
   if (primariesOnCard && firstSub >= 0 && firstSub < firstPrimary) add(R.PRIMARY_AFTER_SECONDARY)
   if (resultClaims.length && isSub(resultClaims[0]) && (!primariesOnCard || primaryEntries.some((e) => e.direction === 'no-clear-difference'))) add(R.COMPONENT_AS_HEADLINE)
-  // a null primary preceded by a favorable sub-result, or omitted while favorable results show
   const nullPrimaryEntries = primaryEntries.filter((e) => e.direction === 'no-clear-difference')
   for (const e of nullPrimaryEntries) {
-    const covering = resultClaims.findIndex((c) => claimCovers(c, byId.get(c.id), e, index))
+    const covering = resultClaims.findIndex((c) => covers(c, e))
     const favorableSubBefore = resultClaims.findIndex((c) => isSub(c) && (c.direction === 'favors-a' || c.direction === 'favors-b'))
     if (covering < 0 && resultClaims.some((c) => c.direction === 'favors-a' || c.direction === 'favors-b')) add(R.NULL_PRIMARY_OBSCURED)
     else if (covering >= 0 && favorableSubBefore >= 0 && favorableSubBefore < covering) add(R.NULL_PRIMARY_OBSCURED)
   }
-  // an author sentence placed before a null primary's claim (supported but misleading emphasis)
   const authorIdx = eligible.findIndex((c) => c.kind === 'author-statement' && /significan/.test(normalize(c.text || '')))
   if (authorIdx >= 0 && nullPrimaryEntries.length) {
-    const coveringIdx = eligible.findIndex((c) => nullPrimaryEntries.some((e) => claimCovers(c, byId.get(c.id), e, index)))
+    const coveringIdx = eligible.findIndex((c) => nullPrimaryEntries.some((e) => covers(c, e)))
     if (coveringIdx < 0 || authorIdx < coveringIdx + 2) add(R.NULL_PRIMARY_OBSCURED)
   }
-  // no declared primary: ordering still applies to the set of reported results
   if (inventory.primaryBasis === 'none') {
     add(R.NO_DECLARED_PRIMARY)
     const favorableShown = resultClaims.some((c) => c.direction === 'favors-a' || c.direction === 'favors-b')
-    const nullOmitted = inventory.entries.some((e) => e.direction === 'no-clear-difference' && !eligible.some((c) => claimCovers(c, byId.get(c.id), e, index)))
+    const nullOmitted = inventory.entries.some((e) => e.direction === 'no-clear-difference' && !eligible.some((c) => covers(c, e)))
     if (favorableShown && nullOmitted) { add(R.NULL_PRIMARY_OBSCURED); add(R.SECONDARY_WITHOUT_CONTEXT) }
   }
-  // a secondary estimate without a primary on the card
   if (!primariesOnCard && inventory.primaryBasis !== 'none' && resultClaims.some((c) => isSub(c) && c.estimate)) add(R.SECONDARY_WITHOUT_CONTEXT)
 
   const blocking = [R.PRIMARY_MISSING, R.PRIMARY_AFTER_SECONDARY, R.COMPONENT_AS_HEADLINE, R.NULL_PRIMARY_OBSCURED, R.SECONDARY_WITHOUT_CONTEXT, R.CROSS_TRIAL_RANKING]
-  const status = reasons.some((r) => blocking.includes(r)) ? 'fail' : 'pass'
   return {
-    status, reasons,
-    inventory: { entries: inventory.entries.map(({ outcomeTokens, text, favorable, sentence, ...e }) => e), primaryBasis: inventory.primaryBasis, uncertain: inventory.uncertain },
-    omitted,
-    covers: (claim, entry) => claimCovers(claim, byId.get(claim.id), entry, index),
+    status: reasons.some((r) => blocking.includes(r)) ? 'fail' : 'pass', reasons,
+    inventory: { entries: inventory.entries.map(({ outcomeTokens, text, sentence, ...e }) => e), primaryBasis: inventory.primaryBasis, uncertain: inventory.uncertain },
+    omitted, covers,
   }
 }

@@ -109,7 +109,10 @@ export async function assessCard({ source, profile = [], card, options = {} }) {
         if (wCohorts.length !== cCohorts.length) return false
         return !w.population || !c.population || overlap(tokenSet(c.population), tokenSet(w.population)).length >= 1
       }
-      const match = claims.find((c) => c.id !== w.id && ['pass', 'pass-qualitative'].includes(byId.get(c.id).eligibility) && byId.get(c.id).elements.direction === 'bound' && overlap(tokenSet(c.outcome || ''), wTok).length >= 1 && samePopulation(c))
+      // the conclusion must resolve to the SAME endpoint, not to a component that shares a word
+      const wKey = byId.get(w.id).bound.endpointKey
+      const sameEndpoint = (c) => { const k = byId.get(c.id).bound.endpointKey; return wKey && k ? k === wKey : overlap(tokenSet(c.outcome || ''), wTok).length >= 1 }
+      const match = claims.find((c) => c.id !== w.id && ['pass', 'pass-qualitative'].includes(byId.get(c.id).eligibility) && byId.get(c.id).elements.direction === 'bound' && sameEndpoint(c) && samePopulation(c))
       if (match) { conclusionClaims.push(match.id); conclusionFor[w.id] = match.id }
     }
     fallback = { kind: 'estimate-withheld', conclusionClaims, conclusionFor }

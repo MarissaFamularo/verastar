@@ -185,6 +185,9 @@ export const REASONS = Object.freeze({
   OUTCOME_SUBSTITUTED: 'outcome-substituted',
   TIMEPOINT_UNBOUND: 'timepoint-unbound',
   TIMEPOINT_MISMATCH: 'timepoint-mismatch',               // a printed timepoint from another result
+  TIMEPOINT_UNIT_MISMATCH: 'timepoint-unit-mismatch',     // same number, different unit
+  TIMEPOINT_MEANING_MISMATCH: 'timepoint-meaning-mismatch', // same number and unit, different sense (median follow-up vs fixed horizon …)
+  INTERVAL_LEVEL_MISMATCH: 'interval-level-mismatch',     // same bounds, different (or unstated) confidence level
   DIRECTION_UNSUPPORTED: 'direction-unsupported',
   EQUIVALENCE_NOT_TESTED: 'equivalence-not-tested',
   VALUE_MISMATCH: 'value-mismatch',
@@ -231,7 +234,8 @@ export const REASONS = Object.freeze({
   PROSE_ARM_SWAPPED: 'prose-arm-swapped',                 // favored arm not first, or arm values in the wrong order
   PROSE_OUTCOME_SUBSTITUTED: 'prose-outcome-substituted', // a component named where the claim's outcome belongs
   PROSE_POPULATION_DROPPED: 'prose-population-dropped',   // cohort / restriction in the claim absent from the sentence
-  PROSE_TIMEPOINT_CHANGED: 'prose-timepoint-changed',
+  PROSE_TIMEPOINT_CHANGED: 'prose-timepoint-changed',     // number, unit or sense of the timepoint differs from the claim
+  PROSE_INTERVAL_LEVEL_CHANGED: 'prose-interval-level-changed',
 })
 
 /** @type {ProfileItem[]} */

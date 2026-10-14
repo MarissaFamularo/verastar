@@ -257,7 +257,7 @@ describe(`${adversarial.id} — ${adversarial.title}`, () => {
         it(`${t.name} → ineligible`, async () => {
           const src = g.source()
           // Precondition: every number in the claim is printed somewhere in the source.
-          const e = t.claim.estimate
+          const e = t.claim.estimate || {}
           for (const n of [e.value, e.interval?.low, e.interval?.high, e.p].filter((x) => x != null)) {
             const printed = String(Math.abs(n)).replace('.', '[.·]')
             expect(src.text, `${n} should be printed in the source`).toMatch(new RegExp(printed))

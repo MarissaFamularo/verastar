@@ -35,10 +35,13 @@ const primary = claim({
   evidence: { quote: Q.primary },
 })
 const primaryQualitative = claim({ ...primary, id: 'primary-qual', estimate: null, attribution: 'authors', evidence: { quote: Q.interpretation }, text: 'authors attribute the difference largely to fewer deaths' })
+// Specification correction (2026-10-14): the death HR's interval is 1·00–1·87, which contains
+// the null; under the reference's rule the card may state only "no clear difference" for it,
+// with the estimate shown. An earlier draft of this case asserted favors-b.
 const death = claim({
   id: 'death', kind: 'effect', role: 'component',
   population: 'CLTI requiring infra-popliteal revascularisation', comparator: { a: 'vein bypass first', b: 'best endovascular treatment first' },
-  outcome: 'all-cause death', direction: 'favors-b', language: 'associational',
+  outcome: 'all-cause death', direction: 'no-clear-difference', language: 'associational',
   estimate: { measure: 'aHR', value: 1.37, interval: ci(1.0, 1.87), p: null, unit: null, sample: null },
   evidence: { quote: Q.death },
 })
@@ -68,6 +71,14 @@ export default {
 
   misleading: [
     {
+      // The source prints 63% for the vein bypass group. Assigning it to the endovascular-first
+      // group contradicts the source (not merely "cannot verify"): ineligible, never withheld.
+      name: '63% assigned to the endovascular-first group → source contradiction, rejected',
+      check: 'claim-support',
+      claim: claim({ id: 'm-arm', kind: 'rate', role: 'primary', population: 'best endovascular treatment group', outcome: 'major amputation or death', estimate: { measure: 'percent', value: 63, interval: null, p: null, unit: '%', sample: null }, evidence: { quote: Q.primary } }),
+      expect: 'fail', reasons: [R.ARM_VALUE_MISMATCH],
+    },
+    {
       name: 'legacy take: death HR headlined as the finding (claim itself is supported; see fidelity)',
       check: 'claim-support',
       claim: death, expect: 'pass',
@@ -81,8 +92,11 @@ export default {
     {
       name: '"bypass increases mortality" (unqualified generalization)',
       check: 'claim-support',
-      claim: claim({ ...death, id: 'm3', population: 'CLTI', comparator: { a: 'bypass', b: 'endovascular therapy' }, language: 'causal', estimate: null }),
-      expect: 'fail', reasons: [R.POPULATION_OVERGENERALIZED, R.COMPARATOR_UNBOUND],
+      claim: claim({ ...death, id: 'm3', population: 'CLTI', comparator: { a: 'bypass', b: 'endovascular therapy' }, direction: 'favors-b', language: 'causal', estimate: null }),
+      // The abstract never prints "CLTI" (it writes the condition out and restricts it to
+      // infra-popliteal disease), so the generalized population is unverifiable rather than
+      // contradicted; and the CI 1·00–1·87 does not support a direction.
+      expect: 'fail', reasons: [R.POPULATION_UNBOUND, R.POPULATION_OVERGENERALIZED, R.DIRECTION_UNSUPPORTED],
     },
     {
       name: 'supportable causal form: bypass-first worse AFS, infra-popliteal population, largely through deaths',

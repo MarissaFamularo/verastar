@@ -8,12 +8,13 @@
 
 import { normalize, extractNumbersWithIndex, numbersEqual, tokens, tokenSet, overlap } from './text.js'
 import { REASONS as R } from '../acceptance/schema.js'
+import { parseTimepoint } from './check.js'
 
 const COMPARATIVE = /\b(largest|biggest|smallest|first(?:-ever)?|superior|inferior|outperform(?:ed|s)?|best|strongest|unprecedented|landmark|definitive|practice-changing)\b/
 const BENEFIT = /\b(fewer|lower|reduced|reduce[sd]?|improved?|less|decreased?|better|favou?red|protective|benefit(?:ed)?)\b/
 const HARM = /\b(higher|more|increased?|worse|greater|excess)\b/
 const NULLW = /\bdid not differ\b|\bno (?:statistically )?significant difference\b|\bno (?:clear|meaningful) difference\b|\bsimilar\b|\bno difference\b|\bnot differ\b|\bwere comparable\b/
-const TIME = /(?<![\d.])(\d+(?:\.\d+)?)(?:\s|-)(?:years?|months?|weeks?|days?)\b/g
+const TIME_UNIT = /(?<![\d.])(\d+(?:\.\d+)?)(?:\s|-)(years?|months?|weeks?|days?)\b/g
 const CI_LABEL = /(\d+)%\s*(?:ci|confidence interval)\b|\bci\b|\bconfidence interval\b/
 const GENERIC_ARM = new Set(['initial', 'strategy', 'group', 'arm', 'therapy', 'treatment', 'first', 'best'])
 
@@ -65,6 +66,8 @@ export function checkProse({ rendered, assessment, claims }) {
     }
     const ciHere = CI_LABEL.test(norm)
     if (ciHere && allBracket && !anyCi && live.some((c) => c.claim.estimate?.interval)) add(R.PROSE_INTERVAL_LABEL_INVENTED)
+    const levels = live.map((c) => c.claim.estimate?.interval?.label).filter((l) => l && l !== 'printed-bracket').map((l) => parseFloat(l))
+    for (const m of norm.matchAll(/(\d+(?:\.\d+)?)%\s*(?:ci|confidence interval)\b/g)) if (!levels.some((l) => numbersEqual(l, parseFloat(m[1])))) add(R.PROSE_INTERVAL_LEVEL_CHANGED)
     for (const n of numbersIn(s.text)) {
       if (withheld.some((w) => numbersEqual(w, n)) && !allowed.some((a) => numbersEqual(a, n))) add(R.NUMBER_FROM_WITHHELD_ESTIMATE)
       else if (!allowed.some((a) => numbersEqual(a, n))) add(R.UNBACKED_NUMBER)
@@ -111,20 +114,35 @@ export function checkProse({ rendered, assessment, claims }) {
           }
         }
         if (cl.outcome) {
+          // the sentence must name the complete endpoint the claim was bound to: the core (half
+          // its words or more), its acronym, or every disjunct of a composite. Naming one
+          // component or one disjunct is a substitution.
           const st = tokenSet(s.text)
-          const head = new Set([...(c.res.bound?.outcomeDef?.headTokens || []), ...tokens(cl.outcome)])
-          const comp = new Set((c.res.bound?.outcomeDef?.componentTokens || []).filter((t) => !head.has(t)))
-          const headHit = overlap(head, st).length > 0
-          const compHit = overlap(comp, st).length > 0
-          const carried = cl.direction === 'no-clear-difference' && overlap(head, prevOutcome).length > 0
-          if (compHit && !headHit) add(R.PROSE_OUTCOME_SUBSTITUTED)
-          else if (!headHit && !carried) add(R.PROSE_OUTCOME_SUBSTITUTED)
-          if (headHit) prevOutcome = head
+          const od = c.res.bound?.outcomeDef || { headTokens: tokens(cl.outcome), acronyms: [], disjuncts: [], componentTokens: [] }
+          const acr = new Set(od.acronyms || [])
+          const core = new Set((od.headTokens || []).filter((t) => !acr.has(t)))
+          const coreSize = [...core].filter((t) => t.length > 2).length
+          const coreHit = overlap(core, st).length
+          const sayComposite = st.has('composite') || [...acr].some((a) => st.has(a))
+          const disj = (od.disjuncts || []).map((d) => new Set(d))
+          const covered = disj.filter((d) => overlap(d, st).length > 0).length
+          const compHit = overlap(new Set(od.componentTokens || []), st).length > 0
+          const named = sayComposite || (coreSize <= 3 ? coreHit >= Math.max(1, Math.ceil(coreSize / 2)) : coreHit >= Math.ceil(coreSize / 2) && coreHit >= 2) || (disj.length >= 2 && covered === disj.length)
+          const carried = cl.direction === 'no-clear-difference' && overlap(core, prevOutcome).length > 0
+          if (!named && (compHit || covered > 0)) add(R.PROSE_OUTCOME_SUBSTITUTED)
+          else if (!named && !carried) add(R.PROSE_OUTCOME_SUBSTITUTED)
+          if (named) prevOutcome = core
         }
         if (cl.timepoint && c.res.elements.timepoint === 'bound') {
-          const want = numbersIn(cl.timepoint)
-          const here = [...norm.matchAll(TIME)].map((m) => parseFloat(m[1]))
-          if (here.length && !here.every((h) => want.some((w) => numbersEqual(w, h)))) add(R.PROSE_TIMEPOINT_CHANGED)
+          // number, unit and sense must all match the claim's checked timepoint
+          const want = c.res.bound?.timepoint || parseTimepoint(cl.timepoint)
+          for (const m of norm.matchAll(TIME_UNIT)) {
+            const h = { value: parseFloat(m[1]), unit: m[2].replace(/s$/, '') }
+            const before = norm.slice(0, m.index)
+            const sense = /\b(?:median|mean)\b[^.]{0,20}$/.test(before) ? 'median-follow-up' : /\b(?:minimum|at least)\b[^.]{0,12}$/.test(before) ? 'minimum-follow-up' : /\b(?:at|by|within)\s+(?:a\s+)?$/.test(before) ? 'fixed' : /\b(?:for|over|lasting)\s+(?:a\s+)?$/.test(before) ? 'duration' : null
+            const ok = want.items.some((w) => numbersEqual(w.value, h.value) && (!w.unit || w.unit === h.unit)) && (!want.sense || !sense || sense === want.sense || (sense === 'duration' && want.sense === 'median-follow-up' && /\bmedian\b/.test(before.slice(-30))))
+            if (!ok) add(R.PROSE_TIMEPOINT_CHANGED)
+          }
         }
       }
     }

@@ -8,7 +8,15 @@ import { claim } from './load.js'
 import { REASONS as R } from '../schema.js'
 
 const bound = (keys) => Object.fromEntries(keys.map((k) => [k, 'bound']))
-const DEF = { headTokens: ['composite', 'adverse', 'death', 'cause', 'male'], componentTokens: ['amputation', 'ankle', 'reintervention', 'bypass', 'graft', 'revision', 'thrombectomy', 'thrombolysi'] }
+// What a correct assessment binds the cohort claims' outcome to: the definition's core
+// ("a composite of a major adverse limb event or death from any cause"), its acronyms, its two
+// disjuncts, and its components.
+const DEF = {
+  headTokens: ['composite', 'major', 'adverse', 'limb', 'death', 'mal', 'ale', 'male'],
+  acronyms: ['mal', 'ale', 'male'],
+  disjuncts: [['composite', 'major', 'adverse', 'limb'], ['death']],
+  componentTokens: ['amputation', 'above', 'ankle', 'major', 'limb', 'reintervention', 'new', 'bypass', 'graft', 'revision', 'thrombectomy', 'thrombolysi'],
+}
 
 // The conclusions sentence of the abstract carries the cohort-1 conclusion independently of
 // the results sentence; a state-A fallback rests on it.
@@ -110,6 +118,10 @@ export default {
     { name: 'arm values swapped, arm order kept', sentence: s('In patients with a usable single-segment great saphenous vein (cohort 1), an initial surgical strategy led to fewer major adverse limb events or deaths than an initial endovascular strategy over a median 2.7 years (57.4% vs 42.6%; HR 0.68, 95% CI 0.59–0.79).', C1), reasons: [R.PROSE_ARM_SWAPPED] },
     { name: 'amputation substituted for the composite', sentence: s('In patients with a usable single-segment great saphenous vein (cohort 1), an initial surgical strategy led to fewer major amputations than an initial endovascular strategy over a median 2.7 years (42.6% vs 57.4%; HR 0.68, 95% CI 0.59–0.79).', C1), reasons: [R.PROSE_OUTCOME_SUBSTITUTED] },
     { name: 'conduit restriction removed', sentence: s('In patients with CLTI, an initial surgical strategy led to fewer major adverse limb events or deaths than an initial endovascular strategy over a median 2.7 years (42.6% vs 57.4%; HR 0.68, 95% CI 0.59–0.79).', C1), reasons: [R.PROSE_POPULATION_DROPPED] },
+    { name: 'timepoint unit changed (2.7 months)', sentence: s('In patients with a usable single-segment great saphenous vein (cohort 1), an initial surgical strategy led to fewer major adverse limb events or deaths than an initial endovascular strategy over a median 2.7 months (42.6% vs 57.4%; HR 0.68, 95% CI 0.59–0.79).', C1), reasons: [R.PROSE_TIMEPOINT_CHANGED] },
+    { name: 'timepoint meaning changed (at 2.7 years)', sentence: s('In patients with a usable single-segment great saphenous vein (cohort 1), an initial surgical strategy led to fewer major adverse limb events or deaths than an initial endovascular strategy at 2.7 years (42.6% vs 57.4%; HR 0.68, 95% CI 0.59–0.79).', C1), reasons: [R.PROSE_TIMEPOINT_CHANGED] },
+    { name: 'confidence level changed (97.5% CI)', sentence: s('In patients with a usable single-segment great saphenous vein (cohort 1), an initial surgical strategy led to fewer major adverse limb events or deaths than an initial endovascular strategy over a median 2.7 years (42.6% vs 57.4%; HR 0.68, 97.5% CI 0.59–0.79).', C1), reasons: [R.PROSE_INTERVAL_LEVEL_CHANGED] },
+    { name: 'wrong outcome sharing words (major limb reinterventions)', sentence: s('In patients with a usable single-segment great saphenous vein (cohort 1), an initial surgical strategy led to fewer major limb reinterventions than an initial endovascular strategy over a median 2.7 years (42.6% vs 57.4%; HR 0.68, 95% CI 0.59–0.79).', C1), reasons: [R.PROSE_OUTCOME_SUBSTITUTED] },
     { name: 'timepoint changed to the other cohort\'s', sentence: s('In patients with a usable single-segment great saphenous vein (cohort 1), an initial surgical strategy led to fewer major adverse limb events or deaths than an initial endovascular strategy over a median 1.6 years (42.6% vs 57.4%; HR 0.68, 95% CI 0.59–0.79).', C1), reasons: [R.PROSE_TIMEPOINT_CHANGED] },
   ],
 

@@ -33,7 +33,9 @@ function effectSentence(claim, withEstimate) {
   const tail = numbers ? ` (${numbers})` : ''
   if (claim.direction === 'no-clear-difference') return `${where}${a && b ? `${a} and ${b}` : 'the two groups'} did not differ clearly in ${claim.outcome}${when}${tail}.`
   const [fav, other] = claim.direction === 'favors-b' ? [b, a] : [a, b]
-  return `${cap(`${where}${fav} ${verb} a lower rate of ${claim.outcome} than ${other}${when}${tail}.`)}`
+  // a "good" outcome (survival, healing, patency, walking distance) is better, not lower
+  const good = /\bsurvival\b|\bhealing\b|\bpatency\b|\bdistance\b|\bquality of life\b|\bsuccess\b/.test(String(claim.outcome).toLowerCase())
+  return `${cap(`${where}${fav} ${verb} ${good ? 'better' : 'a lower rate of'} ${claim.outcome} than ${other}${when}${tail}.`)}`
 }
 
 export function renderCard({ assessment, claims, personal = [] }) {

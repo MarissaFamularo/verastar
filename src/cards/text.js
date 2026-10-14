@@ -14,9 +14,18 @@ const STOP = new Set(('a an the of in on at to for from by with and or vs versus
   'between among compared comparing rate rates risk event events outcome outcomes primary secondary co-primary ' +
   'median mean years year months month weeks week days day up more most less least also only into out').split(' '))
 
+// Canonical spellings so an outcome named two ways compares as one: death from any cause /
+// all-cause mortality / died → death.
+const CANON = [[/\bdeath from any cause\b|\ball-cause (?:death|mortality)\b|\bany-cause mortality\b|\boverall mortality\b|\bmortality\b|\bdied\b|\bdeaths\b/g, 'death']]
+export function canonical(s) {
+  let n = normalize(s)
+  for (const [re, to] of CANON) n = n.replace(re, to)
+  return n
+}
+
 // Content tokens: lowercase, alphanumeric, plural-insensitive, stopwords removed.
 export function tokens(s) {
-  return normalize(s)
+  return canonical(s)
     .replace(/[^a-z0-9%]+/g, ' ')
     .split(' ')
     .filter((w) => w && !STOP.has(w) && !/^\d+(\.\d+)?%?$/.test(w))
