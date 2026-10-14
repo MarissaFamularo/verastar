@@ -73,7 +73,10 @@ export function checkProse({ rendered, assessment, claims }) {
       else if (!allowed.some((a) => numbersEqual(a, n))) add(R.UNBACKED_NUMBER)
     }
 
-    if (kind !== 'read' && COMPARATIVE.test(norm)) add(R.UNBACKED_COMPARATIVE)
+    // a comparative inside a printed arm label ("best endovascular treatment") is a name, not a claim
+    let masked = norm
+    for (const c of live) for (const arm of [c.claim.comparator?.a, c.claim.comparator?.b]) if (arm) masked = masked.split(normalize(arm).replace(/\s*\([^)]*\)\s*/g, ' ').trim()).join(' ')
+    if (kind !== 'read' && COMPARATIVE.test(masked)) add(R.UNBACKED_COMPARATIVE)
     if (kind !== 'read' && /\b(primary|secondary)\b/.test(norm) && !live.some((c) => c.res.elements.role === 'bound')) add(R.ROLE_WORD_UNBACKED)
 
     if (kind === 'finding') {

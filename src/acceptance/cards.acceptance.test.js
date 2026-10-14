@@ -237,6 +237,29 @@ describe('C6-BASIL2 — scenarios', () => {
   })
 })
 
+describe('C6-BASIL2 — end to end: every scenario renders and passes the prose check', () => {
+  const c = basil2
+  const personal = c.personal.filter((p) => p.expect === 'pass').map((p) => p.personal)
+  const expectations = {
+    normal: { includes: ['1.35', '1.02', '0.037', 'amputation-free survival', 'death'], excludes: ['could not be confirmed'] },
+    stateA_genuine: { includes: ['could not be confirmed', 'amputation-free survival'], excludes: ['1.35', '1.36'] },
+    stateA_simulated: { includes: ['could not be confirmed', 'amputation-free survival'], excludes: ['1.35'] },
+    stateA_noConclusion: { includes: ['could not be confirmed'], excludes: ['1.35', 'better amputation-free survival'] },
+    stateB: { includes: ['not available', 'amputation-free survival'], excludes: ['1.35', '1.37', '345', '63%', '53%'] },
+  }
+  for (const [name, sc] of Object.entries(c.scenarios)) {
+    it(`${name}: rendered card passes checkProse and carries only what the scenario allows`, async () => {
+      const a = await run(c, { source: sc.source(), claims: sc.card, personal, options: sc.options })
+      const rendered = renderCard({ assessment: a, claims: sc.card, personal })
+      const p = checkProse({ rendered, assessment: a, claims: sc.card })
+      expect(p.sentences.filter((x) => x.status !== 'ok').map((x) => [rendered.sentences[x.index].text, x.reasons])).toEqual([])
+      const text = rendered.sentences.map((x) => x.text).join(' ')
+      for (const n of expectations[name].includes) expect(text, `${name} should include ${n}`).toContain(n)
+      for (const n of expectations[name].excludes) expect(text, `${name} should not include ${n}`).not.toContain(n)
+    })
+  }
+})
+
 describe('C1-BESTCLI — landmark recommendation', () => {
   it('editorial landmark status strengthens the recommendation and adds no claim', async () => {
     const c = bestcli

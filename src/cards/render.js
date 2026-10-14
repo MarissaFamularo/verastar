@@ -73,6 +73,12 @@ export function renderCard({ assessment, claims, personal = [] }) {
     sentences.push({ text: effectSentence(c, withEst(c.id)), claims: [c.id], kind: 'finding' })
   }
 
+  // results unavailable: say so, anchored to the outcome definition when one is shown
+  if (assessment.render.state === 'reduced-results-unavailable') {
+    const def = claims.find((c) => c.kind === 'outcome-definition' && shown(c.id))
+    sentences.push({ text: `Main result not available to the app: the text available did not include the results${def ? ` for ${def.outcome}` : ''}; read the paper's results before repeating a takeaway.`, claims: def ? [def.id] : [], kind: def ? 'finding' : 'read' })
+  }
+
   // for you
   for (const p of personal) if (assessment.render.personalShown.includes(p.id)) sentences.push({ text: `For you: ${p.text}.`.replace(/\.\.$/, '.'), claims: design ? [design.id] : [], personal: [p.id], kind: 'for-you' })
 
