@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest'
 import { assessCard } from '../cards/assess.js'
 import { checkProse } from '../cards/prose.js'
+import { renderCard } from '../cards/render.js'
 import { REASONS as R } from './schema.js'
 import bestcli from './cases/bestcli.js'
 import crest2 from './cases/crest2.js'
@@ -319,14 +320,21 @@ describe(`${roles.id} — ${roles.title}`, () => {
 describe(`${prose.id} — ${prose.title}`, () => {
   for (const t of prose.accepted) {
     it(`accepted: ${t.name}`, () => {
-      const p = checkProse({ rendered: t.rendered, assessment: t.assessment, claims: bestcli.fidelity[0].card })
+      const p = checkProse({ rendered: t.rendered, assessment: t.assessment, claims: prose.claims })
+      expect(p.sentences.filter((x) => x.status !== 'ok')).toEqual([])
       expect(p.status).toBe('pass')
-      for (const s of p.sentences) expect(s.status, `sentence ${s.index}`).toBe('ok')
+    })
+  }
+  for (const t of prose.renderedAdversarial) {
+    it(`rendered adversarial: ${t.name} → fail`, () => {
+      const p = checkProse({ rendered: { sentences: [t.sentence] }, assessment: prose.accepted[0].assessment, claims: prose.claims })
+      expect(p.status).toBe('fail')
+      expectReasons(p.sentences[0].reasons, t.reasons)
     })
   }
   for (const t of prose.rejected) {
     it(`rejected: ${t.name}`, () => {
-      const p = checkProse({ rendered: { sentences: [t.sentence] }, assessment: t.assessment, claims: bestcli.fidelity[0].card })
+      const p = checkProse({ rendered: { sentences: [t.sentence] }, assessment: t.assessment, claims: t.claims || prose.claims })
       expect(p.status).toBe('fail')
       expect(p.sentences[0].status).toBe('reject')
       expectReasons(p.sentences[0].reasons, t.reasons)
@@ -341,6 +349,66 @@ describe(`${prose.id} — ${prose.title}`, () => {
     const bad = checkProse({ rendered: { sentences: [b.rejected.sentence] }, assessment: b.assessment, claims })
     expect(bad.status).toBe('fail')
     expectReasons(bad.sentences[0].reasons, b.rejected.reasons)
+  })
+})
+
+// The one complete path: source text → assessment → constrained rendering → prose check.
+const BESTCLI_LIVE = {}
+describe('C1-BESTCLI — end to end', () => {
+  const c = bestcli
+  const card = prose.claims
+  const personal = c.personal.filter((p) => p.expect === 'pass').map((p) => p.personal)
+
+  it('assesses the full reference card: every claim eligible, fidelity pass, full render', async () => {
+    const a = await run(c, { claims: card, personal })
+    BESTCLI_LIVE.assessment = a
+    expectInvariants(a)
+    for (const r of a.claims) expect(['pass', 'pass-qualitative'], `${r.id}: ${r.reasons}`).toContain(r.eligibility)
+    expect(a.fidelity.status).toBe('pass')
+    expect(a.render.state).toBe('full')
+    expect(a.render.mainResultShown).toBe(true)
+    expect(a.render.estimatesShown).toEqual(expect.arrayContaining(['enrollment', 'cohort1', 'cohort2']))
+    expect(a.recommendation).toEqual({ read: 'full', basis: ['E1'] })
+  })
+
+  it('the constrained renderer\'s output passes the prose check and carries the reference facts', async () => {
+    const a = await run(c, { claims: card, personal })
+    const rendered = renderCard({ assessment: a, claims: card, personal })
+    const p = checkProse({ rendered, assessment: a, claims: card })
+    expect(p.sentences.filter((x) => x.status !== 'ok').map((x) => [rendered.sentences[x.index].text, x.reasons])).toEqual([])
+    const text = rendered.sentences.map((x) => x.text).join(' ')
+    for (const needle of ['1,830', 'cohort 1', 'cohort 2', 'surgical', 'endovascular', '42.6%', '57.4%', '0.68', '0.59', '0.79', '2.7 years', '0.58', '1.06', '1.6 years', 'landmark']) expect(text).toContain(needle)
+    expect(text).not.toMatch(/amputations? than/) // no component where the composite belongs
+  })
+
+  it('the reference rendering passes against the real assessment', async () => {
+    const a = await run(c, { claims: card, personal })
+    const p = checkProse({ rendered: prose.accepted[0].rendered, assessment: a, claims: card })
+    expect(p.sentences.filter((x) => x.status !== 'ok').map((x) => [x.index, x.reasons])).toEqual([])
+  })
+
+  for (const t of prose.renderedAdversarial) {
+    it(`rendered adversarial against the real assessment: ${t.name} → fail`, async () => {
+      const a = await run(c, { claims: card, personal })
+      const p = checkProse({ rendered: { sentences: [t.sentence] }, assessment: a, claims: card })
+      expect(p.status).toBe('fail')
+      expectReasons(p.sentences[0].reasons, t.reasons)
+    })
+  }
+
+  it('state A end to end: simulated estimate failure renders the conclusion without the number', async () => {
+    const a = await run(c, { claims: card, personal, options: { simulateEstimateFailure: ['cohort1'] } })
+    expectInvariants(a)
+    expect(a.render.state).toBe('reduced-estimate-withheld')
+    expect(a.render.fallback.conclusionClaims).toEqual(['cohort1-conclusion'])
+    expect(a.render.mainResultShown).toBe(true)
+    const rendered = renderCard({ assessment: a, claims: card, personal })
+    const p = checkProse({ rendered, assessment: a, claims: card })
+    expect(p.sentences.filter((x) => x.status !== 'ok').map((x) => [rendered.sentences[x.index].text, x.reasons])).toEqual([])
+    const text = rendered.sentences.map((x) => x.text).join(' ')
+    expect(text).not.toContain('0.68')
+    expect(text).toContain('could not be confirmed')
+    expect(text).toContain('0.79')
   })
 })
 

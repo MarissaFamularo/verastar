@@ -37,6 +37,7 @@ export function claim(fields) {
     timepoint: fields.timepoint ?? null,
     direction: fields.direction ?? null,
     estimate: fields.estimate ?? null,
+    arms: fields.arms ?? undefined,
     language: fields.language ?? 'none',
     basis: fields.basis ?? 'source',
     attribution: fields.attribution ?? null,

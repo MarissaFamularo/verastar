@@ -41,6 +41,8 @@
  * @property {string|null} timepoint
  * @property {'favors-a'|'favors-b'|'no-clear-difference'|'equivalent'|'non-inferior'|null} direction
  * @property {Estimate|null} estimate
+ * @property {{arm:'a'|'b', percent?:number, count?:number, denominator?:number}[]} [arms]
+ *   arm-specific printed values the card will show; each is checked for owner arm
  * @property {'causal'|'associational'|'none'} language
  * @property {'source'|'design'|'editorial'} basis
  * @property {'authors'|null} attribution
@@ -225,6 +227,11 @@ export const REASONS = Object.freeze({
   CLAIM_NOT_SHOWN_CITED: 'claim-not-shown-cited',
   PROSE_INTERVAL_LABEL_INVENTED: 'prose-interval-label-invented',
   PERSONAL_UNTAGGED: 'personal-untagged',
+  // final prose — structure against the cited claim's checked fields
+  PROSE_ARM_SWAPPED: 'prose-arm-swapped',                 // favored arm not first, or arm values in the wrong order
+  PROSE_OUTCOME_SUBSTITUTED: 'prose-outcome-substituted', // a component named where the claim's outcome belongs
+  PROSE_POPULATION_DROPPED: 'prose-population-dropped',   // cohort / restriction in the claim absent from the sentence
+  PROSE_TIMEPOINT_CHANGED: 'prose-timepoint-changed',
 })
 
 /** @type {ProfileItem[]} */

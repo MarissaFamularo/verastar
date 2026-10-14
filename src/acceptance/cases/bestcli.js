@@ -11,7 +11,10 @@ const Q = {
   cohort2: 'In cohort 2, a primary-outcome event occurred in 83 of 194 patients (42.8%) in the surgical group and in 95 of 199 patients (47.7%) in the endovascular group (hazard ratio, 0.79; 95% CI, 0.58 to 1.06; P = 0.12) after a median follow-up of 1.6 years.',
 }
 
-const enrollment = claim({ id: 'design', kind: 'design', role: 'design', population: 'CLTI with infrainguinal peripheral artery disease', evidence: { quote: Q.enroll }, text: 'International randomized trial, 1,830 patients, two parallel cohorts by conduit availability.' })
+// Every factual assertion the reference card prints is a claim: the design, the enrollment
+// count, both cohort results WITH their arm-specific percentages, and the composite definition.
+const design = claim({ id: 'design', kind: 'design', role: 'design', population: 'CLTI with infrainguinal peripheral artery disease', evidence: { quote: Q.enroll } })
+const enrollment = claim({ id: 'enrollment', kind: 'count', role: 'design', estimate: { measure: 'count', value: 1830, interval: null, p: null, unit: 'patients', sample: null }, evidence: { quote: Q.enroll } })
 const composite = claim({ id: 'primary-def', kind: 'outcome-definition', role: 'primary', outcome: 'MALE (amputation above the ankle or major limb reintervention) or death from any cause', evidence: { quote: Q.primaryDef } })
 const cohort1 = claim({
   id: 'cohort1', kind: 'effect', role: 'co-primary',
@@ -20,6 +23,7 @@ const cohort1 = claim({
   outcome: 'primary composite: MALE or death', timepoint: 'median 2.7 years',
   direction: 'favors-a', language: 'causal',
   estimate: { measure: 'HR', value: 0.68, interval: ci(0.59, 0.79), p: null, unit: null, sample: null },
+  arms: [{ arm: 'a', count: 302, denominator: 709, percent: 42.6 }, { arm: 'b', count: 408, denominator: 711, percent: 57.4 }],
   evidence: { quote: Q.cohort1 },
 })
 const cohort2 = claim({
@@ -29,6 +33,7 @@ const cohort2 = claim({
   outcome: 'primary composite: MALE or death', timepoint: 'median 1.6 years',
   direction: 'no-clear-difference', language: 'none',
   estimate: { measure: 'HR', value: 0.79, interval: ci(0.58, 1.06), p: null, unit: null, sample: null },
+  arms: [{ arm: 'a', count: 83, denominator: 194, percent: 42.8 }, { arm: 'b', count: 95, denominator: 199, percent: 47.7 }],
   evidence: { quote: Q.cohort2 },
 })
 const notSeparated = claim({ id: 'components-not-separated', kind: 'absence', role: 'design', basis: 'design', outcome: 'component outcomes (amputation, reintervention, death) separately', text: 'The abstract does not separate the composite components.' })
@@ -40,10 +45,11 @@ export default {
   profile: PROFILE,
 
   supported: [
-    { claim: enrollment, expect: 'pass-qualitative' },
+    { claim: design, expect: 'pass-qualitative' },
+    { claim: enrollment, expect: 'pass', bound: ['value'] },
     { claim: composite, expect: 'pass-qualitative' },
-    { claim: cohort1, expect: 'pass', bound: ['population', 'comparator', 'outcome', 'timepoint', 'direction', 'value', 'interval'] },
-    { claim: cohort2, expect: 'pass', bound: ['population', 'comparator', 'outcome', 'timepoint', 'direction', 'value', 'interval'] },
+    { claim: cohort1, expect: 'pass', bound: ['population', 'comparator', 'outcome', 'timepoint', 'direction', 'value', 'interval', 'arms'] },
+    { claim: cohort2, expect: 'pass', bound: ['population', 'comparator', 'outcome', 'timepoint', 'direction', 'value', 'interval', 'arms'] },
     { claim: notSeparated, expect: 'pass-qualitative' },
   ],
 
@@ -69,8 +75,8 @@ export default {
   ],
 
   fidelity: [
-    { name: 'both co-primary cohorts present, definition present', card: [enrollment, composite, cohort1, cohort2, notSeparated], expect: 'pass' },
-    { name: 'cohort 2 omitted', card: [enrollment, composite, cohort1], expect: 'fail', reasons: [R.PRIMARY_MISSING] },
+    { name: 'both co-primary cohorts present, definition present', card: [design, enrollment, composite, cohort1, cohort2, notSeparated], expect: 'pass' },
+    { name: 'cohort 2 omitted', card: [design, enrollment, composite, cohort1], expect: 'fail', reasons: [R.PRIMARY_MISSING] },
   ],
 
   personal: [
@@ -82,11 +88,11 @@ export default {
   // Omitted factual assertions: every inventory entry with no claim on the card is listed in
   // fidelity.omitted with its role, how the role was established, and whether it blocks.
   omissions: [
-    { name: 'cohort 2 omitted → listed as a blocking co-primary omission', card: [enrollment, composite, cohort1], fidelity: 'fail', omitted: { roleIn: ['co-primary', 'primary'], severity: 'blocking' } },
-    { name: 'adverse-events sentence omitted → listed, noted, not blocking', card: [enrollment, composite, cohort1, cohort2, notSeparated], fidelity: 'pass', omitted: { describes: 'adverse events', severity: 'noted' } },
-    { name: 'declared safety omission is recorded as declared', card: [enrollment, composite, cohort1, cohort2, notSeparated], declared: [{ describes: 'adverse events similar in the two groups in the two cohorts', reason: 'safety-not-shown' }], fidelity: 'pass', omitted: { describes: 'adverse events', severity: 'noted' } },
+    { name: 'cohort 2 omitted → listed as a blocking co-primary omission', card: [design, enrollment, composite, cohort1], fidelity: 'fail', omitted: { roleIn: ['co-primary', 'primary'], severity: 'blocking' } },
+    { name: 'adverse-events sentence omitted → listed, noted, not blocking', card: [design, enrollment, composite, cohort1, cohort2, notSeparated], fidelity: 'pass', omitted: { describes: 'adverse events', severity: 'noted' } },
+    { name: 'declared safety omission is recorded as declared', card: [design, enrollment, composite, cohort1, cohort2, notSeparated], declared: [{ describes: 'adverse events similar in the two groups in the two cohorts', reason: 'safety-not-shown' }], fidelity: 'pass', omitted: { describes: 'adverse events', severity: 'noted' } },
   ],
-  fidelityFallback: { card: [enrollment, composite, cohort1] },
+  fidelityFallback: { card: [design, enrollment, composite, cohort1] },
 
   recommendation: {
     // E1 strengthens the recommendation; without it the abstract carries the headline.

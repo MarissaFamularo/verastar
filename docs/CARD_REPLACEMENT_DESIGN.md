@@ -192,10 +192,20 @@ A fidelity failure may trigger one writer re-run with the inventory's primaries 
 re-run's claims go through Stage 4 again. There is no path in which inventory text reaches the
 card without becoming a checked claim.
 
-### Stage 7 — Prose rendering and final-prose check
+### Stage 7 — Constrained rendering and final-prose check
 
-The renderer (model) turns the render plan into sentences, each tagged with the claim ids it
-renders and, for personal sentences, the item ids. `checkProse` then rejects a sentence when:
+The renderer is **not** a model with a filter. `render.js` builds each sentence by template
+from checked claim fields only (population, comparator, outcome, timepoint, arm values,
+estimate, interval label), tags it with the claim ids it was built from, and uses model text
+nowhere in a factual sentence (personal lines carry the model's connection text, which the
+personalization checker has already judged by connection type). `checkProse` then holds every
+sentence — rendered or hand-written — to the claims it cites, structurally as well as by
+tokens: the claim's cohort label or restriction must appear, the favored arm must be named
+first (or the disfavored first under harm framing), arm values must sit in arm order, the
+outcome head must appear and no component may stand in for it, and timepoints must match.
+A sentence that cites a valid claim and prints its real numbers still fails when it swaps the
+arms, substitutes amputation for the composite, drops the conduit restriction or changes the
+timepoint (`cases/prose.js › renderedAdversarial`). It rejects a sentence when:
 
 | condition | reason |
 |---|---|
@@ -245,7 +255,7 @@ components-not-separated]`, read-recommendation with basis E1).
 |---|---|
 | Specified | reference rev. 4; `schema.js`; 10 case files |
 | Executable | `npm run test:acceptance` — see the run count in the suite output; 6 `todo` for the unfilled diagnostic-validation category |
-| Demonstrated | none: `assessCard` and `checkProse` are stubs; every test fails "not implemented". `npm test` (legacy, 2,210 passing) is unchanged and excludes `src/acceptance/`; lint adds no new diagnostics |
+| Demonstrated | **BEST-CLI path only** (`src/cards/`): index → claim check → inventory/fidelity → render plan → constrained renderer → prose check. All 46 BEST-CLI and prose tests pass, including state A end to end and the five rendered-output adversarial cases. Other cards' cases run against the same code and fail where their source patterns are not yet parsed (see `src/acceptance/README.md`). Nothing is wired into the app; `npm test` (legacy) is unchanged |
 
 ## 6. Open implementation questions (not editorial)
 
