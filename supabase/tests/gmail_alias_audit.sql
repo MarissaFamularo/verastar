@@ -217,6 +217,37 @@ begin
   execute 'reset role';
 end $$;
 
+-- Exact address wins when another spelling of the same inbox already has an account.
+delete from auth.users;
+insert into auth.users (email, created_at) values
+  ('famularo.marissa@gmail.com', now() - interval '2 days'),
+  ('famularo.marissa+notes@gmail.com', now() - interval '1 day');
+truncate private.gmail_alias_limits;
+truncate private.gmail_alias_permits;
+select set_config('request.headers', '{"cf-connecting-ip":"192.0.2.41"}', false);
+select pg_temp.assert_ok(
+  public.gmail_alias_prepare('famularo.marissa+notes@gmail.com') = jsonb_build_object('match', false),
+  'prepare stays silent for an exact address even when an older alias account exists');
+select pg_temp.assert_ok(
+  public.gmail_alias_prepare('famularo.marissa@gmail.com') = jsonb_build_object('match', false),
+  'prepare stays silent for the older exact address when a tagged account also exists');
+select pg_temp.assert_ok(
+  (select count(*) = 0 from private.gmail_alias_permits),
+  'an exact address does not store the other account');
+select pg_temp.assert_ok(
+  public.gmail_alias_hint('famularo.marissa+notes@gmail.com') = jsonb_build_object('match', false),
+  'the hint stays silent for an exact address when another alias exists');
+truncate private.gmail_alias_limits;
+truncate private.gmail_alias_permits;
+create temp table prepare_third as
+select public.gmail_alias_prepare('f.amularo.marissa@gmail.com') as prepared;
+select pg_temp.assert_ok(
+  (select prepared ->> 'hint' = 'f…@gmail.com' and prepared ? 'ticket' and not (prepared ? 'email') from prepare_third),
+  'a third spelling still matches an existing account');
+select pg_temp.assert_ok(
+  public.gmail_alias_take_send((select (prepared ->> 'ticket')::uuid from prepare_third)) = 'famularo.marissa@gmail.com',
+  'a third spelling is sent to the oldest account, not the tagged one');
+
 -- Leave a clean slate for the concurrency test that follows.
 delete from auth.users;
 truncate private.gmail_alias_limits;

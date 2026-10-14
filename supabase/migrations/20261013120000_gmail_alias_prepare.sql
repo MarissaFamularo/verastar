@@ -72,18 +72,31 @@ begin
     return pg_catalog.jsonb_build_object('match', false);
   end if;
 
+  -- Exact account first. Two accounts can share one Gmail inbox; signing in
+  -- with one of those stored addresses must not be sent to the other.
+  select u.email into v_stored
+    from auth.users u
+   where u.email is not null
+     and u.deleted_at is null
+     and lower(pg_catalog.btrim(u.email)) = v_raw
+   limit 1;
+
+  if v_stored is not null then
+    return pg_catalog.jsonb_build_object('match', false);
+  end if;
+
+  v_stored := null;
   select u.email into v_stored
     from auth.users u
    where u.email is not null
      and u.deleted_at is null
      and split_part(lower(pg_catalog.btrim(u.email)), '@', 2) in ('gmail.com', 'googlemail.com')
      and private.gmail_canonical(u.email) = v_canon
-     and lower(pg_catalog.btrim(u.email)) <> v_raw
    order by u.created_at asc
    limit 1;
 
-  -- The exact stored address, and the canonical spelling of a dotted account,
-  -- stay silent. A ticket is only for a different spelling.
+  -- The canonical spelling of a dotted account stays silent. A ticket is only
+  -- for a different spelling of an inbox whose exact address was not typed.
   if v_stored is null or v_raw = v_canon then
     return pg_catalog.jsonb_build_object('match', false);
   end if;

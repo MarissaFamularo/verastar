@@ -163,6 +163,222 @@ describe('onboarding sign-in and review', () => {
     expect(dom.text()).not.toContain('Signing you in as')
   })
 
+  const TYPED_ALIAS = 'famularo.marissa+notes@gmail.com'
+  const TICKET_B = '44444444-4444-4444-8444-444444444444'
+  const VERIFY_B = '33333333-3333-4333-8333-333333333333'
+
+  function aliasPrepare(ticket) {
+    return { data: { match: true, hint: 'f…@gmail.com', ticket, email: 'famularo.marissa@gmail.com' }, error: null }
+  }
+
+  function sentBody(verifyTicket) {
+    return { ok: true, json: async () => ({ sent: true, verifyTicket, email: 'famularo.marissa@gmail.com' }) }
+  }
+
+  async function openAliasSignIn() {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon-key')
+    await dom.render(React.createElement(OnboardingQuiz))
+    await dom.click(dom.button('Set up my digest'))
+    await dom.type(dom.q('#account-email'), TYPED_ALIAS)
+  }
+
+  it('does not switch a confirmed alias to the typed address when a retry lookup is limited or fails', async () => {
+    sendMagicLink.mockResolvedValue(undefined)
+    supabase.rpc
+      .mockResolvedValueOnce(aliasPrepare(ALIAS_TICKET))
+      .mockResolvedValueOnce({ data: { match: false }, error: null })
+      .mockRejectedValueOnce(new Error('lookup failed'))
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => ({}) })))
+    await openAliasSignIn()
+    await dom.submit(dom.q('form'))
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect(dom.q('[role="alert"]').textContent).toMatch(/couldn.t reach sign-in/i)
+    expect(dom.text()).not.toContain(`Code sent to ${TYPED_ALIAS}`)
+    await dom.submit(dom.q('form'))
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect(dom.text()).not.toContain('Code sent to')
+    expect(dom.q('[role="alert"]').textContent).toMatch(/couldn.t send a new code/i)
+    await dom.submit(dom.q('form'))
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect(dom.text()).not.toContain(`Code sent to ${TYPED_ALIAS}`)
+    expect(supabase.rpc).toHaveBeenCalledTimes(3)
+  })
+
+  function verifyTokens() {
+    return { ok: true, json: async () => ({ access_token: 'access', refresh_token: 'refresh' }) }
+  }
+
+  async function submitCode(calls) {
+    window.location.assign = vi.fn()
+    await dom.type(dom.q('#email-code'), '123456')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    return calls.find((body) => body.action === 'verify')
+  }
+
+  it('keeps a canonical code that arrives after the send timeout', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    const late = deferred()
+    const calls = []
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      const body = JSON.parse(init.body)
+      calls.push(body)
+      if (body.action === 'verify') return verifyTokens()
+      return late.promise
+    }))
+    supabase.rpc.mockResolvedValueOnce(aliasPrepare(ALIAS_TICKET))
+    await openAliasSignIn()
+    await dom.submit(dom.q('form'))
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    expect(dom.q('[role="alert"]').textContent).toMatch(/couldn.t reach sign-in/i)
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect(dom.text()).not.toContain('Code sent to')
+    await dom.settle(async () => {
+      late.resolve(sentBody(VERIFY_TICKET))
+      for (let i = 0; i < 20; i += 1) await Promise.resolve()
+    })
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    expect(dom.text()).not.toContain('famularo.marissa@gmail.com')
+    expect(dom.button('Create a separate account with this spelling instead')).toBeTruthy()
+    expect((await submitCode(calls)).verifyTicket).toBe(VERIFY_TICKET)
+    expect(verifyEmailCode).not.toHaveBeenCalled()
+    expect(adoptEmailSession).toHaveBeenCalledWith({ access_token: 'access', refresh_token: 'refresh' })
+  })
+
+  it('does not let an older canonical send replace a newer ticket', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    const late = deferred()
+    const calls = []
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      const body = JSON.parse(init.body)
+      calls.push(body)
+      if (body.action === 'verify') return verifyTokens()
+      if (body.ticket === TICKET_B) return sentBody(VERIFY_B)
+      return late.promise
+    }))
+    supabase.rpc
+      .mockResolvedValueOnce(aliasPrepare(ALIAS_TICKET))
+      .mockResolvedValueOnce(aliasPrepare(TICKET_B))
+    await openAliasSignIn()
+    await dom.submit(dom.q('form'))
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    expect(dom.q('[role="alert"]').textContent).toMatch(/couldn.t reach sign-in/i)
+    await dom.submit(dom.q('form'))
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    await dom.settle(async () => {
+      late.resolve(sentBody(VERIFY_TICKET))
+      for (let i = 0; i < 20; i += 1) await Promise.resolve()
+    })
+    expect((await submitCode(calls)).verifyTicket).toBe(VERIFY_B)
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect(verifyEmailCode).not.toHaveBeenCalled()
+  })
+
+  it('keeps the late alias ticket when a retry lookup is already limited', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    const late = deferred()
+    const calls = []
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      const body = JSON.parse(init.body)
+      calls.push(body)
+      if (body.action === 'verify') return verifyTokens()
+      return late.promise
+    }))
+    supabase.rpc
+      .mockResolvedValueOnce(aliasPrepare(ALIAS_TICKET))
+      .mockResolvedValueOnce({ data: { match: false }, error: null })
+    await openAliasSignIn()
+    await dom.submit(dom.q('form'))
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    await dom.submit(dom.q('form'))
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect(dom.text()).not.toContain(`Code sent to ${TYPED_ALIAS}`)
+    expect(dom.q('[role="alert"]').textContent).toMatch(/couldn.t send a new code/i)
+    await dom.settle(async () => {
+      late.resolve(sentBody(VERIFY_TICKET))
+      for (let i = 0; i < 20; i += 1) await Promise.resolve()
+    })
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    expect((await submitCode(calls)).verifyTicket).toBe(VERIFY_TICKET)
+    expect(sendMagicLink).not.toHaveBeenCalled()
+  })
+
+  it('does not let an older canonical resend replace a newer code', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    const late = deferred()
+    const calls = []
+    const VERIFY_OLD = '55555555-5555-4555-8555-555555555555'
+    let sends = 0
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      const body = JSON.parse(init.body)
+      calls.push(body)
+      if (body.action === 'verify') return verifyTokens()
+      sends += 1
+      if (sends === 1) return sentBody(VERIFY_TICKET)
+      if (sends === 2) return late.promise
+      return sentBody(VERIFY_B)
+    }))
+    supabase.rpc.mockResolvedValue(aliasPrepare(ALIAS_TICKET))
+    await openAliasSignIn()
+    await dom.submit(dom.q('form'))
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    await dom.click(dom.button('Send a new code'))
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    expect(dom.q('[role="alert"]').textContent).toMatch(/couldn.t send a new code/i)
+    await dom.click(dom.button('Send a new code'))
+    expect(dom.text()).toContain('A new code is on its way')
+    await dom.settle(async () => {
+      late.resolve(sentBody(VERIFY_OLD))
+      for (let i = 0; i < 20; i += 1) await Promise.resolve()
+    })
+    expect((await submitCode(calls)).verifyTicket).toBe(VERIFY_B)
+    expect(sendMagicLink).not.toHaveBeenCalled()
+  })
+
+  it('resends a confirmed alias to the existing account and still offers a separate account', async () => {
+    sendMagicLink.mockResolvedValue(undefined)
+    const calls = []
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      const body = JSON.parse(init.body)
+      calls.push(body)
+      if (body.action === 'verify') {
+        return { ok: true, json: async () => ({ access_token: 'access', refresh_token: 'refresh' }) }
+      }
+      const verifyTicket = body.ticket === TICKET_B ? VERIFY_B : VERIFY_TICKET
+      return sentBody(verifyTicket)
+    }))
+    supabase.rpc
+      .mockResolvedValueOnce(aliasPrepare(ALIAS_TICKET))
+      .mockResolvedValueOnce(aliasPrepare(TICKET_B))
+      .mockResolvedValueOnce({ data: { match: false }, error: null })
+    await openAliasSignIn()
+    await dom.submit(dom.q('form'))
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    await dom.click(dom.button('Send a new code'))
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect(calls.some((body) => body.action === 'send' && body.ticket === TICKET_B)).toBe(true)
+    expect(dom.text()).toContain('A new code is on its way')
+    expect(dom.text()).not.toContain('famularo.marissa@gmail.com')
+    window.location.assign = vi.fn()
+    await dom.type(dom.q('#email-code'), '123456')
+    await dom.submit(dom.q('#email-code').closest('form'))
+    expect(calls.find((body) => body.action === 'verify').verifyTicket).toBe(VERIFY_B)
+    expect(verifyEmailCode).not.toHaveBeenCalled()
+
+    await dom.click(dom.button('Send a new code'))
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect(dom.q('[role="alert"]').textContent).toMatch(/couldn.t send a new code/i)
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    await dom.click(dom.button('Create a separate account with this spelling instead'))
+    expect(sendMagicLink).toHaveBeenCalledWith(TYPED_ALIAS)
+    expect(dom.text()).toContain(`Code sent to ${TYPED_ALIAS}`)
+    expect(dom.text()).not.toContain('Signing you in as')
+  })
+
   it('sends the code when the gmail lookup never returns', async () => {
     vi.useFakeTimers()
     sendMagicLink.mockResolvedValue(undefined)
