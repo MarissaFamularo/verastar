@@ -190,6 +190,17 @@ export function useEmailCodeSignIn() {
     emailGen.current += 1
     clearCanonical()
     setEmail(value)
+    setSendState('idle')
+    setSendError('')
+  }
+
+  // A code-entry screen that already has a verification ticket stays up when a
+  // concurrent retry lookup or send fails.
+  function keepRetainedTicket() {
+    if (!canonical.current?.verifyTicket) return false
+    setSendError('')
+    setSendState('sent')
+    return true
   }
 
   function enter() {
@@ -259,9 +270,11 @@ export function useEmailCodeSignIn() {
   }
 
   function acceptCanonical(id, gen, decision, value, { resend = false, typed } = {}) {
-    // An older attempt must not replace a ticket or a receipt a newer one already showed.
-    if (!stillCurrent(id, gen)) return
+    // A changed address drops the old ticket. A newer send that already stored
+    // a ticket keeps it; an older success may still fill in when nothing newer has.
+    if (gen !== emailGen.current) return
     if (!value?.ok || !value.verifyTicket) return
+    if (canonical.current?.verifyTicket && id !== attempt.current) return
     canonical.current = { verifyTicket: value.verifyTicket }
     aliasDestination.current = { typed: typed || aliasDestination.current?.typed || '', note: decision.note }
     setAliasNote(decision.note)
@@ -276,18 +289,21 @@ export function useEmailCodeSignIn() {
   }
 
   function failCanonical(id, gen, { resend = false } = {}) {
-    if (!stillCurrent(id, gen)) return
+    if (gen !== emailGen.current) return
     if (resend) {
+      if (id !== attempt.current) return
       setVerifyError('We couldn\u2019t send a new code. Try again in a moment.')
       setVerifyState('error')
       return
     }
+    if (keepRetainedTicket()) return
+    if (id !== attempt.current) return
     setSendError(EMAIL_CODE_MESSAGES.network)
     setSendState('error')
   }
 
-  // The send keeps running after the timeout. A late ticket is kept only while
-  // this attempt is still the current one.
+  // The send keeps running after the timeout. A late ticket is kept when this
+  // attempt is still current, or when a newer attempt has not stored one yet.
   async function settleCanonical(decision, id, gen, { resend = false, typed } = {}) {
     const pending = sendCanonicalGmailCode({ ticket: decision.ticket, redirectTo: redirectOrigin() })
     let raced
@@ -356,17 +372,22 @@ export function useEmailCodeSignIn() {
         if (aliasDestination.current?.typed !== typed) aliasDestination.current = { typed, note: '' }
         aliasFlight.current = false
         setSendPending(false)
-        setSendState('error')
-        setSendError(EMAIL_CODE_MESSAGES.network)
+        if (!keepRetainedTicket()) {
+          setSendState('error')
+          setSendError(EMAIL_CODE_MESSAGES.network)
+        }
         return
       }
       // A confirmed alias stays on that account. A limited or failed lookup
-      // must not open a second account at the spelling that was typed.
+      // must not open a second account at the spelling that was typed, and
+      // must not cover a code screen that already has a ticket.
       if (aliasDestination.current?.typed === typed) {
         aliasFlight.current = false
         setSendPending(false)
-        setSendState('error')
-        setSendError('We couldn\u2019t send a new code. Try again in a moment.')
+        if (!keepRetainedTicket()) {
+          setSendState('error')
+          setSendError('We couldn\u2019t send a new code. Try again in a moment.')
+        }
         return
       }
       aliasFlight.current = false

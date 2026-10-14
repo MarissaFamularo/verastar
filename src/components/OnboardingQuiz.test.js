@@ -276,6 +276,114 @@ describe('onboarding sign-in and review', () => {
     expect(verifyEmailCode).not.toHaveBeenCalled()
   })
 
+  function stubPendingRetry(late, onSend) {
+    const prepareRetry = deferred()
+    let lookups = 0
+    supabase.rpc.mockImplementation(() => {
+      lookups += 1
+      if (lookups === 1) return Promise.resolve(aliasPrepare(ALIAS_TICKET))
+      return prepareRetry.promise
+    })
+    const calls = []
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      const body = JSON.parse(init.body)
+      calls.push(body)
+      if (body.action === 'verify') return verifyTokens()
+      const custom = onSend?.(body)
+      if (custom) return custom
+      return late.promise
+    }))
+    return { prepareRetry, calls }
+  }
+
+  async function timeOutFirstAliasSend() {
+    await openAliasSignIn()
+    await dom.submit(dom.q('form'))
+    await dom.settle(() => vi.advanceTimersByTimeAsync(8000))
+    expect(dom.q('[role="alert"]').textContent).toMatch(/couldn.t reach sign-in/i)
+    await dom.submit(dom.q('form'))
+    expect(dom.button('Sending…')).toBeTruthy()
+  }
+
+  async function settleDeferred(gate, value) {
+    await dom.settle(async () => {
+      gate.resolve(value)
+      for (let i = 0; i < 20; i += 1) await Promise.resolve()
+    })
+  }
+
+  it('keeps the code screen when the original send lands before the retry lookup', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    const late = deferred()
+    const { prepareRetry, calls } = stubPendingRetry(late)
+    await timeOutFirstAliasSend()
+    await settleDeferred(late, sentBody(VERIFY_TICKET))
+    expect(dom.q('#email-code')).toBeTruthy()
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    await settleDeferred(prepareRetry, { data: { match: false }, error: null })
+    expect(dom.q('#email-code')).toBeTruthy()
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    expect(dom.text()).not.toContain(`Code sent to ${TYPED_ALIAS}`)
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect((await submitCode(calls)).verifyTicket).toBe(VERIFY_TICKET)
+    expect(adoptEmailSession).toHaveBeenCalledWith({ access_token: 'access', refresh_token: 'refresh' })
+    expect(verifyEmailCode).not.toHaveBeenCalled()
+  })
+
+  it('keeps the code screen when the retry lookup returns before the original send', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    const late = deferred()
+    const { prepareRetry, calls } = stubPendingRetry(late)
+    await timeOutFirstAliasSend()
+    await settleDeferred(prepareRetry, { data: { match: false }, error: null })
+    expect(dom.q('#email-code')).toBeFalsy()
+    expect(dom.text()).not.toContain(`Code sent to ${TYPED_ALIAS}`)
+    expect(dom.q('[role="alert"]').textContent).toMatch(/couldn.t send a new code/i)
+    await settleDeferred(late, sentBody(VERIFY_TICKET))
+    expect(dom.q('#email-code')).toBeTruthy()
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect((await submitCode(calls)).verifyTicket).toBe(VERIFY_TICKET)
+    expect(adoptEmailSession).toHaveBeenCalledWith({ access_token: 'access', refresh_token: 'refresh' })
+    expect(verifyEmailCode).not.toHaveBeenCalled()
+  })
+
+  it('keeps the retained ticket when the retry send fails after the original code arrives', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    const late = deferred()
+    const { prepareRetry, calls } = stubPendingRetry(late, (body) => (
+      body.ticket === TICKET_B ? { ok: false, json: async () => ({}) } : null
+    ))
+    await timeOutFirstAliasSend()
+    await settleDeferred(late, sentBody(VERIFY_TICKET))
+    expect(dom.q('#email-code')).toBeTruthy()
+    await settleDeferred(prepareRetry, aliasPrepare(TICKET_B))
+    expect(dom.q('#email-code')).toBeTruthy()
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect((await submitCode(calls)).verifyTicket).toBe(VERIFY_TICKET)
+    expect(verifyEmailCode).not.toHaveBeenCalled()
+  })
+
+  it('drops a late alias ticket when the address changes during the retry lookup', async () => {
+    vi.useFakeTimers()
+    sendMagicLink.mockResolvedValue(undefined)
+    const late = deferred()
+    const { prepareRetry, calls } = stubPendingRetry(late)
+    await timeOutFirstAliasSend()
+    await dom.type(dom.q('#account-email'), 'someone.else@gmail.com')
+    await settleDeferred(late, sentBody(VERIFY_TICKET))
+    expect(dom.q('#email-code')).toBeFalsy()
+    expect(dom.text()).not.toContain('Signing you in')
+    await settleDeferred(prepareRetry, { data: { match: false }, error: null })
+    expect(dom.q('#email-code')).toBeFalsy()
+    expect(sendMagicLink).not.toHaveBeenCalled()
+    expect(calls.some((body) => body.action === 'verify')).toBe(false)
+  })
+
   it('keeps the late alias ticket when a retry lookup is already limited', async () => {
     vi.useFakeTimers()
     sendMagicLink.mockResolvedValue(undefined)
