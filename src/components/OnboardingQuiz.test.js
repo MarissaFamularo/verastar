@@ -7,6 +7,7 @@ vi.mock('../lib/supabase.js', () => ({
   supabaseConfigured: true,
   sendMagicLink: vi.fn(),
   verifyEmailCode: vi.fn(),
+  adoptEmailSession: vi.fn(async () => ({ id: 'user-canonical' })),
   supabase: {
     auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
     rpc: vi.fn(async () => ({ data: { match: false }, error: null })),
@@ -50,7 +51,10 @@ vi.mock('./ProfileInterview.jsx', () => ({
 
 import { redeemInviteCode } from '../lib/inviteCode.js'
 import { GMAIL_ALIAS_LOOKUP_MS } from '../lib/gmailAlias.js'
-import { sendMagicLink, supabase, verifyEmailCode } from '../lib/supabase.js'
+import { adoptEmailSession, sendMagicLink, supabase, verifyEmailCode } from '../lib/supabase.js'
+
+const ALIAS_TICKET = '11111111-1111-4111-8111-111111111111'
+const VERIFY_TICKET = '22222222-2222-4222-8222-222222222222'
 import OnboardingQuiz from './OnboardingQuiz.jsx'
 
 let dom
@@ -62,6 +66,8 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   await dom.unmount()
 })
 
@@ -104,19 +110,57 @@ describe('onboarding sign-in and review', () => {
     expect(dom.text()).toContain('A new code is on its way')
   })
 
-  it('warns when a gmail spelling belongs to an existing account and does not send a second code', async () => {
+  it('sends immediately when a gmail address is not a different spelling', async () => {
     sendMagicLink.mockResolvedValue(undefined)
-    supabase.rpc.mockResolvedValue({ data: { match: true, hint: 'f…@gmail.com' }, error: null })
+    supabase.rpc.mockResolvedValue({ data: { match: false }, error: null })
     await dom.render(React.createElement(OnboardingQuiz))
     await dom.click(dom.button('Set up my digest'))
-    await dom.type(dom.q('#account-email'), 'famularo.marissa@gmail.com')
+    await dom.type(dom.q('#account-email'), 'famularomarissa@gmail.com')
     await dom.submit(dom.q('form'))
-    expect(dom.text()).toContain('You already have an account as f…@gmail.com; sign in with that address?')
-    expect(dom.text()).not.toContain('famularomarissa@gmail.com')
+    expect(sendMagicLink).toHaveBeenCalledWith('famularomarissa@gmail.com')
+    expect(dom.text()).toContain('Code sent to famularomarissa@gmail.com')
+    expect(dom.text()).not.toContain('Signing you in')
+    expect(dom.text()).not.toContain('You already have an account')
+    expect(dom.button('Create a separate account with this spelling instead')).toBeUndefined()
+  })
+
+  it('signs a different gmail spelling into the existing account without showing that address', async () => {
+    sendMagicLink.mockResolvedValue(undefined)
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon-key')
+    supabase.rpc.mockResolvedValue({
+      data: { match: true, hint: 'f…@gmail.com', ticket: ALIAS_TICKET, email: 'famularo.marissa@gmail.com' },
+      error: null,
+    })
+    const fetchMock = vi.fn(async (_url, init) => {
+      const body = JSON.parse(init.body)
+      if (body.action === 'verify') {
+        return { ok: true, json: async () => ({ access_token: 'access', refresh_token: 'refresh', email: 'famularo.marissa@gmail.com' }) }
+      }
+      return { ok: true, json: async () => ({ sent: true, verifyTicket: VERIFY_TICKET, email: 'famularo.marissa@gmail.com' }) }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await dom.render(React.createElement(OnboardingQuiz))
+    await dom.click(dom.button('Set up my digest'))
+    await dom.type(dom.q('#account-email'), 'famularo.marissa+notes@gmail.com')
+    await dom.submit(dom.q('form'))
+    expect(supabase.rpc).toHaveBeenCalledWith('gmail_alias_prepare', { p_email: 'famularo.marissa+notes@gmail.com' })
     expect(sendMagicLink).not.toHaveBeenCalled()
-    await dom.click(dom.button('Send a code to this address anyway'))
-    expect(sendMagicLink).toHaveBeenCalledWith('famularo.marissa@gmail.com')
-    expect(dom.text()).toContain('Code sent to famularo.marissa@gmail.com')
+    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
+    expect(dom.text()).not.toContain('famularo.marissa@gmail.com')
+    expect(dom.text()).not.toContain('You already have an account')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).email).toBeUndefined()
+    window.location.assign = vi.fn()
+    await dom.type(dom.q('#email-code'), '123456')
+    await dom.submit(dom.q('form'))
+    expect(verifyEmailCode).not.toHaveBeenCalled()
+    expect(adoptEmailSession).toHaveBeenCalledWith({ access_token: 'access', refresh_token: 'refresh' })
+    expect(dom.text()).not.toContain('famularo.marissa@gmail.com')
+    sendMagicLink.mockClear()
+    await dom.click(dom.button('Create a separate account with this spelling instead'))
+    expect(sendMagicLink).toHaveBeenCalledWith('famularo.marissa+notes@gmail.com')
+    expect(dom.text()).toContain('Code sent to famularo.marissa+notes@gmail.com')
+    expect(dom.text()).not.toContain('Signing you in as')
   })
 
   it('sends the code when the gmail lookup never returns', async () => {
@@ -133,6 +177,7 @@ describe('onboarding sign-in and review', () => {
     expect(sendMagicLink).toHaveBeenCalledWith('famularo.marissa@gmail.com')
     expect(dom.text()).toContain('Code sent to famularo.marissa@gmail.com')
     expect(dom.text()).not.toContain('You already have an account')
+    expect(dom.text()).not.toContain('Signing you in')
   })
 
   it('shows a timeout on the code screen instead of leaving', async () => {

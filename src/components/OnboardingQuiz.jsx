@@ -22,7 +22,7 @@ import { isSponsored } from '../lib/sponsor.js'
 import InviteCode from './InviteCode.jsx'
 import { currentNpiMatch } from '../lib/npi.js'
 import { supabaseConfigured } from '../lib/supabase.js'
-import { GmailAliasNotice } from './GmailAliasNotice.jsx'
+import { EmailCodeStatus } from './GmailAliasNotice.jsx'
 import { useEmailCodeSignIn } from '../lib/emailCode.js'
 import { useOnboardStep } from '../lib/onboardingRoute.js'
 import { getProfile, saveProfile } from '../lib/store.js'
@@ -204,8 +204,13 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
         </p>
         {signin.sendState === 'sent' ? (
           <div style={{ maxWidth: 520 }}>
-            <div role="status" style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55 }}>
-              <span style={{ fontWeight: 600 }}>Code sent to {signin.email.trim()}.</span> Enter the 6-digit code from that email.
+            <div style={{ marginTop: 24 }}>
+              <EmailCodeStatus
+                email={signin.email.trim()}
+                aliasNote={signin.aliasNote}
+                busy={signin.resending}
+                onSeparate={signin.sendSeparate}
+              />
             </div>
             <form onSubmit={signin.verify} style={{ marginTop: 14 }}>
               <label htmlFor="email-code" style={fieldLabel}>6-digit code</label>
@@ -262,7 +267,6 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
                 <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {signin.sendError}
               </div>
             )}
-            <GmailAliasNotice message={signin.aliasWarning} busy={signin.sendBusy} onContinue={() => signin.send(null, { force: true })} />
             <div className="flex items-center" style={{ marginTop: 20, gap: 18 }}>
                 <button type="submit" disabled={signin.sendBusy} className="cursor-pointer" style={{ ...primaryBtn, opacity: signin.sendBusy ? 0.6 : 1 }}>
                   {signin.sendBusy ? 'Sending…' : 'Email me a code'}

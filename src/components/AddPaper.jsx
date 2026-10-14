@@ -12,6 +12,7 @@
 
 import { useRef, useState } from 'react'
 import { hasModelAccess, isCapReached } from '../lib/anthropic.js'
+import { BetaAccessGate } from './InviteCode.jsx'
 import { getProfile, store } from '../lib/store.js'
 import { logEvent } from '../lib/events.js'
 import { runPaper } from '../pipeline/pipeline.js'
@@ -41,6 +42,8 @@ export default function AddPaper({ onAdded }) {
   const [whyFor, setWhyFor] = useState(null) // saved-paper snapshot awaiting its "why"
   const [pdf, setPdf] = useState(null) // File the reader attached, or null
   const fileRef = useRef(null)
+  const [accessVersion, setAccessVersion] = useState(0)
+  void accessVersion
   const keySet = hasModelAccess()
   const busy = stage !== ''
 
@@ -211,7 +214,9 @@ export default function AddPaper({ onAdded }) {
       </div>
 
       {!keySet && (
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-abstract)' }}>Sign in or set your API key in Settings to add a paper.</p>
+        <BetaAccessGate inputId="beta-invite-add" onEnrolled={() => setAccessVersion((version) => version + 1)}>
+          <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-abstract)' }}>Sign in or set your API key in Settings to add a paper.</p>
+        </BetaAccessGate>
       )}
       {busy && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-accent)' }}>{STAGE_LABEL[stage] || 'Working…'}</p>}
       {error && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-domain-vascular)' }}>{error}</p>}

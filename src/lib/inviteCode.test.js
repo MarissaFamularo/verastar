@@ -35,5 +35,8 @@ describe('redemption states', () => {
     const statuses = [...new Set([...body.matchAll(/'status', '([a-z_]+)'/g)].map((m) => m[1]))]
     expect(statuses.sort()).toEqual(['already', 'enrolled', 'exhausted', 'expired', 'full', 'inactive', 'invalid', 'paused', 'revoked'])
     for (const s of statuses) expect(INVITE_MESSAGES[s]).toBeTruthy()
+    expect(INVITE_MESSAGES.invalid).toMatch(/not recognized/i)
+    expect(INVITE_MESSAGES.exhausted).toMatch(/used up/i)
+    expect(INVITE_MESSAGES.slow_down).toMatch(/too many attempts/i)
   })
 })

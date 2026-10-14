@@ -11,8 +11,9 @@
 
 import { useRef, useState } from 'react'
 import { awaitWithin } from './deadline.js'
-import { gmailAliasDecision, lookupGmailAlias } from './gmailAlias.js'
-import { sendMagicLink, supabase, verifyEmailCode } from './supabase.js'
+import { sendCanonicalGmailCode, verifyCanonicalGmailCode } from './gmailCanonical.js'
+import { gmailAliasDecision, prepareGmailAlias } from './gmailAlias.js'
+import { adoptEmailSession, sendMagicLink, supabase, verifyEmailCode } from './supabase.js'
 
 export const EMAIL_CODE_TIMEOUT_MS = 8000
 // A session lookup must not swallow the code-check timeout. Two seconds is long
@@ -158,6 +159,9 @@ export function useEmailCodeSignIn() {
   const aliasFlight = useRef(false)
   const emailGen = useRef(0)
   const entered = useRef(false)
+  // Set after a code was sent to the account already on this inbox. Verification
+  // uses the opaque ticket, not the address that was typed.
+  const canonical = useRef(null)
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [sendState, setSendState] = useState('idle') // idle | sending | sent | error
@@ -168,11 +172,16 @@ export function useEmailCodeSignIn() {
   const [resending, setResending] = useState(false)
   const [resendNote, setResendNote] = useState('')
   const [sendPending, setSendPending] = useState(false)
-  const [aliasWarning, setAliasWarning] = useState('')
+  const [aliasNote, setAliasNote] = useState('')
+
+  function clearCanonical() {
+    canonical.current = null
+    setAliasNote('')
+  }
 
   function setEmailValue(value) {
     emailGen.current += 1
-    setAliasWarning('')
+    clearCanonical()
     setEmail(value)
   }
 
@@ -205,9 +214,72 @@ export function useEmailCodeSignIn() {
     }
   }
 
+  function redirectOrigin() {
+    if (typeof window === 'undefined') return ''
+    return window.location?.origin || ''
+  }
+
+  async function deliverTyped(typed, { stay = false } = {}) {
+    const id = ++attempt.current
+    const pending = sendMagicLink(typed)
+    sendFlight.current = pending
+    aliasFlight.current = false
+    setSendPending(true)
+    if (stay) setResending(true)
+    else setSendState('sending')
+    setSendError('')
+    await finishSend(pending, id, () => {
+      clearCanonical()
+      setSendError('')
+      setSendState('sent')
+      if (stay) {
+        setCode('')
+        setVerifyError('')
+        setVerifyState('idle')
+        setResendNote('A new code is on its way.')
+      }
+    }, (message) => {
+      if (stay) {
+        setSendState('sent')
+        setVerifyError(message || 'We couldn\u2019t send a new code. Try again in a moment.')
+        setVerifyState('error')
+      } else {
+        setSendError(message || EMAIL_CODE_MESSAGES.network)
+        setSendState('error')
+      }
+    })
+    if (stay) setResending(false)
+  }
+
+  async function deliverCanonical(decision, gen) {
+    let raced
+    try {
+      raced = await awaitWithin(
+        sendCanonicalGmailCode({ ticket: decision.ticket, redirectTo: redirectOrigin() }),
+        EMAIL_CODE_TIMEOUT_MS,
+      )
+    } catch {
+      if (gen !== emailGen.current) return
+      setSendError(EMAIL_CODE_MESSAGES.network)
+      setSendState('error')
+      return
+    }
+    if (gen !== emailGen.current) return
+    if (raced.timeout || !raced.value?.ok) {
+      setSendError(EMAIL_CODE_MESSAGES.network)
+      setSendState('error')
+      return
+    }
+    canonical.current = { verifyTicket: raced.value.verifyTicket }
+    setAliasNote(decision.note)
+    setSendError('')
+    setSendState('sent')
+  }
+
   async function send(event, options) {
     event?.preventDefault?.()
     const force = options?.force === true
+    const stay = options?.stay === true
     const typed = email.trim()
     if (!typed || sendFlight.current || aliasFlight.current) return
     const gen = emailGen.current
@@ -216,36 +288,42 @@ export function useEmailCodeSignIn() {
       setSendPending(true)
       setSendState('sending')
       setSendError('')
-      let lookup = { match: false }
+      let prepared = { match: false }
       try {
-        lookup = await lookupGmailAlias(typed)
+        prepared = await prepareGmailAlias(typed)
       } catch {
-        lookup = { match: false }
+        prepared = { match: false }
       }
-      const decision = gmailAliasDecision(lookup)
-      if (gen !== emailGen.current || !decision.send) {
+      if (gen !== emailGen.current) {
         aliasFlight.current = false
-        setSendState('idle')
         setSendPending(false)
-        if (gen === emailGen.current) setAliasWarning(decision.warning)
+        setSendState('idle')
         return
       }
+      const decision = gmailAliasDecision(prepared)
+      if (decision.send === 'canonical') {
+        try {
+          await deliverCanonical(decision, gen)
+        } finally {
+          aliasFlight.current = false
+          setSendPending(false)
+        }
+        return
+      }
+      if (decision.send === 'blocked') {
+        aliasFlight.current = false
+        setSendPending(false)
+        setSendState('error')
+        setSendError(EMAIL_CODE_MESSAGES.network)
+        return
+      }
+      aliasFlight.current = false
     }
-    setAliasWarning('')
-    const id = ++attempt.current
-    const pending = sendMagicLink(typed)
-    sendFlight.current = pending
-    aliasFlight.current = false
-    setSendPending(true)
-    setSendState('sending')
-    setSendError('')
-    await finishSend(pending, id, () => {
-      setSendError('')
-      setSendState('sent')
-    }, (message) => {
-      setSendError(message || EMAIL_CODE_MESSAGES.network)
-      setSendState('error')
-    })
+    await deliverTyped(typed, { stay })
+  }
+
+  function sendSeparate() {
+    return send(null, { force: true, stay: true })
   }
 
   function releaseFlight(id) {
@@ -267,7 +345,11 @@ export function useEmailCodeSignIn() {
     setVerifyError('')
     setResendNote('')
     try {
+      const ticket = canonical.current?.verifyTicket
       const result = await verifyEmailCodeForSignIn(email.trim(), trimmed, {
+        verify: ticket
+          ? async () => adoptEmailSession(await verifyCanonicalGmailCode({ verifyTicket: ticket, code: trimmed }))
+          : undefined,
         onLateSession: () => enter(),
         onSettled: (settled) => {
           releaseFlight(id)
@@ -311,21 +393,57 @@ export function useEmailCodeSignIn() {
   }
 
   async function resend() {
-    if (!email.trim() || resending || sendFlight.current) return
+    if (!email.trim() || resending || sendFlight.current || aliasFlight.current) return
     // The new code supersedes the previous check. Bumping the attempt id is
     // what unblocks submit: the old flight no longer matches. Drop the busy
     // flag now so the replacement can be typed and sent while that request
     // is still outstanding. A late success still reaches enter().
     const id = ++attempt.current
+    const gen = emailGen.current
     setPending(false)
-    const pending = sendMagicLink(email.trim())
-    sendFlight.current = pending
-    setSendPending(true)
     setResending(true)
     setVerifyState('idle')
     setVerifyError('')
     setResendNote('')
     setCode('')
+    if (canonical.current) {
+      try {
+        const prepared = await prepareGmailAlias(email.trim())
+        if (id !== attempt.current || gen !== emailGen.current) return
+        const decision = gmailAliasDecision(prepared)
+        if (decision.send !== 'canonical') {
+          setVerifyError('We couldn\u2019t send a new code. Try again in a moment.')
+          setVerifyState('error')
+          return
+        }
+        const raced = await awaitWithin(
+          sendCanonicalGmailCode({ ticket: decision.ticket, redirectTo: redirectOrigin() }),
+          EMAIL_CODE_TIMEOUT_MS,
+        )
+        if (id !== attempt.current || gen !== emailGen.current) return
+        if (raced.timeout || !raced.value?.ok) {
+          setVerifyError('We couldn\u2019t send a new code. Try again in a moment.')
+          setVerifyState('error')
+          return
+        }
+        canonical.current = { verifyTicket: raced.value.verifyTicket }
+        setAliasNote(decision.note)
+        setSendState('sent')
+        setVerifyError('')
+        setVerifyState('idle')
+        setResendNote('A new code is on its way.')
+      } catch {
+        if (id !== attempt.current) return
+        setVerifyError('We couldn\u2019t send a new code. Try again in a moment.')
+        setVerifyState('error')
+      } finally {
+        setResending(false)
+      }
+      return
+    }
+    const pending = sendMagicLink(email.trim())
+    sendFlight.current = pending
+    setSendPending(true)
     try {
       await finishSend(pending, id, () => {
         setSendState('sent')
@@ -353,7 +471,7 @@ export function useEmailCodeSignIn() {
     setResendNote('')
     setResending(false)
     setCode('')
-    setAliasWarning('')
+    clearCanonical()
   }
 
   return {
@@ -361,7 +479,7 @@ export function useEmailCodeSignIn() {
     sendState, sendError, verifyState, verifyError,
     pending, verifyBusy: pending || verifyState === 'verifying',
     sendPending, sendBusy: sendPending || sendState === 'sending',
-    resending, resendNote, aliasWarning,
-    send, verify, resend, reset,
+    resending, resendNote, aliasNote,
+    send, sendSeparate, verify, resend, reset,
   }
 }

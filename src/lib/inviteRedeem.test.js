@@ -40,6 +40,13 @@ describe('redeem invite responses', () => {
     expect(flags.refresh).not.toHaveBeenCalled()
   })
 
+  it('surfaces a rate limit without a second attempt', async () => {
+    respond(429, { status: 'slow_down' })
+    expect(await redeemInviteCode('BETA')).toEqual({ status: 'slow_down', cohort: null })
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(flags.refresh).not.toHaveBeenCalled()
+  })
+
   it('enrolls only on a 2xx enrolled or already', async () => {
     respond(200, { status: 'enrolled', cohort: 'beta-2026' })
     expect(await redeemInviteCode('BETA')).toEqual({ status: 'enrolled', cohort: 'beta-2026' })

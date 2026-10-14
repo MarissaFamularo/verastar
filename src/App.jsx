@@ -18,6 +18,7 @@ import { ncbiCredentialCopy } from './lib/ncbiCopy.js'
 import { getProfile, store, COLLECTIONS, initStore, idbStore } from './lib/store.js'
 import { supabase, supabaseConfigured, currentUser, signOut, isSignedIn } from './lib/supabase.js'
 import { useEmailCodeSignIn } from './lib/emailCode.js'
+import AccountSection from './components/AccountSection.jsx'
 import { shouldOfferMigration, migrateLocalToAccount, getMigrationProgress } from './lib/migrate.js'
 import { loadDomains } from './lib/domains.js'
 import { drainVault } from './lib/library.js'
@@ -31,7 +32,7 @@ import { refreshSponsorship, isSponsored } from './lib/sponsor.js'
 import { seedLibraryIfDue } from './pipeline/seed.js'
 import { digestDateLine } from './lib/digestStore.js'
 import { needsExistingLibrarySync } from './lib/accountGate.js'
-import { GmailAliasNotice } from './components/GmailAliasNotice.jsx'
+import { EmailCodeStatus } from './components/GmailAliasNotice.jsx'
 import DomainEditor from './components/DomainEditor.jsx'
 import NorthStars from './components/NorthStars.jsx'
 import OnboardingQuiz from './components/OnboardingQuiz.jsx'
@@ -268,115 +269,6 @@ function StarMapSmallSky() {
   )
 }
 
-// Account & sync — magic-link sign-in (no passwords, consistent with the
-// no-credential ethos). Renders nothing when Supabase env isn't configured, so a
-// cloned repo without keys keeps the original local-only app. The consent line is
-// required groundwork for the adoption study: one sentence, visible, honest.
-function AccountSection({ account, first = false }) {
-  const form = useEmailCodeSignIn()
-  if (!supabaseConfigured) return null
-
-  return (
-    <>
-      {!first && <div style={{ height: 1, background: 'var(--hairline)', margin: '26px 0' }} />}
-      <p style={{ margin: '0 0 14px', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }}>Account &amp; sync</p>
-      {account ? (
-        <>
-          <div className="flex items-center" style={{ gap: 10, padding: '10px 13px', borderRadius: 10, background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,.08)' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-verified)', boxShadow: '0 0 7px var(--color-verified)' }} />
-            <span style={{ color: 'var(--color-fg-soft)', fontSize: 13 }}>{account.email}</span>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-verified-soft)', fontWeight: 600 }}>Signed in</span>
-          </div>
-          <p style={{ margin: '12px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
-            Your library lives in your account so it works on every device — and you always hold
-            your own copy on disk, in plain files any agent can read. Your API key and your disk
-            folder stay on this device, never in your account.
-          </p>
-          <button
-            onClick={async () => { await signOut(); window.location.reload() }}
-            className="cursor-pointer"
-            style={{ marginTop: 12, padding: '9px 15px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10, background: 'transparent', color: 'var(--color-fg-soft)', fontSize: 13, fontWeight: 500, fontFamily: 'inherit' }}
-          >
-            Sign out
-          </button>
-        </>
-      ) : (
-        <>
-          <p style={{ margin: '0 0 12px', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
-            Sign in and your library follows you — we keep it so it works on every device, and you
-            always hold your own copy on disk, in plain files any agent can read. Your API key
-            stays on this device, never in your account.
-          </p>
-          {form.sendState === 'sent' ? (
-            <>
-              <div role="status" style={{ padding: '10px 13px', borderRadius: 10, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 13, lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 600 }}>Code sent to {form.email.trim()}.</span> Enter the 6-digit code from that email.
-              </div>
-              <form onSubmit={form.verify} style={{ marginTop: 10 }}>
-                <label htmlFor="settings-email-code" style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#aab0be', fontWeight: 500 }}>6-digit code</label>
-                <div className="flex" style={{ gap: 9 }}>
-                  <input
-                    id="settings-email-code"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    value={form.code}
-                    onChange={(e) => form.setCode(e.target.value)}
-                    placeholder="123456"
-                    aria-invalid={form.verifyState === 'error'}
-                    style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none', letterSpacing: '.14em' }}
-                  />
-                  <button type="submit" disabled={form.verifyBusy} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: form.verifyBusy ? 0.6 : 1 }}>
-                    {form.verifyBusy ? 'Checking…' : 'Continue'}
-                  </button>
-                </div>
-              </form>
-              {form.verifyState === 'error' && (
-                <div role="alert" style={{ marginTop: 10, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-                  {form.verifyError}
-                </div>
-              )}
-              {form.resendNote && <p role="status" style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--color-verified-soft)' }}>{form.resendNote}</p>}
-              <button type="button" onClick={form.resend} disabled={form.resending} className="cursor-pointer" style={{ marginTop: 10, border: 0, background: 'transparent', padding: 0, color: 'var(--color-accent)', fontSize: 13, fontFamily: 'inherit' }}>
-                {form.resending ? 'Sending…' : 'Send a new code'}
-              </button>
-            </>
-          ) : (
-            <form onSubmit={form.send}>
-              <label htmlFor="settings-account-email" style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#aab0be', fontWeight: 500 }}>Account email</label>
-              <div className="flex" style={{ gap: 9 }}>
-                <input
-                  id="settings-account-email"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => form.setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  style={{ flex: 1, padding: '10px 13px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }}
-                />
-                <button type="submit" disabled={form.sendBusy} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: form.sendBusy ? 0.6 : 1 }}>
-                  {form.sendBusy ? 'Sending…' : 'Email me a code'}
-                </button>
-              </div>
-            </form>
-          )}
-          {form.sendState === 'error' && (
-            <div role="alert" style={{ marginTop: 10, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13, lineHeight: 1.5 }}>
-              <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {form.sendError}
-            </div>
-          )}
-          <GmailAliasNotice message={form.aliasWarning} busy={form.sendBusy} onContinue={() => form.send(null, { force: true })} />
-          <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
-            Signing in stores your steering profile, literature library, and usage events on our servers —
-            never patient data, and never sold. You always hold your own flat-file copy
-            on disk. Usage data may be analyzed, in aggregate, for research.
-          </p>
-        </>
-      )}
-    </>
-  )
-}
-
 // Existing browser-only library recovery. This appears on every fresh visit until
 // the user signs in or dismisses it for the current page load. Signing in reloads
 // the app; the existing empty-cloud migration check then offers the actual move.
@@ -399,8 +291,13 @@ function ExistingLibrarySyncGate({ onNotNow }) {
 
         {form.sendState === 'sent' ? (
           <>
-            <div role="status" style={{ marginTop: 24, padding: '12px 15px', borderRadius: 11, background: 'rgba(127,191,154,.1)', color: 'var(--color-verified-soft)', fontSize: 14, lineHeight: 1.55 }}>
-              <span style={{ fontWeight: 600 }}>Code sent to {form.email.trim()}.</span> Enter the 6-digit code from that email.
+            <div style={{ marginTop: 24 }}>
+              <EmailCodeStatus
+                email={form.email.trim()}
+                aliasNote={form.aliasNote}
+                busy={form.resending}
+                onSeparate={form.sendSeparate}
+              />
             </div>
             <form onSubmit={form.verify} style={{ marginTop: 14 }}>
               <label htmlFor="library-email-code" style={{ display: 'block', fontSize: 13, color: '#aab0be', fontWeight: 500 }}>6-digit code</label>
@@ -450,7 +347,6 @@ function ExistingLibrarySyncGate({ onNotNow }) {
                 <span style={{ fontWeight: 600 }}>Couldn&rsquo;t send the code:</span> {form.sendError}
               </div>
             )}
-            <GmailAliasNotice message={form.aliasWarning} busy={form.sendBusy} onContinue={() => form.send(null, { force: true })} />
             <div className="flex items-center" style={{ marginTop: 22, gap: 18 }}>
               <button type="submit" disabled={form.sendBusy || !form.email.trim()} className="cursor-pointer" style={{ padding: '12px 22px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: form.sendBusy || !form.email.trim() ? 0.5 : 1 }}>
                 {form.sendBusy ? 'Sending…' : 'Email me a secure code'}
@@ -728,7 +624,7 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
               </div>
             </>
           )}
-          <div hidden={section !== 'account'}><AccountSection account={account} first /></div>
+          <div hidden={section !== 'account'}><AccountSection account={account} first onEnrolled={() => setSettingsVersion((v) => v + 1)} /></div>
           <div hidden={section !== 'access'}>
           {sponsored ? (
             <div style={{ borderRadius: 10, border: '1px solid rgba(127,191,154,.25)', background: 'rgba(127,191,154,.07)', padding: '10px 13px' }}>

@@ -1,11 +1,11 @@
 // Gmail treats dots and +tags as the same inbox, and googlemail.com as gmail.com.
-// Signing in with a different spelling must not silently open a second account.
-// The server reports only whether a different account already normalizes to this
-// inbox, plus a one-character hint. Typing the canonical address itself gets no
-// hint, so that spelling does not reveal a dotted or tagged account. This module
-// never receives the other address.
+// Signing in with a different spelling must open the account already on that inbox.
+// The server reports a one-character hint and an opaque ticket. It does not report
+// the stored address. Typing that stored address, or the canonical spelling, gets
+// the same "no match" as an inbox with no account.
 
 import { awaitWithin } from './deadline.js'
+import { isUuid } from './gmailCanonical.js'
 import { supabase } from './supabase.js'
 
 const MASKED_HINT = /^[^\s@]…@(gmail|googlemail)\.com$/u
@@ -26,32 +26,58 @@ export function isMaskedGmailHint(hint) {
   return typeof hint === 'string' && MASKED_HINT.test(hint)
 }
 
-export function gmailAliasWarning(hint) {
-  return `You already have an account as ${hint}; sign in with that address?`
+export function gmailCanonicalNote(hint) {
+  return `Signing you in as ${hint} (the account already on this inbox)`
 }
 
-// force: the person chose to send a code to the address they typed anyway.
-// A hint that is not a mask is ignored and sign-in continues.
-export function gmailAliasDecision(lookup, { force = false } = {}) {
-  if (force) return { send: true, warning: '' }
-  if (lookup?.match === true && isMaskedGmailHint(lookup.hint)) {
-    return { send: false, warning: gmailAliasWarning(lookup.hint) }
+// force: the person chose a separate account at the spelling they typed.
+// A match with no ticket cannot be delivered without the stored address, so
+// sign-in stops instead of opening a second account. Anything else sends to
+// the typed address, including an exact account address and a failed lookup.
+export function gmailAliasDecision(prepared, { force = false } = {}) {
+  if (force) return { send: 'typed', note: '' }
+  if (prepared?.match === true && isMaskedGmailHint(prepared.hint)) {
+    if (prepared.ticket) {
+      return { send: 'canonical', note: gmailCanonicalNote(prepared.hint), ticket: prepared.ticket }
+    }
+    return { send: 'blocked', note: '' }
   }
-  return { send: true, warning: '' }
+  return { send: 'typed', note: '' }
+}
+
+function noMatch() {
+  return { match: false }
 }
 
 // Missing function, rate limit, timeout, and network errors all return no match
-// so a code can still be sent. The check is a warning, not a lock on the door.
+// so a code can still be sent to the typed address. A match never includes an
+// address, even if a response carries one.
+export async function prepareGmailAlias(email, { timeoutMs = GMAIL_ALIAS_LOOKUP_MS } = {}) {
+  const typed = String(email || '').trim()
+  if (!isGmailFamily(typed) || typeof supabase?.rpc !== 'function') return noMatch()
+  try {
+    const raced = await awaitWithin(supabase.rpc('gmail_alias_prepare', { p_email: typed }), timeoutMs)
+    if (raced.timeout) return noMatch()
+    const { data, error } = raced.value || {}
+    if (error || !data || data.match !== true || !isMaskedGmailHint(data.hint)) return noMatch()
+    return { match: true, hint: data.hint, ticket: isUuid(data.ticket) ? data.ticket : '' }
+  } catch {
+    return noMatch()
+  }
+}
+
+// The hint RPC, kept for the audit client. Sign-in uses prepareGmailAlias so a
+// different spelling can be delivered without a second rate-limit hit.
 export async function lookupGmailAlias(email, { timeoutMs = GMAIL_ALIAS_LOOKUP_MS } = {}) {
   const typed = String(email || '').trim()
-  if (!isGmailFamily(typed) || typeof supabase?.rpc !== 'function') return { match: false }
+  if (!isGmailFamily(typed) || typeof supabase?.rpc !== 'function') return noMatch()
   try {
     const raced = await awaitWithin(supabase.rpc('gmail_alias_hint', { p_email: typed }), timeoutMs)
-    if (raced.timeout) return { match: false }
+    if (raced.timeout) return noMatch()
     const { data, error } = raced.value || {}
-    if (error || !data || data.match !== true || !isMaskedGmailHint(data.hint)) return { match: false }
+    if (error || !data || data.match !== true || !isMaskedGmailHint(data.hint)) return noMatch()
     return { match: true, hint: data.hint }
   } catch {
-    return { match: false }
+    return noMatch()
   }
 }

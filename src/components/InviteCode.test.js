@@ -3,13 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mountDom, deferred } from '../test-utils/dom.js'
 vi.mock('../lib/inviteCode.js', () => ({
   canRedeem: () => true, redeemInviteCode: vi.fn(), normalizeInviteCode: (s) => s.toUpperCase(),
-  INVITE_MESSAGES: { invalid: 'Invalid code', npi_required: 'Match NPI', enrolled: 'Enrolled' },
+  INVITE_MESSAGES: {
+    invalid: 'That code is not recognized. Check it and try again.',
+    exhausted: 'That code has been used up. Ask for a new one.',
+    slow_down: 'Too many attempts. Try again in an hour.',
+    npi_required: 'Match NPI',
+    enrolled: 'Enrolled',
+    error: 'Something went wrong. Try again in a moment.',
+  },
 }))
 vi.mock('../lib/sponsor.js', () => ({ isSponsored: () => false }))
 vi.mock('./NpiMatch.jsx', () => ({ default: ({ onContinue, onBack }) => React.createElement('div', null,
   'NPI form', React.createElement('button', { onClick: onContinue }, 'Finish NPI'), React.createElement('button', { onClick: onBack }, 'Back')) }))
 import { redeemInviteCode } from '../lib/inviteCode.js'
-import InviteCode from './InviteCode.jsx'
+import InviteCode, { BetaAccessGate } from './InviteCode.jsx'
 let dom
 beforeEach(async () => { vi.clearAllMocks(); redeemInviteCode.mockReset(); dom = await mountDom() })
 afterEach(async () => { vi.useRealTimers(); await dom.unmount() })
@@ -23,9 +30,28 @@ describe('beta code before NPI', () => {
     await dom.render(React.createElement(InviteCode))
     expect(dom.text()).not.toContain('NPI form')
     await enterCode()
-    expect(dom.text()).toContain('Invalid code')
+    expect(dom.text()).toContain('That code is not recognized')
+    expect(dom.text()).toContain('Have a beta invite code?')
     expect(dom.text()).not.toContain('NPI form')
   })
+  it('shows a used-up code and a rate limit once each', async () => {
+    redeemInviteCode.mockResolvedValueOnce({ status: 'exhausted' }).mockResolvedValueOnce({ status: 'slow_down' })
+    await dom.render(React.createElement(InviteCode))
+    await enterCode()
+    expect(dom.text()).toContain('That code has been used up')
+    expect(redeemInviteCode).toHaveBeenCalledTimes(1)
+    await dom.submit(dom.q('form'))
+    expect(dom.text()).toContain('Too many attempts')
+    expect(redeemInviteCode).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers the invite field on an access gate', async () => {
+    await dom.render(React.createElement(BetaAccessGate, { inputId: 'beta-invite-digest' }, 'Sign in or add your API key in Settings first.'))
+    expect(dom.text()).toContain('Sign in or add your API key in Settings first.')
+    expect(dom.q('label[for="beta-invite-digest"]').textContent).toContain('Have a beta invite code?')
+    expect(dom.q('#beta-invite-digest')).toBeTruthy()
+  })
+
   it('shows NPI only after a usable code and redeems the same code after matching', async () => {
     const onEnrolled = vi.fn()
     redeemInviteCode.mockResolvedValueOnce({ status: 'npi_required' }).mockResolvedValueOnce({ status: 'enrolled' })
