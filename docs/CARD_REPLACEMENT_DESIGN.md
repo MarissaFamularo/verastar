@@ -255,7 +255,7 @@ components-not-separated]`, read-recommendation with basis E1).
 |---|---|
 | Specified | reference rev. 4; `schema.js`; 10 case files |
 | Executable | `npm run test:acceptance` — see the run count in the suite output; 6 `todo` for the unfilled diagnostic-validation category |
-| Demonstrated | **BEST-CLI path only** (`src/cards/`): index → claim check → inventory/fidelity → render plan → constrained renderer → prose check. All 46 BEST-CLI and prose tests pass, including state A end to end and the five rendered-output adversarial cases. Other cards' cases run against the same code and fail where their source patterns are not yet parsed (see `src/acceptance/README.md`). Nothing is wired into the app; `npm test` (legacy) is unchanged |
+| Demonstrated | **every card** (`src/cards/`): index → claim check → inventory/fidelity → render plan → constrained renderer → prose check, for BEST-CLI, BASIL-2 (all scenarios), CREST-2, RAO, cilostazol, PCB and the roles/linkage cases, each rendered end to end and prose-checked; the adversarial set and rendered-output adversarial cases all fail for a coded reason. 201 tests pass, 6 `todo` (diagnostic validation). Observed false accepts, their causes and fixes are recorded in `src/acceptance/README.md`. Nothing is wired into the app; `npm test` (legacy) is unchanged |
 
 ## 6. Open implementation questions (not editorial)
 

@@ -237,6 +237,24 @@ describe('C6-BASIL2 — scenarios', () => {
   })
 })
 
+// Every card's first fidelity-pass composition must render through the constrained renderer
+// and pass the prose check with its main result shown.
+describe('every card — end to end render of the reference composition', () => {
+  for (const c of CASES) {
+    it(`${c.id}: renders and passes checkProse`, async () => {
+      const card = c.fidelity.find((f) => f.expect === 'pass').card
+      const personal = c.personal.filter((p) => p.expect === 'pass' && !p.profile).map((p) => p.personal)
+      const a = await run(c, { claims: card, personal })
+      expectInvariants(a)
+      expect(a.fidelity.status, `fidelity ${a.fidelity.reasons}`).toBe('pass')
+      const rendered = renderCard({ assessment: a, claims: card, personal })
+      const p = checkProse({ rendered, assessment: a, claims: card })
+      expect(p.sentences.filter((x) => x.status !== 'ok').map((x) => [rendered.sentences[x.index].text, x.reasons])).toEqual([])
+      expect(a.render.mainResultShown).toBe(true)
+    })
+  }
+})
+
 describe('C6-BASIL2 — end to end: every scenario renders and passes the prose check', () => {
   const c = basil2
   const personal = c.personal.filter((p) => p.expect === 'pass').map((p) => p.personal)

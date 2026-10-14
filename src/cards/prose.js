@@ -10,7 +10,7 @@ import { normalize, extractNumbersWithIndex, numbersEqual, tokens, tokenSet, ove
 import { REASONS as R } from '../acceptance/schema.js'
 import { parseTimepoint } from './check.js'
 
-const COMPARATIVE = /\b(largest|biggest|smallest|first(?:-ever)?|superior|inferior|outperform(?:ed|s)?|best|strongest|unprecedented|landmark|definitive|practice-changing)\b/
+const COMPARATIVE = /\b(largest|biggest|smallest|first(?:-ever)? (?:trial|study|randomi[sz]ed|to show|to demonstrate|evidence)|superior|inferior|outperform(?:ed|s)?|best|strongest|unprecedented|landmark|definitive|practice-changing)\b/
 const BENEFIT = /\b(fewer|lower|reduced|reduce[sd]?|improved?|less|decreased?|better|favou?red|protective|benefit(?:ed)?)\b/
 const HARM = /\b(higher|more|increased?|worse|greater|excess)\b/
 const NULLW = /\bdid not differ\b|\bno (?:statistically )?significant difference\b|\bno (?:clear|meaningful) difference\b|\bsimilar\b|\bno difference\b|\bnot differ\b|\bwere comparable\b/
@@ -60,6 +60,7 @@ export function checkProse({ rendered, assessment, claims }) {
       if (disp === 'shown-with-estimate') allowed.push(...claimNumbers(c.claim))
       else if (c.res.eligibility === 'withhold') withheld.push(...claimNumbers(c.claim))
       if (c.claim.timepoint && c.res.elements.timepoint === 'bound') allowed.push(...numbersIn(c.claim.timepoint))
+      if (c.claim.outcome && c.res.elements.outcome === 'bound') allowed.push(...numbersIn(c.claim.outcome))
       if (c.claim.population) allowed.push(...numbersIn(c.claim.population))
       const lab = c.claim.estimate?.interval?.label
       if (lab && lab !== 'printed-bracket') { anyCi = true; allBracket = false; allowed.push(parseInt(lab, 10)) }
@@ -100,7 +101,11 @@ export function checkProse({ rendered, assessment, claims }) {
         if (cl.comparator && (cl.direction === 'favors-a' || cl.direction === 'favors-b')) {
           // distinctive arm words only (a shared word like "runoff" or "group" places neither arm)
           const ta = armTokens(cl.comparator.a), tb = armTokens(cl.comparator.b)
-          const pa = firstPos(norm, ta.filter((t) => !tb.includes(t))), pb = firstPos(norm, tb.filter((t) => !ta.includes(t)))
+          // a leading population phrase ("In peroneal runoff patients, …") may share a word
+          // with an arm; arm order is read from the clause after it
+          let body = norm
+          if (cl.population) { const pn = normalize(cl.population); if (body.startsWith(`in ${pn}`)) body = body.slice(3 + pn.length) }
+          const pa = firstPos(body, ta.filter((t) => !tb.includes(t))), pb = firstPos(body, tb.filter((t) => !ta.includes(t)))
           if (pa < 0 || pb < 0) add(R.PROSE_ARM_SWAPPED)
           else {
             // benefit framing ("A led to fewer … than B") names the favored arm first; harm
@@ -108,7 +113,7 @@ export function checkProse({ rendered, assessment, claims }) {
             const harmFramed = HARM.test(norm) && !BENEFIT.test(norm)
             const favoredFirst = cl.direction === 'favors-a' ? pa < pb : pb < pa
             if (harmFramed ? favoredFirst : !favoredFirst) add(R.PROSE_ARM_SWAPPED)
-            const pcts = [...norm.matchAll(/(\d+(?:\.\d+)?)%/g)].map((m) => ({ v: parseFloat(m[1]), pos: m.index }))
+            const pcts = [...body.matchAll(/(\d+(?:\.\d+)?)%/g)].map((m) => ({ v: parseFloat(m[1]), pos: m.index }))
             const ra = cl.arms?.find((x) => x.arm === 'a')?.percent, rb = cl.arms?.find((x) => x.arm === 'b')?.percent
             if (pcts.length >= 2 && ra != null && rb != null) {
               const firstArmIsA = pa < pb
@@ -126,9 +131,12 @@ export function checkProse({ rendered, assessment, claims }) {
           const core = new Set((od.headTokens || []).filter((t) => !acr.has(t)))
           const coreSize = [...core].filter((t) => t.length > 2).length
           const coreHit = overlap(core, st).length
-          const sayComposite = st.has('composite') || [...acr].some((a) => st.has(a))
           const disj = (od.disjuncts || []).map((d) => new Set(d))
-          const covered = disj.filter((d) => overlap(d, st).length > 0).length
+          const disjAcr = od.disjunctAcronyms || []
+          const isComposite = disj.length >= 2 || (od.componentTokens || []).length > 0 || core.has('composite')
+          const sayComposite = isComposite && (st.has('composite') || [...acr].some((a) => st.has(a)))
+          // a disjunct is named by its own acronym or by at least half of its words
+          const covered = disj.filter((d, i) => (disjAcr[i] && st.has(disjAcr[i])) || overlap(d, st).filter((t) => t !== disjAcr[i]).length >= Math.max(1, Math.ceil([...d].filter((t) => t.length > 2 && t !== disjAcr[i]).length / 2))).length
           const compHit = overlap(new Set(od.componentTokens || []), st).length > 0
           const named = sayComposite || (coreSize <= 3 ? coreHit >= Math.max(1, Math.ceil(coreSize / 2)) : coreHit >= Math.ceil(coreSize / 2) && coreHit >= 2) || (disj.length >= 2 && covered === disj.length)
           const carried = cl.direction === 'no-clear-difference' && overlap(core, prevOutcome).length > 0
@@ -142,7 +150,8 @@ export function checkProse({ rendered, assessment, claims }) {
           for (const m of norm.matchAll(TIME_UNIT)) {
             const h = { value: parseFloat(m[1]), unit: m[2].replace(/s$/, '') }
             const before = norm.slice(0, m.index)
-            const sense = /\b(?:median|mean)\b[^.]{0,20}$/.test(before) ? 'median-follow-up' : /\b(?:minimum|at least)\b[^.]{0,12}$/.test(before) ? 'minimum-follow-up' : /\b(?:at|by|within)\s+(?:a\s+)?$/.test(before) ? 'fixed' : /\b(?:for|over|lasting)\s+(?:a\s+)?$/.test(before) ? 'duration' : null
+            // "over" states follow-up of any sense; "at/by/within" name a fixed horizon; "for" a duration
+            const sense = /\b(?:median|mean)\b[^.]{0,20}$/.test(before) ? 'median-follow-up' : /\b(?:minimum|at least)\b[^.]{0,12}$/.test(before) ? 'minimum-follow-up' : /\b(?:at|by|within)\s+(?:a\s+)?$/.test(before) ? 'fixed' : /\b(?:for|lasting)\s+(?:a\s+)?$/.test(before) ? 'duration' : null
             const ok = want.items.some((w) => numbersEqual(w.value, h.value) && (!w.unit || w.unit === h.unit)) && (!want.sense || !sense || sense === want.sense || (sense === 'duration' && want.sense === 'median-follow-up' && /\bmedian\b/.test(before.slice(-30))))
             if (!ok) add(R.PROSE_TIMEPOINT_CHANGED)
           }

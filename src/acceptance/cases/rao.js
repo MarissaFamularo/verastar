@@ -22,7 +22,7 @@ const rao = claim({
   estimate: { measure: 'OR', value: 1.64, interval: ci(1.12, 2.41), p: null, unit: null, sample: null },
   evidence: { quote: Q.rao },
 })
-const secondary = claim({ id: 'secondary', kind: 'effect', role: 'secondary', population: 'matched cohorts', comparator: { a: 'CAS', b: 'CEA' }, outcome: 'stroke; mortality', timepoint: '1 year', direction: 'favors-b', language: 'associational', estimate: null, evidence: { quote: Q.secondary } })
+const secondary = claim({ id: 'secondary', kind: 'effect', role: 'secondary', population: 'matched CEA and CAS cohorts', comparator: { a: 'CAS', b: 'CEA' }, outcome: 'stroke; mortality', timepoint: '1 year', direction: 'favors-b', language: 'associational', estimate: null, evidence: { quote: Q.secondary } })
 const timing = claim({ id: 'timing', kind: 'author-statement', role: 'design', evidence: { quote: Q.timing } })
 const confounding = claim({ id: 'confounding', kind: 'limitation', role: 'design', basis: 'design', text: 'procedure choice was not random; residual confounding remains possible despite matching' })
 

@@ -10,9 +10,9 @@ export { normalize, extractNumbersWithIndex, numbersEqual }
 
 const STOP = new Set(('a an the of in on at to for from by with and or vs versus than as is was were are be been ' +
   'had has have did do does not no any all both each per who whom which that this these those it its their there ' +
-  'first second initial strategy group groups patients participants people subjects after over within during ' +
+  'first second strategy group groups patients participants people subjects after over within during ' +
   'between among compared comparing rate rates risk event events outcome outcomes primary secondary co-primary ' +
-  'median mean years year months month weeks week days day up more most less least also only into out').split(' '))
+  'median mean years year months month weeks week days day up more most less least also only into out then later earlier through until beyond').split(' '))
 
 // Canonical spellings so an outcome named two ways compares as one: death from any cause /
 // all-cause mortality / died → death.
@@ -57,6 +57,14 @@ export function acronyms(phrase) {
     }
   }
   return out
+}
+
+// The acronym of a WHOLE phrase ("major adverse limb events" → male), or null when the phrase
+// is not a single 3–5 word name. Unlike window initials, this never names a part of a composite.
+export function wholeAcronym(phrase) {
+  const words = normalize(phrase).replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').split(' ').filter((w) => w && !ARTICLES.has(w))
+  if (words.length < 3 || words.length > 5 || words.some((w) => BREAKERS.has(w))) return null
+  return words.map((w) => w[0]).join('')
 }
 
 export const fmtNum = (n) => (Number.isInteger(n) && Math.abs(n) >= 1000 ? n.toLocaleString('en-US') : String(n))

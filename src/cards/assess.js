@@ -26,12 +26,28 @@ function checkPersonal(p, profile, index) {
   const facts = items.filter((i) => i.kind === 'fact')
   const topical = items.filter((i) => i.kind === 'north-star' || i.kind === 'project')
   // topical overlap: the item's words against the title, background and methods (not results)
-  const scope = index.sentences.filter((s) => ['background', 'methods', 'body'].includes(s.section)).map((s) => s.text).join(' ') + ' ' + index.title
-  const scopeTokens = tokenSet(scope)
-  const overlaps = (item) => overlap(tokenSet(item.text), scopeTokens).length > 0
+  const scope = index.sentences.filter((s) => ['background', 'methods', 'body'].includes(s.section)).map((s) => s.text).join(' ')
+  const scopeTokens = tokenSet(scope), titleTokens = tokenSet(index.title)
+  const primaryTokens = new Set(index.definitions.filter((d) => d.role !== 'secondary').flatMap((d) => [...d.allTokens]))
+  const secondaryTokens = new Set(index.definitions.filter((d) => d.role === 'secondary').flatMap((d) => [...d.allTokens]))
+  // topical support: a word of the item in the title, or two of its words (or its acronym) in
+  // the background/methods — one generic word in the body is not a connection
+  const overlaps = (item) => {
+    const it = tokenSet(item.text)
+    const acr = [...item.text.matchAll(/\b([A-Z]{2,6})\b/g)].map((m) => m[1].toLowerCase())
+    return overlap(it, titleTokens).length >= 1 || overlap(it, scopeTokens).length >= 2 || acr.some((a) => scopeTokens.has(a) || titleTokens.has(a))
+  }
+  // a connection whose words rest only on a secondary outcome is not a topic connection
+  const restsOnSecondary = () => {
+    const t = tokenSet(p.text)
+    const onSecondary = overlap(t, secondaryTokens).filter((x) => !primaryTokens.has(x) && !titleTokens.has(x))
+    const onPrimary = overlap(t, new Set([...primaryTokens, ...titleTokens]))
+    return onSecondary.length > 0 && onPrimary.length === 0
+  }
   switch (p.connection) {
     case 'topic':
       if (!topical.some(overlaps)) reasons.push(R.NO_SUPPORTING_ITEM)
+      else if (topical.every((i) => i.kind === 'project') && restsOnSecondary()) reasons.push(R.CONNECTION_TYPE_UNSUPPORTED)
       break
     case 'population':
       if (!facts.length) reasons.push(R.PRACTICE_CLAIM_WITHOUT_FACT)

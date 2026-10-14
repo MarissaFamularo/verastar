@@ -19,22 +19,22 @@ const design = claim({ id: 'design', kind: 'design', role: 'design', population:
 const primaryDef = claim({ id: 'primary-def', kind: 'outcome-definition', role: 'primary', outcome: 'stroke or death through day 44, then ipsilateral ischemic stroke to 4 years', timepoint: '4 years', evidence: { quote: Q.primaryDef } })
 const stent = claim({
   id: 'stent-primary', kind: 'effect', role: 'primary',
-  population: 'stenting trial', comparator: { a: 'stenting + IMM', b: 'IMM alone' },
+  population: 'stenting trial', comparator: { a: 'stenting plus intensive medical management', b: 'medical therapy alone (intensive medical management)' },
   outcome: 'primary composite', timepoint: '4 years', direction: 'favors-a', language: 'causal',
   estimate: { measure: 'RD', value: 3.2, interval: ci(0.6, 5.9), p: 0.02, unit: 'percentage points', sample: null },
   evidence: { quote: Q.stent },
 })
 const cea = claim({
   id: 'cea-primary', kind: 'no-clear-difference', role: 'primary',
-  population: 'endarterectomy trial', comparator: { a: 'endarterectomy + IMM', b: 'IMM alone' },
+  population: 'endarterectomy trial', comparator: { a: 'endarterectomy plus intensive medical management', b: 'medical therapy alone (intensive medical management)' },
   outcome: 'primary composite', timepoint: '4 years', direction: 'no-clear-difference', language: 'none',
   estimate: { measure: 'RD', value: 1.6, interval: ci(-1.1, 4.3), p: 0.24, unit: 'percentage points', sample: null },
   evidence: { quote: Q.cea },
 })
 const ceaPost = claim({
   id: 'cea-postprocedural', kind: 'effect', role: 'component',
-  population: 'endarterectomy trial', comparator: { a: 'endarterectomy + IMM', b: 'IMM alone' },
-  outcome: 'ipsilateral ischemic stroke beyond day 44', timepoint: 'to 4 years', direction: 'favors-a', language: 'associational',
+  population: 'endarterectomy trial', comparator: { a: 'endarterectomy plus intensive medical management', b: 'medical therapy alone (intensive medical management)' },
+  outcome: 'ipsilateral ischemic stroke', timepoint: 'beyond 44 days', direction: 'favors-a', language: 'associational',
   estimate: null, evidence: { quote: Q.ceaPost },
 })
 const notHeadToHead = claim({ id: 'not-head-to-head', kind: 'author-statement', role: 'design', basis: 'source', text: 'event rates in the revascularization groups appeared similar across the two trials; no head-to-head comparison', evidence: { quote: Q.similar } })

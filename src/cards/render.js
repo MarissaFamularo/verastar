@@ -27,7 +27,8 @@ const strip = (s) => String(s || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\
 function effectSentence(claim, withEstimate) {
   const a = strip(claim.comparator?.a), b = strip(claim.comparator?.b)
   const where = claim.population ? `In ${claim.population}, ` : ''
-  const when = claim.timepoint ? ` over ${claim.timepoint}` : ''
+  const tp = claim.timepoint || ''
+  const when = !tp ? '' : /^(?:median|mean)/i.test(tp) ? ` over a ${tp}` : /^(?:minimum|at least)/i.test(tp) ? ` with a ${tp} follow-up` : /^(?:beyond|after|within|at|by|during)/i.test(tp) ? ` ${tp}` : ` at ${tp}`
   const verb = claim.language === 'causal' ? 'led to' : 'was associated with'
   const numbers = withEstimate ? [armRates(claim), estimateText(claim.estimate)].filter(Boolean).join('; ') : ''
   const tail = numbers ? ` (${numbers})` : ''
@@ -80,7 +81,9 @@ export function renderCard({ assessment, claims, personal = [] }) {
   }
 
   // for you
-  for (const p of personal) if (assessment.render.personalShown.includes(p.id)) sentences.push({ text: `For you: ${p.text}.`.replace(/\.\.$/, '.'), claims: design ? [design.id] : [], personal: [p.id], kind: 'for-you' })
+  // a personal line may refer to any shown fact; its numbers are checked against all of them
+  const shownIds = claims.filter((c) => shown(c.id)).map((c) => c.id)
+  for (const p of personal) if (assessment.render.personalShown.includes(p.id)) sentences.push({ text: `For you: ${p.text}.`.replace(/\.\.$/, '.'), claims: shownIds, personal: [p.id], kind: 'for-you' })
 
   // temper: outcome definition, absences, limitations
   for (const c of claims) {

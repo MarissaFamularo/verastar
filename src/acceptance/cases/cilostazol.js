@@ -29,16 +29,16 @@ const icd = claim({
 })
 const qol = claim({ id: 'qol', kind: 'absence', role: 'primary', outcome: 'quality of life', text: 'could not be pooled', evidence: { quote: Q.qol } })
 const headache = claim({
-  id: 'headache', kind: 'effect', role: 'safety', population: 'pooled RCTs', comparator: { a: 'cilostazol', b: 'placebo' },
+  id: 'headache', kind: 'effect', role: 'safety', population: 'intermittent claudication (pooled RCTs)', comparator: { a: 'cilostazol', b: 'placebo' },
   outcome: 'headache', direction: 'favors-b', language: 'causal',
   estimate: { measure: 'OR', value: 2.83, interval: ci(2.26, 3.55), p: null, unit: null, sample: { studies: 8, participants: 2584 } },
   evidence: { quote: Q.headache }, text: 'moderate certainty',
 })
 const serious = claim({ id: 'serious', kind: 'absence', role: 'secondary', outcome: 'revascularisation, amputation, cardiovascular events', evidence: { quote: Q.serious } })
-const pentox = claim({ id: 'pentox', kind: 'no-clear-difference', role: 'secondary', comparator: { a: 'cilostazol', b: 'pentoxifylline' }, outcome: 'walking distance (ICD, ACD)', direction: 'no-clear-difference', estimate: null, evidence: { quote: Q.pentox }, text: 'one study (ICD) and two (ACD)' })
+const pentox = claim({ id: 'pentox', kind: 'no-clear-difference', role: 'secondary', comparator: { a: 'cilostazol', b: 'pentoxifylline' }, outcome: 'initial claudication distance; absolute claudication distance', direction: 'no-clear-difference', estimate: null, evidence: { quote: Q.pentox }, text: 'one study (ICD) and two (ACD)' })
 const pubbias = claim({ id: 'pubbias', kind: 'certainty', role: 'design', evidence: { quote: Q.pubbias } })
 const acdWithContext = claim({
-  id: 'acd-ctx', kind: 'effect', role: 'secondary', population: 'pooled RCTs', comparator: { a: 'cilostazol', b: 'placebo' },
+  id: 'acd-ctx', kind: 'effect', role: 'secondary', population: 'intermittent claudication (pooled RCTs)', comparator: { a: 'cilostazol', b: 'placebo' },
   outcome: 'absolute claudication distance', direction: 'favors-a', language: 'causal',
   estimate: { measure: 'MD', value: 39.57, interval: ci(21.8, 57.33), p: null, unit: 'metres', sample: { studies: 8, participants: 2360 } },
   evidence: { quote: Q.acd }, text: 'very-low certainty; secondary to the 26 m initial-distance primary',
@@ -78,7 +78,7 @@ export default {
     {
       name: 'pentoxifylline "no difference" generalized beyond walking distance',
       check: 'claim-support',
-      claim: claim({ ...pentox, id: 'm-pentox', outcome: 'efficacy and safety' }),
+      claim: claim({ ...pentox, id: 'm-pentox', outcome: 'efficacy; safety' }),
       expect: 'fail', reasons: [R.OUTCOME_UNBOUND],
     },
     {

@@ -51,7 +51,7 @@ export default {
 
   adjacentLinkage: {
     source: () => devsetSource('CAR-07'),
-    claim: claim({ id: 'rd-only', kind: 'effect', role: 'primary', population: 'stenting trial', comparator: { a: 'stenting + IMM', b: 'IMM alone' }, outcome: 'primary composite', timepoint: '4 years', direction: 'favors-a', estimate: { measure: 'RD', value: 3.2, interval: ci(0.6, 5.9), p: 0.02, unit: 'percentage points', sample: null }, evidence: { quote: Q.crestRD } }),
+    claim: claim({ id: 'rd-only', kind: 'effect', role: 'primary', population: 'stenting trial', comparator: { a: 'stenting plus intensive medical management', b: 'medical therapy alone (intensive medical management)' }, outcome: 'primary composite', timepoint: '4 years', direction: 'favors-a', estimate: { measure: 'RD', value: 3.2, interval: ci(0.6, 5.9), p: 0.02, unit: 'percentage points', sample: null }, evidence: { quote: Q.crestRD } }),
     expect: { eligibility: 'pass', linkage: 'adjacent-sentence', elements: { outcome: 'bound', population: 'bound' } },
   },
 }
