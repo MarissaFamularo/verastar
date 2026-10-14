@@ -128,7 +128,128 @@ select pg_temp.assert_ok(
   not exists (select 1 from private.gmail_alias_limits where bucket = 'ip:203.0.113.9'),
   'the lookup does not record the first forwarding hop');
 
+-- A different spelling issues an opaque ticket and does not return the stored address.
+delete from auth.users;
+insert into auth.users (email, created_at) values ('famularo.marissa@gmail.com', now() - interval '1 day');
+truncate private.gmail_alias_limits;
+truncate private.gmail_alias_permits;
+select set_config('request.headers', '{"cf-connecting-ip":"192.0.2.40"}', false);
+select pg_temp.assert_ok(
+  public.gmail_alias_prepare('famularo.marissa@gmail.com') = jsonb_build_object('match', false),
+  'prepare stays silent for the exact stored address');
+select pg_temp.assert_ok(
+  (select count(*) = 0 from private.gmail_alias_permits),
+  'a silent prepare does not store an address');
+truncate private.gmail_alias_limits;
+select pg_temp.assert_ok(
+  not (public.gmail_alias_prepare('famularomarissa@gmail.com') ? 'email')
+    and public.gmail_alias_prepare('famularomarissa@gmail.com') = jsonb_build_object('match', false),
+  'prepare does not reveal a dotted account from its canonical spelling');
+truncate private.gmail_alias_limits;
+truncate private.gmail_alias_permits;
+select pg_temp.assert_ok(
+  (public.gmail_alias_prepare('famularo.marissa+notes@gmail.com') ->> 'hint') = 'f…@gmail.com',
+  'first different spelling returns the masked hint');
+select pg_temp.assert_ok(
+  (public.gmail_alias_prepare('famularo.marissa+tag@gmail.com') ->> 'hint') = 'f…@gmail.com',
+  'second different spelling returns the masked hint');
+select pg_temp.assert_ok(
+  (public.gmail_alias_prepare('f.amularo.marissa@gmail.com') ->> 'hint') = 'f…@gmail.com',
+  'third prepare in the hour still returns the masked hint');
+select pg_temp.assert_ok(
+  public.gmail_alias_prepare('fa.mularo.marissa@gmail.com') = jsonb_build_object('match', false),
+  'fourth prepare hits the same inbox cap as the hint');
+
+truncate private.gmail_alias_limits;
+truncate private.gmail_alias_permits;
+create temp table prepare_once as
+select public.gmail_alias_prepare('famularo.marissa+x@gmail.com') as prepared;
+select pg_temp.assert_ok(
+  (select prepared ->> 'hint' = 'f…@gmail.com' and prepared ? 'ticket' and not (prepared ? 'email') from prepare_once),
+  'a different spelling returns a hint and a ticket, not an address');
+select pg_temp.assert_ok(
+  position('famularo.marissa@gmail.com' in (select prepared::text from prepare_once)) = 0,
+  'the stored address is not in the prepare response');
+select pg_temp.assert_ok(
+  public.gmail_alias_take_send((select (prepared ->> 'ticket')::uuid from prepare_once)) = 'famularo.marissa@gmail.com',
+  'the service-role claim returns the stored address once');
+select pg_temp.assert_ok(
+  public.gmail_alias_take_send((select (prepared ->> 'ticket')::uuid from prepare_once)) is null,
+  'a send ticket cannot be claimed twice');
+
+select pg_temp.assert_ok(
+  not has_function_privilege('anon', 'public.gmail_alias_take_send(uuid)', 'execute'),
+  'anon cannot claim a send ticket');
+select pg_temp.assert_ok(
+  not has_function_privilege('authenticated', 'public.gmail_alias_take_send(uuid)', 'execute'),
+  'authenticated cannot claim a send ticket');
+select pg_temp.assert_ok(
+  has_function_privilege('service_role', 'public.gmail_alias_take_send(uuid)', 'execute'),
+  'service role can claim a send ticket');
+select pg_temp.assert_ok(
+  not has_function_privilege('anon', 'private.gmail_alias_decide(text, boolean)', 'execute'),
+  'anon cannot execute the private decide function');
+select pg_temp.assert_ok(
+  not has_table_privilege('anon', 'private.gmail_alias_permits', 'select'),
+  'anon cannot read alias permits');
+select pg_temp.assert_ok(
+  has_function_privilege('anon', 'public.gmail_alias_prepare(text)', 'execute'),
+  'anon can prepare a sign-in');
+
+do $$
+declare
+  v_ticket uuid := public.gmail_alias_keep_verify('famularo.marissa@gmail.com');
+begin
+  if public.gmail_alias_read_verify(v_ticket) is distinct from 'famularo.marissa@gmail.com' then
+    raise exception 'FAIL: verify ticket did not resolve to the stored address';
+  end if;
+  perform public.gmail_alias_consume_verify(v_ticket);
+  if public.gmail_alias_read_verify(v_ticket) is not null then
+    raise exception 'FAIL: verify ticket survived consume';
+  end if;
+  execute 'set local role anon';
+  begin
+    perform public.gmail_alias_read_verify(v_ticket);
+    raise exception 'anon read a verify ticket';
+  exception when insufficient_privilege then
+    null;
+  end;
+  execute 'reset role';
+end $$;
+
+-- Exact address wins when another spelling of the same inbox already has an account.
+delete from auth.users;
+insert into auth.users (email, created_at) values
+  ('famularo.marissa@gmail.com', now() - interval '2 days'),
+  ('famularo.marissa+notes@gmail.com', now() - interval '1 day');
+truncate private.gmail_alias_limits;
+truncate private.gmail_alias_permits;
+select set_config('request.headers', '{"cf-connecting-ip":"192.0.2.41"}', false);
+select pg_temp.assert_ok(
+  public.gmail_alias_prepare('famularo.marissa+notes@gmail.com') = jsonb_build_object('match', false),
+  'prepare stays silent for an exact address even when an older alias account exists');
+select pg_temp.assert_ok(
+  public.gmail_alias_prepare('famularo.marissa@gmail.com') = jsonb_build_object('match', false),
+  'prepare stays silent for the older exact address when a tagged account also exists');
+select pg_temp.assert_ok(
+  (select count(*) = 0 from private.gmail_alias_permits),
+  'an exact address does not store the other account');
+select pg_temp.assert_ok(
+  public.gmail_alias_hint('famularo.marissa+notes@gmail.com') = jsonb_build_object('match', false),
+  'the hint stays silent for an exact address when another alias exists');
+truncate private.gmail_alias_limits;
+truncate private.gmail_alias_permits;
+create temp table prepare_third as
+select public.gmail_alias_prepare('f.amularo.marissa@gmail.com') as prepared;
+select pg_temp.assert_ok(
+  (select prepared ->> 'hint' = 'f…@gmail.com' and prepared ? 'ticket' and not (prepared ? 'email') from prepare_third),
+  'a third spelling still matches an existing account');
+select pg_temp.assert_ok(
+  public.gmail_alias_take_send((select (prepared ->> 'ticket')::uuid from prepare_third)) = 'famularo.marissa@gmail.com',
+  'a third spelling is sent to the oldest account, not the tagged one');
+
 -- Leave a clean slate for the concurrency test that follows.
 delete from auth.users;
 truncate private.gmail_alias_limits;
+truncate private.gmail_alias_permits;
 select set_config('request.headers', '', false);

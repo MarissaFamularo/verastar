@@ -19,6 +19,7 @@ export LC_ALL=C PGDATABASE=$DB PSQL
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/gmail_alias_fixture.sql
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/migrations/20261012213000_gmail_alias_hint.sql
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/migrations/20261013050000_gmail_alias_hint_audit.sql
+"$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/migrations/20261013120000_gmail_alias_prepare.sql
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/gmail_alias_audit.sql
 python3 supabase/tests/gmail_alias_concurrency.py
 [ -n "${KEEP_DB:-}" ] || "$DROPDB" "$DB"

@@ -63,6 +63,16 @@ export async function verifyEmailCode(email, code) {
   return _user
 }
 
+// A canonical Gmail sign-in checks the code on the server, which holds the
+// stored address. The session tokens are enough to continue; this does not
+// take an address argument.
+export async function adoptEmailSession({ access_token, refresh_token }) {
+  const { data, error } = await supabase.auth.setSession({ access_token, refresh_token })
+  if (error) throw new Error(error.message)
+  _user = data?.session?.user || null
+  return _user
+}
+
 export async function signOut() {
   await supabase.auth.signOut()
   _user = null

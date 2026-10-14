@@ -7,11 +7,14 @@ import { supabase } from './supabase.js'
 import {
   GMAIL_ALIAS_LOOKUP_MS,
   gmailAliasDecision,
-  gmailAliasWarning,
+  gmailCanonicalNote,
   isGmailFamily,
   isMaskedGmailHint,
   lookupGmailAlias,
+  prepareGmailAlias,
 } from './gmailAlias.js'
+
+const TICKET = '11111111-1111-4111-8111-111111111111'
 
 describe('gmail alias warning', () => {
   it('recognizes only gmail.com and googlemail.com', () => {
@@ -30,16 +33,19 @@ describe('gmail alias warning', () => {
     expect(isMaskedGmailHint('f…@clinic.edu')).toBe(false)
   })
 
-  it('warns with the masked hint and does not send until asked', () => {
-    const blocked = gmailAliasDecision({ match: true, hint: 'f…@gmail.com' })
-    expect(blocked).toEqual({
-      send: false,
-      warning: 'You already have an account as f…@gmail.com; sign in with that address?',
+  it('sends a different spelling to the existing account and stays quiet otherwise', () => {
+    const canonical = gmailAliasDecision({ match: true, hint: 'f…@gmail.com', ticket: TICKET })
+    expect(canonical).toEqual({
+      send: 'canonical',
+      note: 'Signing you in as f…@gmail.com (the account already on this inbox)',
+      ticket: TICKET,
     })
-    expect(gmailAliasWarning('f…@gmail.com')).toBe(blocked.warning)
-    expect(gmailAliasDecision({ match: true, hint: 'f…@gmail.com' }, { force: true })).toEqual({ send: true, warning: '' })
-    expect(gmailAliasDecision({ match: true, hint: 'famularomarissa@gmail.com' })).toEqual({ send: true, warning: '' })
-    expect(gmailAliasDecision({ match: false })).toEqual({ send: true, warning: '' })
+    expect(gmailCanonicalNote('f…@gmail.com')).toBe(canonical.note)
+    expect(gmailAliasDecision({ match: true, hint: 'f…@gmail.com', ticket: TICKET }, { force: true })).toEqual({ send: 'typed', note: '' })
+    expect(gmailAliasDecision({ match: true, hint: 'f…@gmail.com' })).toEqual({ send: 'blocked', note: '' })
+    expect(gmailAliasDecision({ match: true, hint: 'famularomarissa@gmail.com', ticket: TICKET })).toEqual({ send: 'typed', note: '' })
+    expect(gmailAliasDecision({ match: false })).toEqual({ send: 'typed', note: '' })
+    expect(gmailAliasDecision({ match: false, hint: 'f…@gmail.com', email: 'famularo.marissa@gmail.com' })).toEqual({ send: 'typed', note: '' })
   })
 
   it('asks the server only for gmail addresses and drops an unsafe hint', async () => {
@@ -56,6 +62,28 @@ describe('gmail alias warning', () => {
 
     supabase.rpc.mockRejectedValue(new Error('function gmail_alias_hint does not exist'))
     await expect(lookupGmailAlias('famularo.marissa@googlemail.com')).resolves.toEqual({ match: false })
+  })
+
+  it('prepares a gmail spelling and drops any address on the response', async () => {
+    supabase.rpc.mockResolvedValue({ data: { match: false }, error: null })
+    await expect(prepareGmailAlias('doctor@clinic.edu')).resolves.toEqual({ match: false })
+
+    supabase.rpc.mockResolvedValue({
+      data: { match: true, hint: 'f…@gmail.com', ticket: TICKET, email: 'famularo.marissa@gmail.com' },
+      error: null,
+    })
+    await expect(prepareGmailAlias('famularo.marissa+notes@gmail.com')).resolves.toEqual({
+      match: true,
+      hint: 'f…@gmail.com',
+      ticket: TICKET,
+    })
+    expect(supabase.rpc).toHaveBeenCalledWith('gmail_alias_prepare', { p_email: 'famularo.marissa+notes@gmail.com' })
+
+    supabase.rpc.mockResolvedValue({ data: { match: false }, error: null })
+    await expect(prepareGmailAlias('famularomarissa@gmail.com')).resolves.toEqual({ match: false })
+
+    supabase.rpc.mockRejectedValue(new Error('function gmail_alias_prepare does not exist'))
+    await expect(prepareGmailAlias('famularo.marissa@gmail.com')).resolves.toEqual({ match: false })
   })
 
   it('treats a lookup that never returns as no match', async () => {
@@ -96,5 +124,32 @@ describe('gmail alias migration', () => {
     expect(body).not.toContain('x-real-ip')
     expect(body).not.toContain("split_part(coalesce(v_headers ->> 'x-forwarded-for'")
     expect(body).toContain('grant execute on function public.gmail_alias_hint(text) to anon, authenticated, service_role')
+  })
+})
+
+describe('gmail alias prepare migration', () => {
+  const sql = readFileSync('supabase/migrations/20261013120000_gmail_alias_prepare.sql', 'utf8')
+  const body = sql.replace(/--[^\n]*/g, '')
+
+  it('keeps the address in a private permit and the same hourly caps', () => {
+    expect(body).toMatch(/function private\.gmail_alias_decide\(p_email text, p_issue boolean\)[\s\S]*security definer[\s\S]*set search_path = ''/)
+    expect(body).toContain('return private.gmail_alias_decide(p_email, false)')
+    expect(body).toContain('select private.gmail_alias_decide(p_email, true)')
+    expect(body).toContain('v_email_count > 3 or v_ip_count > 8')
+    expect(body).toContain('v_raw = v_canon')
+    const exactAt = body.indexOf('lower(pg_catalog.btrim(u.email)) = v_raw')
+    const otherAt = body.indexOf('private.gmail_canonical(u.email) = v_canon')
+    expect(exactAt).toBeGreaterThan(-1)
+    expect(otherAt).toBeGreaterThan(exactAt)
+    expect(body.slice(exactAt, otherAt)).toContain("jsonb_build_object('match', false)")
+    expect(body).toContain("jsonb_build_object('match', true, 'hint', v_hint, 'ticket', v_ticket)")
+    expect(body).not.toMatch(/jsonb_build_object\([^)]*email/i)
+    expect(body).toContain('revoke all on function private.gmail_alias_decide(text, boolean) from public, anon, authenticated, service_role')
+    expect(body).toContain('revoke all on table private.gmail_alias_permits from public, anon, authenticated, service_role')
+    expect(body).toContain('grant execute on function public.gmail_alias_prepare(text) to anon, authenticated, service_role')
+    expect(body).toContain('revoke all on function public.gmail_alias_take_send(uuid) from public, anon, authenticated')
+    expect(body).toContain('grant execute on function public.gmail_alias_take_send(uuid) to service_role')
+    expect(body).toContain('revoke all on function public.gmail_alias_read_verify(uuid) from public, anon, authenticated')
+    expect(body).toContain('grant execute on function public.gmail_alias_keep_verify(text) to service_role')
   })
 })

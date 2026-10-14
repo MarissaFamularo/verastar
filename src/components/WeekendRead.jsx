@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { store, getProfile } from '../lib/store.js'
 import { hasModelAccess } from '../lib/anthropic.js'
+import { BetaAccessGate } from './InviteCode.jsx'
 import { synthesizeWeekendRead } from '../pipeline/weekend.js'
 import { excludeRetracted } from '../pipeline/retractions.js'
 import { appendConnectionsToLibrary } from '../lib/library.js'
@@ -87,6 +88,8 @@ export default function WeekendRead() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
+  const [accessVersion, setAccessVersion] = useState(0)
+  void accessVersion
   const keySet = hasModelAccess()
 
   useEffect(() => {
@@ -247,9 +250,11 @@ export default function WeekendRead() {
             )}
 
             {!hasContent && !generating && !keySet && (
-              <div style={emptyCard}>
-                Set your Anthropic key in Settings to find the connections across your {papers.length} saved {papers.length === 1 ? 'paper' : 'papers'}.
-              </div>
+              <BetaAccessGate inputId="beta-invite-connections" onEnrolled={() => setAccessVersion((version) => version + 1)}>
+                <div style={emptyCard}>
+                  Set your Anthropic key in Settings to find the connections across your {papers.length} saved {papers.length === 1 ? 'paper' : 'papers'}.
+                </div>
+              </BetaAccessGate>
             )}
 
             {!hasContent && !generating && keySet && !error && (

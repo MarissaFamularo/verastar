@@ -10,6 +10,7 @@ import { ClaimCheckMark } from './ClaimCheckMark.jsx'
 
 import { useEffect, useRef, useState } from 'react'
 import { hasModelAccess } from '../lib/anthropic.js'
+import { BetaAccessGate } from './InviteCode.jsx'
 import { sourceExamplesVisible } from '../lib/sourceExamples.js'
 import { CAP_MESSAGE } from '../lib/sponsor.js'
 import { canSchedule, digestRefusalMessage, runScheduledDigestNow } from '../lib/digestSchedule.js'
@@ -663,6 +664,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // from the profile on mount (not just set by a run) because a restored digest has to be
   // able to say it too. Null until loaded — the note stays off rather than guessing a bar.
   const [scoreFloor, setScoreFloor] = useState(null)
+  const [accessVersion, setAccessVersion] = useState(0)
+  void accessVersion
   const keySet = hasModelAccess()
 
   // Latest digest state, mirrored every render — async runs would otherwise persist stale
@@ -1689,7 +1692,11 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
 
       {/* Actionable state never goes inside the receipt: closing audit details must not hide
           live progress, a failure, or the one button that can recover paid work. */}
-      {!demo && !keySet && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Sign in or add your API key in Settings first.</p>}
+      {!demo && !keySet && (
+        <BetaAccessGate inputId="beta-invite-digest" onEnrolled={() => setAccessVersion((version) => version + 1)}>
+          <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-abstract)' }}>Sign in or add your API key in Settings first.</p>
+        </BetaAccessGate>
+      )}
       {searching && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-fg-muted)' }}>Searching PubMed — one query per topic…</p>}
       {selecting && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-accent)' }}>Claude is scoring every candidate against your rubric…</p>}
       {scanError && <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--color-domain-vascular)' }}>{scanError}</p>}
