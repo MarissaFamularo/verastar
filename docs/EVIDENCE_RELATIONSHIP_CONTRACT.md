@@ -1,5 +1,57 @@
 # Evidence relationship contract — 2026-09-11
 
+## Amendment 2026-10-14 — token-boundary slices, folded glyphs, governed cues (`2026-10-14.estimates-v13`)
+
+Pre-beta adversarial audit (`src/pipeline/betaAudit.verify.test.js`, 73 cases: 20 false
+verifies and 5 crashes reproduced, then repaired). Every change refuses; nothing is
+admitted that v12 refused.
+
+- **Token-boundary slices.** Every non-sentence validator (estimate, bracket interval,
+  comparison, "and" pair, proportion, heterogeneity) first requires the located quote to
+  start and end on token boundaries of the FULL source. A quote that cuts a token
+  ("5% vs 7%" inside "15% vs 7%", "…0.8-1.5" inside "…0.8-1.57", a dropped minus sign)
+  earns no validated tier. v12 read the slice's own edges as boundaries.
+- **Bare "or".** "or" counts as an odds ratio only where the full source opens a clause
+  there (start of text, sentence end, or after `( [ ; :`); "10% or 0.10 (95% CI …)" quoted
+  from "or" no longer verifies as an estimate.
+- **Folded glyphs.** For verification only, a digit run glued to a superscript, subscript,
+  circled digit or vulgar fraction ("10²", "1½") becomes a non-numeric placeholder in both
+  quote and source, so 10² can never match 102 and 1½ never 11. The shared `normalize()`
+  is unchanged so the prose guard still sees those digits.
+- **European decimals.** A comma group led by a lone 0 ("0,847", "P = 0,001") is never
+  rewritten as thousands.
+- **Governed "and" pair cue.** The cue word must be the last cue before the first label,
+  separated from it only by a short preposition run ("similar for", "compared with",
+  "differed between"). "higher than expected, with mortality (5%) and stroke (3%)" is
+  refused.
+- **Numeric arm labels.** A `comparison` whose label itself contains a numeric token is
+  refused: "men and 6 mg in women" could swallow another arm's value.
+- **Heterogeneity P.** The P must end its clause in the full source (same rule as the
+  estimate tier) and may not carry an exponent or scientific suffix ("1.2e-5").
+- **Robustness.** `verify()` never throws: a null quantity, null options, a non-string
+  `location_hint`, or an unreadable quote returns a flagged verdict.
+
+**Read-time policy.** Because v13 refuses shapes every earlier stamp admitted,
+`FULLY_COMPATIBLE_VERIFICATION_VERSIONS` is now empty: a v7–v12 validated verdict is
+re-derived from saved source text where it exists (digest store and Library do this on
+read) and shown as legacy-unchecked otherwise. Documented design limits that stay as they
+are, under the badge's "groups / endpoint unchecked" caveat: SD or denominator read as a
+group value, a range start as an operand, years as group values, swapped labels, an
+estimate name not compared to the printed measure, an assumed effect in a sample-size
+sentence, and I² as a Methods threshold (`[design-limit-N]` cases in the audit file).
+
+**Prose guard, same day** (`src/pipeline/numberFree.js`, `triage.js`, `check.js`,
+`lib/claimCheck.js`, `lib/digestStore.js`, `lib/evidenceVersion.js`; probes in
+`src/pipeline/betaAudit.prose.test.js`): the nomenclature exemption refuses a statistic
+glued to its label ("HR0.84", "OR0.5", "x2") while keeping names (TcPO2, P2Y12, COVID-19);
+non-ASCII decimal digits are never grounded; the repair path reads the same normalized
+tokens as the guard (full-width and circled digits no longer leak into relevance text); a
+timepoint carries its unit, so "12 months" cannot back "12 days"; a duplicate checker
+verdict can only refute; an unchecked claim is always labelled; a validated verdict must
+also carry a validated tier; and a restored digest re-runs the number guard on each saved
+finding against the rows validated now, withholding a sentence whose numbers were demoted.
+
+
 ## Amendment 2026-10-04 — qualifiers, "and" pairs, recomputed proportions (`2026-10-04.estimates-v4`)
 
 Three true printed values from a real digest that no rule admitted. Each is narrow, and

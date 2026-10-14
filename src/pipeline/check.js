@@ -74,6 +74,7 @@ Numeric values in the claim were already verified against the source by a separa
 // Items with no finding or no snippet are 'unchecked' (nothing to audit / nothing to
 // audit against) and are never sent to the model. One structured call on the cheap model.
 export const NO_RESULTS_REASON = 'Not checked: the supplied evidence window has no identifiable Results text.'
+export const NO_SNIPPET_REASON = 'Not checked: no source text was available to check this claim against.'
 
 // Managed windows explicitly label their selected sections. Primary-result metadata
 // is not source evidence. Design cautions can still be checked against Methods.
@@ -93,7 +94,13 @@ function missingResults(item) {
 
 export async function checkFindings({ items, model = MODELS.fast, maxTokens }) {
   const out = new Map(
-    (items || []).map((i) => [String(i.id), { verdict: 'unchecked', reason: missingResults(i) ? NO_RESULTS_REASON : '' }])
+    (items || []).map((i) => [
+      String(i.id),
+      {
+        verdict: 'unchecked',
+        reason: missingResults(i) ? NO_RESULTS_REASON : String(i.finding || '').trim() && !String(i.snippet || '').trim() ? NO_SNIPPET_REASON : '',
+      },
+    ])
   )
   const checkable = (items || []).filter(
     (i) => String(i.finding || '').trim() && String(i.snippet || '').trim() && !missingResults(i)
@@ -138,15 +145,19 @@ export async function checkFindings({ items, model = MODELS.fast, maxTokens }) {
   for (const v of result.verdicts || []) {
     const raw = String(v?.id ?? '')
     const key = wanted.get(normalizeClaimId(raw))
-    if (!key || matched.has(key)) {
+    if (!key) {
       unmatched.push(raw)
       continue
     }
+    const verdict = v.supported === true && !reasonAdmitsMissingEvidence(v.reason) ? 'supported' : 'refuted'
+    // A second verdict for the same claim can only make it stricter: any refute wins
+    // (2026-10-14 beta audit: first-verdict-wins let a later refute be dropped).
+    if (matched.has(key)) {
+      if (verdict === 'refuted' && out.get(key)?.verdict !== 'refuted') out.set(key, { verdict, reason: String(v.reason || '').trim() })
+      continue
+    }
     matched.add(key)
-    out.set(key, {
-      verdict: v.supported === true && !reasonAdmitsMissingEvidence(v.reason) ? 'supported' : 'refuted',
-      reason: String(v.reason || '').trim(),
-    })
+    out.set(key, { verdict, reason: String(v.reason || '').trim() })
   }
   const missing = checkable.map((i) => String(i.id)).filter((id) => !matched.has(id))
   for (const id of missing) out.set(id, { verdict: 'unchecked', reason: NO_VERDICT_REASON })
@@ -166,7 +177,12 @@ export async function checkFindings({ items, model = MODELS.fast, maxTokens }) {
 export function reasonAdmitsMissingEvidence(reason) {
   const text = String(reason || '').replace(/[’‘]/g, "'").replace(/\s+/g, ' ')
   return /\b(?:snippet|source|abstract|text|excerpt|passage|evidence)\s+(?:(?:does|do)\s+not|doesn't|don't|cannot|can't|fails?\s+to)\s+(?:explicitly\s+|directly\s+|clearly\s+)?(?:state|say|mention|report|describe|specify|establish|support|confirm|show|demonstrate|provide|contain)\b/i.test(text) ||
-    /\b(?:not|never)\s+(?:explicitly\s+|directly\s+|clearly\s+)?(?:stated|mentioned|reported|described|specified|established|supported|confirmed|shown|provided|contained)\s+(?:in|by)\s+(?:the\s+)?(?:supplied\s+|provided\s+)?(?:snippet|source|abstract|text|excerpt|passage|evidence)\b/i.test(text)
+    /\b(?:not|never)\s+(?:explicitly\s+|directly\s+|clearly\s+)?(?:stated|mentioned|reported|described|specified|established|supported|confirmed|shown|provided|contained)\s+(?:in|by)\s+(?:the\s+)?(?:supplied\s+|provided\s+)?(?:snippet|source|abstract|text|excerpt|passage|evidence)\b/i.test(text) ||
+    // Paraphrases of the same admission (2026-10-14 beta audit).
+    /\b(?:snippet|source|abstract|text|excerpt|passage|evidence)\s+(?:is|was|remains)\s+silent\s+(?:on|about)\b/i.test(text) ||
+    /\b(?:cannot|can't|could not|couldn't|unable to)\s+(?:be\s+)?(?:confirm(?:ed)?|verif(?:y|ied)|establish(?:ed)?|determine[d]?)\b[^.]*\b(?:from|against|in|by|with)\s+(?:the\s+)?(?:supplied\s+|provided\s+)?(?:snippet|source|abstract|text|excerpt|passage|evidence)\b/i.test(text) ||
+    /\b(?:absent|missing)\s+from\s+(?:the\s+)?(?:supplied\s+|provided\s+)?(?:snippet|source|abstract|text|excerpt|passage|evidence)\b/i.test(text) ||
+    /\bno\s+evidence\s+in\s+(?:the\s+)?(?:supplied\s+|provided\s+)?(?:snippet|source|abstract|text|excerpt|passage|evidence)\b/i.test(text)
 }
 
 export const NO_VERDICT_REASON = 'Not checked: the source checker returned no verdict for this claim.'

@@ -3,6 +3,7 @@ import { VERIFICATION_VERSION } from './evidenceVersion.js'
 import { libraryRailCounts } from './libraryCounts.js'
 
 const validated = {
+  tier: 'verified-estimate',
   relationshipValidated: true,
   flagged: false,
   verificationVersion: VERIFICATION_VERSION,

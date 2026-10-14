@@ -8,15 +8,22 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-12.estimates-v12'
+export const VERIFICATION_VERSION = '2026-10-14.estimates-v13'
 // v12 refuses a question or an exclamation for the two shapes added in v10. The
 // terminator is read from the source sentence, including punctuation immediately
 // outside the quote. v11 stripped "?" and treated "?" and "!" as sentence
 // boundaries, so it can false-verify those and is not a subset. v11 also kept
 // v10's whole-sentence rule; v10 can still false-verify a matching phrase inside
 // a longer sentence. Neither stamp is compatible. Nothing v9 accepted is refused.
-// All v9, v8 and v7 guarantees survive.
-export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-12.estimates-v9', '2026-10-10.estimates-v8', '2026-10-09.estimates-v7']
+// All v9, v8 and v7 guarantees survive in v12.
+// v13 (2026-10-14 beta audit) REFUSES shapes every earlier stamp admitted: a quote that
+// cuts a source token at either end, a bare "or" read as an odds ratio mid-clause, a
+// superscript or fraction folded into a number, a European decimal read as thousands, an
+// "and" pair whose cue does not govern it, an arm label carrying a number, and a
+// heterogeneity P with an exponent or a trailing qualifier. No earlier stamp is a subset,
+// so none is fully compatible: older verdicts are re-derived from saved source text where
+// it exists, and shown as legacy-unchecked otherwise.
+export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = []
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
@@ -68,12 +75,28 @@ const THOUSANDS_GROUP = /\b\d{1,3}(?:,\d{3})+\b/g
 // Normalize a string for matching: NFKC, unify dashes, middle-dot decimals -> period,
 // strip thousands separators, collapse whitespace, lowercase. Applied identically to quote
 // and source text so the two are compared on equal footing.
+// A digit run glued to a superscript, subscript or vulgar fraction ("10²", "1½", "12¹")
+// is not a number NFKC may fold: it would read 10² as 102 and 1½ as "11⁄2". For
+// VERIFICATION only (quote and source alike) the whole glued run becomes a non-numeric
+// placeholder, so no claimed value can match it and the quote still locates. The plain
+// normalize() keeps the digits visible: other callers use it to DETECT digits.
+const GLUED_NUMBER_MARK = /[\d.,]*\d\p{No}+\d*/gu
+function normalizeForVerify(value) {
+  if (value == null) return ''
+  let text
+  try { text = String(value) } catch { return '' }
+  return normalize(text.replace(GLUED_NUMBER_MARK, '\uFFFD'))
+}
+
 export function normalize(str) {
   if (str == null) return ''
-  let s = String(str).normalize('NFKC')
+  let s
+  try { s = String(str) } catch { return '' }
+  s = s.normalize('NFKC')
   s = s.replace(DASH_VARIANTS, '-')
   s = s.replace(INTERPUNCT_DECIMAL, '$1.$2')
-  s = s.replace(THOUSANDS_GROUP, (m) => m.replace(/,/g, ''))
+  // A group led by a lone 0 ("0,847", "0,001") is a European decimal, never thousands.
+  s = s.replace(THOUSANDS_GROUP, (m) => (/^0/.test(m) ? m : m.replace(/,/g, '')))
   s = s.replace(/\s+/g, ' ').trim()
   return s.toLowerCase()
 }
@@ -248,6 +271,41 @@ export function plausibilityWarnings(quantity, { verifiedAsPrinted = false } = {
 
 // --- Registry (CT.gov posted outcome) match -----------------------------------
 
+// A validator reads the SLICE of the corpus the quote matched. If that slice cuts a
+// token of the full source (starts or ends inside a number or word, or drops a sign or
+// decimal point), the slice's own boundaries are invented: "5% vs 7%" inside "15% vs 7%",
+// "...0.8-1.5" inside "...0.8-1.57". Such a quote never earns a validated tier.
+const isAlnum = (ch) => ch !== undefined && /[a-z0-9]/i.test(ch)
+const isDigit = (ch) => ch !== undefined && /[0-9]/.test(ch)
+function sliceOnTokenBoundaries(corpus, index, length) {
+  const end = index + length
+  if (!(index >= 0) || end > corpus.length || length <= 0) return false
+  const first = corpus[index]
+  const last = corpus[end - 1]
+  const prev = corpus[index - 1]
+  const next = corpus[end]
+  if (prev !== undefined) {
+    if (isAlnum(prev) && isAlnum(first)) return false
+    if (isDigit(first) && (prev === '.' || prev === '-' || prev === ',')) return false
+    if (first === '.' && isDigit(prev)) return false
+  }
+  if (next !== undefined) {
+    if (isAlnum(last) && isAlnum(next)) return false
+    if (isDigit(last) && (next === '.' || next === ',') && isDigit(corpus[end + 1])) return false
+    if (last === '.' && isDigit(next)) return false
+  }
+  return true
+}
+
+// Bare "or" is an odds ratio only where the FULL source opens a clause there (start of
+// text, a sentence end, or after ( [ ; :). The regex's `^` is the start of the quote
+// slice, which says nothing about the source: "10% or 0.10 (95% CI ...)" quoted from "or".
+function bareOrOpensClause(corpus, tupleStart, measure) {
+  if (normalize(measure).replace(/\s+/g, ' ') !== 'or') return true
+  const before = corpus.slice(0, tupleStart).trimEnd()
+  return before === '' || /[([;:.!?]$/.test(before)
+}
+
 // Numeric coincidence is not endpoint identity. Registry upgrades require explicit
 // exact endpoint, unit, timepoint and group identity from the source adapters. Missing
 // identity withholds the upgrade; abbreviations are not guessed. Existing adapters
@@ -302,6 +360,9 @@ function validateRelationship(quantity, matched, corpus, declaredType) {
     const first = normalize(quantity.first_label)
     const second = normalize(quantity.second_label)
     if (!first || !second || first === second || /[.!?;:=]/.test(first + second)) return false
+    // A label is a group name, not a clause: one holding a number could swallow another
+    // arm's value ("men and 6 mg in women") and mislabel the value before it.
+    if (extractNumbers(first).length || extractNumbers(second).length) return false
     pattern = `${escape(name)} was ${amount} in ${escape(first)} and ${amount} in ${escape(second)}`
     values = [quantity.first_value, quantity.second_value]
   } else if (declaredType === 'single') {
@@ -594,6 +655,7 @@ const QUALIFIER_MEASURE = new RegExp(`(?<![a-z])(?:${RATIO_NAMES.filter((n) => n
 
 function validateEstimate(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (!sliceOnTokenBoundaries(corpus, matched.index, matched.length)) return false
   if (declaredType !== 'single') return false
   const span = corpus.slice(matched.index, matched.index + matched.length)
   if (corpus.indexOf(span, matched.index + 1) !== -1) return false
@@ -606,6 +668,7 @@ function validateEstimate(quantity, matched, corpus, declaredType) {
   if (Object.keys(quantity).some((key) => !supportedFields.has(key) && quantity[key] != null)) return false
   if (!normalize(quantity.name)) return false
   const [, measure, abbrev, qualifier, value, opener, , ciLow, ciHigh, closer, printedP] = tuples[0]
+  if (!bareOrOpensClause(corpus, matched.index + tuples[0].index, measure)) return false
   let p = printedP
   if (p != null) {
     // Across a closing bracket only when it closes the CI's own bracket; in every case only
@@ -654,6 +717,7 @@ const BRACKET_INTERVAL = new RegExp(
 
 function validateBracketInterval(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (!sliceOnTokenBoundaries(corpus, matched.index, matched.length)) return false
   if (declaredType !== 'single') return false
   const span = corpus.slice(matched.index, matched.index + matched.length)
   if (corpus.indexOf(span, matched.index + 1) !== -1) return false
@@ -664,6 +728,7 @@ function validateBracketInterval(quantity, matched, corpus, declaredType) {
   const tuples = [...span.matchAll(BRACKET_INTERVAL)]
   if (tuples.length !== 1) return false
   const [, measure, abbrev, value, opener, ciLow, ciHigh, closer, printedP] = tuples[0]
+  if (!bareOrOpensClause(corpus, matched.index + tuples[0].index, measure)) return false
   if (CLOSES[opener] !== closer) return false
   if (!/\d\.\d/.test(`${ciLow}${ciHigh}`)) return false
   if (Number(ciLow) > Number(ciHigh)) return false
@@ -705,6 +770,7 @@ const SPREAD_NUM = '(?:\\d+\\.\\d+|\\.\\d+|\\d+)(?!\\d)(?!\\.\\d)'
 
 function validateComparison(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (!sliceOnTokenBoundaries(corpus, matched.index, matched.length)) return false
   if (declaredType !== 'comparison') return false
   const span = corpus.slice(matched.index, matched.index + matched.length)
   if (corpus.indexOf(span, matched.index + 1) !== -1) return false
@@ -753,10 +819,22 @@ function validateComparison(quantity, matched, corpus, declaredType) {
 // in the span, a comparison cue word in the span, no CI and no claimed P. The badge still
 // reads "groups unchecked" — the cue word makes a comparison likely, not proven.
 const AND_PAIR_CUE = /(?<![a-z])(?:similar|comparable|compared|differ|differed|different|difference|higher|lower|greater|fewer|more|less)(?![a-z])/
+// The cue must be the comparison word that GOVERNS the pair: the last cue word before the
+// first label, followed only by a short preposition run ("similar for", "compared with",
+// "differed between"). A cue earlier in the sentence, across a comma, a bracket or other
+// words ("higher than expected, with mortality (5%) ...") does not count.
+const AND_PAIR_LINK = /^(?:\s+(?:for|in|between|with|among|across|to|than|of|by|at|the|a|an))*\s*$/
+function andPairCueGoverns(prefix) {
+  let last = null
+  for (const m of prefix.matchAll(new RegExp(AND_PAIR_CUE.source, 'g'))) last = m
+  if (!last) return false
+  return AND_PAIR_LINK.test(prefix.slice(last.index + last[0].length))
+}
 const BRACKETED_NUM = /[([]\s*(?:\d+\.\d+|\.\d+|\d+)\s*%?\s*[)\]]/g
 
 function validateAndPair(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (!sliceOnTokenBoundaries(corpus, matched.index, matched.length)) return false
   if (declaredType !== 'comparison') return false
   const span = corpus.slice(matched.index, matched.index + matched.length)
   if (corpus.indexOf(span, matched.index + 1) !== -1) return false
@@ -777,7 +855,7 @@ function validateAndPair(quantity, matched, corpus, declaredType) {
   const num = `\\s*${PAIR_NUM}${pct}\\s*`
   const pairs = [...span.matchAll(new RegExp(`(?<![a-z])${escape(first)}\\s*[(\\[]${num}[)\\]]\\s*,?\\s*and\\s+${escape(second)}\\s*[(\\[]${num}[)\\]]`, 'g'))]
   if (pairs.length !== 1) return false
-  if (!AND_PAIR_CUE.test(span.slice(0, pairs[0].index))) return false
+  if (!andPairCueGoverns(span.slice(0, pairs[0].index))) return false
   const [, a, b] = pairs[0]
   return numbersEqual(quantity.first_value, Number(a)) && numbersEqual(quantity.second_value, Number(b))
 }
@@ -830,6 +908,7 @@ function leadingProportionStatement(span) {
 
 function validateProportion(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (!sliceOnTokenBoundaries(corpus, matched.index, matched.length)) return false
   if (declaredType !== 'single') return false
   const span = corpus.slice(matched.index, matched.index + matched.length)
   if (corpus.indexOf(span, matched.index + 1) !== -1) return false
@@ -878,6 +957,7 @@ const HET_P = new RegExp(
 
 function validateHeterogeneity(quantity, matched, corpus, declaredType) {
   if (!matched || matched.fuzzy || matched.corpus !== 'prose') return false
+  if (!sliceOnTokenBoundaries(corpus, matched.index, matched.length)) return false
   if (declaredType !== 'single') return false
   const span = corpus.slice(matched.index, matched.index + matched.length)
   if (corpus.indexOf(span, matched.index + 1) !== -1) return false
@@ -888,6 +968,12 @@ function validateHeterogeneity(quantity, matched, corpus, declaredType) {
   if (quantity.p_value != null) {
     const hetP = [...span.matchAll(HET_P)]
     if (hetP.length !== 1) return false
+    // The P must end its own clause in the FULL source (a truncated quote cannot hide a
+    // scientific-notation suffix or a qualifier), and may not carry an exponent.
+    const hetEnd = matched.index + hetP[0].index + hetP[0][0].length
+    const hetRest = corpus.slice(hetEnd)
+    if (/^\s*(?:e\s*[-+]?\d|[×x*]\s*10)/.test(hetRest)) return false
+    if (!pEndsItsClause(corpus, hetEnd) && !/^\s*for\s+heterogeneity\s*(?:[)\]]|[.;,]|$)/.test(hetRest)) return false
     const printedP = Number(hetP[0][1] ?? hetP[0][2])
     if (!Number.isFinite(quantity.p_value) || !numbersEqual(quantity.p_value, printedP)) return false
   }
@@ -973,18 +1059,47 @@ function locate(normQuote, normCorpus) {
 //                registry?: Array<{ measure, value, ci_low, ci_high }> } // CT.gov posted rows
 //
 // Returns a verdict including `warnings`, a separate statistical-plausibility channel.
-export function verify(quantity, source, opts = {}) {
+export function verify(quantity, source, opts) {
+  try {
+    return verifyInner(quantity, source, opts)
+  } catch {
+    // Malformed input must flag, never throw: a verdict the caller can render.
+    return {
+      tier: TIERS.FLAGGED,
+      verificationVersion: VERIFICATION_VERSION,
+      flagged: true,
+      sourceLocated: false,
+      numericCoverage: false,
+      relationshipValidated: false,
+      endpointValidated: false,
+      relationshipStatus: 'unresolved',
+      sourceTier: (opts && typeof opts === 'object' && opts.sourceTier) || 'full_text',
+      found: false,
+      consistent: false,
+      matched: null,
+      quoteNums: [],
+      badNums: [],
+      shapeError: '',
+      reason: 'Input could not be read safely, so nothing is verified.',
+      warnings: [],
+    }
+  }
+}
+
+function verifyInner(quantity, source, opts) {
+  if (!quantity || typeof quantity !== 'object') quantity = {}
+  if (!opts || typeof opts !== 'object') opts = {}
   const sourceTier = opts.sourceTier || 'full_text'
 
   const src = typeof source === 'string' ? { text: source, tables: '' } : (source || {})
-  const normProse = normalize(src.text || '')
-  const normTables = normalize(src.tables || '')
-  const normQuote = normalize(quantity.source_quote || '')
+  const normProse = normalizeForVerify(src.text || '')
+  const normTables = normalizeForVerify(src.tables || '')
+  const normQuote = normalizeForVerify(quantity.source_quote || '')
 
   // Choose corpus order by the location hint. A table-cell value should be matched
   // against flattened cell text, not prose — but fall back to the other corpus so a
   // misfiled hint never causes a false flag.
-  const hint = (quantity.location_hint || '').toLowerCase()
+  const hint = typeof quantity.location_hint === 'string' ? quantity.location_hint.toLowerCase() : ''
   const prefersTable = /table|tbl/.test(hint)
   const corpora = prefersTable
     ? [['tables', normTables], ['prose', normProse]]

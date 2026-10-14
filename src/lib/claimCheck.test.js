@@ -38,9 +38,14 @@ describe('linkFindingNumbers — every number links to its own quote', () => {
 })
 
 describe('claimCheckLabel — says what was checked, and by what', () => {
-  it('says nothing for an unchecked claim', () => {
-    expect(claimCheckLabel({ verdict: 'unchecked', reason: '' })).toBeNull()
-    expect(claimCheckLabel(undefined)).toBeNull()
+  it('an unchecked claim, with or without a reason, says so in muted words (2026-10-14: never silent)', () => {
+    for (const c of [{ verdict: 'unchecked', reason: '' }, undefined, null, {}]) {
+      const l = claimCheckLabel(c)
+      expect(l.text).toBe('claim not checked')
+      expect(l.tone).toBe('muted')
+      expect(l.title).toMatch(/did not run/)
+    }
+    expect(claimCheckLabel({ verdict: 'unchecked', reason: 'because' }).title).toBe('because')
   })
   it('names the model check and says it is not proof', () => {
     const l = claimCheckLabel({ verdict: 'supported', reason: '' })

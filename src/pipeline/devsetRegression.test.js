@@ -358,7 +358,8 @@ describe('fix 6 — checker results are never silently dropped (CAR-12)', () => 
   const d = load('CAR-12')
   it('the recorded CAR-12 take came back unchecked with no reason', () => {
     expect(d.recordedTake.check).toEqual({ verdict: 'unchecked', reason: '' })
-    expect(claimCheckLabel(d.recordedTake.check)).toBeNull() // invisible before the fix
+    // Invisible before fix 6; since 2026-10-14 an unchecked claim is labelled even with no reason.
+    expect(claimCheckLabel(d.recordedTake.check)).toMatchObject({ text: 'claim not checked', tone: 'muted' })
   })
 
   it('decorated ids match; unmatched ids are logged; omitted claims carry a reason', async () => {

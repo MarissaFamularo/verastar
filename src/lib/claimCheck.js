@@ -17,9 +17,14 @@ import { fmtNum } from './format.js'
 // checker failed, or returned no verdict for it (2026-10-11 fix 6) — says so in muted
 // words, so a silently dropped check is visible. Refuted claims are withheld upstream and
 // never reach this.
+const UNCHECKED_DEFAULT = 'The source check did not run for this sentence. Only the underlined numbers are matched to the source by the app.'
 export function claimCheckLabel(check) {
-  if (check?.verdict === 'unchecked' && String(check.reason || '').trim()) {
-    return { text: 'claim not checked', title: String(check.reason).trim(), tone: 'muted' }
+  if (check?.verdict === 'unchecked' || check == null || check.verdict == null) {
+    // No verdict at all (a paper saved before the gate existed, or a check that never
+    // ran) says so in muted words rather than rendering like a checked claim
+    // (2026-10-14 beta audit: an empty reason rendered silently).
+    const reason = String(check?.reason || '').trim()
+    return { text: 'claim not checked', title: reason || UNCHECKED_DEFAULT, tone: 'muted' }
   }
   if (check?.verdict !== 'supported') return null
   return {

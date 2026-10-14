@@ -9,8 +9,10 @@
 // only records with type === 'weekend' && read — this record has neither field, so it is
 // invisible to that filter. Do not add a `type` field here.
 
-import { evidenceVerdict, VERIFICATION_VERSION } from './evidenceVersion.js'
+import { evidenceVerdict, isRelationshipValidated, VERIFICATION_VERSION } from './evidenceVersion.js'
 import { verify } from '../pipeline/verify.js'
+import { allowedNumbers, allowedTimepoints, allowedCiLevels, numbersGrounded } from '../pipeline/numberFree.js'
+import { fmtNum } from './format.js'
 import { store } from './store.js'
 
 const COLLECTION = 'digests'
@@ -62,6 +64,30 @@ function currentEvidenceView(results) {
   return results.map((result) => ({ ...result, rows: result.rows?.map((row) => ({ ...row, verdict: currentVerdict(result, row) })) }))
 }
 
+// A saved finding was number-guarded against the verdicts of its day. When a re-derived
+// verdict demotes one of those rows, the sentence would keep a digit no badge backs, as
+// plain prose. Run the same guard again against the CURRENT validated rows and withhold
+// the finding when it no longer passes (2026-10-14 beta audit). Pure; exported for tests.
+export function regateTriaged(triaged, results) {
+  if (!triaged || typeof triaged !== 'object') return triaged ?? {}
+  const byId = new Map((results || []).map((r) => [String(r?.paper?.id), r]))
+  const out = {}
+  for (const [id, take] of Object.entries(triaged)) {
+    const finding = String(take?.finding ?? '')
+    const result = byId.get(String(id))
+    if (!finding || !take || !result) {
+      out[id] = take
+      continue
+    }
+    const verified = (result.rows || [])
+      .filter((row) => isRelationshipValidated(row.verdict))
+      .map((row) => ({ name: row.quantity?.name, value: fmtNum(row.quantity || {}), quote: row.quantity?.source_quote }))
+    const ok = numbersGrounded(finding, allowedNumbers(verified), allowedTimepoints(verified), allowedCiLevels(verified))
+    out[id] = ok ? take : { ...take, finding: '', findingWithheld: 'stale-numbers' }
+  }
+  return out
+}
+
 // The date that says which day a digest belongs to. Records written before ranAt existed
 // fall back to savedAt.
 export function digestRanAt(record) {
@@ -72,10 +98,11 @@ export function digestRanAt(record) {
 // foreign record under the key can never masquerade as a digest.
 export function reviveDigest(record) {
   if (!record || record.kind !== 'daily') return null
+  const processedResults = currentEvidenceView(record.processedResults ?? record.results ?? [])
   return {
     results: currentEvidenceView(record.results ?? []),
-    processedResults: currentEvidenceView(record.processedResults ?? record.results ?? []),
-    triaged: record.triaged ?? {},
+    processedResults,
+    triaged: regateTriaged(record.triaged ?? {}, processedResults),
     candidates: record.candidates ?? [],
     preCapCandidates: record.preCapCandidates ?? record.candidates ?? [],
     searchContext: record.searchContext ?? { counts: [], failed: [], days: null },

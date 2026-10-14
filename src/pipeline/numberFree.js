@@ -15,6 +15,8 @@
 // rule the guard uses (a digit glued to a letter — TcPO2, SF-36, COVID-19 — is a name, not a
 // statistic). The caller treats '' as "no usable sentence" and falls back.
 
+import { normalize, extractNumbers, extractNumbersWithIndex, numbersEqual } from './verify.js'
+
 // A gated numeric token: not glued to a letter (or letter-dash), optional sign.
 const NUM = String.raw`(?<![a-z0-9.])(?<![a-z][-‐–—−])[-−+]?(?:\d+(?:[.,·]\d+)*|\.\d+)`
 const DASH = '[-‐‑–—−]'
@@ -47,7 +49,39 @@ const PATTERNS = [
   [new RegExp(String.raw`${APPROX}${RANGE}\s*${UNIT}(?![a-z0-9])\s*`, 'gi'), ''],
 ]
 
-const hasGated = (s) => new RegExp(NUM, 'i').test(String(s || ''))
+// The ONE nomenclature rule, shared with the guard in triage.js so the two layers can never
+// disagree. A numeric token is exempt (a name, not a statistic) only when the character
+// directly before it is a letter AND the glue is not a statistic label: "TcPO2", "CD34",
+// "P2Y12", "COVID-19", "SF-36" and "HbA1c" stay whole, but "HR0.84", "OR0.5", "RR1.4",
+// "x2" and "n12" are statistics the writer glued to their label (2026-10-14 beta audit).
+// Tokens are read on the verifier's normalized text (NFKC, dashes unified), so full-width
+// and circled digits and vulgar fractions are seen as the digits they fold to.
+const STAT_GLUE = new Set(['hr', 'ahr', 'or', 'aor', 'rr', 'arr', 'irr', 'md', 'smd', 'nnt', 'nnh', 'ci', 'sd', 'se', 'n', 'p', 'x', 'r', 'i'])
+const isLetter = (ch) => ch != null && /[a-z]/i.test(ch)
+export function nomenclatureExempt(norm, token) {
+  if (!isLetter(norm[token.start - 1])) return false
+  let i = token.start
+  while (i > 0 && isLetter(norm[i - 1])) i -= 1
+  const glue = norm.slice(i, token.start)
+  if (!STAT_GLUE.has(glue)) return true
+  // "P2Y12": the digit is followed by more letters, so it is inside a name.
+  return isLetter(norm[token.end])
+}
+
+// Unicode decimal digits that NFKC leaves alone (Arabic-Indic, Devanagari, ...) are not
+// ASCII digits, so the tokenizer cannot see them. Treat any of them as a gated number.
+const FOREIGN_DIGIT = /\p{Nd}/u
+export function gatedTokens(text) {
+  const norm = normalize(text || '')
+  return extractNumbersWithIndex(norm).filter((t) => !nomenclatureExempt(norm, t))
+}
+export function hasGatedNumber(text) {
+  const norm = normalize(text || '')
+  if (FOREIGN_DIGIT.test(norm.replace(/[0-9]/g, ''))) return true
+  return gatedTokens(text).length > 0
+}
+
+const hasGated = (s) => hasGatedNumber(s)
 
 // Words a repaired clause must not end on (a dangling stub means the clause lost its object).
 const DANGLING = /\b(?:to|from|of|at|the|a|an|and|or|about|than|by|over|in|for|with|between|ranging|approximately|roughly|nearly|versus|vs)\s*[.]?$/i
@@ -119,3 +153,90 @@ export function repairNumberFree(text) {
   if (!out || hasGated(out) || DANGLING.test(out) || leadLost || out.split(/\s+/).length < 2) return ''
   return out + (endPunct || '.')
 }
+
+// --- The number guard (moved from triage.js, 2026-10-14) -------------------------
+
+// Every number a finding is allowed to carry: the numeric tokens of the paper's verified
+// value strings (fmtNum output — the exact strings the fact channel renders). Tokenized
+// with the verifier's own normalize/extractNumbers so "0·84", "8 %", and CI en-dashes
+// read identically here and there.
+export function allowedNumbers(verified) {
+  const out = []
+  for (const v of verified || []) {
+    const value = normalize(String(v?.value ?? '')).replace(CI_LEVEL_RE, ' ')
+    for (const n of extractNumbers(value)) out.push(n)
+  }
+  return out
+}
+
+// An interval's printed level ("99% CI", "95% credible interval") is a label fmtNum renders
+// beside a verified interval, not a verified value: it never joins the allowed set, and a
+// finding may carry it only directly in front of the same label, when one of the paper's
+// verified value strings prints that level (2026-10-11 fix 4).
+export const CI_LEVEL_RE = /(?<![\d.])(\d{2}(?:\.\d+)?)\s*%\s*(?=(?:CI|credible interval)\b)/gi
+const CI_LEVEL_AHEAD = /^\s*%\s*(?:CI|credible interval)\b/i
+export function allowedCiLevels(verified) {
+  const out = []
+  for (const v of verified || []) {
+    for (const m of normalize(String(v?.value ?? '')).matchAll(CI_LEVEL_RE)) out.push(Number(m[1]))
+  }
+  return out
+}
+
+// Timepoints (2026-10-04). A result's value strings never carry its timepoint — "67.3%
+// versus 50%" — so "no clear benefit at 12 months" lost its 12 even when the 12-month
+// result itself verified. A finding may also carry a number used AS A TIMEPOINT (number
+// then a time unit: "at 12 months", "12-month") when that same number-and-unit is printed
+// in the quote of one of the paper's VERIFIED rows. Narrow on both sides: the token must
+// sit before a time unit in the finding, and the quote must print it before a time unit,
+// so a timepoint can never launder a statistic and a statistic never launders a timepoint.
+// Whether it is the RIGHT timepoint for the claim is a prose judgment — the check pass
+// (pipeline/check.js) covers it, not this guard.
+const TIME_UNIT = '(hours?|days?|weeks?|months?|years?)\\b'
+const QUOTE_TIMEPOINT = new RegExp(`(?<![\\d.])(\\d+(?:\\.\\d+)?)\\s*-?\\s*${TIME_UNIT}`, 'g')
+const FOLLOWED_BY_UNIT = new RegExp(`^\\s*-?\\s*${TIME_UNIT}`)
+const unitStem = (u) => String(u || '').toLowerCase().replace(/s$/, '')
+
+// [{ value, unit }]: the number AND its unit, so "12 months" in a quote can back "at 12
+// months" but never "at 12 days" (2026-10-14 beta audit: the unit was not compared).
+export function allowedTimepoints(verified) {
+  const out = []
+  for (const v of verified || []) {
+    for (const m of normalize(String(v?.quote ?? '')).matchAll(QUOTE_TIMEPOINT)) out.push({ value: Number(m[1]), unit: unitStem(m[2]) })
+  }
+  return out
+}
+
+// Nomenclature exemption, shared by the check and the strip so the two layers can never
+// disagree: a numeric token whose character DIRECTLY before it is a letter is part of a
+// name (TcPO2, CD34, P2Y12, COVID-19, SF-36 — the token there starts at the dash), not a
+// statistic. A statistic in prose is always delimited from letters by a space, comparator,
+// or punctuation ("8%", "HR 0.84", "n=84"), so nothing delimited ever slips this gate —
+// "type 2 diabetes", "30-day", and "8-fold" all stay gated (conservatively: they fall
+// back unless verified).
+// The exemption itself lives in numberFree.js (nomenclatureExempt) so the guard and the
+// repair can never disagree; it also refuses a statistic glued to its label ("HR0.84").
+
+// True when EVERY gated numeric token in `text` equals some allowed number (verifier
+// representation-equality: 8 == 8.0, 0.84 == .84 — never rounding). Boundary-safe by
+// construction: extractNumbersWithIndex tokenizes "2008" as 2008, so a verified 8 can
+// never launder a year, and 0.84 never satisfies 0.8. A digit the tokenizer cannot read
+// (a non-ASCII decimal digit) is never grounded.
+export function numbersGrounded(text, allowed, timepoints = [], ciLevels = []) {
+  const norm = normalize(text || '')
+  if (hasGatedNumber(text) && !extractNumbersWithIndex(norm).length) return false
+  const timepointOk = (t) => {
+    const m = FOLLOWED_BY_UNIT.exec(norm.slice(t.end))
+    if (!m) return false
+    const unit = unitStem(m[1])
+    return timepoints.some((a) => (typeof a === 'object' ? numbersEqual(a.value, t.value) && a.unit === unit : numbersEqual(a, t.value)))
+  }
+  return extractNumbersWithIndex(norm).every(
+    (t) =>
+      nomenclatureExempt(norm, t) ||
+      allowed.some((a) => numbersEqual(a, t.value)) ||
+      timepointOk(t) ||
+      (CI_LEVEL_AHEAD.test(norm.slice(t.end)) && ciLevels.some((a) => numbersEqual(a, t.value)))
+  )
+}
+

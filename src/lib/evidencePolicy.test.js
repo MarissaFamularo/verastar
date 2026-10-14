@@ -71,10 +71,16 @@ describe('compatible stamps in tightened tiers', () => {
   })
 })
 
-// v8 expands supported inline definitions; v7 did not have weaker guarantees.
-it('preserves v7 verdicts without undoing the pre-v7 qualified-P downgrade', () => {
-  for (const tier of ['verified-estimate', 'verified-comparison', 'source-located']) {
-    const old = { verificationVersion: '2026-10-09.estimates-v7', tier, flagged: tier === 'source-located' }
-    expect(evidenceVerdict(old)).toBe(old)
+// v13 (2026-10-14) refuses shapes v7–v12 admitted (truncated quotes, bare "or", folded
+// superscripts, European decimals, ungoverned "and" pairs, numeric arm labels, exponent
+// P). A v7–v12 validated verdict is therefore re-derived from saved source text or shown
+// as legacy-unchecked; it is never displayed as stamped.
+it('downgrades v7–v12 validated verdicts at read time', () => {
+  for (const version of ['2026-10-09.estimates-v7', '2026-10-10.estimates-v8', '2026-10-12.estimates-v9', '2026-10-12.estimates-v12']) {
+    for (const tier of ['verified-estimate', 'verified-comparison', 'verified-full-text']) {
+      const old = { verificationVersion: version, tier, relationshipValidated: true, flagged: false }
+      expect(evidenceVerdict(old).tier, `${version} ${tier}`).toBe('legacy-unchecked')
+      expect(evidenceVerdict(old).flagged).toBe(true)
+    }
   }
 })

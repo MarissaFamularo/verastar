@@ -205,7 +205,13 @@ describe('timepoints printed in a verified quote', () => {
   const V = [{ name: '12-month primary patency', value: '67.3% versus 50% (P = 0.16)', quote: 'At 12 months, primary patency (67.3% vs. 50%, p = 0.16)' }]
 
   it('reads the timepoint out of the verified quote', () => {
-    expect(allowedTimepoints(V)).toEqual([12])
+    expect(allowedTimepoints(V)).toEqual([{ value: 12, unit: 'month' }])
+  })
+  it('a timepoint carries its unit: 12 months cannot back "12 days" (2026-10-14)', () => {
+    const tps = allowedTimepoints(V)
+    const allowed = allowedNumbers(V)
+    expect(numbersGrounded('No clear patency benefit at 12 days.', allowed, tps)).toBe(false)
+    expect(numbersGrounded('No clear 12-year patency benefit.', allowed, tps)).toBe(false)
   })
   it('lets a finding carry that timepoint, spelled either way', () => {
     const tps = allowedTimepoints(V)

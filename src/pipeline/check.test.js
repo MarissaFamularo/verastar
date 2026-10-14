@@ -13,7 +13,7 @@ vi.mock('../lib/anthropic.js', () => ({
 }))
 
 import { extractStructured } from '../lib/anthropic.js'
-import { checkFindings, CHECK_SCHEMA, SNIPPET_CHARS, NO_VERDICT_REASON } from './check.js'
+import { checkFindings, CHECK_SCHEMA, SNIPPET_CHARS, NO_VERDICT_REASON, NO_SNIPPET_REASON } from './check.js'
 import { triage, TRIAGE_SCHEMA } from './triage.js'
 
 const ITEMS = [
@@ -45,8 +45,8 @@ describe('checkFindings — verdict plumbing', () => {
     const out = await checkFindings({
       items: [ITEMS[0], { id: 'p3', finding: '', snippet: 'text' }, { id: 'p4', finding: 'claim', snippet: '  ' }],
     })
-    expect(out.get('p3')).toEqual({ verdict: 'unchecked', reason: '' })
-    expect(out.get('p4')).toEqual({ verdict: 'unchecked', reason: '' })
+    expect(out.get('p3')).toEqual({ verdict: 'unchecked', reason: '' }) // nothing to audit
+    expect(out.get('p4')).toEqual({ verdict: 'unchecked', reason: NO_SNIPPET_REASON }) // nothing to audit against: say so
     const content = extractStructured.mock.calls[0][0].content
     expect(content).toContain('[p1]')
     expect(content).not.toContain('[p3]')
@@ -55,7 +55,7 @@ describe('checkFindings — verdict plumbing', () => {
 
   it('makes no model call at all when nothing is auditable', async () => {
     const out = await checkFindings({ items: [{ id: 'p1', finding: 'claim', snippet: '' }] })
-    expect(out.get('p1')).toEqual({ verdict: 'unchecked', reason: '' })
+    expect(out.get('p1')).toEqual({ verdict: 'unchecked', reason: NO_SNIPPET_REASON })
     expect(extractStructured).not.toHaveBeenCalled()
   })
 

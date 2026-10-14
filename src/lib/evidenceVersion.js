@@ -43,8 +43,16 @@ export function currentPaperQuantities(paper) {
   })
 }
 
+// The tiers whose badge may read "Verified". A verdict is validated only when its flags
+// AND its tier agree; a malformed record with relationshipValidated true under a flagged
+// or unknown tier is not evidence (2026-10-14 beta audit).
+export const VALIDATED_TIERS = new Set([
+  'verified-registry', 'verified-full-text', 'abstract-only', 'verified-user-text',
+  'verified-estimate', 'verified-comparison', 'verified-proportion', 'verified-heterogeneity',
+])
 export function isRelationshipValidated(verdict) {
-  return evidenceVerdict(verdict).relationshipValidated === true && evidenceVerdict(verdict).flagged === false
+  const v = evidenceVerdict(verdict)
+  return v.relationshipValidated === true && v.flagged === false && VALIDATED_TIERS.has(v.tier)
 }
 
 // The library rail counts papers with at least one currently validated claim,

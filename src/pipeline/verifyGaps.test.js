@@ -162,16 +162,19 @@ describe('heterogeneity I² (frailty meta-analysis)', () => {
 })
 
 describe('version', () => {
-  it('bumps, and keeps the previous stamps readable outside the tiers v7 tightened', () => {
-    expect(VERIFICATION_VERSION).toBe('2026-10-12.estimates-v12')
-    expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).toEqual(expect.arrayContaining(['2026-10-12.estimates-v9', '2026-10-10.estimates-v8', '2026-10-09.estimates-v7']))
+  it('bumps; v13 refuses shapes every earlier stamp admitted, so no stamp is fully compatible', () => {
+    expect(VERIFICATION_VERSION).toBe('2026-10-14.estimates-v13')
+    expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).toEqual([])
+    expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v12')
     expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v10')
     expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v11')
     expect(COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v10')
     expect(COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v11')
     expect(COMPATIBLE_VERIFICATION_VERSIONS).toEqual(expect.arrayContaining(['2026-09-30.estimates-v3', '2026-10-04.estimates-v4', '2026-10-04.estimates-v5', '2026-10-04.estimates-v6']))
     const v9 = { verificationVersion: '2026-10-12.estimates-v9', tier: TIERS.PROPORTION, relationshipValidated: true, flagged: false }
-    expect(evidenceVerdict(v9)).toBe(v9)
+    expect(evidenceVerdict(v9).tier).toBe('legacy-unchecked')
+    const v12 = { verificationVersion: '2026-10-12.estimates-v12', tier: TIERS.COMPARISON, relationshipValidated: true, flagged: false }
+    expect(evidenceVerdict(v12).tier).toBe('legacy-unchecked')
     const v10 = { verificationVersion: '2026-10-12.estimates-v10', tier: TIERS.FULL_TEXT, relationshipValidated: true, flagged: false }
     expect(evidenceVerdict(v10).tier).toBe('legacy-unchecked')
     const v11 = { verificationVersion: '2026-10-12.estimates-v11', tier: TIERS.FULL_TEXT, relationshipValidated: true, flagged: false }

@@ -14,9 +14,8 @@ import { PILOT_DIGEST_LIMIT } from './digestLimit.js'
 // model sneaks in.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
-import { normalize, extractNumbers, extractNumbersWithIndex, numbersEqual } from './verify.js'
 import { checkFindings, SNIPPET_CHARS } from './check.js'
-import { repairNumberFree } from './numberFree.js'
+import { repairNumberFree, allowedNumbers, allowedTimepoints, allowedCiLevels, numbersGrounded, CI_LEVEL_RE } from './numberFree.js'
 import { tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary } from './primaryResult.js'
 import { journalPreferenceText } from './journals.js'
 
@@ -88,77 +87,11 @@ HARD RULE: finding may contain ONLY numbers that appear verbatim in that paper's
 // a grounded number that gets dropped is annoying; an unverified number that renders is
 // fatal. So any doubt resolves to the number-free form.
 
-// Every number a finding is allowed to carry: the numeric tokens of the paper's verified
-// value strings (fmtNum output — the exact strings the fact channel renders). Tokenized
-// with the verifier's own normalize/extractNumbers so "0·84", "8 %", and CI en-dashes
-// read identically here and there.
-export function allowedNumbers(verified) {
-  const out = []
-  for (const v of verified || []) {
-    const value = normalize(String(v?.value ?? '')).replace(CI_LEVEL_RE, ' ')
-    for (const n of extractNumbers(value)) out.push(n)
-  }
-  return out
-}
-
-// An interval's printed level ("99% CI", "95% credible interval") is a label fmtNum renders
-// beside a verified interval, not a verified value: it never joins the allowed set, and a
-// finding may carry it only directly in front of the same label, when one of the paper's
-// verified value strings prints that level (2026-10-11 fix 4).
-const CI_LEVEL_RE = /(?<![\d.])(\d{2}(?:\.\d+)?)\s*%\s*(?=(?:CI|credible interval)\b)/gi
-const CI_LEVEL_AHEAD = /^\s*%\s*(?:CI|credible interval)\b/i
-export function allowedCiLevels(verified) {
-  const out = []
-  for (const v of verified || []) {
-    for (const m of normalize(String(v?.value ?? '')).matchAll(CI_LEVEL_RE)) out.push(Number(m[1]))
-  }
-  return out
-}
-
-// Timepoints (2026-10-04). A result's value strings never carry its timepoint — "67.3%
-// versus 50%" — so "no clear benefit at 12 months" lost its 12 even when the 12-month
-// result itself verified. A finding may also carry a number used AS A TIMEPOINT (number
-// then a time unit: "at 12 months", "12-month") when that same number-and-unit is printed
-// in the quote of one of the paper's VERIFIED rows. Narrow on both sides: the token must
-// sit before a time unit in the finding, and the quote must print it before a time unit,
-// so a timepoint can never launder a statistic and a statistic never launders a timepoint.
-// Whether it is the RIGHT timepoint for the claim is a prose judgment — the check pass
-// (pipeline/check.js) covers it, not this guard.
-const TIME_UNIT = '(?:hours?|days?|weeks?|months?|years?)\\b'
-const QUOTE_TIMEPOINT = new RegExp(`(?<![\\d.])(\\d+(?:\\.\\d+)?)\\s*-?\\s*${TIME_UNIT}`, 'g')
-const FOLLOWED_BY_UNIT = new RegExp(`^\\s*-?\\s*${TIME_UNIT}`)
-
-export function allowedTimepoints(verified) {
-  const out = []
-  for (const v of verified || []) {
-    for (const m of normalize(String(v?.quote ?? '')).matchAll(QUOTE_TIMEPOINT)) out.push(Number(m[1]))
-  }
-  return out
-}
-
-// Nomenclature exemption, shared by the check and the strip so the two layers can never
-// disagree: a numeric token whose character DIRECTLY before it is a letter is part of a
-// name (TcPO2, CD34, P2Y12, COVID-19, SF-36 — the token there starts at the dash), not a
-// statistic. A statistic in prose is always delimited from letters by a space, comparator,
-// or punctuation ("8%", "HR 0.84", "n=84"), so nothing delimited ever slips this gate —
-// "type 2 diabetes", "30-day", and "8-fold" all stay gated (conservatively: they fall
-// back unless verified).
-const isLetter = (ch) => ch != null && /[a-z]/i.test(ch)
-
-// True when EVERY gated numeric token in `text` equals some allowed number (verifier
-// representation-equality: 8 == 8.0, 0.84 == .84 — never rounding). Boundary-safe by
-// construction: extractNumbersWithIndex tokenizes "2008" as 2008, so a verified 8 can
-// never launder a year, and 0.84 never satisfies 0.8.
-export function numbersGrounded(text, allowed, timepoints = [], ciLevels = []) {
-  const norm = normalize(text || '')
-  return extractNumbersWithIndex(norm).every(
-    (t) =>
-      isLetter(norm[t.start - 1]) ||
-      allowed.some((a) => numbersEqual(a, t.value)) ||
-      (FOLLOWED_BY_UNIT.test(norm.slice(t.end)) && timepoints.some((a) => numbersEqual(a, t.value))) ||
-      (CI_LEVEL_AHEAD.test(norm.slice(t.end)) && ciLevels.some((a) => numbersEqual(a, t.value)))
-  )
-}
+// The guard helpers (allowedNumbers, allowedTimepoints, allowedCiLevels, numbersGrounded)
+// live in pipeline/numberFree.js, which has no model dependency, so the digest store can
+// re-run the guard on a restored digest without importing this module. Re-exported here
+// so existing callers and tests keep their import path.
+export { allowedNumbers, allowedTimepoints, allowedCiLevels, numbersGrounded, CI_LEVEL_RE }
 
 // Last-resort number-free form: delete gated numeric tokens (with any glued comparator,
 // sign, percent, or joining dash) and tidy the seams. Only reached when the model violated
