@@ -51,8 +51,8 @@ export const SEED_RETRY_MAX_MS = 3 * 24 * 60 * 60 * 1000
 // general shelf rather than guessing.
 export function specialtySlug(text) {
   const t = String(text || '').toLowerCase()
-  if (/vascular/.test(t)) return 'vascular-surgery'
   if (/cardio|cardiac|heart/.test(t)) return 'cardiology'
+  if (/\bvascular\b/.test(t)) return 'vascular-surgery'
   if (/general surg|surgeon|surgery|surgical/.test(t)) return 'general-surgery'
   return 'general'
 }

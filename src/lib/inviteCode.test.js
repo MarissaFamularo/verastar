@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('./supabase.js', () => ({ supabase: null, supabaseConfigured: false, isSignedIn: () => false }))
-vi.mock('./sponsor.js', () => ({ refreshSponsorship: async () => {} }))
+vi.mock('./sponsor.js', () => ({ refreshSponsorship: async () => {}, isSponsored: () => false, markSponsored: () => {} }))
 
 const { normalizeInviteCode, INVITE_MESSAGES } = await import('./inviteCode.js')
 

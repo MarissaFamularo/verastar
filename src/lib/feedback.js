@@ -12,6 +12,7 @@
 // when reports are reviewed. Payloads carry ids, versions, tiers and a short quote at most —
 // never source text, never patient information.
 
+import { awaitWithin } from './deadline.js'
 import { supabase, supabaseConfigured, currentUser, isSignedIn } from './supabase.js'
 import { fmtNum } from './format.js'
 import { evidenceVerdict } from './evidenceVersion.js'
@@ -20,6 +21,7 @@ export const BADGE_REPORT_TYPE = 'badge_reported'
 export const FEEDBACK_TYPE = 'beta_feedback'
 export const REPORT_SURFACES = ['digest', 'library']
 export const FEEDBACK_MAX = 2000
+export const REPORT_TIMEOUT_MS = 10000
 
 export function canReport() {
   return Boolean(supabaseConfigured && isSignedIn())
@@ -99,13 +101,15 @@ export function buildFeedback({ text, view = null, reportId, now = new Date() })
 
 // Durable write. Resolves { id } only after the server confirms the stored row; throws
 // otherwise. `client`/`user` are injectable for tests.
-export async function submitReport(type, payload, { client = supabase, user = currentUser(), configured = supabaseConfigured } = {}) {
+export async function submitReport(type, payload, { client = supabase, user = currentUser(), configured = supabaseConfigured, timeoutMs = REPORT_TIMEOUT_MS } = {}) {
   if (!configured || !client) throw new Error('Reports need the Verastar account service, which is not configured here.')
   if (!user?.id) throw new Error('Sign in to send reports.')
   let data
   let error
   try {
-    ;({ data, error } = await client.from('events').insert({ user_id: user.id, type, payload }).select('id').single())
+    const raced = await awaitWithin(client.from('events').insert({ user_id: user.id, type, payload }).select('id').single(), timeoutMs)
+    if (raced.timeout) throw new Error('the server did not answer in time')
+    ;({ data, error } = raced.value)
   } catch (err) {
     throw new Error(`Not sent: ${err?.message || 'network error'}`)
   }

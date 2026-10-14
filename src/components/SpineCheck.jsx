@@ -13,7 +13,7 @@ import { hasModelAccess } from '../lib/anthropic.js'
 import { BetaAccessGate } from './InviteCode.jsx'
 import { sourceExamplesVisible } from '../lib/sourceExamples.js'
 import { CAP_MESSAGE } from '../lib/sponsor.js'
-import { canSchedule, digestRefusalMessage, runScheduledDigestNow } from '../lib/digestSchedule.js'
+import { canSchedule, digestRefusalMessage, runScheduledDigestNow, serverRunFailureNote, PAUSED_RUN_NOTE } from '../lib/digestSchedule.js'
 import { getProfile, store, SEEN_KEY } from '../lib/store.js'
 import {
   saveDailyDigestIfCurrent,
@@ -900,34 +900,43 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // app-verified numbers, and the FULL fetched source text (no longer truncated), persisted
   // locally. The save is instant; Claude auto-classifies the domain + topic tags in the
   // background (she prunes later) and the record is patched when they arrive.
+  // One write per paper at a time: an unsave can never overtake a save still in flight.
+  const paperBusy = useRef(new Set())
+  const without = (set, id) => { const next = new Set(set); next.delete(id); return next }
   async function toggleSave(res, take, verifiedRows, title) {
     const id = res.paper.id
-    if (savedIds.has(id)) {
-      await store.delete('papers', id)
-      if (whyFor === id) setWhyFor(null)
-      setSavedIds((prev) => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
-      // Withdrawing the record takes its heart with it — mirror that in the UI set.
-      setFavIds((prev) => {
-        if (!prev.has(id)) return prev
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
-      return
-    }
-    setSavedIds((prev) => new Set(prev).add(id))
-    // One shared path (pipeline/save.js): persist the record, then in the background file it under a
-    // concept, resolve an open-access PDF link, and write it to the connected on-disk folder. The
-    // "Add a paper" entry point in the Library uses the exact same path so they never drift.
+    if (paperBusy.current.has(id)) return
+    paperBusy.current.add(id)
+    setSaveNote('')
     try {
-      whyBaseline.current = await savePaper(res, take, { title, source: 'digest' })
-      setWhyFor(id)
-    } catch (err) {
-      console.warn('Save failed:', err.message)
+      if (savedIds.has(id)) {
+        try {
+          await store.delete('papers', id)
+        } catch (err) {
+          console.warn('Unsave failed:', err.message)
+          setSaveNote(`Couldn\u2019t remove that paper from your Library: ${err.message} It is still saved.`)
+          return
+        }
+        if (whyFor === id) setWhyFor(null)
+        setSavedIds((prev) => without(prev, id))
+        // Withdrawing the record takes its heart with it — mirror that in the UI set.
+        setFavIds((prev) => (prev.has(id) ? without(prev, id) : prev))
+        return
+      }
+      setSavedIds((prev) => new Set(prev).add(id))
+      // One shared path (pipeline/save.js): persist the record, then in the background file it under a
+      // concept, resolve an open-access PDF link, and write it to the connected on-disk folder. The
+      // "Add a paper" entry point in the Library uses the exact same path so they never drift.
+      try {
+        whyBaseline.current = await savePaper(res, take, { title, source: 'digest' })
+        setWhyFor(id)
+      } catch (err) {
+        console.warn('Save failed:', err.message)
+        setSavedIds((prev) => without(prev, id))
+        setSaveNote(`Not saved: ${err.message}`)
+      }
+    } finally {
+      paperBusy.current.delete(id)
     }
   }
 
@@ -942,27 +951,32 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
   // flag — one tap does both, and the checkbox lights up alongside the heart.
   async function toggleFavorite(res, take, title) {
     const id = res.paper.id
-    if (favIds.has(id)) {
-      await setPaperFavorite(id, false, { surface: 'digest' })
-      setFavIds((prev) => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
-      return
-    }
-    if (!savedIds.has(id)) {
-      setSavedIds((prev) => new Set(prev).add(id))
-      try {
-        whyBaseline.current = await savePaper(res, take, { title, source: 'digest' })
-        setWhyFor(id)
-      } catch (err) {
-        console.warn('Save failed:', err.message)
+    if (paperBusy.current.has(id)) return
+    paperBusy.current.add(id)
+    setSaveNote('')
+    let optimisticSave = false
+    try {
+      if (favIds.has(id)) {
+        await setPaperFavorite(id, false, { surface: 'digest' })
+        setFavIds((prev) => without(prev, id))
         return
       }
+      if (!savedIds.has(id)) {
+        setSavedIds((prev) => new Set(prev).add(id))
+        optimisticSave = true
+        whyBaseline.current = await savePaper(res, take, { title, source: 'digest' })
+        optimisticSave = false
+        setWhyFor(id)
+      }
+      await setPaperFavorite(id, true, { surface: 'digest' })
+      setFavIds((prev) => new Set(prev).add(id))
+    } catch (err) {
+      console.warn('Favorite failed:', err.message)
+      if (optimisticSave) setSavedIds((prev) => without(prev, id))
+      setSaveNote(`Couldn\u2019t update that paper: ${err.message}`)
+    } finally {
+      paperBusy.current.delete(id)
     }
-    await setPaperFavorite(id, true, { surface: 'digest' })
-    setFavIds((prev) => new Set(prev).add(id))
   }
 
   // Open the source panel for a located quote, picking the corpus (prose/table) it
@@ -1133,10 +1147,15 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
         let out
         try {
           out = await runScheduledDigestNow(tick === 0 && days ? { days } : {})
-        } catch {
-          // The phone dropped the request (locked, backgrounded, offline). The server-side
-          // run is unaffected and the cron ticks carry it on.
-          setScanNote('Your digest is being prepared on the server. You can close the app; it will be here when you come back.')
+        } catch (err) {
+          if (err?.status) {
+            // The server answered and refused or failed: say so. Nothing is known to be running.
+            setScanError(serverRunFailureNote(err))
+          } else {
+            // The phone dropped the request (locked, backgrounded, offline). The server-side
+            // run is unaffected and the cron ticks carry it on.
+            setScanNote('Your digest is being prepared on the server. You can close the app; it will be here when you come back.')
+          }
           break
         }
         const saved = await loadDailyDigest().catch(() => null)
@@ -1150,6 +1169,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
             continue
           }
           if (out?.reason === 'cap reached') setScanError(CAP_MESSAGE)
+          else if (out?.reason === 'paused' || out?.status === 'paused') setScanError(PAUSED_RUN_NOTE)
           // Held for review: say it is delayed, once, and do not suggest trying again.
           else if (isHeldRun(out)) markHeld()
           else if (out?.reason !== "today's digest already exists") setScanError(digestRefusalMessage(out?.reason))

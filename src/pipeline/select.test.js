@@ -29,6 +29,7 @@ import {
 vi.mock('../lib/anthropic.js', () => ({
   extractStructured: vi.fn(),
   MODELS: { triage: 'test-triage' },
+  isCapReached: (e) => e?.capReached === true || e?.status === 402,
 }))
 
 vi.mock('./sources.js', () => ({
@@ -628,5 +629,16 @@ describe('belowFloorNote', () => {
   // An explicit floor of 0 is opting out — nothing can be below it.
   it('reports nothing against a zero bar', () => {
     expect(belowFloorNote({ score: 0, floor: 0 })).toBe('')
+  })
+})
+
+describe('selectCandidates and a spending cap', () => {
+  it('rethrows a cap unchanged so callers can degrade', async () => {
+    const { CapReachedError, isCapReached } = await vi.importActual('../lib/anthropic.js')
+    extractStructured.mockReset()
+    fetchAbstractsByPmid.mockResolvedValue({})
+    extractStructured.mockRejectedValue(new CapReachedError())
+    const err = await selectCandidates({ candidates: [{ id: '1', title: 't', abstract: 'a' }] }).catch((e) => e)
+    expect(isCapReached(err)).toBe(true)
   })
 })

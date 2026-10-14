@@ -52,13 +52,22 @@ export async function sendMagicLink(email) {
 // {{ .Token }}). Typing the code signs in THIS context — the only path that works in
 // an installed home-screen app, where the emailed link opens the browser's separate
 // storage world instead.
+// Keep the status and code supabase-js reports, so callers can tell a rate limit or an
+// outage from a wrong code. Pure.
+export function authError(error) {
+  const err = new Error(error?.message || 'Sign-in failed')
+  if (error?.status != null) err.status = error.status
+  if (error?.code) err.code = error.code
+  return err
+}
+
 export async function verifyEmailCode(email, code) {
   const { data, error } = await supabase.auth.verifyOtp({
     email,
     token: code,
     type: 'email',
   })
-  if (error) throw new Error(error.message)
+  if (error) throw authError(error)
   _user = data?.session?.user || null
   return _user
 }

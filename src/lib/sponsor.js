@@ -13,21 +13,39 @@ import { supabase, supabaseConfigured, currentUser } from './supabase.js'
 
 let _sponsored = false
 
-export async function refreshSponsorship() {
-  _sponsored = false
-  const user = currentUser()
-  if (!supabaseConfigured || !user) return false
+export const SPONSOR_RETRY_MS = 400
+
+// One read of the sponsorship row. Resolves { ok, sponsored }; ok:false means the read itself
+// failed (a transient error), which says nothing about whether the account is sponsored.
+async function readSponsorship(user) {
   try {
     const { data, error } = await supabase
       .from('sponsored_accounts')
       .select('user_id, active, ends_at')
       .eq('user_id', user.id)
       .maybeSingle()
-    if (error || !data) return false
-    _sponsored = sponsorshipActive(data)
+    if (error) return { ok: false, sponsored: false }
+    return { ok: true, sponsored: data ? sponsorshipActive(data) : false }
   } catch {
-    _sponsored = false
+    return { ok: false, sponsored: false }
   }
+}
+
+// A transient read error is retried once after a short pause, and never overwrites a flag that
+// was already true (a sponsored reader must not lose access to a blip). A signed-out or
+// unconfigured client is a definite "no".
+export async function refreshSponsorship({ retryMs = SPONSOR_RETRY_MS } = {}) {
+  const user = currentUser()
+  if (!supabaseConfigured || !user) {
+    _sponsored = false
+    return false
+  }
+  let result = await readSponsorship(user)
+  if (!result.ok) {
+    await new Promise((resolve) => setTimeout(resolve, retryMs))
+    result = await readSponsorship(user)
+  }
+  if (result.ok) _sponsored = result.sponsored
   return _sponsored
 }
 
@@ -40,6 +58,11 @@ export function sponsorshipActive(row, now = new Date()) {
 
 export function isSponsored() {
   return _sponsored
+}
+
+// The server just confirmed enrollment: flip the flag now, whatever the follow-up read says.
+export function markSponsored() {
+  _sponsored = true
 }
 
 // Test seam only.

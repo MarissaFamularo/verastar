@@ -8,6 +8,9 @@ describe('specialtySlug', () => {
     expect(specialtySlug('general surgery resident')).toBe('general-surgery')
     expect(specialtySlug('nephrology')).toBe('general')
     expect(specialtySlug('')).toBe('general')
+    expect(specialtySlug('Cardiovascular medicine, heart failure')).toBe('cardiology')
+    expect(specialtySlug('vascular surgery and CLTI')).toBe('vascular-surgery')
+    expect(specialtySlug('avascular necrosis research')).toBe('general')
   })
 })
 

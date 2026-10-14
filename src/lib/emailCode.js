@@ -24,6 +24,7 @@ export const EMAIL_CODE_MESSAGES = {
   invalid: 'That code is invalid or expired. It may already have been used. Send a new code and try again.',
   timeout: 'Checking the code timed out, so you are not signed in. Try the code again, or send a new code.',
   network: 'We couldn\u2019t reach sign-in just now. Try the code again, or send a new code.',
+  rate: 'Too many attempts right now. Wait a minute, then try the same code again.',
 }
 
 export function emailCodeFailureKind(err) {
@@ -31,6 +32,7 @@ export function emailCodeFailureKind(err) {
   if (err.code === 'timeout' || err.name === 'TimeoutError' || err.name === 'AbortError') return 'timeout'
   const raw = `${err.code || ''} ${err.status || ''} ${err.message || err}`.toLowerCase()
   if (/timeout|timed out|abort/.test(raw)) return 'timeout'
+  if (Number(err.status) === 429 || /rate.?limit|too many|over_.*_rate|after \d+ seconds/.test(raw)) return 'rate'
   if (/failed to fetch|network|load failed|offline|networkerror|econn|enotfound/.test(raw)) return 'network'
   return 'invalid'
 }

@@ -5,7 +5,7 @@
 // sponsored there is nothing to schedule and every function here resolves to null.
 
 import { supabase, supabaseConfigured, currentUser, isSignedIn } from './supabase.js'
-import { isSponsored } from './sponsor.js'
+import { isSponsored, CAP_MESSAGE } from './sponsor.js'
 
 export const DEFAULT_HOUR = 6
 
@@ -86,8 +86,28 @@ export async function runScheduledDigestNow({ days } = {}) {
     headers: { Authorization: `Bearer ${token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...(Number(days) > 0 ? { days } : {}), timezone: browserTimezone() }),
   })
-  if (!res.ok) throw new Error(`Digest run failed (${res.status}).`)
+  if (!res.ok) {
+    let body = null
+    try { body = await res.json() } catch { body = null }
+    const err = new Error(`Digest run failed (${res.status}).`)
+    err.status = res.status
+    if (body && typeof body === 'object') err.reason = body.reason || body.status || null
+    throw err
+  }
   return res.json()
+}
+
+export const PAUSED_RUN_NOTE = 'Digest runs are paused right now. Nothing is wrong with your account; try again later.'
+
+// What to tell a reader when the digest server answered with an HTTP failure. Pure.
+export function serverRunFailureNote(err) {
+  const status = Number(err?.status)
+  const reason = String(err?.reason ?? '')
+  if (reason === 'paused' || status === 503) return PAUSED_RUN_NOTE
+  if (status === 402 || /cap/.test(reason)) return CAP_MESSAGE
+  if (status === 401 || status === 403) return 'Sign in again to start your digest.'
+  if (status === 429) return 'Too many digest requests right now. Try again in a few minutes.'
+  return `The digest did not start (server error ${status || 'unknown'}). Try again in a minute.`
 }
 
 export function hourLabel(h) {

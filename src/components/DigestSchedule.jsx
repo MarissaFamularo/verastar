@@ -7,7 +7,7 @@ import { canSchedule, digestRefusalMessage, getDigestSchedule, setDigestSchedule
 
 export default function DigestSchedule() {
   const [row, setRow] = useState(null)
-  const [state, setState] = useState('loading') // loading | idle | saving | running | error
+  const [state, setState] = useState('loading') // loading | idle | saving | running (a failure leaves 'idle' plus `error`)
   const [error, setError] = useState('')
   const [runNote, setRunNote] = useState('')
   const enabled = canSchedule()
@@ -16,7 +16,7 @@ export default function DigestSchedule() {
     if (!enabled) return
     getDigestSchedule()
       .then((r) => { setRow(r); setState('idle') })
-      .catch((err) => { setError(err.message); setState('error') })
+      .catch((err) => { setError(err.message); setState('idle') })
   }, [enabled])
 
   if (!enabled) return null
@@ -34,7 +34,7 @@ export default function DigestSchedule() {
       setState('idle')
     } catch (err) {
       setError(err.message)
-      setState('error')
+      setState('idle')
     }
   }
 
@@ -50,7 +50,7 @@ export default function DigestSchedule() {
       setState('idle')
     } catch (err) {
       setError(err.message)
-      setState('error')
+      setState('idle')
     }
   }
 

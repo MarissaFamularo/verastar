@@ -6,7 +6,7 @@ vi.mock('./supabase.js', () => ({
   supabaseConfigured: true,
   isSignedIn: () => true,
 }))
-vi.mock('./sponsor.js', () => ({ refreshSponsorship: (...args) => flags.refresh(...args) }))
+vi.mock('./sponsor.js', () => ({ refreshSponsorship: (...args) => flags.refresh(...args), isSponsored: () => true, markSponsored: () => {} }))
 
 const { redeemInviteCode } = await import('./inviteCode.js')
 

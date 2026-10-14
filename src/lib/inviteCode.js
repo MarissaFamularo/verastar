@@ -1,7 +1,7 @@
 // lib/inviteCode.js — redeem a sponsor invite code for the signed-in account.
 
 import { supabase, supabaseConfigured, isSignedIn } from './supabase.js'
-import { refreshSponsorship } from './sponsor.js'
+import { refreshSponsorship, isSponsored, markSponsored } from './sponsor.js'
 
 export const INVITE_MESSAGES = {
   npi_required: 'Match your name and NPI to finish joining the beta.',
@@ -54,7 +54,12 @@ export async function redeemInviteCode(code) {
   // body claims enrolled.
   const status = res.ok
     ? (out?.status || 'error')
-    : (out?.status === 'npi_required' ? 'npi_required' : res.status === 429 || out?.status === 'slow_down' ? 'slow_down' : 'error')
-  if (res.ok && (status === 'enrolled' || status === 'already')) await refreshSponsorship()
+    : (out?.status === 'npi_required' ? 'npi_required' : out?.status === 'paused' ? 'paused' : res.status === 429 || out?.status === 'slow_down' ? 'slow_down' : 'error')
+  if (res.ok && (status === 'enrolled' || status === 'already')) {
+    // The server just said this account is sponsored. If the follow-up read fails, trust it:
+    // the gates must flip now, not after a reload.
+    await refreshSponsorship()
+    if (!isSponsored()) markSponsored()
+  }
   return { status, cohort: res.ok ? (out?.cohort || null) : null }
 }

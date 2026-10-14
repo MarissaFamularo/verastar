@@ -16,7 +16,7 @@
 // writes, no saveProfile, no profile READ — and drafting is a timed
 // animation instead of paid calls, so the flow can be walked end-to-end for free.
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { hasApiKey, hasModelAccess, setApiKey } from '../lib/anthropic.js'
 import { isSponsored } from '../lib/sponsor.js'
 import InviteCode from './InviteCode.jsx'
@@ -81,6 +81,10 @@ function ChartStar({ size = 44 }) {
 export default function OnboardingQuiz({ onDone, preview = false, account = null }) {
   const [step, goStep, backStep, substep, goSubstep, inviteCode, rememberConnect, npiDraft, codeNotice] = useOnboardStep() // welcome | signin | connect | interview | review
   const [keyInput, setKeyInput] = useState('')
+  const [demoError, setDemoError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const savingRef = useRef(false)
   const [draft, setDraft] = useState(null) // { name, northStars, projects, topics, search, rubric:{criteria,selectCount,scoreFloor} }
   // Account creation/sign-in from the welcome screen (accounts configured only).
   const signin = useEmailCodeSignIn()
@@ -114,7 +118,13 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
     // label demo mode honestly — pipeline stays untouched.
     const demoProfile = { ...DEMO_PROFILE, demo: true }
     if (preview) { onDone?.(demoProfile); return }
-    saveProfile(demoProfile).then(() => onDone?.(demoProfile))
+    // Signed in, saveProfile writes the ACCOUNT's profile: a demo profile there would skip
+    // the invite, NPI and interview steps. The sample is a signed-out path only.
+    if (account) return
+    setDemoError('')
+    saveProfile(demoProfile).then(() => onDone?.(demoProfile)).catch((err) => {
+      setDemoError(`Couldn\u2019t open the sample: ${err?.message || err}`)
+    })
   }
 
   // Write the reviewed draft. Two properties matter here and both are deliberate:
@@ -147,9 +157,20 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
       onDone?.(mergeInterviewProfile(null, fields))
       return
     }
-    const profile = mergeInterviewProfile(await getProfile(), fields)
-    await saveProfile(profile)
-    onDone?.(profile)
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    setSaveError('')
+    try {
+      const profile = mergeInterviewProfile(await getProfile(), fields)
+      await saveProfile(profile)
+      onDone?.(profile)
+    } catch (err) {
+      setSaveError(`Couldn\u2019t save your profile: ${err?.message || err}. Your answers are still here; try again.`)
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
   }
 
   // Draft edit helpers.
@@ -174,12 +195,17 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
           >
             Set up my digest →
           </button>
-          <button onClick={useDemo} className="cursor-pointer" style={ghostLink}>
-            Explore a populated sample digest
-          </button>
-          <p style={{ margin: '-6px 0 0', fontSize: 12, color: 'var(--color-fg-faint)' }}>
-            Look through sample papers from the published literature. Nothing is saved to your library.
-          </p>
+          {!account && (
+            <>
+              <button onClick={useDemo} className="cursor-pointer" style={ghostLink}>
+                Explore a populated sample digest
+              </button>
+              <p style={{ margin: '-6px 0 0', fontSize: 12, color: 'var(--color-fg-faint)' }}>
+                Look through sample papers from the published literature. Nothing is saved to your library.
+              </p>
+              {demoError && <p role="alert" style={{ margin: 0, fontSize: 13, color: '#f0a9a4' }}>{demoError}</p>}
+            </>
+          )}
           {/* Returning users can sign in directly. New users reach the same screen from
               the primary setup button, so a real library is never silently local-only. */}
           {supabaseConfigured && !preview && (
@@ -506,7 +532,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
       <div className="flex items-center" style={{ marginTop: 32, gap: 18 }}>
         <button
           onClick={save}
-          disabled={!topics.length}
+          disabled={!topics.length || saving}
           className="cursor-pointer"
           style={{ ...primaryBtn, padding: '13px 26px', borderRadius: 12, boxShadow: '0 10px 34px -12px rgba(239,143,91,.7)', opacity: topics.length ? 1 : 0.5 }}
         >
@@ -516,6 +542,9 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
           Start the interview over
         </button>
       </div>
+      {saveError && (
+        <p role="alert" style={{ margin: '14px 0 0', fontSize: 13, lineHeight: 1.5, color: '#f0a9a4', maxWidth: 520 }}>{saveError}</p>
+      )}
     </div>
   )
 }

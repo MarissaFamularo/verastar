@@ -44,14 +44,25 @@ export default function SourceViewer({ open, onClose, title, corpusLabel, corpus
 
   useEffect(() => {
     if (open && markRef.current) {
-      markRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      markRef.current.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
     }
   }, [open, quote])
+
+  // Escape closes the panel like the backdrop and the Close button do; a keyboard
+  // reader otherwise has no way out of the overlay.
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') return undefined
+    function onKey(e) {
+      if (e.key === 'Escape') onClose?.()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={title ? `Source for ${title}` : 'Source'}>
       {/* backdrop */}
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
 

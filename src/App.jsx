@@ -640,6 +640,15 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
           ) : (
             <>
               <InviteCode onEnrolled={() => setSettingsVersion((v) => v + 1)} />
+              {supabaseConfigured && !account && (
+                // InviteCode renders nothing signed out, but this panel's subtitle promises a
+                // code field: say where the code goes instead of showing only the key.
+                <div style={{ borderRadius: 10, border: '1px solid rgba(127,191,154,.25)', background: 'rgba(127,191,154,.07)', padding: '10px 13px', marginBottom: 18 }}>
+                  <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-soft)' }}>
+                    Have a beta invitation code? Sign in first under <strong>Account</strong>; the code field appears here once you are signed in. No API key is needed with a code.
+                  </p>
+                </div>
+              )}
               <div style={{ marginTop: 18 }}>{keySection}</div>
               <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
                 <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>

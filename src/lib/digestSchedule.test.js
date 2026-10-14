@@ -18,7 +18,7 @@ vi.mock('./supabase.js', () => ({
     }),
   },
 }))
-vi.mock('./sponsor.js', () => ({ isSponsored: () => flags.sponsored }))
+vi.mock('./sponsor.js', () => ({ isSponsored: () => flags.sponsored, CAP_MESSAGE: 'cap message.' }))
 
 const { browserTimezone, digestRefusalMessage, runScheduledDigestNow } = await import('./digestSchedule.js')
 
@@ -75,5 +75,20 @@ describe('run now without a saved schedule', () => {
     flags.sponsored = false
     expect(await runScheduledDigestNow()).toBeNull()
     expect(fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('runScheduledDigestNow failures', () => {
+  it('carries the HTTP status and the server reason on the error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 503, json: async () => ({ status: 'paused' }) })))
+    const err = await runScheduledDigestNow().catch((e) => e)
+    expect(err.status).toBe(503)
+    expect(err.reason).toBe('paused')
+  })
+  it('a network failure stays a TypeError with no status', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch') }))
+    const err = await runScheduledDigestNow().catch((e) => e)
+    expect(err).toBeInstanceOf(TypeError)
+    expect(err.status).toBeUndefined()
   })
 })

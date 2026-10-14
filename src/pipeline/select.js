@@ -10,7 +10,7 @@
 // Selection is floor-then-cap, not top-N: a score floor decides who EARNED a slot and
 // selectCount only caps a good day. See applyScoreFloor at the bottom of this file.
 
-import { extractStructured, MODELS } from '../lib/anthropic.js'
+import { extractStructured, MODELS, isCapReached } from '../lib/anthropic.js'
 import { fetchAbstractsByPmid } from './sources.js'
 import { journalPreferenceText } from './journals.js'
 
@@ -102,6 +102,8 @@ async function scoreBatch({ batch, batchNumber, batchCount, rubricText, journalT
         thinking: { type: 'disabled' },
       })
     } catch (err) {
+      // A spending cap is not a scoring failure: keep its identity so callers can degrade.
+      if (isCapReached(err)) throw err
       const retryable = isParseOrTruncationError(err)
       if (!retryable || attempt === SELECTION_PARSE_ATTEMPTS) throw selectionError()
     }

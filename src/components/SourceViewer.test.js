@@ -34,3 +34,22 @@ describe('findQuoteSpan', () => {
     expect(findQuoteSpan('abc', '')).toBeNull()
   })
 })
+
+describe('SourceViewer overlay', () => {
+  it('closes on Escape and exposes a dialog role', async () => {
+    const { mountDom } = await import('../test-utils/dom.js')
+    const React = await import('react')
+    const { default: SourceViewer } = await import('./SourceViewer.jsx')
+    const dom = await mountDom()
+    let closed = 0
+    await dom.render(React.createElement(SourceViewer, {
+      open: true, onClose: () => { closed += 1 }, title: 'T', corpusLabel: 'prose', corpusText: 'alpha beta', quote: 'beta',
+    }))
+    expect(dom.q('[role="dialog"]')).toBeTruthy()
+    await dom.keydown(dom.container, 'Escape')
+    expect(closed).toBe(1)
+    await dom.keydown(dom.container, 'Enter')
+    expect(closed).toBe(1)
+    await dom.unmount()
+  })
+})
