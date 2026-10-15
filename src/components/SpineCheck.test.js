@@ -1,6 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { digestControlPolicy, scheduledDigestStatus, frozenDigestState, HELD_DIGEST_NOTE, ABANDONED_DIGEST_NOTE } from '../lib/digestStore.js'
 import SpineCheck, {
   candidateDisplayScore,
@@ -10,6 +10,7 @@ import SpineCheck, {
   failedDigestResults,
   retryBaseSnapshot,
   ScanDetails,
+  CandidatePool,
 } from './SpineCheck.jsx'
 import { sourceExamplesVisible } from '../lib/sourceExamples.js'
 
@@ -204,5 +205,37 @@ describe('controls for a held or stopped server digest', () => {
     expect(html(React.createElement(DigestContinuation, { show: false, note: 'x' }))).toBe('')
     expect(scheduledDigestStatus(held).note).toBe(HELD_DIGEST_NOTE)
     expect(scheduledDigestStatus(abandoned).note).toBe(ABANDONED_DIGEST_NOTE)
+  })
+})
+
+
+describe('scan to selection navigation', () => {
+  it('moves focus and scroll to the funnel after the disclosure opens', () => {
+    const target = { focus: vi.fn(), scrollIntoView: vi.fn() }
+    const onToggle = vi.fn()
+    let frame
+    vi.stubGlobal('requestAnimationFrame', (callback) => { frame = callback })
+    try {
+      const tree = ScanDetails({ candidates: 37, onToggle })
+      tree.props.onToggle({ currentTarget: { open: true, querySelector: () => target } })
+      expect(onToggle).toHaveBeenCalledWith(true)
+      expect(target.focus).not.toHaveBeenCalled()
+      frame()
+      expect(target.focus).toHaveBeenCalledWith({ preventScroll: true })
+      expect(target.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' })
+      target.focus.mockClear()
+      tree.props.onToggle({ currentTarget: { open: false } })
+      expect(target.focus).not.toHaveBeenCalled()
+    } finally { vi.unstubAllGlobals() }
+  })
+  it.each([3, 37, 70])('keeps the link and funnel count aligned at %i papers', (count) => {
+    const candidates = Array.from({ length: count }, (_, i) => ({ id: String(i), title: `Paper ${i}`, score: 70 }))
+    const html = renderToStaticMarkup(React.createElement(ScanDetails, { candidates: count, open: true },
+      React.createElement(CandidatePool, { candidates, selectedIds: new Set(), digestedIds: new Set(), processedIds: new Set(), triaged: {}, open: true })))
+    expect(html).toContain(`Selection funnel — ${count} candidates`)
+    expect(html).toContain('data-selection-funnel')
+    expect(html).toContain('tabindex="-1"')
+    const closed = renderToStaticMarkup(React.createElement(ScanDetails, { candidates: count }))
+    expect(closed).toContain(`See all ${count}`)
   })
 })

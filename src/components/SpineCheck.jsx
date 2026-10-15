@@ -255,15 +255,26 @@ export function candidateDisplayScore(candidate, processedIds, triaged) {
 }
 
 // The completed scan is an audit receipt, not the page's primary content. Keep the
-// headline counts visible while the search, scoring, and candidate controls sit behind
-// one native disclosure. Alerts and recovery actions deliberately live outside this
-// component so a collapsed receipt can never hide something that needs attention.
+// headline counts visible; opening it leads straight to the candidate controls.
+// Search diagnostics remain in a separate nested disclosure. Alerts and recovery actions
+// live outside this component so a collapsed receipt never hides something needing attention.
 export function ScanDetails({ candidates = 0, digest = 0, open = false, onToggle = () => {}, children }) {
   return (
-    <details open={open} onToggle={(e) => onToggle(e.currentTarget.open)} style={{ margin: '30px 0 4px' }}>
+    <details open={open} onToggle={(e) => {
+      const expanded = e.currentTarget.open
+      onToggle(expanded)
+      if (expanded) {
+        const funnel = e.currentTarget.querySelector('[data-selection-funnel]')
+        // Wait for the candidate list to open before moving keyboard focus and viewport.
+        requestAnimationFrame(() => {
+          funnel?.focus({ preventScroll: true })
+          funnel?.scrollIntoView({ block: 'start', behavior: 'instant' })
+        })
+      }
+    }} style={{ margin: '30px 0 4px' }}>
       <summary
         className="cursor-pointer"
-        style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 14, listStyle: 'none' }}
+        style={{ minHeight: 44, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, listStyle: 'none' }}
       >
         <span style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontStyle: 'italic', color: 'var(--color-fg-dim)' }}>Today’s scan</span>
         <span style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
@@ -383,7 +394,7 @@ export function DigestRunControls({
 // digest exists the pool COLLAPSES (the digest is the centerpiece); reopening it lets you
 // check more papers and top up the digest later WITHOUT re-running the ones already done —
 // only the newly-checked papers go through the pipeline and append to the existing digest.
-function CandidatePool({
+export function CandidatePool({
   candidates,
   selectedIds,
   digestedIds,
@@ -413,7 +424,7 @@ function CandidatePool({
     <div style={{ marginTop: 20, borderRadius: 14, border: '1px solid var(--hairline)', background: 'var(--surface-1)', padding: 18 }}>
       <div className="flex flex-wrap items-start justify-between" style={{ gap: 12 }}>
         <div className="min-w-0">
-          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-fg-soft)' }}>
+          <h3 data-selection-funnel tabIndex={-1} style={{ scrollMarginTop: 20, margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-fg-soft)' }}>
             Selection funnel — {candidates.length} candidates
             {hasDigest ? `, ${digestedIds.size} in digest` : `, ${chosen} selected`}
           </h3>
@@ -425,7 +436,7 @@ function CandidatePool({
               : 'The best relevance-scored matches retained from each search topic. Pre-selection covers eligible topics first, then fills remaining slots by score; adjust below, then run the digest on just those.'}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end" style={{ gap: 8 }}>
+        <div className="flex flex-wrap items-center justify-end" style={{ gap: 8, minWidth: 0, maxWidth: '100%' }}>
           <button type="button" onClick={onToggleOpen} aria-expanded={open} aria-label={open ? 'Hide list' : `Show all ${candidates.length}`} style={ghostBtn}>
             <span aria-hidden="true">{open ? '▾' : '▸'}</span> {open ? 'Hide list' : `Show all ${candidates.length}`}
           </button>
@@ -1799,10 +1810,32 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           candidates={candidates.length}
           digest={results.length}
           open={scanDetailsOpen}
-          onToggle={setScanDetailsOpen}
+          onToggle={(expanded) => {
+            setScanDetailsOpen(expanded)
+            if (expanded) setPoolOpen(true)
+          }}
         >
-          {/* The search window, topic accounting, funnel outcome, and optional candidate
-              controls are preserved verbatim as the scan receipt. */}
+          {candidates.length > 0 && (
+            <CandidatePool
+              candidates={candidates}
+              selectedIds={selectedIds}
+              digestedIds={digestedIds}
+              processedIds={processedIds}
+              triaged={triaged}
+              open={poolOpen}
+              onToggleOpen={() => setPoolOpen((o) => !o)}
+              onToggle={toggleCandidate}
+              onRunDigest={runDigest}
+              onAddToDigest={addToDigest}
+              onRescore={rescore}
+              locked={controls.poolLocked}
+              selecting={selecting}
+              running={running}
+            />
+          )}
+          <details style={{ marginTop: 14 }}>
+            <summary className="cursor-pointer" style={{ minHeight: 44, padding: '12px 0', fontSize: 12.5, color: 'var(--color-fg-muted)' }}>Scan diagnostics</summary>
+          {/* Search accounting stays available without interrupting candidate selection. */}
           {searchNote && <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--color-fg-faint)', lineHeight: 1.55, maxWidth: 620, fontFamily: 'var(--font-mono)' }}>{searchNote}</p>}
           {topicReport.length > 0 && (
             <div style={{ margin: '10px 0 0', maxWidth: 620 }}>
@@ -1812,8 +1845,8 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
               </p>
               <ul style={{ margin: '7px 0 0 17px', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {topicReport.map((row, index) => (
-                  <li key={`${row.label}-${index}`} className="flex items-baseline" style={{ gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11.5, lineHeight: 1.45 }}>
-                    <span style={{ minWidth: 0, flex: 1, color: 'var(--color-fg-muted)' }}>{row.label}</span>
+                  <li key={`${row.label}-${index}`} className="flex flex-wrap items-baseline" style={{ gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11.5, lineHeight: 1.45 }}>
+                    <span style={{ minWidth: 0, flex: '1 1 180px', overflowWrap: 'anywhere', color: 'var(--color-fg-muted)' }}>{row.label}</span>
                     <span style={{ flexShrink: 0, color: row.failed ? 'var(--color-domain-vascular)' : 'var(--color-fg-faint)' }}>
                       {row.failed
                         ? 'search failed'
@@ -1841,24 +1874,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
           )}
           {scanNote && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: 'var(--color-fg-dim)', lineHeight: 1.55, maxWidth: 620 }}>{scanNote}</p>}
           {restored && !restored.incomplete && !restored.delayed && <p data-digest-state={restored.state || 'ready'} style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.55, maxWidth: 620, color: 'var(--color-fg-muted)' }}>{restored.note}</p>}
-          {candidates.length > 0 && (
-            <CandidatePool
-              candidates={candidates}
-              selectedIds={selectedIds}
-              digestedIds={digestedIds}
-              processedIds={processedIds}
-              triaged={triaged}
-              open={poolOpen}
-              onToggleOpen={() => setPoolOpen((o) => !o)}
-              onToggle={toggleCandidate}
-              onRunDigest={runDigest}
-              onAddToDigest={addToDigest}
-              onRescore={rescore}
-              locked={controls.poolLocked}
-              selecting={selecting}
-              running={running}
-            />
-          )}
+          </details>
         </ScanDetails>
       )}
 
