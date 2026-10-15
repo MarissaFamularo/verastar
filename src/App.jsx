@@ -44,6 +44,8 @@ import Memos from './components/Memos.jsx'
 import RetractionNotice from './components/RetractionNotice.jsx'
 import DigestSchedule from './components/DigestSchedule.jsx'
 import InviteCode from './components/InviteCode.jsx'
+import AdminDashboard from './components/AdminDashboard.jsx'
+import { checkBetaAdmin } from './lib/betaAdmin.js'
 import { BetaLabel, FeedbackButton } from './components/BetaFeedback.jsx'
 import { savedKeyLabel } from './lib/accessLabel.js'
 import { DEMO_DIGEST_COUNTS } from './demo/demoDigest.js'
@@ -441,6 +443,14 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
   const [section, setSection] = useState(null)
   const cardRef = useRef(null)
   const headingRef = useRef(null)
+  // The beta admin entry appears only when the server's allowlist says so; the metrics RPC
+  // checks the same list again, so the entry is a convenience, not the gate.
+  const [betaAdmin, setBetaAdmin] = useState(false)
+  useEffect(() => {
+    let live = true
+    if (account) checkBetaAdmin().then((yes) => { if (live) setBetaAdmin(yes) })
+    return () => { live = false }
+  }, [account])
   const settingsSections = [
     ['reading', 'Reading preferences', 'Interests, search topics, and paper selection'],
     ...(sponsored ? [['schedule', 'Digest schedule', 'When your morning digest runs']] : []),
@@ -448,6 +458,7 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
     ['account', 'Account', 'Sign in, account details, and sign out'],
     ['access', 'Access & API key', sponsored ? 'Sponsored access is active' : 'Invite code and personal API key'],
     ['advanced', 'Advanced', 'PubMed credentials and reset setup'],
+    ...(betaAdmin ? [['admin', 'Beta admin', 'Aggregate signup, digest, and survey counts']] : []),
   ]
   const sectionTitle = settingsSections.find(([id]) => id === section)?.[1] || 'Settings'
 
@@ -664,6 +675,7 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
 
           </div>
           <div hidden={section !== 'schedule'}><DigestSchedule /></div>
+          {betaAdmin && <div hidden={section !== 'admin'}><AdminDashboard active={section === 'admin'} /></div>}
           <div hidden={section !== 'reading'}><NorthStars /></div>
           <div hidden={section !== 'library'}><DomainEditor /></div>
           <div hidden={section !== 'advanced'}>

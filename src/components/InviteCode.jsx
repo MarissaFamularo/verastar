@@ -69,7 +69,8 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
     setNote(INVITE_MESSAGES[status] || INVITE_MESSAGES.error)
     if (good) {
       updateCode('')
-      onEnrolled?.()
+      // The status lets a caller tell a fresh enrollment from an account that was already in.
+      onEnrolled?.(status)
       // Sponsorship is already refreshed inside redeem. Unhide the connect
       // heading in the same turn so "You are all set" replaces this step.
       onNpiStepRef.current?.(false)
