@@ -119,3 +119,11 @@ describe('rpc wrappers', () => {
     expect(await fetchBetaStats({ from: 'a', to: 'b' })).toMatchObject({ ok: false, reason: 'forbidden' })
   })
 })
+
+it('shows share clicks and unique sharers with source-specific availability', () => {
+  const rows = (stats) => metricSections(stats).find((s) => s.title === 'Paper sharing').rows
+  expect(rows(STATS).every((r) => r.value === 'Not available')).toBe(true)
+  const stats = { ...STATS, shares: { clicks: 5, users: 2 }, earliest_retained: { ...STATS.earliest_retained, paper_share_clicked: '2026-10-01T00:00:00Z' } }
+  expect(rows(stats).map((r) => r.value)).toEqual(['5 as recorded', '2 as recorded'])
+  expect(rows({ ...stats, shares: { clicks: 0, users: 0 } }).map((r) => r.value)).toEqual(['0 as recorded', '0 as recorded'])
+})

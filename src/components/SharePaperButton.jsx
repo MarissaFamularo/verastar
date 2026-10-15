@@ -22,13 +22,15 @@ export function paperShareDetails(paper = {}) {
 }
 
 export async function sharePaper(paper, { surface = 'library', navigatorObject, locationObject } = {}) {
+  // One event per invocation, before sharing: cancellation is still a click.
+  // No paper content or recipient information belongs in telemetry.
+  void logEvent('paper_share_clicked', { surface })
   const details = paperShareDetails(paper)
   const nav = navigatorObject ?? globalThis.navigator
 
   if (typeof nav?.share === 'function') {
     try {
       await nav.share({ title: details.title, text: details.text, url: details.url })
-      logEvent('paper_shared', { pmid: details.pmid, method: 'native', surface })
       return 'native'
     } catch {
       // Closing the system share sheet is a normal cancellation, not an error and not a
@@ -43,7 +45,6 @@ export async function sharePaper(paper, { surface = 'library', navigatorObject, 
     .filter(Boolean)
     .join('\n')
   location.href = `mailto:?subject=${encodeURIComponent(details.title)}&body=${encodeURIComponent(body)}`
-  logEvent('paper_shared', { pmid: details.pmid, method: 'mailto', surface })
   return 'mailto'
 }
 

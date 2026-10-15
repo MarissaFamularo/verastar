@@ -362,3 +362,25 @@ Executed with the owner's approval of 2026-10-15. All times UTC.
 Still not exercised live: a survey **skip** through the UI (covered by the simulated shell
 run and the SQL tests) and the dashboard page viewed in a browser as the owner (the owner
 verifies that by opening Settings → Beta admin).
+
+### Share clicks
+
+`paper_share_clicked` records one invocation of the existing paper Share handler,
+including cancellation or unavailable sharing. The payload contains only the UI surface;
+`events.user_id` attributes it to the signed-in account under existing RLS. It does
+not record recipients, clipboard data, paper text, or successful delivery. Telemetry
+is fire-and-forget and does not delay native sharing or email opening.
+
+The Paper sharing section shows total clicks and distinct sharers in the selected
+half-open time range. Like adoption, it includes enrolled beta accounts only, excludes
+the smoke cohort and accounts excluded at enrollment, and applies explicit test
+intervals at event time. Pre-enrollment and future events are excluded. Historical
+`paper_shared` outcome events remain meaningful adoption activity but are never
+backfilled as clicks. No retained click events means Not available, rather than
+asserting zero before instrumentation existed.
+
+Release prerequisite: apply `20261015233845_share_click_metrics.sql` before releasing
+the frontend. It replaces `beta_release_stats` with the same admin/range checks,
+adds aggregate counts and earliest-retained coverage, and recognizes clicks as adoption
+activity. No new table, changed RLS policy, backfill, or production application is
+part of this change. Before migration, the new rows safely display Not available.
