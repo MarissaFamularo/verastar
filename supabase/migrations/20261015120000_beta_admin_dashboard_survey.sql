@@ -15,19 +15,27 @@
 --
 -- Survey. One row per (user_id, wave). wave = 'signup' is the only wave accepted today;
 -- 'day30' is reserved so a later follow-up can reuse the table and the option codes. Rows
--- are written only through beta_survey_submit (validated option codes, cohort label copied
--- from sponsored_accounts, first write wins). Users may read their own row; the dashboard
--- sees counts only. No free text, no invite code, no email is stored here.
+-- are written only through beta_survey_submit: a FIRST response needs a sponsored_accounts
+-- row (a beta code was redeemed), option codes are validated, the cohort label is copied
+-- from sponsored_accounts, and the first write wins. Users may read their own row's status
+-- columns only: the cohort label stays as hidden here as it is on sponsored_accounts
+-- (column grant, never shown to participants). The dashboard sees counts only. No free
+-- text, no invite code, no email is stored here.
 --
 -- Metrics read existing records only: sponsored_accounts, events (digest_scheduled_run,
 -- digest_run, digest_opened), evidence_cache_trusted, and the survey table. The events
 -- table is editable by its own user under the existing RLS, so counts from it are
--- "as recorded", not tamper-proof; the dashboard says so.
+-- "as recorded", not tamper-proof. `earliest_retained` carries min(ts) per record kind:
+-- the earliest row that still exists, which says nothing about when instrumentation
+-- started or whether rows were deleted; the dashboard words it that way. Telemetry counts
+-- inside event payloads are client-shaped JSON: a value that is not a plain integer of at
+-- most 9 digits counts as 0 rather than failing the whole RPC.
 --
 -- Rollback:
 --   drop function if exists public.beta_admin_stats(timestamptz, timestamptz);
 --   drop function if exists public.beta_admin_check();
 --   drop function if exists public.beta_survey_submit(text, text, text, jsonb);
+--   drop function if exists private.beta_payload_count(jsonb, text);
 --   drop table if exists public.beta_survey_responses;
 --   drop table if exists private.beta_admins;
 begin;
@@ -65,7 +73,9 @@ create table if not exists public.beta_survey_responses (
 create index if not exists beta_survey_responses_wave_at_idx on public.beta_survey_responses (wave, responded_at);
 alter table public.beta_survey_responses enable row level security;
 revoke all on public.beta_survey_responses from public, anon, authenticated;
-grant select on public.beta_survey_responses to authenticated;
+-- Participants read their own row's status, never the cohort label or the answers through
+-- the API (answers are theirs, but nothing in the app needs to read them back).
+grant select (user_id, wave, survey_version, status, responded_at) on public.beta_survey_responses to authenticated;
 grant select, insert on public.beta_survey_responses to service_role;
 drop policy if exists "beta_survey_select_own" on public.beta_survey_responses;
 create policy "beta_survey_select_own" on public.beta_survey_responses
@@ -89,6 +99,10 @@ begin
   select status into v_existing from public.beta_survey_responses where user_id = v_uid and wave = p_wave;
   if found then return jsonb_build_object('status', 'already', 'recorded_status', v_existing); end if;
 
+  -- A first response needs beta eligibility: a sponsored_accounts row, i.e. a redeemed code.
+  select cohort into v_cohort from public.sponsored_accounts where user_id = v_uid;
+  if not found then raise exception using errcode = '42501', message = 'beta access required'; end if;
+
   if p_status = 'completed' then
     v_reason := p_answers->>'reason';
     v_freq := p_answers->>'read_frequency';
@@ -102,8 +116,6 @@ begin
     end if;
   end if;
 
-  select cohort into v_cohort from public.sponsored_accounts where user_id = v_uid;
-
   insert into public.beta_survey_responses (user_id, wave, survey_version, status, cohort, reason, read_frequency, weekly_time, confidence)
     values (v_uid, p_wave, p_version, p_status, v_cohort, v_reason, v_freq, v_time, v_conf)
     on conflict (user_id, wave) do nothing;
@@ -115,6 +127,16 @@ begin
 end;
 $$;
 
+-- --- Safe telemetry counts ------------------------------------------------------------------
+-- A payload field counts only when it is a plain non-negative integer of at most 9 digits
+-- (so the cast can never overflow); anything else (missing, negative, decimal, text, too
+-- long) counts as 0. The row itself still counts as a tick or run.
+create or replace function private.beta_payload_count(p_payload jsonb, p_key text)
+returns integer language sql immutable security invoker set search_path = '' as $$
+  select case when p_payload->>p_key ~ '^[0-9]{1,9}$' then (p_payload->>p_key)::integer else 0 end
+$$;
+revoke all on function private.beta_payload_count(jsonb, text) from public, anon, authenticated;
+
 -- --- Admin check (boolean only) ----------------------------------------------------------
 create or replace function public.beta_admin_check()
 returns boolean language sql stable security definer set search_path = '' as $$
@@ -123,14 +145,16 @@ $$;
 
 -- --- Admin aggregates for [p_from, p_to) -------------------------------------------------
 -- Every number is a count over records that already exist; see docs/BETA_ADMIN_DASHBOARD.md
--- for the plain-language definition of each key. `first_seen` carries the earliest record
--- of each source so the client can show "Not available" for a range that predates it.
+-- for the plain-language definition of each key. `earliest_retained` carries min(ts) of
+-- each source: the oldest row still present, NOT the start of instrumentation and not a
+-- promise that nothing was deleted. The client uses it to say "no retained records" rather
+-- than "0" for a range that precedes every retained row.
 create or replace function public.beta_admin_stats(p_from timestamptz, p_to timestamptz)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare
   v_uid uuid := auth.uid();
   v_users jsonb; v_sched jsonb; v_browser jsonb; v_requesters bigint; v_opened jsonb;
-  v_papers jsonb; v_survey jsonb; v_first jsonb;
+  v_papers jsonb; v_survey jsonb; v_earliest jsonb;
 begin
   if v_uid is null or not exists (select 1 from private.beta_admins where user_id = v_uid) then
     raise exception using errcode = '42501', message = 'beta admin only';
@@ -148,7 +172,7 @@ begin
   with ticks as (
     select id, user_id, ts, (ts at time zone 'UTC')::date as day,
            payload->>'phase' as phase,
-           case when payload->>'papers' ~ '^[0-9]+$' then (payload->>'papers')::integer else 0 end as papers,
+           private.beta_payload_count(payload, 'papers') as papers,
            coalesce(payload->>'manual', '') = 'true' as manual
       from public.events
      where type = 'digest_scheduled_run' and ts >= p_from and ts < p_to
@@ -176,8 +200,8 @@ begin
 
   with runs as (
     select user_id,
-           case when payload->>'papers' ~ '^[0-9]+$' then (payload->>'papers')::integer else 0 end as papers,
-           case when payload->>'errors' ~ '^[0-9]+$' then (payload->>'errors')::integer else 0 end as errors,
+           private.beta_payload_count(payload, 'papers') as papers,
+           private.beta_payload_count(payload, 'errors') as errors,
            coalesce(payload->>'append', '') = 'true' as append
       from public.events
      where type = 'digest_run' and ts >= p_from and ts < p_to
@@ -227,7 +251,7 @@ begin
     'digest_opened', (select min(ts) from public.events where type = 'digest_opened'),
     'evidence_cache_trusted', (select min(created_at) from public.evidence_cache_trusted),
     'beta_survey_responses', (select min(responded_at) from public.beta_survey_responses))
-  into v_first;
+  into v_earliest;
 
   return jsonb_build_object(
     'range', jsonb_build_object('from', p_from, 'to', p_to),
@@ -240,7 +264,7 @@ begin
     'papers', v_papers,
     'verifier', jsonb_build_object('available', false),
     'survey', v_survey,
-    'first_seen', v_first);
+    'earliest_retained', v_earliest);
 end;
 $$;
 

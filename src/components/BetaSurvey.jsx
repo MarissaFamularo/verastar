@@ -1,9 +1,12 @@
 // components/BetaSurvey.jsx — the optional one-minute signup survey, shown once after a
 // beta code enrolls the account (OnboardingQuiz connect step).
 //
-// Four single-choice questions, a Skip that is always available, and no way to block the
-// flow: whatever the server answers (or fails to answer), onDone fires and onboarding
-// continues. Answers are option codes (lib/betaSurvey.js); nothing typed, nothing logged.
+// Four single-choice questions as native radio groups (one fieldset and one `name` per
+// question, so arrow keys move within a question and Tab moves between them), a Skip that is
+// always available, and no way to block the flow: whatever the server answers (or fails to
+// answer), onDone fires and onboarding continues. Answers are option codes
+// (lib/betaSurvey.js); nothing typed, nothing logged. Answers are linked to the account:
+// the copy says so and does not promise anonymity.
 
 import { useState } from 'react'
 import { SURVEY_INTRO, SURVEY_QUESTIONS, submitBetaSurvey, surveyComplete } from '../lib/betaSurvey.js'
@@ -18,22 +21,28 @@ const prompt = { margin: 0, fontSize: 14.5, lineHeight: 1.5, fontWeight: 500, co
 const primaryBtn = { padding: '12px 24px', border: 0, borderRadius: 11, background: 'var(--color-accent)', color: '#1c1206', fontSize: 15, fontWeight: 600, fontFamily: 'inherit' }
 const ghostLink = { border: 0, background: 'transparent', padding: 0, fontSize: 14, color: 'var(--color-fg-muted)', fontFamily: 'inherit' }
 
-function optionStyle(selected) {
+function optionStyle(selected, focused) {
   return {
-    padding: '9px 14px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 14px 8px 10px',
     borderRadius: 999,
     border: selected ? '1px solid rgba(239,143,91,.7)' : '1px solid rgba(255,255,255,.12)',
+    outline: focused ? '2px solid var(--color-accent-bright, #ffb27a)' : 'none',
+    outlineOffset: 2,
     background: selected ? 'rgba(239,143,91,.16)' : 'var(--surface-1)',
     color: selected ? 'var(--color-fg)' : 'var(--color-fg-soft)',
     fontSize: 13.5,
-    fontFamily: 'inherit',
     minHeight: 40,
   }
 }
+const radioStyle = { margin: 0, width: 16, height: 16, accentColor: 'var(--color-accent)', flex: 'none' }
 
 export default function BetaSurvey({ onDone }) {
   const [answers, setAnswers] = useState({})
   const [busy, setBusy] = useState(false)
+  const [focused, setFocused] = useState(null) // `${key}:${code}` of the radio with keyboard focus
   const complete = surveyComplete(answers)
 
   async function finish(status) {
@@ -66,18 +75,22 @@ export default function BetaSurvey({ onDone }) {
             <div className="flex flex-wrap" style={{ marginTop: 10, gap: 8 }}>
               {q.options.map(([code, label]) => {
                 const selected = answers[q.key] === code
+                const id = `survey-${q.key}-${code}`
                 return (
-                  <button
-                    key={code}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => setAnswers((a) => ({ ...a, [q.key]: code }))}
-                    className="cursor-pointer"
-                    style={optionStyle(selected)}
-                  >
+                  <label key={code} htmlFor={id} className="cursor-pointer" style={optionStyle(selected, focused === id)}>
+                    <input
+                      id={id}
+                      type="radio"
+                      name={q.key}
+                      value={code}
+                      checked={selected}
+                      onChange={() => setAnswers((a) => ({ ...a, [q.key]: code }))}
+                      onFocus={() => setFocused(id)}
+                      onBlur={() => setFocused((f) => (f === id ? null : f))}
+                      style={radioStyle}
+                    />
                     {label}
-                  </button>
+                  </label>
                 )
               })}
             </div>
@@ -93,7 +106,7 @@ export default function BetaSurvey({ onDone }) {
           </button>
         </div>
         <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)', maxWidth: 520 }}>
-          Answers are stored with your account as choices only, never free text, and are used in aggregate to improve the beta. Skipping changes nothing about your access.
+          Your answers are linked to your account and shown to the beta operators as counts. In a small beta those counts can reveal an individual’s answers, so this is not anonymous. Only the choices above are collected, never free text. Skipping changes nothing about your access.
         </p>
       </form>
     </div>

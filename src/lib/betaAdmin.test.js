@@ -34,15 +34,17 @@ describe('dates', () => {
 describe('availability', () => {
   it('is not available when the record kind has never been written', () => {
     expect(availability(STATS, 'digest_opened')).toMatchObject({ available: false })
-    expect(availability(STATS, 'digest_opened').note).toMatch(/No records of this kind/)
+    expect(availability(STATS, 'digest_opened').note).toMatch(/No retained records of this kind/)
+    expect(availability(STATS, 'digest_opened').note).toMatch(/instrumentation not yet in place, or rows removed/)
   })
   it('is not available when the range ends before the first record', () => {
     const s = { ...STATS, range: { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z' } }
     expect(availability(s, 'digest_scheduled_run')).toMatchObject({ available: false })
-    expect(availability(s, 'digest_scheduled_run').note).toMatch(/begin 2026-08-15/)
+    expect(availability(s, 'digest_scheduled_run').note).toMatch(/oldest retained record of this kind is from 2026-08-15/)
   })
   it('notes a partial overlap and is silent for full coverage', () => {
-    expect(availability(STATS, 'evidence_cache_trusted')).toEqual({ available: true, note: 'Records begin 2026-10-01; earlier days in this range have no data.' })
+    expect(availability(STATS, 'evidence_cache_trusted')).toEqual({ available: true, note: 'Oldest retained record 2026-10-01; days before it have nothing on record. Coverage before that date is unknown.' })
+    expect(availability({ ...STATS, first_seen: STATS.earliest_retained, earliest_retained: undefined }, 'sponsored_accounts').available).toBe(false) // the old key is not read
     expect(availability(STATS, 'sponsored_accounts')).toEqual({ available: true, note: '' })
   })
 })
@@ -50,26 +52,31 @@ describe('availability', () => {
 describe('metricSections', () => {
   const find = (label) => metricSections(STATS).flatMap((s) => s.rows).find((r) => r.label === label)
   it('renders counts with definitions', () => {
-    expect(find('New beta users in range').value).toBe('2')
-    expect(find('Unique users who requested a digest').value).toBe('2')
-    expect(find('Scheduled digest-days attempted').value).toBe('5')
-    expect(find('Retry ticks')).toMatchObject({ value: '2', available: true })
+    expect(find('New beta users in range').value).toBe('2 as recorded')
+    expect(find('Unique users who requested a digest').value).toBe('2 as recorded')
+    expect(find('Scheduled digest-days attempted').value).toBe('5 as recorded')
+    expect(find('Retry ticks')).toMatchObject({ value: '2 as recorded', available: true })
     expect(find('Retry ticks').definition).toMatch(/counted separately from requests/)
-    expect(find('Summaries generated (scheduled + browser)').value).toBe('9')
-    expect(find('Unique papers extracted (PMIDs)').value).toBe('2')
-    expect(find('Surveys completed').value).toBe('1')
+    expect(find('Summaries generated (scheduled + browser)').value).toBe('9 as recorded')
+    expect(find('Unique papers extracted (PMIDs)').value).toBe('2 as recorded')
+    expect(find('Surveys completed').value).toBe('1 as recorded')
     expect(find('Total beta users').definition).toMatch(/regardless of the range/)
   })
   it('shows Not available, never zero, for missing instrumentation', () => {
     expect(find('Digest opens')).toMatchObject({ value: 'Not available', available: false })
     expect(find('Rejection and failure reasons')).toMatchObject({ value: 'Not available', available: false })
-    const old = metricSections({ ...STATS, range: { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z' }, scheduled: { ...STATS.scheduled, ticks: 0, generated: 0 } })
-    expect(old.flatMap((s) => s.rows).find((r) => r.label === 'Generated').value).toBe('Not available')
+    const old = metricSections({ ...STATS, range: { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z' }, scheduled: { ...STATS.scheduled, ticks: 0, generated: 0 }, survey: { ...STATS.survey, completed: 0 } })
+    const oldRow = (label) => old.flatMap((s) => s.rows).find((r) => r.label === label)
+    expect(oldRow('Generated').value).toBe('Not available')
+    expect(oldRow('Surveys completed').value).toBe('Not available')
+    expect(oldRow('Completed, all time')).toMatchObject({ value: '4 as recorded', available: true }) // independent of the range
+    expect(oldRow('Rejection and failure reasons').value).toBe('Not available') // genuinely unavailable stays so
   })
   it('distinguishes registration from activity in its wording', () => {
     const users = metricSections(STATS).find((s) => s.title === 'Beta users')
     expect(users.caveat).toMatch(/Registering says nothing about activity/)
     expect(metricSections(STATS).find((s) => s.title === 'Digests opened').caveat).toMatch(/does not record delivery/)
+    expect(metricSections(STATS).find((s) => s.title === 'Signup survey').caveat).toMatch(/can identify an individual/)
   })
   it('is empty without stats', () => {
     expect(metricSections(null)).toEqual([])

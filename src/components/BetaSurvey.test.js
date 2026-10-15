@@ -21,20 +21,48 @@ afterEach(async () => {
 })
 
 const send = () => dom.button('Send answers')
+const radios = () => [...dom.container.querySelectorAll('input[type="radio"]')]
+const radio = (name, value) => dom.q(`input[type="radio"][name="${name}"][value="${value}"]`)
+const choose = (node) => dom.click(node)
 async function answerAll() {
-  for (const label of ['Stay current', 'Weekly', '1–3 hours']) await dom.click(dom.button(label))
-  await dom.click(dom.buttons().find((b) => b.getAttribute('role') === 'radio' && b.textContent === '4'))
+  await choose(radio('reason', 'stay_current'))
+  await choose(radio('read_frequency', 'weekly'))
+  await choose(radio('weekly_time', '1_3h'))
+  await choose(radio('confidence', '4'))
 }
 
 describe('BetaSurvey', () => {
-  it('shows the intro, four questions, and a Skip that is always enabled', async () => {
+  it('shows the intro, four native radio groups, and a Skip that is always enabled', async () => {
     await dom.render(React.createElement(BetaSurvey))
     expect(dom.text()).toContain('Help us understand how you keep up with research. This optional, one-minute survey will help us improve the beta.')
-    expect(dom.container.querySelectorAll('fieldset')).toHaveLength(4)
+    const fieldsets = [...dom.container.querySelectorAll('fieldset')]
+    expect(fieldsets).toHaveLength(4)
+    expect(fieldsets.map((f) => f.querySelector('legend').textContent)).toEqual([
+      '1. What’s your main reason for trying Verastar?',
+      '2. How often do you currently read research papers?',
+      '3. About how much time do you spend each week finding and reviewing relevant research?',
+      '4. How confident are you that you’re keeping up with research relevant to your work?',
+    ])
+    // One radio group per fieldset, every radio labelled, no free-text field anywhere.
+    for (const f of fieldsets) {
+      const inputs = [...f.querySelectorAll('input')]
+      expect(inputs.every((i) => i.type === 'radio')).toBe(true)
+      expect(new Set(inputs.map((i) => i.name)).size).toBe(1)
+      expect(inputs.every((i) => f.querySelector(`label[for="${i.id}"]`))).toBe(true)
+    }
+    expect(radios()).toHaveLength(19)
+    expect(dom.container.querySelector('input:not([type="radio"])')).toBeNull()
+    expect(dom.container.querySelector('[role="radio"]')).toBeNull()
     expect(dom.text()).toContain('1 = Not at all confident')
     expect(send().disabled).toBe(true)
     expect(dom.button('Skip for now').disabled).toBe(false)
-    expect(dom.container.querySelector('input')).toBeNull() // choices only, nothing typed
+  })
+
+  it('says answers are account-linked and does not promise anonymity', async () => {
+    await dom.render(React.createElement(BetaSurvey))
+    expect(dom.text()).toContain('linked to your account')
+    expect(dom.text()).toContain('this is not anonymous')
+    expect(dom.text()).not.toMatch(/(are|is|kept|stay|remain) anonymous|anonymously|anonymized/i)
   })
 
   it('submits the four codes and continues', async () => {
@@ -53,10 +81,11 @@ describe('BetaSurvey', () => {
 
   it('changing an answer keeps one choice per question', async () => {
     await dom.render(React.createElement(BetaSurvey))
-    await dom.click(dom.button('Stay current'))
-    await dom.click(dom.button('Explore a topic'))
-    const checked = dom.buttons().filter((b) => b.getAttribute('aria-checked') === 'true')
-    expect(checked.map((b) => b.textContent)).toEqual(['Explore a topic'])
+    await choose(radio('reason', 'stay_current'))
+    await choose(radio('reason', 'explore_topic'))
+    expect(radios().filter((r) => r.checked).map((r) => r.value)).toEqual(['explore_topic'])
+    await choose(radio('read_frequency', 'daily'))
+    expect(radios().filter((r) => r.checked).map((r) => `${r.name}=${r.value}`)).toEqual(['reason=explore_topic', 'read_frequency=daily'])
   })
 
   it('skip records a skip and continues', async () => {

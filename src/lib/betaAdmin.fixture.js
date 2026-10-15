@@ -10,7 +10,7 @@ export const STATS = {
   papers: { extractions: 3, unique_pmids: 2 },
   verifier: { available: false },
   survey: { completed: 1, skipped: 1, completed_all_time: 4, reason: { stay_current: 1 }, read_frequency: { weekly: 1 }, weekly_time: { '1_3h': 1 }, confidence: { 4: 1 } },
-  first_seen: {
+  earliest_retained: {
     sponsored_accounts: '2026-08-01T00:00:00+00:00',
     digest_scheduled_run: '2026-08-15T00:00:00+00:00',
     digest_run: '2026-08-15T00:00:00+00:00',

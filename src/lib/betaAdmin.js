@@ -6,8 +6,10 @@
 // anyone else with 42501. Nothing here decides access; it only asks.
 //
 // The pure helpers turn the RPC's jsonb into rows the dashboard can render, including the
-// "Not available" cases: a record kind that has never been written, or a range that ends
-// before its first record, is reported as not available rather than as zero.
+// "Not available" cases. Coverage is judged from `earliest_retained`, the oldest row of each
+// record kind that still exists: it is not the start of instrumentation and not proof that
+// nothing was deleted, so every count is "as recorded" and a range that precedes every
+// retained row is reported as not available rather than as zero.
 
 import { supabase, supabaseConfigured, currentUser } from './supabase.js'
 import { SURVEY_QUESTIONS } from './betaSurvey.js'
@@ -77,14 +79,16 @@ const fmtDay = (iso) => {
   return Number.isNaN(d.getTime()) ? String(iso) : d.toISOString().slice(0, 10)
 }
 
-// Is a record kind usable for this range? `first` is the earliest record of that kind ever.
+// Is a record kind usable for this range? `first` is the oldest RETAINED record of that kind:
+// rows may have been deleted and instrumentation may have started earlier or later, so the
+// notes say what is known and nothing more.
 export function availability(stats, source) {
-  const first = stats?.first_seen?.[source]
+  const first = stats?.earliest_retained?.[source]
   const to = stats?.range?.to
-  if (!first) return { available: false, note: 'No records of this kind exist yet, so nothing can be counted. A zero here would be misleading.' }
-  if (to && new Date(to) <= new Date(first)) return { available: false, note: `Records of this kind begin ${fmtDay(first)}, after this range.` }
+  if (!first) return { available: false, note: 'No retained records of this kind: no activity, instrumentation not yet in place, or rows removed. Shown as not available rather than zero.' }
+  if (to && new Date(to) <= new Date(first)) return { available: false, note: `The oldest retained record of this kind is from ${fmtDay(first)}, after this range; earlier activity, if any, is not on record.` }
   const from = stats?.range?.from
-  if (from && new Date(from) < new Date(first)) return { available: true, note: `Records begin ${fmtDay(first)}; earlier days in this range have no data.` }
+  if (from && new Date(from) < new Date(first)) return { available: true, note: `Oldest retained record ${fmtDay(first)}; days before it have nothing on record. Coverage before that date is unknown.` }
   return { available: true, note: '' }
 }
 
@@ -94,7 +98,7 @@ const fmt = (v) => n(v).toLocaleString()
 function row(label, value, definition, avail, extra = '') {
   return {
     label,
-    value: avail.available ? fmt(value) : 'Not available',
+    value: avail.available ? `${fmt(value)} as recorded` : 'Not available',
     definition,
     note: [avail.note, extra].filter(Boolean).join(' '),
     available: avail.available,
@@ -133,7 +137,7 @@ export function metricSections(stats) {
     },
     {
       title: 'Digest requests',
-      caveat: 'Counts come from the events ledger, which the owning user can edit under the existing row-level security, so they are "as recorded". A scheduled digest runs across several short ticks; a request is counted once per user per UTC day, not once per tick.',
+      caveat: 'Counts come from the events ledger, which the owning user can edit under the existing row-level security, so they are "as recorded", not audited. A scheduled digest runs across several short ticks; a request is counted once per user per UTC day, not once per tick.',
       rows: [
         row('Unique users who requested a digest', stats.requesters, 'Distinct accounts that pressed "run now" on the scheduled digest or ran a digest in the browser during the range. Cron-only runs are not requests and are not counted here.', sch.available || br.available ? always : sch),
         row('Unique users with any scheduled run', s.users_any, 'Distinct accounts the scheduler ran for during the range, whether by cron or by request.', sch),
@@ -187,11 +191,11 @@ export function metricSections(stats) {
     },
     {
       title: 'Signup survey',
-      caveat: 'Self-reported choices from the optional one-minute survey after beta-code redemption. Counts only; no individual responses. These answers describe habits and confidence as reported, not knowledge or product impact.',
+      caveat: 'Self-reported choices from the optional one-minute survey after beta-code redemption, linked to the responding account. The dashboard shows counts only, but in a small beta a count of one or two can identify an individual’s answer to whoever reads this page. These answers describe habits and confidence as reported, not knowledge or product impact.',
       rows: [
         row('Surveys completed', sv.completed, 'Accounts that answered all four questions in the range.', su),
         row('Surveys skipped', sv.skipped, 'Accounts that chose to skip in the range. A skip is final; the survey is not shown again.', su),
-        row('Completed, all time', sv.completed_all_time, 'Every completed signup survey, regardless of the range.', su),
+        row('Completed, all time', sv.completed_all_time, 'Every completed signup survey on record, independent of the selected range.', always),
       ],
     },
   ]

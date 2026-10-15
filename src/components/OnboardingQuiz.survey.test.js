@@ -67,8 +67,9 @@ describe('signup survey after enrollment', () => {
 
   it('submitting the survey also returns to the connect step', async () => {
     await redeem('enrolled')
-    for (const label of ['Find relevant papers', 'Daily', 'More than 3 hours']) await dom.click(dom.button(label))
-    await dom.click(dom.buttons().find((b) => b.getAttribute('role') === 'radio' && b.textContent === '5'))
+    for (const sel of ['[name="reason"][value="find_papers"]', '[name="read_frequency"][value="daily"]', '[name="weekly_time"][value="gt_3h"]', '[name="confidence"][value="5"]']) {
+      await dom.click(dom.q(`input[type="radio"]${sel}`))
+    }
     await dom.submit(dom.container.querySelector('form'))
     expect(submitBetaSurvey.mock.calls[0][0].status).toBe('completed')
     expect(dom.text()).toContain('You are all set')

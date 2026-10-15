@@ -42,7 +42,7 @@ export default function AdminDashboard({ active = true }) {
   return (
     <div>
       <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
-        Aggregate counts for the beta, computed on the server from records that already exist. Every figure carries its definition; “Not available” means the record kind does not cover the range, never zero activity.
+        Aggregate counts for the beta, computed on the server from records that still exist. Every figure is “as recorded”: the ledgers are not audited, rows can be removed by their owner, and the oldest retained row says nothing about when recording began. “Not available” means there is nothing on record to count, never zero activity.
       </p>
 
       <form onSubmit={(e) => { e.preventDefault(); load() }} className="flex items-end flex-wrap" style={{ marginTop: 14, gap: 10 }}>

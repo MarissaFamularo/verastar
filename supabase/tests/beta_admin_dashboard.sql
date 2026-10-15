@@ -79,11 +79,15 @@ select pg_temp.as_user(:B);
 select pg_temp.ok((public.beta_survey_submit('signup', 'v1', 'completed', '{"reason":"stay_current","read_frequency":"weekly","weekly_time":"1_3h","confidence":"4"}'))->>'status' = 'recorded', 'B completes the survey');
 select pg_temp.ok((public.beta_survey_submit('signup', 'v1', 'completed', '{"reason":"other","read_frequency":"daily","weekly_time":"gt_3h","confidence":"1"}'))->>'status' = 'already', 'B resubmitting is idempotent');
 select pg_temp.ok((public.beta_survey_submit('signup', 'v1', 'skipped'))->>'recorded_status' = 'completed', 'a later skip does not overwrite the completed row');
-select pg_temp.ok((select count(*) = 1 and bool_and(reason = 'stay_current' and confidence = 4 and cohort = 'pilot-1') from public.beta_survey_responses), 'B sees exactly her own row with the cohort label copied');
+select pg_temp.ok((select count(*) = 1 and bool_and(status = 'completed' and wave = 'signup') from public.beta_survey_responses), 'B sees exactly her own row''s status');
+select pg_temp.fails($q$select cohort from public.beta_survey_responses$q$, '42501', 'B cannot read the cohort label through the survey row');
+select pg_temp.fails($q$select reason from public.beta_survey_responses$q$, '42501', 'B cannot read answers back through the API either');
 select pg_temp.fails($q$insert into public.beta_survey_responses (user_id, wave, survey_version, status) values ('b0000000-0000-0000-0000-00000000000b', 'day30', 'v1', 'skipped')$q$, '42501', 'direct insert by a user is refused');
 select pg_temp.as_user(:C);
 select pg_temp.ok((select count(*) from public.beta_survey_responses) = 0, 'C cannot read B''s row');
+select pg_temp.fails($q$select cohort from public.beta_survey_responses$q$, '42501', 'C cannot read any cohort label');
 select pg_temp.ok((public.beta_survey_submit('signup', 'v1', 'skipped'))->>'status' = 'recorded', 'C skips');
+select pg_temp.fails($q$select cohort from public.beta_survey_responses$q$, '42501', 'a skipped row hides the cohort label too');
 select pg_temp.ok((public.beta_survey_submit('signup', 'v1', 'completed', '{"reason":"other","read_frequency":"daily","weekly_time":"gt_3h","confidence":"5"}'))->>'recorded_status' = 'skipped', 'C''s skip is final: no second prompt result');
 select pg_temp.as_user(:D);
 select pg_temp.fails($q$select public.beta_survey_submit('signup', 'v1', 'completed', '{"reason":"stay_current","read_frequency":"weekly","weekly_time":"1_3h","confidence":"7"}')$q$, '22023', 'confidence outside 1..5 is refused');
@@ -92,8 +96,21 @@ select pg_temp.fails($q$select public.beta_survey_submit('signup', 'v1', 'comple
 select pg_temp.fails($q$select public.beta_survey_submit('day30', 'v1', 'skipped')$q$, '22023', 'the day-30 wave is not accepted yet');
 select pg_temp.fails($q$select public.beta_survey_submit('signup', 'v1', 'maybe')$q$, '22023', 'an unknown status is refused');
 select pg_temp.ok((select count(*) from public.beta_survey_responses) = 0, 'a refused submit stores nothing for D');
+-- Eligibility: E is signed in but never redeemed a code (no sponsored_accounts row).
+select pg_temp.as_user(:E);
+select pg_temp.fails($q$select public.beta_survey_submit('signup', 'v1', 'skipped')$q$, '42501', 'a non-beta account cannot skip');
+select pg_temp.fails($q$select public.beta_survey_submit('signup', 'v1', 'completed', '{"reason":"stay_current","read_frequency":"weekly","weekly_time":"1_3h","confidence":"3"}')$q$, '42501', 'a non-beta account cannot complete');
+select pg_temp.ok((select count(*) from public.beta_survey_responses) = 0, 'nothing stored for the non-beta account');
 reset role;
 select pg_temp.ok((select count(*) from public.beta_survey_responses) = 2, 'two rows in all: one completed, one skipped');
+select pg_temp.ok((select cohort from public.beta_survey_responses where user_id = :B) = 'pilot-1' and (select cohort from public.beta_survey_responses where user_id = :C) = 'pilot-1', 'the cohort label is stored and readable by the service role only');
+-- A response recorded before eligibility was enforced (or after access ended) still answers idempotently.
+insert into public.beta_survey_responses (user_id, wave, survey_version, status) values (:E, 'signup', 'v0', 'skipped');
+set local role authenticated;
+select pg_temp.as_user(:E);
+select pg_temp.ok((public.beta_survey_submit('signup', 'v1', 'completed', '{"reason":"other","read_frequency":"daily","weekly_time":"gt_3h","confidence":"5"}'))->>'recorded_status' = 'skipped', 'an existing row answers already even without beta access');
+reset role;
+delete from public.beta_survey_responses where user_id = :E;
 
 -- ---------------------------------------------------------------- authorization
 set local role anon;
@@ -135,11 +152,41 @@ select pg_temp.ok((select (j->'verifier'->>'available')::boolean = false from s)
 select pg_temp.ok((select (j->'survey'->>'completed')::int = 1 and (j->'survey'->>'skipped')::int = 1 from s), 'survey: 1 completed, 1 skipped');
 select pg_temp.ok((select j->'survey'->'reason' = '{"stay_current": 1}'::jsonb and j->'survey'->'confidence' = '{"4": 1}'::jsonb and j->'survey'->'weekly_time' = '{"1_3h": 1}'::jsonb from s), 'survey: aggregate answers only');
 select pg_temp.ok((select j->'survey' ? 'reason' and not (j::text like '%b0000000-0000-0000-0000-00000000000b%') from s), 'stats carry no user ids');
-select pg_temp.ok((select (j->'first_seen'->>'digest_scheduled_run')::timestamptz < now() - interval '59 days' from s), 'first_seen reports the earliest record even outside the range');
+select pg_temp.ok((select (j->'earliest_retained'->>'digest_scheduled_run')::timestamptz < now() - interval '59 days' from s), 'earliest_retained reports the oldest retained record even outside the range');
+select pg_temp.ok((select j->'earliest_retained'->>'digest_opened' is not null and j ? 'earliest_retained' and not (j ? 'first_seen') from s), 'the coverage key is named for what it is');
 
--- A range before any record: zeros, with first_seen letting the client say "not available".
+-- Malformed and oversized telemetry must not crash the RPC: the tick still counts, the value does not.
+reset role;
+insert into public.events (user_id, ts, type, payload) values
+  (:D, (select t from d0) - interval '5 days' + interval '12 hours', 'digest_scheduled_run', '{"phase":"done","papers":"2147483648","read":0,"manual":false}'),
+  (:D, (select t from d0) - interval '5 days' + interval '11 hours', 'digest_scheduled_run', '{"phase":"done","papers":99999999999999999999,"read":0,"manual":false}'),
+  (:D, (select t from d0) - interval '5 days' + interval '10 hours', 'digest_scheduled_run', '{"phase":"done","papers":"abc","read":0,"manual":false}'),
+  (:D, (select t from d0) - interval '5 days' + interval '9 hours', 'digest_scheduled_run', '{"phase":"done","papers":-5,"read":0,"manual":false}'),
+  (:D, (select t from d0) - interval '5 days' + interval '8 hours', 'digest_scheduled_run', '{"phase":"done","papers":2.5,"read":0,"manual":false}'),
+  (:D, (select t from d0) - interval '5 days' + interval '7 hours', 'digest_scheduled_run', '{"phase":"done","papers":{"n":1},"read":0,"manual":false}'),
+  (:D, (select t from d0) - interval '5 days' + interval '6 hours', 'digest_scheduled_run', '{"phase":"done","papers":null,"manual":false}'),
+  (:D, (select t from d0) - interval '5 days' + interval '5 hours', 'digest_scheduled_run', '{"phase":"done","papers":"007","manual":"yes"}'),
+  (:D, now() - interval '12 hours', 'digest_run', '{"papers":"2147483648","errors":"9223372036854775808","append":false,"showcase":false}'),
+  (:D, now() - interval '11 hours', 'digest_run', '{"papers":"1e3","errors":"-1","append":"no","showcase":null}'),
+  (:D, now() - interval '10 hours', 'digest_run', '{"papers":3,"errors":"x"}'),
+  (:D, now() - interval '9 hours',  'digest_run', '{}');
+set local role authenticated;
+select pg_temp.as_user(:ADMIN);
+create temp table s3 as select public.beta_admin_stats(now() - interval '30 days', now() + interval '1 minute') as j;
+select pg_temp.ok((select (j->'scheduled'->>'ticks')::int = 17 and (j->'scheduled'->>'summaries')::int = 13 from s3), 'oversized and malformed scheduled papers count as 0 (only "007" = 7 counts); ticks still count');
+select pg_temp.ok((select (j->'scheduled'->>'manual_ticks')::int = 1 from s3), 'a non-boolean manual flag is not manual');
+select pg_temp.ok((select (j->'browser'->>'runs')::int = 7 and (j->'browser'->>'summaries')::int = 6 and (j->'browser'->>'with_errors')::int = 1 and (j->'browser'->>'empty')::int = 4 from s3), 'oversized and malformed browser papers/errors count as 0; runs still count');
+select pg_temp.ok((select (j->'scheduled'->>'user_days')::int = 6 and (j->'scheduled'->>'generated')::int = 3 from s3), 'the malformed day still resolves to its last phase');
+select pg_temp.fails($q$select private.beta_payload_count('{"n":"1"}', 'n')$q$, '42501', 'the count helper is not callable by users');
+reset role;
+select pg_temp.ok(private.beta_payload_count('{"n":"999999999"}', 'n') = 999999999 and private.beta_payload_count('{"n":"1000000000"}', 'n') = 0 and private.beta_payload_count('{"n":"0"}', 'n') = 0 and private.beta_payload_count('{}', 'n') = 0, 'payload counts are bounded to nine digits');
+
+-- A range before any retained record: zeros, with earliest_retained letting the client say "not available".
+set local role authenticated;
+select pg_temp.as_user(:ADMIN);
 create temp table s2 as select public.beta_admin_stats(now() - interval '400 days', now() - interval '300 days') as j;
 select pg_temp.ok((select (j->'scheduled'->>'ticks')::int = 0 and (j->'users'->>'new_in_range')::int = 0 and (j->'users'->>'total')::int = 3 from s2), 'old range: zero activity, totals unchanged');
+select pg_temp.ok((select (j->'survey'->>'completed_all_time')::int = 1 and (j->'survey'->>'completed')::int = 0 from s2), 'completed-all-time does not depend on the range');
 reset role;
 
 rollback;
