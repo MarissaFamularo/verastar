@@ -86,16 +86,10 @@ with an "oldest retained record" note. Verifier reasons are unavailable regardle
   20:00 and 24:00 America/New_York because it compares `attempt_day` (schedule timezone) with the
   UTC date. Not touched; outside this task.
 
-### Migration instructions (for review, not executed)
+### Migration instructions
 
-1. Review the migration file; it depends on `20261009120000_beta_spending_safeguards.sql`
-   (`evidence_cache_trusted`) and `20261013040000_private_default_privileges.sql` (schema `private`).
-2. Apply after the pending 2026-10-14 release, in its own transaction.
-3. Enroll the admin: `insert into private.beta_admins (user_id, note) values ('<your auth.users.id>', 'owner');`
-4. Verify: `has_function_privilege('anon', 'public.beta_admin_stats(timestamptz,timestamptz)', 'execute')`
-   is false; `has_table_privilege('authenticated', 'private.beta_admins', 'select')` is false;
-   `has_table_privilege('authenticated', 'public.beta_survey_responses', 'insert')` is false.
-5. Deploy the frontend. No edge function changes.
+Superseded by "Release readiness (2026-10-15)" below, which orders the permission checks
+and the denial checks before any admin grant.
 
 ### Unresolved dependencies and what to review
 
@@ -167,3 +161,141 @@ project, the RPCs through the real PostgREST gateway and JWT verification, Supab
 survey offer after a real redemption. The first live check after applying the migration should be
 the three `has_*_privilege` queries in the migration instructions plus one real skip from a
 test account.
+
+## Release readiness (2026-10-15)
+
+### 1. Shared environment, verified read-only
+
+Checked through the connected Supabase tools on project `lahahztitoqjumrxjcim`
+("Paper Trellis + Verastar", the only active Verastar project; `citwmyotcgiyexpkhpsp` is
+INACTIVE and no database branches exist). Catalog reads only; nothing was changed.
+
+| What | Finding |
+|---|---|
+| `private.beta_admins`, `public.beta_survey_responses` | do not exist |
+| `beta_survey_submit`, `beta_admin_check`, `beta_admin_stats`, `private.beta_payload_count` | do not exist (no function of these names in any schema) |
+| Migration history | no `beta_admin` entry; latest entries are the four 2026-10-14 repairs (`20261014192744` to `20261014192812`) |
+| 2026-10-14 release | **applied**, contrary to the "not yet executed" header in `docs/SPONSORED_ACCESS_DEPLOY.md` § 0: `digest_claim_release`, `digest_local_day` and `gmail_alias_fail_verify` exist with the expected grants, and all five edge functions were redeployed at 2026-10-14 ~20:00 UTC |
+| Prerequisites for this migration | schema `private` exists (owner postgres); `evidence_cache_trusted` exists; `sponsored_accounts.cohort` is not selectable by `authenticated` (only `user_id, active, ends_at`) |
+| Default privileges | functions created by postgres in `public` get EXECUTE for `anon`, `authenticated`, `service_role` by default; the global function default is revoked (only postgres); tables in `public` default to `anon`/`authenticated` insert, select, update. The migration's explicit revokes cover all three. |
+| `authenticated` USAGE on schema `private` | **true** live (false in the local fixture). Denial of `private.beta_admins` and the helper therefore rests on the table and function privileges, which the check script verifies directly. |
+| Data on record | 5 sponsored accounts (3 active); events: 80 `digest_scheduled_run`, 51 `digest_run`, 32 `digest_opened`, 5 `sponsored_enrolled`; 49 `evidence_cache_trusted` rows; 145 auth users |
+| Enrollment switches | `spending_paused = false`, `enrollment_paused = false`, `enrollment_limit = 100` |
+| Invites | 5 rows: `beta-2026` (1/100, no expiry), `founder` (1/1), `friends` (1/6, expires 2026-12-31), two 2026-10-12 QA codes (one revoked, one open 1/1). Codes themselves were not read out. |
+| Frontend | Netlify site `verastar` → `https://verastar.papertrellis.com`, production deploy from branch `main` at `c65fc47`, published 2026-10-14 19:17 UTC, framework vite, `manual_deploy = false`. A merge to `main` must be treated as a production deploy. The read-only API reports `deploy_source = "api"`, so whether the trigger is the GitHub integration or a CLI push could not be confirmed. |
+
+Conclusion: no earlier version was applied anywhere, so the in-place migration stands and no
+corrective migration is needed.
+
+### 2. Release procedure (ordered; nothing here has been executed)
+
+Checks come before the grant. Steps 2 to 4 happen with an empty allowlist.
+
+1. **Frontend first, or together.** The client tolerates a missing migration: `beta_admin_check`
+   errors read as "not admin" and a failed `beta_survey_submit` is swallowed. Merging to `main`
+   deploys the frontend; apply the migration at any point after, in a quiet moment.
+2. **Apply** `supabase/migrations/20261015120000_beta_admin_dashboard_survey.sql` once, in its
+   own transaction, as postgres (SQL editor or `supabase db push`). Dependencies are already
+   live (step 1 of the table above).
+3. **Run** `supabase/ops/beta_admin_release_checks.sql` as postgres. It verifies, read-only:
+   objects and RLS; owner postgres, `SECURITY DEFINER` on the three RPCs, `SECURITY INVOKER` on
+   the helper, `search_path = ''` on all four; EXECUTE on every RPC and the helper for `anon`,
+   `authenticated`, `service_role` and PUBLIC; no client write grant on the survey table and no
+   client access to `private.beta_admins`; the column list participants can select (status
+   columns only, never `cohort` or the four answers); exactly one policy (own-row select);
+   the allowlist is empty; and, impersonating a signed-in non-admin and then `anon` with the
+   allowlist empty, that `beta_admin_check` is false, `beta_admin_stats` and the helper are
+   refused (42501), and `beta_survey_submit` is refused for an account with no sponsored row and
+   writes nothing. It ends with `ALL CHECKS PASSED` or raises on the first failure. Locally it
+   passes on a database built from every migration.
+4. **Live denial through the real gateway** (smoke-test plan, part B, below) with a signed-in
+   non-admin account: no "Beta admin" entry in Settings; `rpc('beta_admin_stats', …)` answers
+   42501; `from('beta_survey_responses').select('cohort')` is refused.
+5. **Only then grant**: `insert into private.beta_admins (user_id, note) values ('<your
+   auth.users.id>', 'owner');` Re-run step 3's privilege sections if you like; the allowlist
+   check will now report one row, which is expected after this step.
+6. **Confirm** in the app: Settings shows "Beta admin" for the granted account; the counts
+   match a direct `select public.beta_admin_stats(now() - interval '30 days', now())` run as
+   that user; the 30-day defaults cover existing records (see the data on record above).
+7. **Rollback** is the five statements in the migration header; the frontend needs no change
+   to survive them.
+
+### 3. Live smoke-test plan (for approval; nothing executed)
+
+**Environment.** The production project `lahahztitoqjumrxjcim` and its deployed edge
+functions. There is no staging project or database branch, so every record below is a real
+row on the shared database. The frontend can be either `https://verastar.papertrellis.com`
+after the merge, or the branch run locally (`npm run dev` with `.env` pointing at the
+production URL and anon key) before the merge; the plan is the same. No digest is run and no
+model call is made: the tester stops at "You are all set" and never presses Continue, because
+the interview step that follows makes paid model calls.
+
+**Accounts** (all created by the tester; none exist today).
+
+| Account | Purpose | Notes |
+|---|---|---|
+| QA-1, a fresh non-Gmail address you control | sign-in, redemption, survey **submit**, idempotency | Gmail addresses take the canonical-Gmail path; use a plain mailbox for the first run. |
+| QA-2, a second fresh address | sign-in, redemption, survey **skip**, non-admin denial after redemption | |
+| QA-3, a third fresh address | signed-in but never redeems | non-beta denial: survey RPC and admin RPC both refused |
+| Your own account | admin grant and dashboard check, after parts A and B | the only account that ever enters `private.beta_admins` |
+
+Redemption requires an NPI receipt. The receipt is not unique across accounts, so the tester's
+own NPI can be matched on QA-1 and QA-2.
+
+**Records created or changed, in order.**
+
+1. One invite row for the test: `insert into sponsor_invites (code, cohort, max_uses,
+   expires_at, note) values ('<new code>', 'smoke-qa-20261015', 2, now() + interval '7 days',
+   'release smoke test')`. Same pattern as the two 2026-10-12 QA codes.
+2. By the test itself: two `auth.users`, two `sponsored_accounts` rows (cohort
+   `smoke-qa-20261015`), `events` rows (`app_opened`, `invite_attempt`, `npi_attempt`,
+   `sponsored_enrolled`), and two `beta_survey_responses` rows (one completed, one skipped).
+   QA-3 creates one `auth.users` row and `app_opened` events only.
+3. Cleanup, after the run: `update sponsor_invites set revoked_at = now() where cohort =
+   'smoke-qa-20261015'`; `update sponsored_accounts set active = false where cohort =
+   'smoke-qa-20261015'` (the 2026-10-12 QA accounts were left inactive the same way);
+   `delete from beta_survey_responses where cohort = 'smoke-qa-20261015'` so the dashboard's
+   counts are not seeded with test answers. The auth users may stay. No `digest_schedules`
+   row is created by this plan, so cron never picks these accounts up; deactivating them makes
+   that doubly true.
+
+**Access changes.** Exactly one: your user id inserted into `private.beta_admins` at part C.
+Nothing else is granted, no edge function is redeployed, no secret changes.
+
+**Part A, sign-in and redemption** (QA-1, then QA-2). Open the app signed out → "Set up my
+digest" → email code sign-in with the QA address → connect step → enter the smoke code →
+NPI step with the tester's NPI → redemption answers enrolled → the survey appears.
+Expected: `sponsored_accounts` row created; `events.type = 'sponsored_enrolled'` written.
+
+**Part A, survey.** QA-1 answers all four and sends: a `beta_survey_responses` row with
+`status = 'completed'`, `survey_version = 'signup-v1'`, `cohort = 'smoke-qa-20261015'`, four
+option codes. QA-2 presses "Skip for now": a row with `status = 'skipped'` and null answers.
+Both land on "You are all set". Stop there and sign out.
+
+**Part A, idempotency.** Signed in as QA-1, from the browser console: `await
+supabase.rpc('beta_survey_submit', { p_wave: 'signup', p_version: 'signup-v1', p_status:
+'skipped', p_answers: {} })` answers `{ status: 'already', recorded_status: 'completed' }`
+and the row is unchanged. Repeat as QA-2 with a completed payload: `already` /
+`skipped`.
+
+**Part B, denials** (before any grant). As QA-2: Settings shows no "Beta admin"; console
+`rpc('beta_admin_check')` is `false`; `rpc('beta_admin_stats', { p_from, p_to })` fails with
+code 42501; `from('beta_survey_responses').select('status')` returns the own row and
+`.select('cohort')` is refused (permission denied). As QA-3 (never redeemed):
+`rpc('beta_survey_submit', …)` fails with 42501 and no row appears. Signed out (anon key only):
+`rpc('beta_admin_check')` is refused.
+
+**Part C, admin** (your account). Insert the allowlist row, reload, open Settings: "Beta admin"
+appears; the dashboard loads the last 30 days; "Surveys completed" and "Surveys skipped" each
+read 1 as recorded while the QA rows exist; the four answer tables show the QA-1 choices. Then
+run the cleanup above and confirm the survey rows read 0.
+
+**Out of scope here**, per instruction: redemption from Settings for an existing account,
+survey invitations to existing users, the day-30 wave, welcome emails, any digest or model
+call.
+
+### 4. Approval needed before any of this runs
+
+Merging the branch (which deploys the frontend), applying the migration to the shared
+project, creating the smoke invite and accounts, inserting the allowlist row, and the cleanup
+statements are all actions on live systems. None has been taken.

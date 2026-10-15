@@ -7,7 +7,12 @@ shared Verastar / PaperTrellis Supabase project.*
 project from this session. Still to do by hand: the two function secrets (step 3), the
 first smoke test, enrollment, and the reference collection.
 
-## 0. Deploy order for the 2026-10-14 server repairs (not yet executed)
+## 0. Deploy order for the 2026-10-14 server repairs
+
+**Status 2026-10-15 (read-only check of the project):** executed. The four migrations are in
+the migration history (`20261014192744` to `20261014192812`), their functions exist with the
+expected grants, and the edge functions were redeployed on 2026-10-14. The steps below are kept
+as the record of that release.
 
 The beta audit's server findings (docs/BETA_TEST_PLAN.md § H) are implemented as local code
 and migration files; nothing has been deployed or applied. Same shape as the spending
