@@ -299,3 +299,52 @@ call.
 Merging the branch (which deploys the frontend), applying the migration to the shared
 project, creating the smoke invite and accounts, inserting the allowlist row, and the cleanup
 statements are all actions on live systems. None has been taken.
+
+## Release log (2026-10-15)
+
+Executed with the owner's approval of 2026-10-15. All times UTC.
+
+1. **Migration applied to the production project** `lahahztitoqjumrxjcim` through the Supabase
+   MCP SQL executor, in four chunks (allowlist table; survey table with grants and policy;
+   helper, admin-check and survey-submit functions; stats function), each with
+   `lock_timeout = '5s'`. Object definitions, grants and the policy are identical to
+   `supabase/migrations/20261015120000_beta_admin_dashboard_survey.sql` at 0c523b0; only the
+   outer `begin`/`commit` and the one `drop policy if exists` (no policy existed) were omitted.
+   The `apply_migration` tool and one large `execute_sql` batch timed out at the tool's 60 s
+   limit three times without reaching the database (verified: no objects, no history row, no
+   session); smaller batches went through immediately. A history row
+   `20261015120000 beta_admin_dashboard_survey` was inserted into
+   `supabase_migrations.schema_migrations` so the CLI treats the file as applied.
+2. **Release checks** (`supabase/ops/beta_admin_release_checks.sql`, sections 1 to 5) passed on
+   production with the allowlist empty: objects and RLS; owner postgres, SECURITY DEFINER on
+   the three RPCs, SECURITY INVOKER on the helper, empty `search_path` on all four; EXECUTE
+   matrix for anon / authenticated / service_role / PUBLIC; no client writes on the survey
+   table; participant column access limited to status columns; one own-row select policy;
+   impersonated non-admin: check false, stats 42501, survey submit 42501 for a non-beta
+   account, helper 42501; anon 42501; nothing written.
+3. **Functional probe on real data**, inside one block that raised at its end so every write
+   rolled back (both tables held 0 rows before and after): a real inactive QA account was
+   temporarily allowlisted and, impersonated through the RPCs, got a full stats payload for
+   the last 30 days (5 sponsored accounts, 80 scheduled ticks over 25 user-days, 23
+   generated, 126 scheduled summaries, 6 browser runs, 32 opens, 49 cached extractions);
+   survey submit answered `recorded` then `already` with the first status kept; the own-row
+   `status` read worked and a `cohort` read was refused (42501).
+4. **Merged** `beta-admin-dashboard-survey` into `main` as `96dccee`; Netlify production
+   deploy `6ad0e96da318f584b4d6b1be` from that commit published at 14:56:00 UTC to
+   https://verastar.papertrellis.com.
+5. **Bundle verification.** The container's egress proxy refuses the Supabase host and the
+   Netlify hosts, so the deployed page could not be fetched from here. Instead the same commit
+   was built with `vite build` and served with `vite preview`, and the 47 app-shell
+   scenarios ran against that production bundle with the fake backend: all passed.
+
+### Not done, by design or by access
+
+- **Admin allowlist is still empty.** Nobody can open the dashboard until
+  `insert into private.beta_admins (user_id, note) values ('<owner auth.users.id>', 'owner')`
+  runs; that grant is held for explicit approval.
+- **No live survey walk-through through the UI.** It needs a fresh account that redeems a
+  code; no test identity was approved, and the owner's own account is already sponsored, so
+  the survey would not be offered to it.
+- **Gateway-level anonymous check** (`curl` against `/rest/v1/rpc/...` with the anon key) could
+  not run from this container (egress refused). The equivalent denial is proven at the
+  database level under role `anon`.
