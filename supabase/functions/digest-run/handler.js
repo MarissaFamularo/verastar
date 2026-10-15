@@ -1,3 +1,4 @@
+import { observeDigest } from '../_shared/observeSignup.js'
 // supabase/functions/digest-run/handler.js — the scheduled morning digest, minus the runtime.
 //
 // index.ts binds this to Deno.serve, Supabase, Anthropic and AsyncLocalStorage; vitest binds
@@ -280,5 +281,6 @@ export async function handleDigestRun(req, deps) {
   const spend = { attempts: guarded.state.attempts, dispatched: guarded.state.dispatched, halted: guarded.state.halted, unresolved: run.unresolved, outcomes }
   await admin.from('events').insert({ user_id: userId, type: 'digest_scheduled_run', payload: { phase: result.phase, papers: result.papers ?? 0, read: result.read ?? 0, manual, claimLost, spend } }).then(() => {}, () => {})
 
+  await observeDigest(admin, { finished, failed: result.phase === 'error' || result.phase === 'held' || claimLost })
   return json(200, { ran: true, user_id: userId, ...result, claimLost, spend, log })
 }

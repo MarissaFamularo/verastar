@@ -4,6 +4,8 @@ import { supabase, supabaseConfigured, isSignedIn } from './supabase.js'
 import { refreshSponsorship, isSponsored, markSponsored } from './sponsor.js'
 
 export const INVITE_MESSAGES = {
+  npi_in_use: 'This NPI already has beta access on another account. Sign in with that account, or contact the Verastar team for help.',
+  email_required: 'Verify your email by signing in again, then retry.',
   npi_required: 'Match your name and NPI to finish joining the beta.',
   enrolled: 'You are in. Verastar now does the reading on this account, no key needed.',
   already: 'This account already has sponsored access.',

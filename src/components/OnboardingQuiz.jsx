@@ -336,7 +336,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
           {sponsored
             ? 'This account has sponsored access: Verastar does the reading for you, no key needed. You can still add your own Anthropic key later in Settings.'
             : canUseCode
-              ? 'Verastar uses Claude, an AI model, to read and score papers for you. Enter your beta invitation code for sponsored access, or use your own Anthropic key.'
+              ? 'Verastar uses Claude, an AI model, to read and score papers for you. Join the beta with your email and NPI, optionally using an invitation code, or use your own Anthropic key.'
               : 'Verastar uses Claude, an AI model, to read and score papers for you. It runs on your own Anthropic key.'}
         </p>
 
@@ -364,13 +364,13 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
         <form hidden={betaNpi} onSubmit={connectContinue}>
           {!sponsored && canUseCode && !keySet && !keyOpen && (
             <button type="button" onClick={() => setKeyOpen(true)} aria-expanded={false} className="cursor-pointer" style={{ ...ghostLink, marginTop: 22, fontSize: 13.5 }}>
-              No code? <span style={{ color: 'var(--color-fg-soft)' }}>Use your own Anthropic key instead</span>
+              Prefer your own key? <span style={{ color: 'var(--color-fg-soft)' }}>Use your own Anthropic key instead</span>
             </button>
           )}
           {!sponsored && (!canUseCode || keySet || keyOpen) && (
             <div style={{ marginTop: canUseCode ? 26 : 28 }}>
               {canUseCode && (
-                <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--color-fg-muted)' }}>No code? Use your own Anthropic key.</p>
+                <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--color-fg-muted)' }}>Prefer your own key? Use your own Anthropic key.</p>
               )}
               <label htmlFor="anthropic-api-key" style={fieldLabel}>Anthropic API key</label>
               {keySet && !keyInput ? (
@@ -423,7 +423,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
           )}
           {!showStepContinue && (
             <p id="connect-continue-help" style={{ margin: '14px 0 0', fontSize: 13, lineHeight: 1.5, color: 'var(--color-fg-muted)' }}>
-              Enter your beta code above to continue.
+              Continue above to join the beta.
             </p>
           )}
         </form>

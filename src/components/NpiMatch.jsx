@@ -4,8 +4,8 @@ import { currentNpiMatch, matchNpi } from '../lib/npi.js'
 
 const NPI_MATCH_TIMEOUT_MS = 8000
 
-export default function NpiMatch({ onContinue, onBack, preview = false, draft, onDraft }) {
-  const [match, setMatch] = useState(() => preview ? null : currentNpiMatch())
+export default function NpiMatch({ onContinue, onBack, preview = false, draft, onDraft, requirePhysician = false }) {
+  const [match, setMatch] = useState(() => preview ? null : (requirePhysician && !currentNpiMatch()?.physician ? null : currentNpiMatch()))
   const [fields, setFields] = useState(() => ({
     firstName: draft?.firstName || match?.firstName || '',
     lastName: draft?.lastName || match?.lastName || '',
@@ -39,11 +39,14 @@ export default function NpiMatch({ onContinue, onBack, preview = false, draft, o
       if (result.timeout) {
         setError('Checking the NPI timed out. Try again.')
         pending.then((receipt) => {
-          if (revision.current !== attempt || !receipt) return
+          if (revision.current !== attempt || !receipt || (requirePhysician && !receipt.physician)) return
           setError('')
           setMatch(receipt)
         }).catch(() => {})
         return
+      }
+      if (requirePhysician && !result.value?.physician) {
+        setError('This NPI does not list a physician taxonomy. Check your NPI or use your invitation code.'); return
       }
       setMatch(result.value)
     } catch (err) {

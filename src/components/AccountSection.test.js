@@ -83,7 +83,7 @@ describe('settings account', () => {
       .mockResolvedValueOnce({ status: 'exhausted' })
       .mockResolvedValueOnce({ status: 'slow_down' })
     await dom.render(React.createElement(AccountSection, { account: { email: 'f…@gmail.com' } }))
-    expect(dom.q('label[for="beta-invite-code"]').textContent).toContain('Have a beta invite code?')
+    expect(dom.q('label[for="beta-invite-code"]').textContent).toContain('Join the beta')
     await dom.type(dom.q('#beta-invite-code'), 'nope')
     await dom.submit(dom.q('#beta-invite-code').closest('form'))
     expect(dom.text()).toContain('That code is not recognized')

@@ -755,6 +755,23 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
       .catch(console.warn)
   }, [demo])
 
+  // Visible reading only; no background generation signal. Count at most one view per
+  // mounted digest screen per UTC day, including returning to an already-opened digest.
+  const viewDay = useRef(null)
+  useEffect(() => {
+    if (demo || !results.length) return
+    const viewed = () => {
+      if (document.hidden) return
+      const day = new Date().toISOString().slice(0, 10)
+      if (viewDay.current === day) return
+      viewDay.current = day
+      logEvent('digest_viewed', {})
+    }
+    viewed()
+    document.addEventListener('visibilitychange', viewed)
+    return () => document.removeEventListener('visibilitychange', viewed)
+  }, [demo, results.length])
+
   // Rehydrate the last digest — App unmounts this component on every tab switch, and
   // re-running would re-pay the extraction calls. Stages stay empty: labels only render
   // while a stage is in flight.

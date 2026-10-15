@@ -31,6 +31,22 @@ beforeEach(async () => {
 })
 describe('NPI Edge boundaries', () => {
   const input = { firstName: 'Jane', lastName: 'Doe', npi: '1234567893' }
+  it('routes an empty optional code only to atomic NPI enrollment with the verified JWT user', async () => {
+    const response = await handlers.redeem(request({ code:'', user_id:'attacker', npi_match:receipt }))
+    expect(response.status).toBe(200)
+    expect(admin.rpc).toHaveBeenCalledWith('enroll_npi_beta', {p_user_id:'u1'})
+    expect(admin.rpc).not.toHaveBeenCalledWith('redeem_sponsor_invite',expect.anything())
+  })
+  it('denies anonymous alternate enrollment before any enrollment RPC', async () => {
+    user=null
+    expect((await handlers.redeem(request({code:''}))).status).toBe(401)
+    expect(admin.rpc).not.toHaveBeenCalled()
+  })
+  it('does not report paused or rejected enrollment as successful health evidence', async () => {
+    admin.rpc.mockImplementation(async name=>name==='spending_contract_version'?{data:'2026-10-09.spending-v2'}:{data:{status:'paused'}})
+    expect(await (await handlers.redeem(request({code:''}))).json()).toEqual({status:'paused'})
+    expect(admin.rpc).not.toHaveBeenCalledWith('beta_monitor_record',expect.anything())
+  })
   it('requires authentication before registry call', async () => {
     user = null
     expect((await handlers.match(request(input))).status).toBe(401)

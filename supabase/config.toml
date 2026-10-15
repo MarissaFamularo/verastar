@@ -44,3 +44,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/deno.json"
 entrypoint = "./functions/gmail-canonical-otp/index.ts"
+
+[functions.beta-monitor]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/beta-monitor/index.ts"

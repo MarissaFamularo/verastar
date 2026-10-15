@@ -10,7 +10,7 @@ vi.mock('../lib/supabase.js', () => ({
 }))
 
 import { STATS } from '../lib/betaAdmin.fixture.js'
-import AdminDashboard from './AdminDashboard.jsx'
+import AdminDashboard, { ReleaseOverview } from './AdminDashboard.jsx'
 
 let dom
 beforeEach(async () => {
@@ -25,9 +25,9 @@ describe('AdminDashboard', () => {
     await dom.render(React.createElement(AdminDashboard, { active: true }))
     expect(mocks.rpc).toHaveBeenCalledTimes(1)
     const [name, args] = mocks.rpc.mock.calls[0]
-    expect(name).toBe('beta_admin_stats')
+    expect(name).toBe('beta_release_stats')
     expect(Math.round((new Date(args.p_to) - new Date(args.p_from)) / 86_400_000)).toBe(30)
-    for (const title of ['Beta users', 'Digest requests', 'Browser digest runs', 'Paper summaries', 'Digests opened', 'Verifier rejections', 'Signup survey', 'Survey answers']) {
+    for (const title of ['Beta users', 'Digest requests', 'Browser digest runs', 'Paper summaries', 'Digests opened', 'Verifier rejections', 'Survey answers']) {
       expect(dom.container.querySelector(`section[aria-label="${title}"]`)).toBeTruthy()
     }
     expect(dom.text()).toContain('Unique users who requested a digest')
@@ -93,4 +93,23 @@ describe('AdminDashboard', () => {
     expect(Math.round((new Date(args.p_to) - new Date(args.p_from)) / 86_400_000)).toBe(7)
     expect(dom.text()).toContain('7 days')
   })
+})
+
+for (const [name, checks, expected] of [
+  ['missing', [], 'Status unknown or stale'],
+  ['fresh', ['signup','digest','heartbeat','schedule'].map(name=>({name,state:'ok',checked_at:new Date().toISOString()})), 'Monitor active · schedule on track'],
+  ['stale', ['signup','digest','heartbeat','schedule'].map(name=>({name,state:'ok',checked_at:'2000-01-01T00:00:00Z'})), 'Status unknown or stale'],
+  ['stale failure', [{name:'signup',state:'failed',checked_at:'2000-01-01T00:00:00Z'}], 'Needs attention'],
+  ['sustained failure', [{name:'signup',state:'failed',checked_at:new Date().toISOString()}], 'Needs attention'],
+]) it(`renders ${name} monitoring honestly`,async()=>{
+  await dom.render(React.createElement(ReleaseOverview,{stats:{health:{checks},adoption:{eligible:0},spend:{completed:0}}}))
+  expect(dom.text()).toContain(expected)
+  expect(dom.text()).toContain('Insufficient history')
+  expect(dom.text()).toContain('Unknown')
+})
+
+it('shows quiet schedule health separately from untested signup',async()=>{
+ await dom.render(React.createElement(ReleaseOverview,{stats:{health:{checks:[{name:'signup',state:'unknown'}, {name:'digest',state:'ok',checked_at:'2000-01-01T00:00:00Z'}, ...['heartbeat','schedule'].map(name=>({name,state:'ok',checked_at:new Date().toISOString()}))]}}}))
+ expect(dom.text()).toContain('Monitor active · schedule on track')
+ expect(dom.text()).toContain('untested / no successful observation')
 })
