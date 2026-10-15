@@ -28,6 +28,8 @@ select pg_temp.ok((j->'shares'->>'clicks')::int=3,'three clicks: repeated clicks
 select pg_temp.ok((j->'shares'->>'users')::int=2,'two unique authenticated beta sharers') from result;
 select pg_temp.ok((j->'earliest_retained'->>'paper_share_clicked')::timestamptz=now()-interval '4 days','coverage excludes smoke, non-beta and pre-enrollment events') from result;
 select pg_temp.ok((public.beta_release_stats(now()-interval '10 days',now()-interval '9 days')->'shares'->>'clicks')::int=0,'empty range is zero in RPC');
+select pg_temp.ok(not has_function_privilege('anon','public.beta_release_stats(timestamptz,timestamptz)','execute'),'anonymous RPC execution denied');
+select pg_temp.ok(has_function_privilege('authenticated','public.beta_release_stats(timestamptz,timestamptz)','execute'),'authenticated RPC grant retained');
 -- Existing events RLS binds attribution to auth.uid(), even for the new event type.
 set local role authenticated;
 do $$begin
@@ -37,6 +39,15 @@ do $$begin
  exception when insufficient_privilege then null;
  end;
  insert into public.events(user_id,type) values(auth.uid(),'paper_share_clicked');
+end$$;
+-- A signed-in non-admin cannot read aggregates despite the authenticated grant.
+select set_config('request.jwt.claim.sub','d0000000-0000-0000-0000-000000000002',true);
+do $$begin
+ begin
+ perform public.beta_release_stats(now()-interval '3 days',now());
+ raise exception 'non-admin aggregate access accepted';
+ exception when insufficient_privilege then null;
+ end;
 end$$;
 reset role;
 rollback;

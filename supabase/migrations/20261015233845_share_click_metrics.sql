@@ -80,7 +80,4 @@ end $$;
 revoke all on function public.beta_release_stats(timestamptz,timestamptz) from public,anon;
 grant execute on function public.beta_release_stats(timestamptz,timestamptz) to authenticated,service_role;
 
-
-commit;
-
 commit;
