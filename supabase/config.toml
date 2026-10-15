@@ -47,6 +47,7 @@ entrypoint = "./functions/gmail-canonical-otp/index.ts"
 
 [functions.beta-monitor]
 enabled = true
-verify_jwt = true
+# Authenticated internally by service-role bearer or existing x-cron-secret only.
+verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/beta-monitor/index.ts"

@@ -148,7 +148,20 @@ update public.digest_schedules set timezone='UTC';
 select public.beta_monitor_tick();
 update private.beta_incidents set last_checked_at=now()-interval '16 minutes' where check_name='heartbeat';
 select pg_temp.ok(exists(select 1 from jsonb_array_elements(public.beta_release_stats(now()-interval '30 days',now())->'health'->'checks') c where c->>'name'='heartbeat' and c->>'state'='stale'),'absent heartbeat is stale despite quiet healthy schedule');
+
+-- Claim exposes the queued observation timestamp, not the older incident opening.
+update private.beta_alert_config set enabled=true;
+update private.beta_alert_outbox set attempts=1;
+insert into private.beta_alert_outbox(check_name,incident_at,kind,created_at) values('digest',now()-interval '1 day','recovery',now()-interval '1 minute');
+select pg_temp.ok((public.beta_alert_claim()->>'observed_at')::timestamptz=now()-interval '1 minute','recovery claim uses recovery observation time');
+select pg_temp.ok(public.beta_alert_claim() is null,'claim remains at most once');
+select pg_temp.ok(public.beta_alert_test_claim() is not null,'test claimed once');
+select pg_temp.ok(public.beta_alert_test_claim() is null,'test retry cannot send twice');
+select public.beta_alert_test_finish(true);
+select pg_temp.ok((select test_sent_at is not null and not test_failed from private.beta_alert_config),'test acceptance saved');
 set local role anon;
+select pg_temp.fails('select public.beta_alert_test_claim()');
+select pg_temp.fails('select public.beta_alert_test_finish(true)');
 select pg_temp.fails('select public.enroll_npi_beta(''c0000000-0000-0000-0000-000000000008'')');
 select pg_temp.fails('select public.beta_release_stats(now()-interval ''1 day'',now())');
 select pg_temp.fails('select public.beta_monitor_record(''heartbeat'',true,''ok'')');
