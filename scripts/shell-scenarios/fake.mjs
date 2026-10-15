@@ -95,7 +95,7 @@ export function makeFake({ user, admin = false, tables = {}, log = [] }) {
       const args = req.postDataJSON?.() || {}
       calls.rpc.push({ fn, args })
       if (fn === 'beta_admin_check') return json(200, admin)
-      if (fn === 'beta_admin_stats') {
+      if (fn === 'beta_release_stats') {
         if (!admin) return json(403, { code: '42501', message: 'beta admin only', details: null, hint: null })
         return json(200, { ...control.stats, range: { from: args.p_from, to: args.p_to }, generated_at: new Date().toISOString() })
       }

@@ -4,6 +4,11 @@ const input = { npi: '1234567893', firstName: 'José', lastName: "O’Neil-Smith
 const record = { number: input.npi, enumeration_type: 'NPI-1', basic: { first_name: 'JOSE', last_name: 'ONEIL SMITH', status: 'A' } }
 const registry = (entry = record) => vi.fn().mockResolvedValue({ ok: true, json: async () => ({ result_count: entry ? 1 : 0, results: entry ? [entry] : [] }) })
 describe('NPI matching', () => {
+  it('marks individual physician taxonomy separately from a public name match', async () => {
+    expect((await lookupNpi(input,registry({...record,taxonomies:[{code:'208600000X'}]}))).match.physician).toBe(true)
+    expect((await lookupNpi(input,registry({...record,taxonomies:[{code:'363L00000X'}]}))).match.physician).toBe(false)
+    expect((await lookupNpi(input,registry())).match.physician).toBe(false)
+  })
   it('requires valid NPI checksum and shape', () => {
     expect(validNpi(input.npi)).toBe(true)
     for (const npi of ['1234567890', '123', '0000000000', 1234567893]) expect(validNpi(npi)).toBe(false)
@@ -13,7 +18,7 @@ describe('NPI matching', () => {
     const result = await lookupNpi(input, fetcher)
     expect(result.status).toBe('matched')
     expect(fetcher.mock.calls[0][0]).toBe('https://npiregistry.cms.hhs.gov/api/?version=2.1&number=1234567893')
-    expect(Object.keys(result.match).sort()).toEqual(['firstName', 'lastName', 'matchedAt', 'npi', 'version'])
+    expect(Object.keys(result.match).sort()).toEqual(['firstName', 'lastName', 'matchedAt', 'npi', 'physician', 'version'])
     expect(hasNpiMatch({ app_metadata: { npi_match: result.match } })).toBe(true)
     expect(hasNpiMatch({ user_metadata: { npi_match: result.match } })).toBe(false)
   })

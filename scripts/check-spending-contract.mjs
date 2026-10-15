@@ -158,7 +158,7 @@ export async function runChecks() {
   const pin = (fn) => (toml.match(new RegExp(`\\[functions\\.${fn}\\][^\\[]*verify_jwt = (true|false)`)) || [])[1]
   check(pin('model') === 'false' && pin('digest-run') === 'false' && pin('redeem-invite') === 'false' && pin('match-npi') === 'false', 'config.toml pins verify_jwt = false for model, digest-run, redeem-invite and match-npi', ['model', 'digest-run', 'redeem-invite', 'match-npi'].map((f) => `${f}=${pin(f)}`).join(' '))
   check(pin('gmail-canonical-otp') === 'true', 'config.toml pins verify_jwt = true for gmail-canonical-otp')
-  check((toml.match(/import_map = "\.\/functions\/deno\.json"/g) || []).length === 5, 'every function deploys with the shared import map')
+  check((toml.match(/import_map = "\.\/functions\/deno\.json"/g) || []).length === 6, 'every function deploys with the shared import map')
 
   const grants = read('supabase/migrations/20261014123000_evidence_cache_column_grants.sql').replace(/--[^\n]*/g, '')
   for (const table of ['evidence_cache_trusted', 'evidence_cache']) {

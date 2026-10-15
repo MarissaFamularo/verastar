@@ -585,20 +585,21 @@ function SettingsModal({ onClose, saved, remembered, onSave, onClear, onPing, on
   return (
     <div
       onClick={onClose}
-      className="vs-modal-overlay fixed inset-0 flex items-center justify-center"
+      className={`vs-modal-overlay fixed inset-0 flex items-center justify-center ${section === 'admin' ? 'vs-beta-overlay' : ''}`}
       style={{ zIndex: 60, padding: 32, background: 'rgba(5,6,10,.62)', backdropFilter: 'blur(3px)' }}
     >
       <div
         ref={cardRef}
+        className={section === 'admin' ? 'vs-beta-admin' : undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
         onKeyDown={handleSettingsKey}
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 620,
+          width: section === 'admin' ? 1240 : 620,
           maxWidth: '100%',
-          maxHeight: '86vh',
+          maxHeight: section === 'admin' ? '96vh' : '86vh',
           overflowY: 'auto',
           borderRadius: 20,
           border: '1px solid rgba(255,255,255,.08)',

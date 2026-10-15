@@ -2,10 +2,11 @@
 // a host Playwright intercepts) with real supabase-js and a fake in-memory backend.
 // Everything here is SIMULATED: synthetic accounts, fake responses, no live services.
 import { chromium } from 'playwright-core'
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, mkdirSync } from 'node:fs'
 import { makeFake, installFake, makeUser } from './fake.mjs'
 
-const OUT = new URL('../../docs/screenshots/', import.meta.url).pathname
+const OUT = new URL('../../docs/screenshots/beta-release/', import.meta.url).pathname
+mkdirSync(OUT, {recursive:true})
 const APP = 'http://localhost:5198/'
 const DESKTOP = { width: 1280, height: 900 }
 const MOBILE = { width: 390, height: 844 }
@@ -42,6 +43,19 @@ async function reachSurvey(page) {
   await page.getByText('This optional, one-minute survey').waitFor({ timeout: 10000 })
 }
 const surveySubmit = (fake) => fake.calls.rpc.filter((c) => c.fn === 'beta_survey_submit')
+
+// Optional-code enrollment: real app, fake atomic server success, then existing survey.
+{
+  const s = await session({ viewport: MOBILE })
+  await s.page.getByRole('button', { name: /Set up my digest/ }).click()
+  await s.page.screenshot({path:`${OUT}/join-without-code-mobile.png`})
+  await s.page.locator('#beta-access-code').press('Enter')
+  await s.page.getByText('This optional, one-minute survey').waitFor({timeout:10000})
+  const calls=s.fake.calls.functions.filter(c=>c.fn==='redeem-invite')
+  assert(calls.length===1 && calls[0].body.code==='', 'S0 optional code submits empty code and offers survey after enrollment')
+  assert(s.errors.length===0, 'S0 no page errors')
+  await s.close()
+}
 
 // ---------------------------------------------------------------- S1 submit (desktop)
 {
@@ -158,10 +172,10 @@ async function openSettings(page) {
   const entry = s.page.getByRole('button', { name: /Beta admin/ })
   await entry.waitFor({ timeout: 5000 })
   assert(s.fake.calls.rpc.some((c) => c.fn === 'beta_admin_check'), 'S6 the entry waited for the server allowlist answer')
-  assert(!s.fake.calls.rpc.some((c) => c.fn === 'beta_admin_stats'), 'S6 no metrics were fetched before the section opened')
+  assert(!s.fake.calls.rpc.some((c) => c.fn === 'beta_release_stats'), 'S6 no metrics were fetched before the section opened')
   await entry.click()
-  await s.page.locator('section[aria-label="Signup survey"]').waitFor({ timeout: 10000 })
-  assert(s.fake.calls.rpc.filter((c) => c.fn === 'beta_admin_stats').length === 1, 'S6 metrics fetched once on open')
+  await s.page.locator('section[aria-label="Service health"]').waitFor({ timeout: 10000 })
+  assert(s.fake.calls.rpc.filter((c) => c.fn === 'beta_release_stats').length === 1, 'S6 metrics fetched once on open')
   const dialog = s.page.getByRole('dialog')
   await s.page.screenshot({ path: `${OUT}/shell-admin-desktop.png` })
   const before = await dialog.evaluate((el) => el.scrollTop)
@@ -171,14 +185,15 @@ async function openSettings(page) {
   const headerVisible = await s.page.getByRole('heading', { name: 'Beta admin' }).isVisible()
   assert(headerVisible, 'S6 the sticky header stays visible while scrolled')
   await s.page.screenshot({ path: `${OUT}/shell-admin-desktop-scrolled.png` })
-  assert((await s.page.getByText('as recorded').count()) > 10, 'S6 counts are labelled as recorded')
-  assert((await s.page.getByText('Not available').count()) >= 3, 'S6 unavailable metrics stay Not available')
+  assert(await s.page.getByText('Technical diagnostics and metric definitions').isVisible(), 'S6 technical details are collapsed by default')
+  assert(await s.page.getByText('Status unknown or stale').isVisible(), 'S6 absent monitoring is explicitly unknown')
   // Date range change reloads.
+  await s.page.getByText('Survey and diagnostic date range', {exact:true}).click()
   await s.page.getByLabel('From date').fill('2026-10-01')
   await s.page.getByLabel('To date').fill('2026-10-07')
   await s.page.getByRole('button', { name: 'Update' }).click()
   await s.page.getByText('7 days').waitFor({ timeout: 5000 })
-  assert(s.fake.calls.rpc.filter((c) => c.fn === 'beta_admin_stats').length === 2, 'S6 Update fetched the new range')
+  assert(s.fake.calls.rpc.filter((c) => c.fn === 'beta_release_stats').length === 2, 'S6 Update fetched the new range')
   // Keyboard: Tab stays inside the dialog; Escape closes and focus returns to the opener.
   let inside = true
   for (let i = 0; i < 40; i++) {
@@ -201,7 +216,7 @@ async function openSettings(page) {
   await s.page.getByText('Good morning, Dr. Synthetic').waitFor({ timeout: 10000 })
   await openSettings(s.page)
   await s.page.getByRole('button', { name: /Beta admin/ }).click()
-  await s.page.locator('section[aria-label="Signup survey"]').waitFor({ timeout: 10000 })
+  await s.page.locator('section[aria-label="Service health"]').waitFor({ timeout: 10000 })
   assert(!(await s.page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)), 'S7 no horizontal overflow at 390px')
   await s.page.screenshot({ path: `${OUT}/shell-admin-mobile.png` })
   const dialog = s.page.getByRole('dialog')
@@ -224,7 +239,7 @@ async function openSettings(page) {
   assert(s.fake.calls.rpc.some((c) => c.fn === 'beta_admin_check'), 'S8 the allowlist was asked')
   assert((await s.page.getByRole('button', { name: /Beta admin/ }).count()) === 0, 'S8 no Beta admin entry for a non-admin')
   assert(!(await s.page.textContent('body')).includes('Aggregate counts'), 'S8 no dashboard text anywhere')
-  assert(!s.fake.calls.rpc.some((c) => c.fn === 'beta_admin_stats'), 'S8 no metrics request was made')
+  assert(!s.fake.calls.rpc.some((c) => c.fn === 'beta_release_stats'), 'S8 no metrics request was made')
   await s.page.screenshot({ path: `${OUT}/shell-settings-non-admin.png` })
   await s.close()
 }

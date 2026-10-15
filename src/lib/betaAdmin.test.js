@@ -110,7 +110,7 @@ describe('rpc wrappers', () => {
     mocks.rpc.mockResolvedValue({ data: STATS, error: null })
     const r = await fetchBetaStats({ from: 'a', to: 'b' })
     expect(r).toEqual({ ok: true, stats: STATS })
-    expect(mocks.rpc).toHaveBeenCalledWith('beta_admin_stats', { p_from: 'a', p_to: 'b' })
+    expect(mocks.rpc).toHaveBeenCalledWith('beta_release_stats', { p_from: 'a', p_to: 'b' })
     mocks.rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'beta admin only' } })
     expect(await fetchBetaStats({ from: 'a', to: 'b' })).toMatchObject({ ok: false, reason: 'forbidden' })
     mocks.rpc.mockResolvedValue({ data: null, error: { code: '22023', message: 'range' } })

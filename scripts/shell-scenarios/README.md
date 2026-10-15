@@ -3,8 +3,8 @@
 Drives the real app in Chromium against an in-memory fake of the Supabase HTTP surface:
 real `supabase-js`, real components, synthetic accounts, no live services, no paid calls.
 Covers onboarding survey submit / skip / backend error / backend timeout / keyboard-only,
-admin and non-admin Settings at desktop and phone widths, scrolling, and focus behavior.
-Writes `docs/screenshots/shell-*.png` and `shell-results.txt`. Not part of CI.
+optional-code enrollment handoff, admin and non-admin Settings at desktop and phone widths, scrolling, and focus behavior.
+Writes `docs/screenshots/beta-release/shell-*.png` and `shell-results.txt`. Not part of CI.
 
 ```bash
 # terminal 1: the app, pointed at the host the script intercepts

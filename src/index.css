@@ -282,3 +282,9 @@ a:hover {
   outline: 2px solid var(--color-accent-bright) !important;
   outline-offset: 2px;
 }
+
+@media (max-width: 640px) {
+  .vs-modal-overlay.vs-beta-overlay { padding: 0 !important; }
+  .vs-modal-overlay > .vs-beta-admin { width: 100% !important; height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; }
+  .vs-beta-admin > div { padding-left: 16px !important; padding-right: 16px !important; }
+}

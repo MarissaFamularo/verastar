@@ -8,6 +8,7 @@
 // docs/SPENDING_CONTRACT.md § Invitations.
 
 import { createClient } from '@supabase/supabase-js'
+import { observeSignup } from '../_shared/observeSignup.js'
 import { hasNpiMatch } from '../_shared/npiMatch.js'
 
 const CORS = {
@@ -19,7 +20,7 @@ const EXPECTED_CONTRACT = '2026-10-09.spending-v2'
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
-Deno.serve(async (req) => {
+async function handle(req: Request) {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json(405, { error: 'POST only' })
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -39,7 +40,7 @@ Deno.serve(async (req) => {
   } catch {
     /* fall through */
   }
-  if (!code || code.length > 64) return json(400, { status: 'invalid' })
+  if (code.length > 64) return json(400, { status: 'invalid' })
 
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
   // Cutover guard: this function may be deployed before the spending migration. Until the
@@ -54,6 +55,14 @@ Deno.serve(async (req) => {
   if ((count || 0) >= 5) return json(429, { status: 'slow_down' })
   const { error: logError } = await admin.from('events').insert({ user_id: user.id, type: 'invite_attempt', payload: {} })
   if (logError) return json(503, { status: 'error' })
+
+  if (!code) {
+    // The atomic RPC checks existing access first, then verified email and the
+    // server-owned physician receipt. Client metadata is never accepted.
+    const { data, error } = await admin.rpc('enroll_npi_beta', { p_user_id: user.id })
+    if (error) return json(503, { status: 'error' })
+    return json(200, data)
+  }
 
   if (!hasNpiMatch(user)) {
     // Non-consuming beta-code preflight. Codes are exact text primary keys in the
@@ -99,4 +108,18 @@ Deno.serve(async (req) => {
     await admin.from('events').insert({ user_id: user.id, type: 'sponsored_enrolled', payload: { cohort: data.cohort, status: data.status } })
   }
   return json(200, data)
+}
+Deno.serve(async (req) => {
+  let response: Response
+  try { response = await handle(req) } catch { response = json(503, { status: 'error' }) }
+  // Auth failures and arbitrary malformed requests do not constitute successful signup.
+  const outcome = await response.clone().json().catch(() => ({}))
+  if (req.method === 'POST' && (response.status >= 500 || ['enrolled','already'].includes(outcome.status))) {
+    const url = Deno.env.get('SUPABASE_URL'), key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (url && key) {
+      const admin = createClient(url,key,{auth:{persistSession:false}})
+      await observeSignup(admin,response.status)
+    }
+  }
+  return response
 })

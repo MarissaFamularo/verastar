@@ -42,10 +42,8 @@ export default function AdminDashboard({ active = true }) {
 
   return (
     <div>
-      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)' }}>
-        Aggregate counts for the beta, computed on the server from records that still exist. Every figure is “as recorded”: the ledgers are not audited, rows can be removed by their owner, and the oldest retained row says nothing about when recording began. “Not available” means there is nothing on record to count, never zero activity.
-      </p>
-
+      <p style={{ margin: 0, color: 'var(--color-fg-muted)' }}>People, API usage, and service health.</p>
+      <details style={{ marginTop: 12 }}><summary>Survey and diagnostic date range</summary>
       <form onSubmit={(e) => { e.preventDefault(); load() }} className="flex items-end flex-wrap" style={{ marginTop: 14, gap: 10 }}>
         <label style={{ fontSize: 12, color: 'var(--color-fg-soft)' }}>
           From
@@ -61,7 +59,8 @@ export default function AdminDashboard({ active = true }) {
           {state.phase === 'loading' ? 'Loading…' : 'Update'}
         </button>
       </form>
-      <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>Inclusive calendar dates in your local time zone; the default is the last 30 days.</p>
+      <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>Inclusive calendar dates in your local time zone; the default is the last 30 days. Main cards use the fixed windows shown.</p>
+      </details>
 
       {state.phase === 'invalid' && <p role="alert" style={{ marginTop: 12, padding: '10px 13px', borderRadius: 10, background: 'rgba(224,96,90,.12)', color: '#f0a9a4', fontSize: 13 }}>{state.message}</p>}
       {state.phase === 'forbidden' && (
@@ -80,7 +79,10 @@ export default function AdminDashboard({ active = true }) {
           <p style={{ margin: '14px 0 0', fontSize: 12, color: 'var(--color-fg-muted)' }}>
             {state.days} day{state.days === 1 ? '' : 's'} · computed {new Date(state.stats.generated_at).toLocaleString()}
           </p>
-          {sections.map((section) => (
+          <ReleaseOverview stats={state.stats} />
+          <details style={panel}><summary>Technical diagnostics and metric definitions</summary>
+          <p>Diagnostics include test accounts. Usage events are client-reported; deleted or missing events cannot prove inactivity.</p>
+          {sections.filter(s => s.title !== 'Signup survey').map((section) => (
             <section key={section.title} style={panel} aria-label={section.title}>
               <p style={eyebrow}>{section.title}</p>
               {section.caveat && <p style={{ margin: '6px 0 0', fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-fg-muted)' }}>{section.caveat}</p>}
@@ -98,7 +100,10 @@ export default function AdminDashboard({ active = true }) {
             </section>
           ))}
 
+          </details>
           <section style={panel} aria-label="Survey answers">
+            <h3>Signup survey</h3>
+            <p>{state.stats.survey?.completed ?? 0} completed · {state.stats.survey?.skipped ?? 0} skipped in the selected range. Known test responses excluded. Self-reported answers, not measured impact.</p>
             <p style={eyebrow}>Survey answers (completed surveys in range)</p>
             {distributions.map((d) => (
               <div key={d.key} style={{ marginTop: 12 }}>
@@ -121,4 +126,50 @@ export default function AdminDashboard({ active = true }) {
       )}
     </div>
   )
+}
+
+const money = value => value == null ? 'Unknown' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 3 }).format(value)
+function Cards({ rows }) {
+  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginTop: 16 }}>{rows.map(([title, value, note]) => <section key={title} style={{ ...panel, marginTop: 0, padding: 18 }}><p style={eyebrow}>{title}</p><p style={{ fontSize: 32, fontFamily: 'var(--font-serif)', margin: '10px 0' }}>{value ?? 'Unknown'}</p><p style={{ fontSize: 12, color: 'var(--color-fg-muted)', margin: 0 }}>{note}</p></section>)}</div>
+}
+export function ReleaseOverview({ stats }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer) }, [])
+  const a = stats.adoption || {}, s = stats.spend || {}, h = stats.health || {}
+  const checks = (h.checks || []).map(c => {
+    const age = now - Date.parse(c.checked_at)
+    return { ...c, state: !Number.isFinite(age) || age < 0 ? 'unknown' : age > 900000 ? 'stale' : c.state }
+  })
+  const failed = checks.some(c => c.state === 'failed')
+  const healthy = checks.length === 3 && checks.every(c => c.state === 'ok' && now - Date.parse(c.checked_at) <= 900000 && Date.parse(c.checked_at) <= now) && !h.mail_failed
+  const status = failed ? 'Needs attention' : healthy ? 'Monitored checks passing' : 'Status unknown or stale'
+  const color = failed ? '#f0a9a4' : healthy ? 'var(--color-verified-soft)' : 'var(--color-accent)'
+  return <>
+    <section aria-label="Service health" style={{ ...panel, borderColor: color, padding: 20 }}>
+      <p style={eyebrow}>Service health</p><h3 style={{ color, fontSize: 26, margin: '8px 0' }}>{status}</h3>
+      <p style={{ margin: 0 }}> {failed ? 'Repeated failures need investigation.' : healthy ? 'Fresh deterministic checks succeeded. This does not verify external email delivery or model output.' : 'Fresh successful evidence is missing. No green status is inferred from silence.'}</p>
+      <p style={{ fontSize: 12, color: 'var(--color-fg-muted)' }}>{checks.map(c => `${c.name}: ${c.state}`).join(' · ') || 'Monitoring has not reported yet.'}</p>
+      <p style={{ fontSize: 12 }}>{h.mail_failed ? 'Alert delivery failed; operator follow-up required.' : h.alerts_enabled ? 'Incident delivery configured; pending messages: ' + (h.pending_emails || 0) : 'Email alerts disabled pending recipient and mail configuration review.'}</p>
+    </section>
+    <Cards rows={[
+      ['Real beta signups', a.signups, 'Enrolled accounts; known test enrollments excluded.'],
+      ['Used in last 72 hours', a.active72, a.complete72 ? 'Unique people opening a digest or interacting with papers.' : 'Observed people; the 72-hour recording window is not complete yet.'],
+      ['Returned users', a.returned, 'Meaningful use on two or more UTC dates, in retained history.'],
+      ['Week 1 retention', a.eligible ? `${Math.round(100 * a.retained / a.eligible)}%` : 'Not ready', a.eligible ? `${a.retained} / ${a.eligible} eligible people returned during days 7–13.` : 'Insufficient history: no fully observed 14-day enrollment cohorts.'],
+    ]} />
+    <h3 style={{ marginBottom: 0 }}>API dollar usage</h3>
+    <Cards rows={[
+      ['Today · UTC', money(s.today), 'Recorded sponsor usage at API prices.'],
+      ['This month · UTC', money(s.month), 'Includes test spending, paid failures and retries across sponsor pathways.'],
+      ['Cost / completed digest', s.completed ? money(s.month / s.completed) : 'Not available', `${s.completed ?? 0} completed digests this month; see coverage below.`],
+      ['Unresolved liability', money(s.outstanding), 'Reservations only. Not added to recorded usage.'],
+    ]} />
+    <details style={panel}><summary>Coverage and definitions</summary>
+      <p>Adoption excludes automatic generation, app launches, permission checks, and known test enrollments. Multiple actions count once per person; returned users need two UTC dates. Events are observational and may be incomplete.</p>
+      <p>Week 1 retention: all real enrollments after observation began, at least 14 days old; numerator is people with meaningful use in days 7–13 after enrollment. Non-users stay in the denominator. Observation began {a.coverage_since ? new Date(a.coverage_since).toLocaleString() : 'at an unknown time'}. Active access now: {a.access_now ?? 'unknown'} (permission only).</p>
+      <p>Average is this month's total sponsor API usage divided by completed scheduled digest-days plus completed non-append browser digests for sponsored accounts. This is an operational blended cost, not exact per-job attribution; it includes other sponsor-paid features, failures, retries, and test work. Completion telemetry can be incomplete. BYOK costs are device-local and excluded. Recorded usage is estimated from token prices or operator reconciliation, not a provider invoice.</p>
+      <p>Monitoring covers beta enrollment responses and scheduled digest outcomes, with a 15-minute freshness limit. It does not probe authentication email delivery, browser-only failures, or provider availability. An absent monitor cannot email about its own outage; the dashboard reports unknown/stale.</p>
+      <p>Provider credit balance, grant consumption versus cash charge: unavailable. {s.released_unknown ?? 0} released attempts have no settled charge; this does not prove zero provider billing. Earliest spend record: {s.first_record || 'none'}.</p>
+    </details>
+  </>
 }

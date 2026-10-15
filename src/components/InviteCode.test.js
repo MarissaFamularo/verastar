@@ -31,7 +31,7 @@ describe('beta code before NPI', () => {
     expect(dom.text()).not.toContain('NPI form')
     await enterCode()
     expect(dom.text()).toContain('That code is not recognized')
-    expect(dom.text()).toContain('Have a beta invite code?')
+    expect(dom.text()).toContain('Join the beta')
     expect(dom.text()).not.toContain('NPI form')
   })
   it('shows a used-up code and a rate limit once each', async () => {
@@ -48,7 +48,7 @@ describe('beta code before NPI', () => {
   it('offers the invite field on an access gate', async () => {
     await dom.render(React.createElement(BetaAccessGate, { inputId: 'beta-invite-digest' }, 'Sign in or add your API key in Settings first.'))
     expect(dom.text()).toContain('Sign in or add your API key in Settings first.')
-    expect(dom.q('label[for="beta-invite-digest"]').textContent).toContain('Have a beta invite code?')
+    expect(dom.q('label[for="beta-invite-digest"]').textContent).toContain('Join the beta')
     expect(dom.q('#beta-invite-digest')).toBeTruthy()
   })
 
@@ -88,13 +88,11 @@ describe('beta code before NPI', () => {
     expect(onNpiStep).toHaveBeenCalledWith(false)
     expect(dom.q('#beta-access-code')).toBeNull()
   })
-  it('explains a missing code instead of ignoring NPI continue', async () => {
+  it('keeps the alternate NPI step open without an invitation code', async () => {
     const onNpiStep = vi.fn()
     await dom.render(React.createElement(InviteCode, { npiOpen: true, code: '', onNpiStep }))
-    expect(dom.q('#beta-access-code')).toBeTruthy()
-    expect(dom.text()).toContain('Enter your invitation code to continue')
-    expect(onNpiStep).toHaveBeenCalledWith(false, { discard: true })
-    expect(dom.text()).not.toContain('NPI form')
+    expect(dom.text()).toContain('NPI form')
+    expect(onNpiStep).not.toHaveBeenCalled()
   })
   it('redeems the code kept by the parent after NPI', async () => {
     const onEnrolled = vi.fn()

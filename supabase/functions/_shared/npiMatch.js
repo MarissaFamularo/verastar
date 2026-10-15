@@ -32,6 +32,7 @@ export async function lookupNpi(input, fetcher = fetch) {
     if (normalizeName(record.basic.first_name) !== normalizeName(input.firstName) ||
         normalizeName(record.basic.last_name) !== normalizeName(input.lastName)) return { status: 'mismatch' }
     return { status: 'matched', match: { version: NPI_MATCH_VERSION, npi: input.npi,
+      physician: Array.isArray(record.taxonomies) && record.taxonomies.some(t => /^20[0-9A-Z]{8}$/.test(t.code || '')),
       firstName: record.basic.first_name, lastName: record.basic.last_name, matchedAt: new Date().toISOString() } }
   } catch { return { status: 'unavailable' } }
 }

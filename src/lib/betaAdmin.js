@@ -31,7 +31,7 @@ export async function checkBetaAdmin() {
 export async function fetchBetaStats({ from, to }) {
   if (!supabaseConfigured || !currentUser()) return { ok: false, reason: 'forbidden' }
   try {
-    const { data, error } = await supabase.rpc('beta_admin_stats', { p_from: from, p_to: to })
+    const { data, error } = await supabase.rpc('beta_release_stats', { p_from: from, p_to: to })
     if (error) return { ok: false, reason: error.code === '42501' ? 'forbidden' : 'error', message: error.message }
     return { ok: true, stats: data }
   } catch (err) {
