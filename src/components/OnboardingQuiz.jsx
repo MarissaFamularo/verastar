@@ -20,6 +20,7 @@ import { useRef, useState } from 'react'
 import { hasApiKey, hasModelAccess, setApiKey } from '../lib/anthropic.js'
 import { isSponsored } from '../lib/sponsor.js'
 import InviteCode from './InviteCode.jsx'
+import BetaSurvey from './BetaSurvey.jsx'
 import { currentNpiMatch } from '../lib/npi.js'
 import { supabaseConfigured } from '../lib/supabase.js'
 import { EmailCodeStatus } from './GmailAliasNotice.jsx'
@@ -98,6 +99,10 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
   // NPI is a history substep of #connect, shared with InviteCode. A separate flag
   // stayed true after Back/Forward remounted the code form and hid these controls.
   const betaNpi = step === 'connect' && substep === 'npi'
+  // The optional signup survey is offered once, right after a code enrolls this account
+  // (never in preview, never for an account that was already in). Skip or submit, it is
+  // gone; a failed save is ignored (lib/betaSurvey.js), so it cannot hold up setup.
+  const [surveyOffer, setSurveyOffer] = useState(false)
 
   function connectContinue(e) {
     e.preventDefault()
@@ -319,6 +324,9 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
     const keyPathOpen = !sponsored && (!canUseCode || keySet || keyOpen)
     const showStepContinue = sponsored || preview || keyPathOpen || Boolean(keyInput.trim())
     const keyAlongsideCode = canUseCode && !sponsored && keyPathOpen
+    if (surveyOffer && sponsored) {
+      return <BetaSurvey onDone={() => setSurveyOffer(false)} />
+    }
     return (
       <div>
         <div hidden={betaNpi}>
@@ -345,7 +353,10 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
               codeNotice={codeNotice}
               lead
               preview={preview}
-              onEnrolled={() => setSponsorVersion((v) => v + 1)}
+              onEnrolled={(status) => {
+                setSponsorVersion((v) => v + 1)
+                if (!preview && status === 'enrolled') setSurveyOffer(true)
+              }}
             />
           </div>
         )}
