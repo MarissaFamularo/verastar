@@ -6,11 +6,14 @@
 begin;
 create or replace function pg_temp.ok(v boolean, label text) returns void language plpgsql as $$
 begin if not coalesce(v, false) then raise exception 'FAIL: %', label; end if; raise notice 'ok: %', label; end $$;
+grant execute on all functions in schema pg_temp to anon,authenticated,service_role;
 -- Reserve as the service role; returns the jsonb result.
 create or replace function pg_temp.res(u uuid, rid text, micro bigint, fp text default repeat('a', 64)) returns jsonb language sql as $$
   select public.spend_reserve(u, rid, fp, 'claude-sonnet-5-5', 'test', 'proxy', micro, 100, 100)
 $$;
+grant execute on all functions in schema pg_temp to anon,authenticated,service_role;
 create or replace function pg_temp.reason(u uuid, micro bigint) returns text language sql as $$ select public.spend_denial_reason(u, micro) $$;
+grant execute on all functions in schema pg_temp to anon,authenticated,service_role;
 
 insert into auth.users(id) values
   ('a0000000-0000-0000-0000-000000000001'), ('a0000000-0000-0000-0000-000000000002'),
@@ -389,6 +392,7 @@ update public.spend_overruns set acknowledged_at = now() where acknowledged_at i
 create or replace function pg_temp.sres(u uuid, rid text, tok uuid) returns jsonb language sql as $$
   select public.spend_reserve(u, rid, repeat('d', 64), 'claude-sonnet-5-5', 'scheduled-digest', 'scheduler', 1, 1, 1, tok)
 $$;
+grant execute on all functions in schema pg_temp to anon,authenticated,service_role;
 set local role service_role;
 create temp table t_claim3(tok uuid);
 insert into t_claim3 select public.digest_claim(:A, 240);
@@ -433,11 +437,13 @@ create or replace function pg_temp.head_budget() returns numeric language sql as
           - (select coalesce(sum(usd), 0) from public.model_spend where ts >= c.beta_budget_starts_at)
           - (select coalesce(sum(reserved_micro), 0) from public.spend_reservations where state in ('reserved', 'ambiguous'))::numeric / 1000000) * 1000000
   from public.sponsor_config c $$;
+grant execute on all functions in schema pg_temp to anon,authenticated,service_role;
 create or replace function pg_temp.head_global() returns numeric language sql as $$
   select (c.global_monthly_ceiling_usd
           - (select coalesce(sum(usd), 0) from public.model_spend where ts >= date_trunc('month', now() at time zone 'utc') at time zone 'utc')
           - (select coalesce(sum(reserved_micro), 0) from public.spend_reservations where state in ('reserved', 'ambiguous'))::numeric / 1000000) * 1000000
   from public.sponsor_config c $$;
+grant execute on all functions in schema pg_temp to anon,authenticated,service_role;
 -- Make the total budget the binding limit with a small, exact headroom.
 update public.sponsor_config set beta_budget_usd = ceil(((100000 - pg_temp.head_budget() / 1000000) + 0.0001) * 10000) / 10000;
 create temp table t_h(budget bigint);
@@ -483,10 +489,13 @@ insert into public.digest_schedules(user_id) select id from auth.users where id:
 \set H3 '''e0000000-0000-0000-0000-000000000003'''
 \set H4 '''e0000000-0000-0000-0000-000000000004'''
 create or replace function pg_temp.status(u uuid) returns text language sql as $$ select coalesce(public.spend_status(u)->>'reason', 'allowed') $$;
+grant execute on all functions in schema pg_temp to anon,authenticated,service_role;
 create or replace function pg_temp.recover(u uuid, a text, n text default 'contract test recovery note') returns text language sql as $$
   select coalesce(r->>'reason', r->>'status') from (select public.scheduler_recover(u, a, n) as r) x $$;
+grant execute on all functions in schema pg_temp to anon,authenticated,service_role;
 create or replace function pg_temp.age_claim(u uuid) returns void language sql as $$
   update public.digest_schedules set claimed_at = now() - interval '241 seconds' where user_id = u $$;
+grant execute on all functions in schema pg_temp to anon,authenticated,service_role;
 create temp table t_hold(k text primary key, v uuid);
 grant select, insert, update on t_hold to service_role;
 

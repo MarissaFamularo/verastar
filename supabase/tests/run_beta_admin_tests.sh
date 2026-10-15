@@ -30,7 +30,8 @@ for f in supabase/tests/spending_fixture.sql \
          supabase/migrations/20261014123000_evidence_cache_column_grants.sql \
          supabase/migrations/20261015120000_beta_admin_dashboard_survey.sql \
          supabase/migrations/20261015180000_beta_release.sql \
-         supabase/migrations/20261015181000_beta_monitor.sql; do
+         supabase/migrations/20261015181000_beta_monitor.sql \
+         supabase/migrations/20261015182000_beta_release_review.sql; do
   "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { echo "migration failed: $f" >&2; "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f"; exit 1; }
 done
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/beta_admin_dashboard.sql 2>&1 | grep -E "^psql.*(ERROR|FAIL)|ok:" || true

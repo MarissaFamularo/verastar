@@ -5,7 +5,7 @@ create function pg_temp.ok(v boolean,label text) returns void language plpgsql a
 create function pg_temp.fails(q text) returns void language plpgsql as $$begin begin execute q; raise exception 'expected denial'; exception when insufficient_privilege then null; end; end$$;
 grant execute on function pg_temp.ok(boolean,text),pg_temp.fails(text) to anon,authenticated,service_role;
 insert into auth.users(id,email_confirmed_at,raw_app_meta_data)
-select ('c0000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,now(),'{"npi_match":{"version":1,"npi":"1234567893","physician":true}}' from generate_series(1,8)i;
+select ('c0000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,now(),jsonb_build_object('npi_match',jsonb_build_object('version',1,'npi','123456789'||i::text,'physician',true)) from generate_series(1,8)i;
 insert into private.beta_admins(user_id) values('c0000000-0000-0000-0000-000000000001');
 select set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
 set local role authenticated;
@@ -26,6 +26,7 @@ insert into public.events(user_id,type,ts,payload) values
 ('c0000000-0000-0000-0000-000000000002','digest_viewed',now()-interval '1 day','{}'),
 ('c0000000-0000-0000-0000-000000000003','digest_scheduled_run',now(),'{"phase":"done"}'),
 ('c0000000-0000-0000-0000-000000000003','digest_scheduled_run',now(),'{"phase":"done"}'),
+('c0000000-0000-0000-0000-000000000004','digest_scheduled_run',now(),'{"phase":"done","claimLost":true}'),
 ('c0000000-0000-0000-0000-000000000004','paper_shared',now(),'{}'),
 ('c0000000-0000-0000-0000-000000000005','digest_opened',now(),'{}');
 insert into public.beta_survey_responses(user_id,wave,survey_version,status,cohort) values('c0000000-0000-0000-0000-000000000005','signup','1','skipped','beta');
@@ -35,7 +36,7 @@ select pg_temp.ok((s->'adoption'->>'active72')::int=2,'unique meaningful use; du
 select pg_temp.ok((s->'adoption'->>'returned')::int=1,'return needs later UTC day') from stats;
 select pg_temp.ok((s->'adoption'->>'eligible')::int=2 and (s->'adoption'->>'retained')::int=1,'retention includes mature nonusers; excludes immature cohort') from stats;
 select pg_temp.ok((s->'survey'->>'skipped')::int=0,'historical smoke survey excluded without row edits') from stats;
-select pg_temp.ok((s->'spend'->>'completed')::int=1,'scheduled completion ticks deduplicated') from stats;
+select pg_temp.ok((s->'spend'->>'completed')::int=1,'scheduled completion ticks deduplicated; lost claims excluded') from stats;
 insert into public.model_spend(user_id,model,usd) values('c0000000-0000-0000-0000-000000000005','test',1.25),('c0000000-0000-0000-0000-000000000002','test',2.50);
 select pg_temp.ok((public.beta_release_stats(now()-interval '30 days',now())->'spend'->>'month')::numeric=3.75,'test API spending remains counted');
 select pg_temp.ok(public.beta_release_stats(now()-interval '30 days',now())->'spend'->'credit_balance'='null'::jsonb,'no fabricated provider balance');
@@ -74,13 +75,41 @@ update auth.users set email_confirmed_at=null where id='c0000000-0000-0000-0000-
 select pg_temp.ok(public.enroll_npi_beta('c0000000-0000-0000-0000-000000000006')->>'status'='email_required','email confirmation required');
 update auth.users set email_confirmed_at=now(),raw_app_meta_data='{}' where id='c0000000-0000-0000-0000-000000000006';
 select pg_temp.ok(public.enroll_npi_beta('c0000000-0000-0000-0000-000000000006')->>'status'='npi_required','missing server match denied');
+-- Match production: service_role has no direct SELECT on auth.users.
+revoke select on auth.users from service_role;
+set local role service_role;
 select pg_temp.ok(public.enroll_npi_beta('c0000000-0000-0000-0000-000000000007')->>'status'='enrolled','matched physician enrollment');
 select pg_temp.ok(public.enroll_npi_beta('c0000000-0000-0000-0000-000000000007')->>'status'='already','retry idempotent');
 select pg_temp.ok(public.enroll_npi_beta('c0000000-0000-0000-0000-000000000008')->>'status'='full','global limit enforced');
 select pg_temp.ok((select daily_cap_usd is null and monthly_cap_usd is null from public.sponsored_accounts where user_id='c0000000-0000-0000-0000-000000000007'),'new account inherits existing spend caps');
+reset role;
+-- One public NPI cannot fund two accounts, through either path.
+update public.sponsor_config set enrollment_limit=100;
+update auth.users set raw_app_meta_data=(select raw_app_meta_data from auth.users where id='c0000000-0000-0000-0000-000000000007') where id='c0000000-0000-0000-0000-000000000008';
+select pg_temp.ok(public.enroll_npi_beta('c0000000-0000-0000-0000-000000000008')->>'status'='npi_in_use','second account with same NPI rejected');
+insert into public.sponsor_invites(code,cohort,max_uses) values('SAME-NPI','beta',10);
+select pg_temp.ok(public.redeem_sponsor_invite('SAME-NPI','c0000000-0000-0000-0000-000000000008')->>'status'='npi_in_use','invite path cannot bypass NPI claim');
+select pg_temp.ok((select uses=0 from public.sponsor_invites where code='SAME-NPI'),'duplicate rejection consumes no invite');
+update auth.users set raw_app_meta_data=jsonb_set(raw_app_meta_data,'{npi_match,npi}','"1234567890"') where id='c0000000-0000-0000-0000-000000000007';
+select pg_temp.ok(public.enroll_npi_beta('c0000000-0000-0000-0000-000000000007')->>'status'='already','existing account remains accessible after receipt change');
+select pg_temp.ok(public.enroll_npi_beta('c0000000-0000-0000-0000-000000000008')->>'status'='npi_in_use','receipt changes cannot free a claimed NPI');
+-- last_run_at may mean abandoned/retired. A tick must not create success or recover.
+insert into public.digest_schedules(user_id,last_run_at,last_result) values('c0000000-0000-0000-0000-000000000007',now(),'abandoned');
+select public.beta_monitor_record('digest',false,'failed');
+update private.beta_monitor_samples set checked_at=now()-interval '6 minutes' where check_name='digest';
+select public.beta_monitor_record('digest',false,'failed');
+select public.beta_monitor_record('digest',false,'failed');
+select public.beta_monitor_tick();
+select pg_temp.ok((select state='failed' from private.beta_incidents where check_name='digest'),'recent abandoned schedule timestamp cannot recover digest incident');
+select pg_temp.ok(not exists(select 1 from private.beta_monitor_samples where check_name='digest' and ok),'tick never invents successful digest evidence');
+select public.beta_monitor_record('digest',true,'ok');
+update private.beta_incidents set last_checked_at=now()-interval '16 minutes' where check_name='digest';
+select public.beta_monitor_tick();
+select pg_temp.ok((select last_checked_at<now()-interval '15 minutes' from private.beta_incidents where check_name='digest'),'tick cannot refresh stale success');
 set local role anon;
 select pg_temp.fails('select public.enroll_npi_beta(''c0000000-0000-0000-0000-000000000008'')');
 select pg_temp.fails('select public.beta_release_stats(now()-interval ''1 day'',now())');
 select pg_temp.fails('select public.beta_monitor_record(''heartbeat'',true,''ok'')');
+select pg_temp.fails('select * from private.beta_npi_claims');
 reset role;
 rollback;

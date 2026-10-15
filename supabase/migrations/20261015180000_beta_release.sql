@@ -107,7 +107,7 @@ begin
  with costs as (select * from public.model_spend where not cache_hit),
  finished as (
    select distinct user_id,(ts at time zone 'UTC')::date as day from public.events
-   where type='digest_scheduled_run' and payload->>'phase'='done' and ts>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC' and ts<=now()
+   where type='digest_scheduled_run' and payload->>'phase'='done' and coalesce(payload->>'claimLost','')<>'true' and ts>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC' and ts<=now()
  ), browser as (
    select count(*) n from public.events e where type='digest_run' and coalesce(payload->>'showcase','')<>'true'
    and coalesce(payload->>'append','')<>'true' and private.beta_payload_count(payload,'papers')>0
@@ -149,7 +149,7 @@ grant execute on function public.beta_release_stats(timestamptz,timestamptz) to 
 -- Off by default until approved; no invitation is created and no account is enrolled here.
 alter table public.sponsor_config add column npi_enrollment_enabled boolean not null default false;
 create function public.enroll_npi_beta(p_user_id uuid)
-returns jsonb language plpgsql security invoker set search_path='' as $$
+returns jsonb language plpgsql security definer set search_path='' as $$
 declare c public.sponsor_config%rowtype; a public.sponsored_accounts%rowtype; u auth.users%rowtype; n integer;
 begin
  if p_user_id is null then raise exception using errcode='42501',message='sign in first'; end if;
