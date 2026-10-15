@@ -48,8 +48,8 @@ Implemented and tested on this branch; nothing deployed, applied, or merged.
 - `src/components/InviteCode.jsx` — `onEnrolled` now receives the redeem status (one line).
 - `src/components/OnboardingQuiz.jsx` — offers the survey inline on the connect step after `enrolled`.
 - `src/App.jsx` — Settings gains a "Beta admin" section when `beta_admin_check()` is true.
-- `docs/screenshots/*.png` — synthetic data, rendered from the components in a throwaway harness
-  (the real Settings modal and onboarding canvas are not in the harness; styles are the app's own).
+- `docs/screenshots/shell-*.png`, `shell-results.txt` — the real app shell driven by
+  `scripts/shell-scenarios/` (simulated backend, synthetic accounts; see that README).
 
 ### Metric definitions
 
@@ -66,11 +66,16 @@ Range is half-open `[from, to)`; the UI sends inclusive local calendar dates, de
 | Unique papers (PMIDs) | `evidence_cache_trusted` | Distinct PMIDs among first-time scheduler extractions in range. Scheduled runs only. |
 | Digest opens | `events` | `digest_opened` rows (first open of a digest with results). Delivery is not recorded anywhere. |
 | Verifier rejection reasons | none | **Not available.** Reasons live only inside kv JSON (latest digest, saved papers), not as dated events. |
-| Survey | `beta_survey_responses` | Completed / skipped in range, completed all-time, per-question counts over completed rows. |
+| Survey | `beta_survey_responses` | Completed / skipped in range, completed all-time (independent of the range), per-question counts over completed rows. |
 
-"Not available" is shown when a record kind has no rows at all, or the range ends before its first
-row (`first_seen` in the payload). A partial overlap shows the count with a "records begin" note.
-The `events` table is editable by its owner under the existing RLS, so those counts are as recorded.
+Every count is labelled "as recorded". Coverage is judged from `earliest_retained` (min timestamp
+per record kind): the oldest row that still exists, which is not the start of instrumentation and
+not proof that nothing was deleted. "Not available" is shown when a record kind has no retained
+rows at all, or the range ends before its oldest retained row; a partial overlap shows the count
+with an "oldest retained record" note. Verifier reasons are unavailable regardless of range. The
+`events` table is editable by its owner under the existing RLS. Payload counters (`papers`,
+`errors`) count only when they are plain integers of at most nine digits; anything else counts as
+0 so one malformed row cannot fail the whole RPC.
 
 ### Tests run
 
@@ -100,4 +105,65 @@ The `events` table is editable by its owner under the existing RLS, so those cou
 - **Delivered digests** are not recorded; only opens are.
 - **Survey only on the onboarding connect step.** A code redeemed later from Settings does not offer it.
 - **Small cells.** With few users a per-option count of 1 identifies that user's answer to the admin.
+  The survey copy and the dashboard both say so; answers are account-linked, not anonymous.
 - **Day-30 wave** is reserved in the schema (`wave = 'day30'`) but the RPC refuses it until built.
+
+## Review fixes (commit after 1f5a3a8)
+
+Findings from the review of 1f5a3a8 and what changed. The migration file is edited in place: it
+was never applied anywhere.
+
+1. **Bounded telemetry casts.** `private.beta_payload_count(payload, key)` accepts only
+   `^[0-9]{1,9}$`; everything else (2147483648, 1e3, -1, 2.5, objects, null, missing) counts as 0.
+   SQL tests insert twelve malformed rows across both event types and assert no error, the ticks
+   and runs still count, and the values do not.
+2. **Survey eligibility.** `beta_survey_submit` refuses a first response (42501, nothing stored)
+   unless a `sponsored_accounts` row exists for the caller. The idempotent `already` reply for an
+   existing row is unchanged and is tested for an account without eligibility.
+3. **Cohort label hidden.** `beta_survey_responses` grants `authenticated` only
+   `(user_id, wave, survey_version, status, responded_at)`; `cohort` and the answers are readable
+   by the service role only. Tested for submit, skip, and cross-user reads; the client's only
+   read (`betaSurveyRecorded`) selects `status`.
+4. **Coverage semantics.** `first_seen` is renamed `earliest_retained`; every note and the
+   dashboard intro say "as recorded" and "oldest retained record", not "records begin".
+   "Completed, all time" no longer inherits the range's availability.
+5. **Native radio groups.** One `fieldset`/`legend` and one `name` per question, labelled
+   `<input type="radio">`, visible focus ring; the account-linkage copy replaces the previous
+   wording. Keyboard-only completion is exercised in the app shell.
+
+One more change found by the shell run: the dashboard's Update button is no longer `disabled`
+while loading (a disabled control drops focus to the page body and the next Tab left the
+Settings dialog); re-entry is refused in code instead, with a unit test.
+
+### Checks run on the fix commit
+
+| Check | Result |
+|---|---|
+| `npm test` | 134 files, 2567 passed, 3 expected fail, 15 todo |
+| `npm run lint` / `npm run build` | no new diagnostics / ok |
+| `supabase/tests/run_beta_admin_tests.sh` (local PostgreSQL 16) | 62/62 assertions |
+| `scripts/shell-scenarios/shell.mjs` (simulated backend) | 47/47 assertions, 8 scenarios |
+| `supabase/tests/run_spending_tests.sh` (pre-existing, unchanged) | see below |
+
+### Pre-existing spending-suite failure (separate from this task)
+
+`supabase/tests/spending_contract.sql` line 310 compares `attempt_day` (computed in the schedule's
+timezone, default America/New_York) with the UTC date. Run at 20:27 New York time (00:27 UTC) it
+fails on "a finished run stamps last_attempt_at and counts one attempt today", and because the
+script runs under `ON_ERROR_STOP`, everything after that line did not run in that session: the
+remaining attempt-stamp and release assertions, the scheduler-hold and recovery section, the
+spend-release section, and `spending_concurrency.py`. Run again at 04:31 New York time the same
+suite passed in full (SQL assertions plus 74 concurrency checks). Nothing in that suite or the
+scheduler code was changed here; the failure is a time-of-day artifact of the test, not of the
+migration under test.
+
+### Simulated vs live evidence
+
+Simulated (done): unit tests with mocked modules; SQL contract tests on a disposable local
+database with the fixture roles and a stub `auth.uid()`; app-shell scenarios with a fake HTTP
+backend and a seeded session. Live (not done, by instruction): the migration on the shared
+project, the RPCs through the real PostgREST gateway and JWT verification, Supabase's own
+`authenticated` default privileges, email sign-in, the real `redeem-invite` function, and the
+survey offer after a real redemption. The first live check after applying the migration should be
+the three `has_*_privilege` queries in the migration instructions plus one real skip from a
+test account.

@@ -67,6 +67,21 @@ describe('AdminDashboard', () => {
     expect(mocks.rpc).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps Update focusable while loading and ignores a second submit', async () => {
+    const { deferred } = await import('../test-utils/dom.js')
+    const pending = deferred()
+    mocks.rpc.mockReturnValue(pending.promise)
+    await dom.render(React.createElement(AdminDashboard, { active: true }))
+    const button = dom.button('Loading')
+    expect(button).toBeTruthy()
+    expect(button.disabled).toBe(false) // a disabled control drops focus out of the settings dialog
+    expect(button.getAttribute('aria-busy')).toBe('true')
+    await dom.submit(dom.q('form'))
+    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    await dom.settle(() => pending.resolve({ data: STATS, error: null }))
+    expect(dom.button('Update').getAttribute('aria-busy')).toBe('false')
+  })
+
   it('reloads for a new range on Update', async () => {
     mocks.rpc.mockResolvedValue({ data: STATS, error: null })
     await dom.render(React.createElement(AdminDashboard, { active: true }))

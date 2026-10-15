@@ -17,6 +17,7 @@ export default function AdminDashboard({ active = true }) {
   const loadedOnce = useRef(false)
 
   async function load(f = fromDate, t = toDate) {
+    if (state.phase === 'loading') return // one request at a time; the button stays focusable
     const range = rangeFromInputs(f, t)
     if (range.error) {
       setState({ phase: 'invalid', message: range.error })
@@ -54,7 +55,9 @@ export default function AdminDashboard({ active = true }) {
           To
           <input type="date" aria-label="To date" value={toDate} onChange={(e) => setDates((d) => ({ ...d, toDate: e.target.value }))} style={{ ...inputStyle, display: 'block', marginTop: 4 }} />
         </label>
-        <button type="submit" disabled={state.phase === 'loading'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: state.phase === 'loading' ? 0.5 : 1 }}>
+        {/* Not `disabled` while loading: a disabled button loses keyboard focus to the page body,
+            which breaks the settings dialog's Tab trap. Re-entry is refused in load() instead. */}
+        <button type="submit" aria-busy={state.phase === 'loading'} className="cursor-pointer" style={{ padding: '9px 15px', border: 0, borderRadius: 10, background: 'var(--color-accent)', color: '#1c1206', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: state.phase === 'loading' ? 0.5 : 1 }}>
           {state.phase === 'loading' ? 'Loading…' : 'Update'}
         </button>
       </form>
