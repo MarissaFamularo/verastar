@@ -337,14 +337,28 @@ Executed with the owner's approval of 2026-10-15. All times UTC.
    was built with `vite build` and served with `vite preview`, and the 47 app-shell
    scenarios ran against that production bundle with the fake backend: all passed.
 
-### Not done, by design or by access
+### Completed later the same day (owner approvals of 2026-10-15)
 
-- **Admin allowlist is still empty.** Nobody can open the dashboard until
-  `insert into private.beta_admins (user_id, note) values ('<owner auth.users.id>', 'owner')`
-  runs; that grant is held for explicit approval.
-- **No live survey walk-through through the UI.** It needs a fresh account that redeems a
-  code; no test identity was approved, and the owner's own account is already sponsored, so
-  the survey would not be offered to it.
-- **Gateway-level anonymous check** (`curl` against `/rest/v1/rpc/...` with the anon key) could
-  not run from this container (egress refused). The equivalent denial is proven at the
-  database level under role `anon`.
+6. **Admin grant.** The founder account was inserted into `private.beta_admins`;
+   `beta_admin_check()` answers true for it and `beta_admin_stats` returns the live payload.
+7. **Gateway-level anonymous checks** (after the environment's network policy allowed the
+   Supabase host): with the anon key, all three RPCs and the survey table answer 42501, and
+   schema `private` is not exposed by the API at all.
+8. **Live walk-through on production** with the owner-approved sample account
+   (mchughbot@gmail.com). Reset before the run: its profile record was renamed
+   (`profile/me` → `profile/me.pre-smoke-20261015`, recoverable) and its sponsored-access row
+   (cohort `beta-2026`, invite `BETA-105E0CEFA2`) removed through a single-row delete; a
+   one-use invite in cohort `smoke-qa-20261015` was created. Then, in a real Chromium against
+   https://verastar.papertrellis.com: sign-in with the emailed six-digit code (read from the
+   mchughbot inbox), redemption through the deployed `redeem-invite` function (`enrolled`),
+   the survey offered on the connect step, four answers sent, "You are all set" shown, no page
+   errors, and the run stopped before Continue (no model call). Production rows after the run:
+   one `beta_survey_responses` row (`completed`, `signup-v1`, cohort `smoke-qa-20261015`,
+   codes `find_papers, weekly, 30_60m, 4`), the sponsored row in cohort `smoke-qa-20261015`,
+   invite uses 1/1, events `invite_attempt` and `sponsored_enrolled`. The owner's dashboard
+   payload now reports one completed survey with those answer counts. These test records are
+   left in place and are identifiable by the cohort label.
+
+Still not exercised live: a survey **skip** through the UI (covered by the simulated shell
+run and the SQL tests) and the dashboard page viewed in a browser as the owner (the owner
+verifies that by opening Settings → Beta admin).
