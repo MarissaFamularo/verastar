@@ -31,3 +31,73 @@ section at the end is updated as work lands.*
 6. **Tests.** SQL contract tests on a disposable database (authorization, idempotency,
    validation, metric arithmetic with retries and empty results). Vitest unit tests for
    the survey component, the dashboard metric formatting, and the gating logic.
+
+## Status (2026-10-15)
+
+Implemented and tested on this branch; nothing deployed, applied, or merged.
+
+### Files
+
+- `supabase/migrations/20261015120000_beta_admin_dashboard_survey.sql` — additive: `private.beta_admins`,
+  `public.beta_survey_responses` (RLS, own-row select only), `beta_survey_submit`, `beta_admin_check`,
+  `beta_admin_stats`. Rollback statements are in the file header.
+- `supabase/tests/beta_admin_dashboard.sql`, `supabase/tests/run_beta_admin_tests.sh` — 46 assertions on a
+  disposable database.
+- `src/lib/betaSurvey.js`, `src/components/BetaSurvey.jsx` — the survey; `src/lib/betaAdmin.js`,
+  `src/components/AdminDashboard.jsx` — the dashboard; `src/lib/betaAdmin.fixture.js` — synthetic stats.
+- `src/components/InviteCode.jsx` — `onEnrolled` now receives the redeem status (one line).
+- `src/components/OnboardingQuiz.jsx` — offers the survey inline on the connect step after `enrolled`.
+- `src/App.jsx` — Settings gains a "Beta admin" section when `beta_admin_check()` is true.
+- `docs/screenshots/*.png` — synthetic data, rendered from the components in a throwaway harness
+  (the real Settings modal and onboarding canvas are not in the harness; styles are the app's own).
+
+### Metric definitions
+
+Range is half-open `[from, to)`; the UI sends inclusive local calendar dates, defaulting to the last
+30 days. Server day grouping uses the UTC date.
+
+| Key | Source | Definition |
+|---|---|---|
+| New / total / active beta users | `sponsored_accounts` | Code redeemed in range / ever / switched on and not past `ends_at` now. Registration is not activity. |
+| Unique users who requested a digest | `events` | Distinct users with a manual scheduled tick (`digest_scheduled_run.manual`) or a non-showcase browser `digest_run` in range. Cron-only users are not requesters. |
+| Scheduled digest-days | `events` | Distinct (user, UTC day) with a `digest_scheduled_run` tick. Outcome = phase of the last tick that day: done → generated; empty → empty; error/held/capped → failed; else unfinished. |
+| Run / manual / failure / retry ticks | `events` | Every tick; ticks with `manual`; ticks ending error/held/capped; ticks after a failure tick on the same user-day. Retries are never requests. |
+| Summaries | `events` | `papers` on done scheduled ticks + `papers` on non-append browser runs. Not unique papers. |
+| Unique papers (PMIDs) | `evidence_cache_trusted` | Distinct PMIDs among first-time scheduler extractions in range. Scheduled runs only. |
+| Digest opens | `events` | `digest_opened` rows (first open of a digest with results). Delivery is not recorded anywhere. |
+| Verifier rejection reasons | none | **Not available.** Reasons live only inside kv JSON (latest digest, saved papers), not as dated events. |
+| Survey | `beta_survey_responses` | Completed / skipped in range, completed all-time, per-question counts over completed rows. |
+
+"Not available" is shown when a record kind has no rows at all, or the range ends before its first
+row (`first_seen` in the payload). A partial overlap shows the count with a "records begin" note.
+The `events` table is editable by its owner under the existing RLS, so those counts are as recorded.
+
+### Tests run
+
+- `npm test`: 134 files, 2565 passed, 3 expected fail, 15 todo (37 new tests across 5 new files).
+- `npm run lint`: no new diagnostics. `npm run build`: ok.
+- `supabase/tests/run_beta_admin_tests.sh` on local PostgreSQL 16: 46/46 ok.
+- `supabase/tests/run_spending_tests.sh` (unchanged, pre-existing): one assertion fails between
+  20:00 and 24:00 America/New_York because it compares `attempt_day` (schedule timezone) with the
+  UTC date. Not touched; outside this task.
+
+### Migration instructions (for review, not executed)
+
+1. Review the migration file; it depends on `20261009120000_beta_spending_safeguards.sql`
+   (`evidence_cache_trusted`) and `20261013040000_private_default_privileges.sql` (schema `private`).
+2. Apply after the pending 2026-10-14 release, in its own transaction.
+3. Enroll the admin: `insert into private.beta_admins (user_id, note) values ('<your auth.users.id>', 'owner');`
+4. Verify: `has_function_privilege('anon', 'public.beta_admin_stats(timestamptz,timestamptz)', 'execute')`
+   is false; `has_table_privilege('authenticated', 'private.beta_admins', 'select')` is false;
+   `has_table_privilege('authenticated', 'public.beta_survey_responses', 'insert')` is false.
+5. Deploy the frontend. No edge function changes.
+
+### Unresolved dependencies and what to review
+
+- **Admin authorization did not exist.** The allowlist table is new; until you insert your user id
+  nobody can open the dashboard. Decide whether a SQL-managed allowlist is acceptable for the beta.
+- **Verifier reasons** cannot be reported without adding instrumentation to the pipeline (excluded).
+- **Delivered digests** are not recorded; only opens are.
+- **Survey only on the onboarding connect step.** A code redeemed later from Settings does not offer it.
+- **Small cells.** With few users a per-option count of 1 identifies that user's answer to the admin.
+- **Day-30 wave** is reserved in the schema (`wave = 'day30'`) but the RPC refuses it until built.
