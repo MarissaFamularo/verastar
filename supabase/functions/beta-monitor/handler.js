@@ -1,6 +1,6 @@
 // No raw error text, account identifier, email, NPI, paper, or event payload enters mail.
 export function incidentEmail(event) {
-  if (!['signup', 'digest', 'heartbeat'].includes(event?.check) || !['incident', 'recovery'].includes(event?.kind)) throw new Error('Invalid alert')
+  if (!['signup', 'digest', 'heartbeat', 'schedule'].includes(event?.check) || !['incident', 'recovery'].includes(event?.kind)) throw new Error('Invalid alert')
   const label = event.kind === 'incident' ? 'Needs attention' : 'Recovered'
   return { subject: `Verastar: ${event.check} — ${label}`, text: `${event.check}: ${label}. Open Beta admin for current monitored evidence. No participant data is included in this message.` }
 }

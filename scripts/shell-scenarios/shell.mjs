@@ -186,7 +186,7 @@ async function openSettings(page) {
   assert(headerVisible, 'S6 the sticky header stays visible while scrolled')
   await s.page.screenshot({ path: `${OUT}/shell-admin-desktop-scrolled.png` })
   assert(await s.page.getByText('Technical diagnostics and metric definitions').isVisible(), 'S6 technical details are collapsed by default')
-  assert(await s.page.getByText('Status unknown or stale').isVisible(), 'S6 absent monitoring is explicitly unknown')
+  assert(await s.page.getByText('Monitor active · schedule on track').isVisible(), 'S6 quiet schedule health remains separate from untested signup')
   // Date range change reloads.
   await s.page.getByText('Survey and diagnostic date range', {exact:true}).click()
   await s.page.getByLabel('From date').fill('2026-10-01')

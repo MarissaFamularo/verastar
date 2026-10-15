@@ -34,3 +34,7 @@ describe('deterministic beta monitoring', () => {
     await expect(observeSignup({rpc},503)).resolves.toBeUndefined()
   })
 })
+
+it('formats overdue schedule alerts without participant data', () => {
+ expect(incidentEmail({check:'schedule',kind:'incident',user_id:'private',error:'secret'})).toEqual({subject:'Verastar: schedule — Needs attention',text:'schedule: Needs attention. Open Beta admin for current monitored evidence. No participant data is included in this message.'})
+})

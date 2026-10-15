@@ -138,17 +138,17 @@ export function ReleaseOverview({ stats }) {
   const a = stats.adoption || {}, s = stats.spend || {}, h = stats.health || {}
   const checks = (h.checks || []).map(c => {
     const age = now - Date.parse(c.checked_at)
-    return { ...c, state: !Number.isFinite(age) || age < 0 ? 'unknown' : age > 900000 ? 'stale' : c.state }
+    return { ...c, state: c.state === 'failed' ? 'failed' : ['heartbeat', 'schedule'].includes(c.name) && (!Number.isFinite(age) || age < 0 || age > 900000) ? 'stale' : c.state }
   })
-  const failed = checks.some(c => c.state === 'failed')
-  const healthy = checks.length === 3 && checks.every(c => c.state === 'ok' && now - Date.parse(c.checked_at) <= 900000 && Date.parse(c.checked_at) <= now) && !h.mail_failed
-  const status = failed ? 'Needs attention' : healthy ? 'Monitored checks passing' : 'Status unknown or stale'
+  const failed = checks.some(c => c.state === 'failed') || h.mail_failed
+  const healthy = ['heartbeat', 'schedule'].every(name => checks.some(c => c.name === name && c.state === 'ok')) && !failed
+  const status = failed ? 'Needs attention' : healthy ? 'Monitor active · schedule on track' : 'Status unknown or stale'
   const color = failed ? '#f0a9a4' : healthy ? 'var(--color-verified-soft)' : 'var(--color-accent)'
   return <>
     <section aria-label="Service health" style={{ ...panel, borderColor: color, padding: 20 }}>
       <p style={eyebrow}>Service health</p><h3 style={{ color, fontSize: 26, margin: '8px 0' }}>{status}</h3>
-      <p style={{ margin: 0 }}> {failed ? 'Repeated failures need investigation.' : healthy ? 'Fresh deterministic checks succeeded. This does not verify external email delivery or model output.' : 'Fresh successful evidence is missing. No green status is inferred from silence.'}</p>
-      <p style={{ fontSize: 12, color: 'var(--color-fg-muted)' }}>{checks.map(c => `${c.name}: ${c.state}`).join(' · ') || 'Monitoring has not reported yet.'}</p>
+      <p style={{ margin: 0 }}> {failed ? 'Sustained failures, overdue work, or alert delivery need investigation.' : healthy ? 'The monitor checked expected work successfully. No digest is overdue beyond its two-hour grace period.' : 'The monitor or expected-work check is missing or stale. Last observed failures remain visible.'}</p>
+      <p style={{ fontSize: 12, color: 'var(--color-fg-muted)' }}>{checks.map(c => `${['signup', 'digest'].includes(c.name) ? c.name + ' outcome' : c.name}: ${c.state === 'unknown' && ['signup', 'digest'].includes(c.name) ? 'untested / no successful observation' : c.state}${['signup', 'digest'].includes(c.name) && c.checked_at ? ' (last observed ' + new Date(c.checked_at).toLocaleString() + ')' : ''}`).join(' · ') || 'Monitoring has not reported yet.'}</p>
       <p style={{ fontSize: 12 }}>{h.mail_failed ? 'Alert delivery failed; operator follow-up required.' : h.alerts_enabled ? 'Incident delivery configured; pending messages: ' + (h.pending_emails || 0) : 'Email alerts disabled pending recipient and mail configuration review.'}</p>
     </section>
     <Cards rows={[
@@ -168,7 +168,7 @@ export function ReleaseOverview({ stats }) {
       <p>Adoption excludes automatic generation, app launches, permission checks, and known test enrollments. Multiple actions count once per person; returned users need two UTC dates. Events are observational and may be incomplete.</p>
       <p>Week 1 retention: all real enrollments after observation began, at least 14 days old; numerator is people with meaningful use in days 7–13 after enrollment. Non-users stay in the denominator. Observation began {a.coverage_since ? new Date(a.coverage_since).toLocaleString() : 'at an unknown time'}. Active access now: {a.access_now ?? 'unknown'} (permission only).</p>
       <p>Average is this month's total sponsor API usage divided by completed scheduled digest-days plus completed non-append browser digests for sponsored accounts. This is an operational blended cost, not exact per-job attribution; it includes other sponsor-paid features, failures, retries, and test work. Completion telemetry can be incomplete. BYOK costs are device-local and excluded. Recorded usage is estimated from token prices or operator reconciliation, not a provider invoice.</p>
-      <p>Monitoring covers beta enrollment responses and scheduled digest outcomes, with a 15-minute freshness limit. It does not probe authentication email delivery, browser-only failures, or provider availability. An absent monitor cannot email about its own outage; the dashboard reports unknown/stale.</p>
+      <p>Monitor and expected-work checks expire after 15 minutes. Signup and digest outcomes are last-observed evidence, not continuous capability tests. Expected work follows the configured local daily hour, active access, and unopened-digest gate; a single slot overdue by two hours is actionable. No weekly scheduler configuration exists in this release. It does not probe authentication email delivery, browser-only failures, or provider availability. An absent monitor cannot email about its own outage; the dashboard reports unknown/stale.</p>
       <p>Provider credit balance, grant consumption versus cash charge: unavailable. {s.released_unknown ?? 0} released attempts have no settled charge; this does not prove zero provider billing. Earliest spend record: {s.first_record || 'none'}.</p>
     </details>
   </>

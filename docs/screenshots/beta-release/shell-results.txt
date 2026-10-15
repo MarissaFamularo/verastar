@@ -1,4 +1,4 @@
-App-shell scenarios (simulated backend, synthetic accounts) 2026-10-15T22:00:04.916Z
+App-shell scenarios (simulated backend, synthetic accounts) 2026-10-15T22:19:47.999Z
 ok   S0 optional code submits empty code and offers survey after enrollment
 ok   S0 no page errors
 ok   S1 submit is disabled before all four answers
@@ -17,7 +17,7 @@ ok   S2 no page errors ()
 ok   S3 the failing submit was attempted once
 ok   S3 a 500 from the survey RPC is swallowed, setup continues ()
 ok   S4 shows Saving… while the backend hangs
-ok   S4 continued after the 6 s timeout (6355 ms)
+ok   S4 continued after the 6 s timeout (6362 ms)
 ok   S4 no page errors ()
 ok   S5 focus lands on the first radio group
 ok   S5 ArrowRight moves within the group and checks the option
@@ -33,7 +33,7 @@ ok   S6 metrics fetched once on open
 ok   S6 the settings card scrolls to the survey answers
 ok   S6 the sticky header stays visible while scrolled
 ok   S6 technical details are collapsed by default
-ok   S6 absent monitoring is explicitly unknown
+ok   S6 quiet schedule health remains separate from untested signup
 ok   S6 Update fetched the new range
 ok   S6 Tab never leaves the settings dialog
 ok   S6 Escape closes settings
