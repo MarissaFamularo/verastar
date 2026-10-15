@@ -7,13 +7,14 @@
 
 import { supabase, supabaseConfigured, currentUser, isSignedIn } from './supabase.js'
 
-export function logEvent(type, payload = {}) {
-  if (!supabaseConfigured || !isSignedIn()) return Promise.resolve()
-  return supabase
-    .from('events')
-    .insert({ user_id: currentUser().id, type, payload })
-    .then(({ error }) => {
-      if (error) console.warn('Event dropped:', error.message)
-    })
-    .catch(() => {})
+export async function logEvent(type, payload = {}) {
+  try {
+    if (!supabaseConfigured || !isSignedIn()) return
+    const { error } = await supabase
+      .from('events')
+      .insert({ user_id: currentUser().id, type, payload })
+    if (error) console.warn('Event dropped:', error.message)
+  } catch {
+    // Both synchronous client failures and rejected inserts must stay non-blocking.
+  }
 }

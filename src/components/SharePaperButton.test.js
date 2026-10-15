@@ -1,7 +1,11 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SharePaperButton, { paperShareDetails, sharePaper } from './SharePaperButton.jsx'
+
+vi.mock('../lib/events.js', () => ({ logEvent: vi.fn() }))
+import { logEvent } from '../lib/events.js'
+beforeEach(() => vi.clearAllMocks())
 
 const paper = {
   id: '42560069',
@@ -49,6 +53,8 @@ describe('paper sharing', () => {
       url: 'https://pubmed.ncbi.nlm.nih.gov/42560069/',
     })
     expect(location.href).toBe('')
+    expect(logEvent).toHaveBeenCalledTimes(1)
+    expect(logEvent).toHaveBeenCalledWith('paper_share_clicked', { surface: 'digest' })
   })
 
   it('opens an addressed-ready email when native sharing is unavailable', async () => {
@@ -58,6 +64,8 @@ describe('paper sharing', () => {
       navigatorObject: {},
       locationObject: location,
     })).resolves.toBe('mailto')
+    expect(logEvent).toHaveBeenCalledTimes(1)
+    expect(logEvent).toHaveBeenCalledWith('paper_share_clicked', { surface: 'library' })
     expect(location.href).toContain('mailto:?subject=A%20paper%20worth%20sending')
     expect(decodeURIComponent(location.href)).toContain('https://pubmed.ncbi.nlm.nih.gov/42560069/')
     expect(decodeURIComponent(location.href)).toContain('Full text: https://example.org/full-text')
@@ -71,5 +79,26 @@ describe('paper sharing', () => {
       locationObject: location,
     })).resolves.toBe('cancelled')
     expect(location.href).toBe('')
+    expect(logEvent).toHaveBeenCalledTimes(1)
+    expect(logEvent).toHaveBeenCalledWith('paper_share_clicked', { surface: 'library' })
+  })
+  it('counts each button click once without waiting for telemetry', async () => {
+    logEvent.mockReturnValue(new Promise(() => {}))
+    const nativeShare = vi.fn().mockResolvedValue()
+    vi.stubGlobal('navigator', { share: nativeShare })
+    try {
+      const button = SharePaperButton({ paper, surface: 'digest' })
+      await button.props.onClick()
+      await button.props.onClick()
+      expect(nativeShare).toHaveBeenCalledTimes(2)
+      expect(logEvent.mock.calls).toEqual([
+        ['paper_share_clicked', { surface: 'digest' }],
+        ['paper_share_clicked', { surface: 'digest' }],
+      ])
+    } finally { vi.unstubAllGlobals() }
+  })
+  it('counts a click even if sharing is unavailable', async () => {
+    await expect(sharePaper(paper, { navigatorObject: {}, locationObject: null })).resolves.toBe('unavailable')
+    expect(logEvent).toHaveBeenCalledTimes(1)
   })
 })

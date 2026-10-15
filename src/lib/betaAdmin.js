@@ -116,6 +116,8 @@ export function metricSections(stats) {
   const o = stats.opened || {}
   const p = stats.papers || {}
   const sv = stats.survey || {}
+  const shares = stats.shares || {}
+  const shareAvailability = availability(stats, 'paper_share_clicked')
   const acc = availability(stats, 'sponsored_accounts')
   const sch = availability(stats, 'digest_scheduled_run')
   const br = availability(stats, 'digest_run')
@@ -180,6 +182,14 @@ export function metricSections(stats) {
       rows: [
         row('Digest opens', o.events, 'Times a digest with results was opened for the first time after it was produced.', op),
         row('Unique users who opened a digest', o.users, 'Distinct accounts behind those opens.', op),
+      ],
+    },
+    {
+      title: 'Paper sharing',
+      caveat: 'Share button clicks by enrolled beta users, excluding test accounts and test periods. Counts include cancelled sharing and do not indicate delivery. Historical sharing outcomes are not counted as clicks.',
+      rows: [
+        row('Total share clicks', shares.clicks, 'Recorded Share button clicks in the selected range, including repeated clicks by the same account.', shareAvailability),
+        row('Unique sharers', shares.users, 'Distinct authenticated beta accounts that clicked Share in the selected range.', shareAvailability),
       ],
     },
     {
