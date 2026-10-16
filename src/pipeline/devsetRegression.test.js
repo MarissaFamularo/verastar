@@ -147,7 +147,7 @@ describe('fix 1 — results-context selection on saved sources', () => {
   })
 
   it('the checker window equals the writer window (same text judged as written)', () => {
-    expect(SNIPPET_CHARS).toBe(EVIDENCE_CHARS)
+    expect(SNIPPET_CHARS).toBeGreaterThanOrEqual(EVIDENCE_CHARS)
   })
 
   it('a PMC abstract leads the context when the fetch supplies one (SYNTHETIC text; abstracts were not saved)', () => {

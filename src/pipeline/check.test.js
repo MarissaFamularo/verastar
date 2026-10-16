@@ -73,13 +73,10 @@ describe('checkFindings — verdict plumbing', () => {
     expect(out.has('ghost')).toBe(false)
   })
 
-  it('slices the snippet to the shared evidence window (SNIPPET_CHARS)', async () => {
-    extractStructured.mockResolvedValue({ verdicts: [] })
+  it('rejects oversized evidence before dispatch rather than slicing it', async () => {
     const long = 'a'.repeat(SNIPPET_CHARS + 500)
-    await checkFindings({ items: [{ id: 'p1', finding: 'claim', snippet: long }] })
-    const content = extractStructured.mock.calls[0][0].content
-    expect(content).not.toContain('a'.repeat(SNIPPET_CHARS + 1))
-    expect(content).toContain('a'.repeat(SNIPPET_CHARS))
+    await expect(checkFindings({ items: [{ id: 'p1', finding: 'claim', snippet: long }] })).rejects.toThrow(/no truncated evidence/)
+    expect(extractStructured).not.toHaveBeenCalled()
   })
 })
 

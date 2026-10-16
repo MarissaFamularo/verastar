@@ -71,7 +71,7 @@ describe('scheduled ranking reads the evidence window', () => {
     for (const c of candidates) {
       expect(c.summary).toContain(RESULT)
       expect(c.summary).not.toContain('0.50')
-      expect(c.summary).toMatch(/^\[Evidence window: Results section/)
+      expect(c.summary).toMatch(/^\[Evidence window: complete Results sections/)
     }
     // The persisted digest still carries the complete verification corpus.
     const saved = mem.get('digests/daily:latest')

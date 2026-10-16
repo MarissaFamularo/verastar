@@ -14,7 +14,8 @@ import { PILOT_DIGEST_LIMIT } from './digestLimit.js'
 // model sneaks in.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
-import { checkFindings, SNIPPET_CHARS } from './check.js'
+import { checkFindings } from './check.js'
+import { assertEvidenceBatch, assertProseRequest } from './evidenceWindow.js'
 import { repairNumberFree, allowedNumbers, allowedTimepoints, allowedCiLevels, numbersGrounded, CI_LEVEL_RE } from './numberFree.js'
 import { tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary } from './primaryResult.js'
 import { journalPreferenceText } from './journals.js'
@@ -219,6 +220,7 @@ export async function triage({
   // and a caller that already filtered the list all land here.
   if (!Array.isArray(candidates) || candidates.length === 0) return []
   if (candidates.length > PILOT_DIGEST_LIMIT) throw new Error('Pilot digests are limited to 20 papers; no ranking request was sent.')
+  assertEvidenceBatch(candidates.map(c => c.summary || ''))
   const stars = northStars.length ? northStars.join(', ') : '(none set)'
   const projs = projects.length ? projects.join(', ') : '(none set)'
   const content =
@@ -245,10 +247,11 @@ export async function triage({
         const steering = (Array.isArray(c.topicSteering) ? c.topicSteering : [])
           .map((row) => `${row.topic || 'Unnamed topic'} → ${(row.northStars || []).length ? row.northStars.join(', ') : '(unmapped)'}`)
           .join('; ')
-        return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\nSearch steering: ${steering || '(not available)'}\n${(c.summary || '').slice(0, SNIPPET_CHARS)}\n${primaryLine}Verified results:\n${facts}`
+        return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\nSearch steering: ${steering || '(not available)'}\n${c.summary || ''}\n${primaryLine}Verified results:\n${facts}`
       })
       .join('\n\n')
 
+  assertProseRequest(buildSystem(rubric), content)
   const result = await extractStructured({
     model,
     system: buildSystem(rubric),

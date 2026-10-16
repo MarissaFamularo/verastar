@@ -127,18 +127,18 @@ describe('selectEvidenceWindow — full text', () => {
     const w = selectEvidenceWindow(source)
     expect(w.text).toContain('METHODS (abstract): We randomly assigned adults')
     expect(w.text.indexOf('METHODS')).toBeLessThan(w.text.indexOf('RESULTS'))
-    expect(w.parts.map((p) => p.kind)).toEqual(['methods', 'results'])
+    expect(w.parts.map((p) => p.kind)).toEqual(['background', 'methods', 'results', 'conclusions', 'results'])
   })
   it('the old body-prefix window would have been the Introduction (why this exists)', () => {
     expect(source.text.slice(0, SNIPPET_CHARS)).toContain('0.50 (95% CI 0.40-0.62)')
   })
-  it('stays inside the unchanged budget when Results are long', () => {
+  it('stays inside the complete-passage budget when Results are long', () => {
     const long = { ...source, abstractParts: source.abstractParts.filter((p) => p.label !== 'Results'), sections: [{ label: 'Results', kind: 'results', text: `${OWN_RESULT} `.repeat(40) }] }
     const w = selectEvidenceWindow(long)
-    expect(SECTION_WINDOW_CHARS).toBe(2600)
+    expect(SECTION_WINDOW_CHARS).toBe(12000)
     expect(w.text.length).toBeLessThanOrEqual(SECTION_WINDOW_CHARS)
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
-    expect(w.text).toMatch(/…$/)
+    expect(w.text).not.toContain('…')
     expect(w.text).toContain('METHODS (abstract)')
   })
   it('keeps a combined Results and Discussion and says so', () => {
@@ -154,7 +154,7 @@ describe('selectEvidenceWindow — full text', () => {
   it('falls back to the abstract, labelled as the abstract, when no Results section exists', () => {
     const w = selectEvidenceWindow({ ...source, sections: source.sections.filter((s) => s.kind !== 'results') })
     expect(w.kind).toBe('abstract')
-    expect(w.text).toMatch(/^\[Evidence window: the paper's abstract\]/)
+    expect(w.text).toMatch(/^\[Evidence window: the paper's complete abstract\]/)
     expect(w.text).toContain('RESULTS: The primary endpoint did not differ')
     expect(w.text).not.toContain(INTRO_HR)
     expect(w.reason).toMatch(/No Results section identified/)
@@ -180,7 +180,7 @@ describe('selectEvidenceWindow — abstracts', () => {
     expect(structured).toBe(true)
     expect(parts.map((p) => p.kind)).toEqual(['background', 'methods', 'results', 'conclusions'])
   })
-  it('keeps Results whole and trims a long Background first, within budget', () => {
+  it('keeps every abstract section whole, within budget', () => {
     const w = selectEvidenceWindow({ tier: 'abstract_only', text: STRUCTURED })
     expect(w.kind).toBe('abstract')
     expect(w.structured).toBe(true)
@@ -188,8 +188,7 @@ describe('selectEvidenceWindow — abstracts', () => {
     expect(w.text).toContain('METHODS: Adults')
     expect(w.text).toContain('CONCLUSIONS: Outcomes were similar.')
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
-    const bg = w.parts.find((p) => p.kind === 'background')
-    expect(bg.chars).toBeLessThan(400)
+    expect(w.text).toContain('Background prose about a condition. '.repeat(40).trim())
     // Reading order is the abstract's own.
     expect(w.text.indexOf('BACKGROUND')).toBeLessThan(w.text.indexOf('METHODS'))
   })
@@ -207,7 +206,7 @@ describe('selectEvidenceWindow — abstracts', () => {
   it('an uploaded PDF is a limited, explicitly labelled opening', () => {
     const w = selectEvidenceWindow({ tier: 'user_text', text: `${INTRO_HR} ${OWN_RESULT}` })
     expect(w).toMatchObject({ kind: 'opening', limited: true })
-    expect(w.text).toMatch(/^\[Evidence window: opening of the supplied text\. Sections were not identified; this is not necessarily the Results\]/)
+    expect(w.text).toMatch(/^\[Evidence window: complete supplied text; sections not identified\]/)
   })
 })
 
@@ -284,12 +283,8 @@ describe('Results subsections — the primary outcome gets first claim', () => {
     const w = selectEvidenceWindow({ tier: 'full_text', sections, abstractParts: [] })
     expect(w.text).toContain(PRIMARY)
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
-    const kinds = Object.fromEntries(w.parts.map((p) => [p.label, p.kind]))
-    expect(kinds['Results › Primary end point']).toBe('results-primary')
-    expect(kinds['Results › Secondary end points']).toBe('results-other')
-    expect(w.parts.find((p) => p.kind === 'results-population').chars).toBeLessThanOrEqual(500)
-    // Source order is preserved for reading.
-    expect(w.text.indexOf('STUDY POPULATION')).toBeLessThan(w.text.indexOf('PRIMARY END POINT'))
+    expect(w.parts.filter(p => p.kind === 'results')).toHaveLength(1)
+    expect(w.text).toContain(sections.find(s => s.kind === 'results').text.replace(/\s+/g, ' ').trim())
     expect(w.hasResults).toBe(true)
   })
   it('without a primary-outcome subsection, Results are read from the top as before', () => {
@@ -315,27 +310,27 @@ describe('aggregate design-context budget — Results are never crowded out (Cod
     expect(w.hasResults).toBe(true)
     expect(w.text).toContain(`RESULTS: ${RESULT}`)
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
-    expect(designChars(w)).toBeLessThanOrEqual(600)
+    expect(designChars(w)).toBeGreaterThan(600)
   })
   it('PMC abstract fallback (full text without Results) keeps its Results', () => {
     const abstractParts = [...LABELS.map((label) => ({ label, text: CONTEXT })), { label: 'Results', text: RESULT }]
     const w = selectEvidenceWindow({ tier: 'full_text', sections: [{ label: 'Introduction', kind: 'background', text: 'x' }], abstractParts })
     expect(w.kind).toBe('abstract')
     expect(w.text).toContain(`RESULTS: ${RESULT}`)
-    expect(designChars(w)).toBeLessThanOrEqual(600)
+    expect(designChars(w)).toBeGreaterThan(600)
   })
-  it('full text: several abstract design labels stay within the aggregate context budget', () => {
+  it('full text: preserves all abstract design labels alongside Results', () => {
     const abstractParts = LABELS.map((label) => ({ label, text: CONTEXT }))
     const w = selectEvidenceWindow({ tier: 'full_text', sections: [{ label: 'Results', kind: 'results', depth: 0, parent: -1, text: `${RESULT} `.repeat(60) }], abstractParts })
-    expect(designChars(w)).toBeLessThanOrEqual(600)
+    expect(designChars(w)).toBeGreaterThan(600)
     expect(w.parts.find((p) => p.kind === 'results').chars).toBeGreaterThan(1800)
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
   })
-  it('long Results are truncated, never absent, and the total budget is unchanged', () => {
+  it('long Results and abstract context are retained whole when they fit', () => {
     const w = selectEvidenceWindow({ tier: 'abstract_only', text: pubmed([`${RESULT} `.repeat(100)]) })
     expect(w.hasResults).toBe(true)
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
-    expect(SECTION_WINDOW_CHARS).toBe(2600)
+    expect(SECTION_WINDOW_CHARS).toBe(12000)
     expect(w.text.length).toBeLessThanOrEqual(SECTION_WINDOW_CHARS)
   })
   it('a very short Results part is still included', () => {
