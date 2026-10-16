@@ -71,14 +71,18 @@ describe('PARADE trace: every supporting quote is real, and the checkpoint rejec
   it('renders a usable, non-empty summary that keeps the conflicting analyses and the design caveats', () => {
     const h = buildResultHandoff(load())
     const plan = selectAll(h)
-    expect(plan.every(p => p.includeEstimate === false)).toBe(true) // no tuple verified under the current verifier
+    // Only the conventional Cox tuple verifies (estimates-v14 admits "95% CI of"); the
+    // three others claim a P the verifier refuses to bind and stay qualitative.
+    expect(plan.map(p => p.includeEstimate)).toEqual([true, false, false, false])
     const take = applyResultApproval(h, plan, accept(plan.map(p => p.id)))
     expect(take.check.verdict).toBe('supported')
     expect(take.finding).toContain('overall survival: combined therapy (CT) versus other postoperative antithrombotic regimens; worse overall survival. Analysis: multivariable Cox regression model.')
+    expect(take.finding).toContain('Estimate: 1.30 hazard ratio (CI 1.04–1.61).')
     expect(take.finding).toContain('overall survival: CT versus non-CT; did not differ significantly. Analysis: weighted analysis.')
     expect(take.finding).toContain('Outcome timepoint: median follow-up of 30 months.')
     expect(take.finding).toContain('bleeding complications not systematically captured.')
-    expect(take.finding).not.toMatch(/\d\.\d\d? hazard ratio/)
+    expect(take.finding).not.toMatch(/1\.37|1\.20|1\.28/)
+    expect(take.findingBindings).toHaveLength(1)
     expect(restoreResultApproval(load(), take).finding).toBe(take.finding)
   })
   it('renders the estimate once the tuple verifies, bound to its own quote', () => {

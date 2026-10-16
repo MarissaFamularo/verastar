@@ -56,6 +56,38 @@ describe('estimate tier — positive controls', () => {
   })
 })
 
+// 2026-10-16 (estimates-v14): MDPI prints the joiner as a word — "HR of 1.30, 95% CI of
+// 1.04–1.61" (PARADE, PMID 42513277). The PARADE Cox tuple is the positive control; every
+// tuple there that claims a P the verifier refuses to bind (log-rank qualifiers, a trailing
+// "C = 0.53") stays unresolved, as before.
+describe('estimate tier — "95% CI of" joiner (estimates-v14)', () => {
+  const PARADE = 'According to the multivariable Cox regression model (Table 4), patients receiving combined therapy (CT) experienced worse overall survival compared with patients receiving other postoperative antithrombotic regimens (CT vs. others: HR of 1.30, 95% CI of 1.04–1.61; C = 0.523; AIC = 6312).'
+  const cox = est({ name: 'Overall survival, CT vs others', unit: 'hazard ratio', value: 1.3, ci_low: 1.04, ci_high: 1.61, p_value: null, source_quote: '(CT vs. others: HR of 1.30, 95% CI of 1.04–1.61; C = 0.523; AIC = 6312)' })
+  it('validates value and CI joined by "of"', () => {
+    const v = verify(cox, PARADE)
+    expect(v.tier).toBe(TIERS.ESTIMATE)
+    expect(v.flagged).toBe(false)
+    expect(isRelationshipValidated(v)).toBe(true)
+  })
+  it('[false-verify guard] still refuses a borrowed bound, a wrong value, and a P the text does not bind', () => {
+    expect(verify({ ...cox, ci_high: 1.56 }, PARADE).tier).not.toBe(TIERS.ESTIMATE)
+    expect(verify({ ...cox, value: 1.03 }, PARADE).tier).not.toBe(TIERS.ESTIMATE)
+    expect(verify({ ...cox, p_value: 0.523 }, PARADE).tier).not.toBe(TIERS.ESTIMATE)
+    const weighted = 'CT was associated with significantly reduced primary patency compared with non-CT patients (CT vs. non-CT: HR of 1.37, 95% CI of 1.02–1.85; log-rank test, p < 0.0001; robust log-rank, p = 0.03; Figure 6).'
+    const q = est({ unit: 'hazard ratio', value: 1.37, ci_low: 1.02, ci_high: 1.85, p_value: 0.03, source_quote: '(CT vs. non-CT: HR of 1.37, 95% CI of 1.02–1.85; log-rank test, p < 0.0001; robust log-rank, p = 0.03; Figure 6)' })
+    expect(verify(q, weighted).tier).not.toBe(TIERS.ESTIMATE)
+    expect(verify({ ...q, p_value: null }, weighted).tier).toBe(TIERS.ESTIMATE)
+  })
+  it('[false-verify guard] "of" must be followed directly by the bounds', () => {
+    const text = 'the risk was higher (HR of 1.30, 95% CI of the difference 1.04–1.61)'
+    expect(verify({ ...cox, source_quote: text }, text).tier).not.toBe(TIERS.ESTIMATE)
+  })
+  it('keeps a v13 verdict as stamped in every tier', () => {
+    const old = { verificationVersion: '2026-10-14.estimates-v13', tier: 'verified-estimate', flagged: false, relationshipValidated: true }
+    expect(evidenceVerdict(old).tier).toBe('verified-estimate')
+  })
+})
+
 describe('estimate tier — [false-verify guards]', () => {
   const expectWithheld = (quantity, source, opts) => {
     const v = verify(quantity, source, opts)
