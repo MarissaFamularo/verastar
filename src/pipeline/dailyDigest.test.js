@@ -101,7 +101,7 @@ describe('runDailyDigest', () => {
     const now = () => t
     vi.mocked(runPaper).mockImplementation(async (paper) => {
       t += 40_000 // each paper "takes" 40s
-      return { paper, citation: { pmid: paper.pmid }, design: 'RCT', source: { tier: 'full_text', hasBody: true }, sourceDoc: { text: '', tables: '' }, rows: [] }
+      return { paper, citation: { pmid: paper.pmid }, design: 'RCT', source: { tier: 'full_text', hasBody: true }, sourceDoc: { text: 'Results: Mortality was similar between groups.', tables: '' }, rows: [] }
     })
     const first = await runDailyDigest({ budgetMs: 70_000, now })
     expect(first.phase).toBe('reading')
@@ -131,7 +131,7 @@ describe('runDailyDigest', () => {
     const now = () => t
     vi.mocked(runPaper).mockImplementation(async (paper) => {
       t += 20_000 // three papers = 60s of a 100s budget, past the handoff fraction
-      return { paper, citation: { pmid: paper.pmid }, design: 'RCT', source: { tier: 'full_text', hasBody: true }, sourceDoc: { text: '', tables: '' }, rows: [] }
+      return { paper, citation: { pmid: paper.pmid }, design: 'RCT', source: { tier: 'full_text', hasBody: true }, sourceDoc: { text: 'Results: Mortality was similar between groups.', tables: '' }, rows: [] }
     })
     expect(RANK_HANDOFF_FRACTION).toBeLessThan(0.6)
     const first = await runDailyDigest({ budgetMs: 100_000, now })

@@ -15,7 +15,7 @@ import { PILOT_DIGEST_LIMIT } from './digestLimit.js'
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
 import { checkFindings } from './check.js'
-import { assertEvidenceBatch, assertProseRequest } from './evidenceWindow.js'
+import { assertEvidenceBatch, assertProseRequest, proseRequestBudget } from './evidenceWindow.js'
 import { repairNumberFree, allowedNumbers, allowedTimepoints, allowedCiLevels, numbersGrounded, CI_LEVEL_RE } from './numberFree.js'
 import { tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary } from './primaryResult.js'
 import { journalPreferenceText } from './journals.js'
@@ -251,13 +251,22 @@ export async function triage({
       })
       .join('\n\n')
 
-  assertProseRequest(buildSystem(rubric), content)
+  const outputTokens = maxTokens ?? triageMaxTokens(candidates.length)
+  if (!proseRequestBudget(buildSystem(rubric), content, TRIAGE_SCHEMA, outputTokens).fits && candidates.length > 1) {
+    const middle = Math.ceil(candidates.length / 2)
+    const rankings = []
+    for (const group of [candidates.slice(0, middle), candidates.slice(middle)]) {
+      rankings.push(...await triage({ northStars, projects, journalPreferences, rubric, candidates: group, model, maxTokens }))
+    }
+    return rankings
+  }
+  assertProseRequest(buildSystem(rubric), content, TRIAGE_SCHEMA, outputTokens)
   const result = await extractStructured({
     model,
     system: buildSystem(rubric),
     content,
     schema: TRIAGE_SCHEMA,
-    maxTokens: maxTokens ?? triageMaxTokens(candidates.length),
+    maxTokens: outputTokens,
     thinking: { type: 'disabled' }, // ranking/summary is not a reasoning task; keep output for JSON
   })
   // The guard, unconditionally — every ranking is sanitized against ITS paper's verified

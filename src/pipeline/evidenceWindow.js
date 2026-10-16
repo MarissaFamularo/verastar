@@ -1,8 +1,15 @@
 // Complete source passages for both prose stages. Extraction and numeric verification
 // keep their original corpora. Never turn a qualified result into a clipped fragment.
-export const SECTION_WINDOW_CHARS = 12000
-export const MAX_BATCH_EVIDENCE_BYTES = 100000
-export const EVIDENCE_WINDOW_VERSION = '2026-10-16.complete-passages-v5'
+import { PRICES } from '../../supabase/functions/_shared/pricing.js'
+// Budget against the smaller prose model. One token per serialized UTF-8 byte,
+// plus 25% and a fixed pad, deliberately overestimates ordinary prose. This is a
+// conservative local admission estimate, not a provider token count.
+export const PROSE_CONTEXT_TOKENS = Math.min(...Object.values(PRICES).map(p => p.contextWindowTokens))
+export const PROSE_OUTPUT_TOKENS = 8192
+const PROMPT_HEADROOM_TOKENS = 32768
+export const SECTION_WINDOW_CHARS = Math.floor((PROSE_CONTEXT_TOKENS - PROSE_OUTPUT_TOKENS - PROMPT_HEADROOM_TOKENS) / 1.25)
+export const EVIDENCE_WINDOW_VERSION = '2026-10-16.complete-passages-v6'
+const utf8Bytes = text => new TextEncoder().encode(String(text ?? '')).length
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim()
 
 // Section kind from a label (and a JATS sec-type when present). Results must START the
@@ -106,7 +113,7 @@ export function selectEvidenceWindow(source, { budget = SECTION_WINDOW_CHARS } =
       : "[Evidence window: the paper's complete abstract]"
   const lines = parts.map(p => `${p.label ? p.label.toUpperCase() : p.from === 'abstract' ? 'ABSTRACT' : 'TEXT'}${p.from === 'abstract' && kind === 'results' ? ' (abstract)' : ''}: ${p.text}`)
   const text = [header, ...lines].join('\n')
-  if (text.length > limit) return unavailable(`Complete abstract and relevant source sections require ${text.length} characters, exceeding the ${limit}-character evidence limit. No truncated evidence was sent; use a smaller complete source or review the paper directly.`, true)
+  if (text.length > limit || utf8Bytes(text) > SECTION_WINDOW_CHARS) return unavailable(`Complete abstract and relevant source sections require ${text.length} characters, exceeding the ${limit}-character evidence limit. No truncated evidence was sent; review this source directly; its complete evidence cannot fit the conservative model budget.`, true)
   return { version: EVIDENCE_WINDOW_VERSION, kind, basis, limited: kind === 'opening', blocked: false,
     hasResults: parts.some(p => p.kind === 'results'), structured: parts.some(p => p.label),
     combinedWithDiscussion: parts.some(p => p.kind === 'results' && /discussion/i.test(p.label)),
@@ -117,6 +124,17 @@ export function selectEvidenceWindow(source, { budget = SECTION_WINDOW_CHARS } =
 export function evidenceWindowFor(result) {
   const stored = result?.evidenceWindow
   if (stored?.version === EVIDENCE_WINDOW_VERSION && typeof stored.text === 'string') return stored
+  // Old full-text rows keep the complete verification corpus, but not its section
+  // tree. Use that whole corpus verbatim, never an old clipped window or an inferred
+  // Results boundary. The checker sees honest provenance, not fabricated labels.
+  if (result?.source?.tier === 'full_text' && !result?.evidenceSource) {
+    const body = result?.sourceDoc?.text
+    if (!String(body || '').trim()) return unavailable('Saved full-text evidence is missing. Re-read the source before summarizing.', true)
+    const text = '[Complete saved full-text source; original section structure unavailable]\n' + body + (result.sourceDoc.tables ? '\nTABLES:\n' + result.sourceDoc.tables : '')
+    if (utf8Bytes(text) > SECTION_WINDOW_CHARS) return unavailable('Complete saved source exceeds the conservative model budget. Re-read the source to recover its complete abstract and Results sections.', true)
+    return { version: EVIDENCE_WINDOW_VERSION, kind: 'complete_source', basis: 'saved_full_text', legacy: true, limited: true, blocked: false, text,
+      reason: 'Complete saved verification corpus retained; no section boundaries inferred.', parts: [{ from: 'saved_source', chars: text.length }] }
+  }
   const rebuilt = selectEvidenceWindow(result?.evidenceSource || { tier: result?.source?.tier || 'abstract_only', text: result?.sourceDoc?.text || '' })
   return { ...rebuilt, legacy: true }
 }
@@ -128,17 +146,19 @@ export function evidenceSummary(result) {
   return window.text
 }
 
-// Both prose stages enforce the same bound without modifying the evidence bytes.
+// Per-paper source admission reserves room for profile, claims and output. The
+// final request check below includes those fields and the structured-output schema.
 export function assertCompleteEvidence(text) {
-  if (String(text || '').length > SECTION_WINDOW_CHARS) throw new Error('Evidence exceeds the complete-passage limit; no truncated evidence was sent.')
+  if (utf8Bytes(text) > SECTION_WINDOW_CHARS) throw new Error('Evidence exceeds the complete-passage model budget; no truncated evidence was sent.')
 }
 export function assertEvidenceBatch(texts) {
   for (const text of texts) assertCompleteEvidence(text)
-  const bytes = texts.reduce((n, text) => n + new TextEncoder().encode(String(text || '')).length, 0)
-  if (bytes > MAX_BATCH_EVIDENCE_BYTES) throw new Error('Complete evidence exceeds the batch context limit; split the batch before summarizing. No truncated evidence was sent.')
 }
-
-// Bound the complete serialized prompt as well as sources (profile/claims also consume context).
-export function assertProseRequest(system, content) {
-  if (new TextEncoder().encode(String(system) + String(content)).length > 150000) throw new Error('Complete prose request exceeds the context limit; split the batch. No truncated evidence was sent.')
+export function proseRequestBudget(system, content, schema = {}, maxTokens = PROSE_OUTPUT_TOKENS) {
+  const serialized = JSON.stringify({ system, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema } } })
+  const inputTokens = Math.ceil(utf8Bytes(serialized) * 1.25) + 1024
+  return { inputTokens, outputTokens: maxTokens, contextTokens: PROSE_CONTEXT_TOKENS, fits: inputTokens + maxTokens <= PROSE_CONTEXT_TOKENS }
+}
+export function assertProseRequest(system, content, schema, maxTokens) {
+  if (!proseRequestBudget(system, content, schema, maxTokens).fits) throw new Error('Complete prose request exceeds the conservative token budget. No truncated evidence was sent.')
 }

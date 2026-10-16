@@ -14,7 +14,7 @@
 // opt-out at the call sites.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
-import { sectionKind, SECTION_WINDOW_CHARS, assertEvidenceBatch, assertProseRequest } from './evidenceWindow.js'
+import { sectionKind, SECTION_WINDOW_CHARS, assertEvidenceBatch, assertProseRequest, proseRequestBudget } from './evidenceWindow.js'
 
 // The shared bound is checked, never sliced. Writer and checker receive identical
 // complete evidence; duplicate finding/caution snippets are sent only once.
@@ -115,8 +115,18 @@ export async function checkFindings({ items, model = MODELS.fast, maxTokens }) {
       }).join('\n')
     ).join('\n\n')
 
-  assertProseRequest(SYSTEM, content)
-  const result = await extractStructured({ model, system: SYSTEM, content, schema: CHECK_SCHEMA, maxTokens: maxTokens ?? Math.min(8192, Math.max(2048, checkable.length * 128)) })
+  const outputTokens = maxTokens ?? Math.min(8192, Math.max(2048, checkable.length * 128))
+  if (!proseRequestBudget(SYSTEM, content, CHECK_SCHEMA, outputTokens).fits && groups.length > 1) {
+    const middle = Math.ceil(groups.length / 2)
+    for (const groupSet of [groups.slice(0, middle), groups.slice(middle)]) {
+      const snippets = new Set(groupSet.map(group => group.snippet))
+      const checked = await checkFindings({ items: checkable.filter(item => snippets.has(String(item.snippet))), model, maxTokens })
+      for (const [id, verdict] of checked) out.set(id, verdict)
+    }
+    return out
+  }
+  assertProseRequest(SYSTEM, content, CHECK_SCHEMA, outputTokens)
+  const result = await extractStructured({ model, system: SYSTEM, content, schema: CHECK_SCHEMA, maxTokens: outputTokens })
 
   // Match each returned verdict to a claim id. Models echo ids with decoration ("[123]",
   // "CLAIM 123", "id: 123", quotes, stray spaces); normalizing that is bookkeeping, not

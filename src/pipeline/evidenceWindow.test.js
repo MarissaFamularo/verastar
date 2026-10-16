@@ -135,7 +135,7 @@ describe('selectEvidenceWindow — full text', () => {
   it('stays inside the complete-passage budget when Results are long', () => {
     const long = { ...source, abstractParts: source.abstractParts.filter((p) => p.label !== 'Results'), sections: [{ label: 'Results', kind: 'results', text: `${OWN_RESULT} `.repeat(40) }] }
     const w = selectEvidenceWindow(long)
-    expect(SECTION_WINDOW_CHARS).toBe(12000)
+    expect(SECTION_WINDOW_CHARS).toBeGreaterThan(12000)
     expect(w.text.length).toBeLessThanOrEqual(SECTION_WINDOW_CHARS)
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
     expect(w.text).not.toContain('…')
@@ -211,11 +211,11 @@ describe('selectEvidenceWindow — abstracts', () => {
 })
 
 describe('old rows (saved before windows existed)', () => {
-  it('a full-text row is explicitly unavailable, never its saved body prefix', () => {
+  it('a full-text row retains the whole saved corpus, never a body prefix', () => {
     const old = { source: { tier: 'full_text' }, sourceDoc: { text: `${INTRO_HR} ${OWN_RESULT}`, tables: '' } }
     const w = evidenceWindowFor(old)
-    expect(w).toMatchObject({ kind: 'unavailable', limited: true, legacy: true, text: '' })
-    expect(evidenceSummary(old)).toBe('')
+    expect(w).toMatchObject({ kind: 'complete_source', limited: true, legacy: true })
+    expect(evidenceSummary(old)).toContain(old.sourceDoc.text)
   })
   it('an abstract-only row is rebuilt from its saved abstract with no fetch', () => {
     const old = { source: { tier: 'abstract_only' }, sourceDoc: { text: `T.\n\nMETHODS: Adults were randomized.\n\nRESULTS: ${OWN_RESULT}`, tables: '' } }
@@ -229,7 +229,7 @@ describe('old rows (saved before windows existed)', () => {
   })
   it('a stored window of an unknown version is rebuilt, not trusted', () => {
     const w = evidenceWindowFor({ evidenceWindow: { version: 'future', text: 'x' }, source: { tier: 'full_text' }, sourceDoc: { text: INTRO_HR } })
-    expect(w.kind).toBe('unavailable')
+    expect(w.kind).toBe('complete_source')
   })
 })
 
@@ -330,7 +330,7 @@ describe('aggregate design-context budget — Results are never crowded out (Cod
     const w = selectEvidenceWindow({ tier: 'abstract_only', text: pubmed([`${RESULT} `.repeat(100)]) })
     expect(w.hasResults).toBe(true)
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
-    expect(SECTION_WINDOW_CHARS).toBe(12000)
+    expect(SECTION_WINDOW_CHARS).toBeGreaterThan(12000)
     expect(w.text.length).toBeLessThanOrEqual(SECTION_WINDOW_CHARS)
   })
   it('a very short Results part is still included', () => {
