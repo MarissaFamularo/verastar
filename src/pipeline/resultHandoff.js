@@ -1,10 +1,10 @@
 // Result proposals are not scientific proof. Exact source location and numeric
 // verification are deterministic; relationships require the independent checker.
-import { verify } from './verify.js'
+import { verify, normalize } from './verify.js'
 import { fmtNum } from '../lib/format.js'
 import { numbersGrounded } from './numberFree.js'
 
-export const HANDOFF_VERSION = 'result-handoff-v2'
+export const HANDOFF_VERSION = 'result-handoff-v3'
 export const MAX_HANDOFF_BYTES = 127232
 export const CONTEXT_FIELDS = ['outcome', 'intervention', 'comparator', 'analysis', 'interventionTiming', 'outcomeTimepoint', 'endpointRole', 'analysisRole', 'effect']
 const object = properties => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties })
@@ -54,30 +54,61 @@ export function normalizeResultContexts(contexts) {
   return normalized
 }
 
+// Two separate questions, answered separately and reported separately:
+//   1. Is the QUOTE real evidence?  Exact, unique substring of the supplied corpus.
+//   2. Is the LABEL faithful to it?  Verbatim is accepted as before, bar negation. A non-verbatim label
+//      is accepted only when every word of it is printed in its own quote (it may drop
+//      or reorder source words, never add any), a claim-bearing label keeps the quote's
+//      negation (verbatim or not), and its numbers are typed contextual descriptors printed in
+//      that quote.
+// Neither answer proves the label MEANS what the quote means; the checker judges that
+// against the complete source, and this gate records which labels are paraphrases.
+const LABEL_TOKEN = /[^a-z0-9]+/
+const tokens = s => normalize(s).split(LABEL_TOKEN).filter(Boolean)
+const NEGATION = new Set(['not', 'no', 'never', 'neither', 'nor', 'without', 'lack', 'lacked', 'lacking', 'absence', 'absent'])
+const CLAIM_FIELDS = ['effect', 'qualification']
+function labelFidelity(field, key) {
+  const verbatim = field.quote.includes(field.text)
+  const quoteTokens = new Set(tokens(field.quote))
+  const labelTokens = tokens(field.text)
+  if (!verbatim && (!labelTokens.length || labelTokens.some(t => !quoteTokens.has(t)))) return 'label-not-in-quote'
+  // A claim-bearing label may not shed its quote's negation, verbatim or not: "differ
+  // significantly" is a substring of "did not differ significantly".
+  const claim = CLAIM_FIELDS.some(k => key.startsWith(k))
+  if (claim && [...quoteTokens].some(t => NEGATION.has(t)) && !labelTokens.some(t => NEGATION.has(t))) return 'label-drops-negation'
+  return verbatim ? 'verbatim' : 'paraphrase'
+}
+// Typed contextual numbers: time units (including prefix and hyphenated forms), short
+// length units for anatomic descriptors, structural analysis counts, and numbered endpoint
+// classifications. No paper-specific values. They are admitted in every field, including
+// qualifications and roles, because "30-day MACEs" is an endpoint name wherever it sits.
+// Anything else numeric stays an explicit coverage failure, never pooled with estimate
+// numbers, and a number a paraphrase carries must be printed in its own quote (fidelity
+// above). The checker must still approve the meaning.
+const UNITS = '(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?|mm|cm)'
+const NUMBER = '(?:[≤≥<>]\\s*)?\\d+(?:\\.\\d+)?(?:\\s*(?:[-–]|to)\\s*\\d+(?:\\.\\d+)?)?'
+const CONTEXTUAL_UNIT = new RegExp(`\\b${UNITS}\\s+${NUMBER}|${NUMBER}(?:-|\\s+)${UNITS}\\b`, 'gi')
+function contextualNumbersStripped(text, key) {
+  let contextual = text.replace(CONTEXTUAL_UNIT, '')
+  if (key === 'analysis') contextual = contextual.replace(/\b\d+[- ](?:stage|step|level|way)\b/gi, '')
+  if (key === 'outcome') contextual = contextual
+    .replace(/\b(?:types?|grades?|stages?|classes?)\s+\d+(?:\s*(?:,|or|and|[-–])\s*\d+)*/gi, '')
+    .replace(/(^|[;])\s*\(?\d+\)?[.):]\s*/g, '$1 ')
+  return contextual
+}
+
 function locateField(field, source, id, key) {
   const invalid = reason => ({ invalid: true, reason })
   if (field == null) return null
   if (!field || typeof field.text !== 'string' || !field.text.trim() || typeof field.quote !== 'string' || !['text', 'tables'].includes(field.corpus)) return invalid('malformed-context-field')
   const text = source[field.corpus] || ''
   const start = text.indexOf(field.quote)
-  if (!field.quote || start < 0 || !field.quote.includes(field.text)) return invalid('context-not-located')
+  if (!field.quote || start < 0) return invalid('context-not-located')
   if (text.indexOf(field.quote, start + 1) !== -1) return invalid('ambiguous-context-passage')
-  // Typed contextual numbers: time units (including prefix forms), structural
-  // analysis counts, and numbered endpoint classifications. No paper-specific
-  // values. Unrecognized numbers remain explicit coverage failures, never silently
-  // pooled with estimate numbers. The checker must still approve their meanings.
-  let contextual = field.text
-  const units = '(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)'
-  const number = '(?:[≤≥<>]\\s*)?\\d+(?:\\.\\d+)?(?:\\s*(?:[-–]|to)\\s*\\d+(?:\\.\\d+)?)?'
-  if (['interventionTiming', 'outcomeTimepoint', 'intervention', 'comparator', 'analysis', 'outcome'].includes(key)) {
-    contextual = contextual.replace(new RegExp(`\\b${units}\\s+${number}|${number}(?:-|\\s+)${units}\\b`, 'gi'), '')
-  }
-  if (key === 'analysis') contextual = contextual.replace(/\b\d+[- ](?:stage|step|level|way)\b/gi, '')
-  if (key === 'outcome') contextual = contextual
-    .replace(/\b(?:types?|grades?|stages?|classes?)\s+\d+(?:\s*(?:,|or|and|[-–])\s*\d+)*/gi, '')
-    .replace(/(^|[;])\s*\(?\d+\)?[.):]\s*/g, '$1 ')
-  if (!numbersGrounded(contextual, [])) return invalid('unsupported-context-number')
-  return { text: field.text, passageId: `${id}:${key}`, corpus: field.corpus, start, end: start + field.quote.length, quote: field.quote }
+  const fidelity = labelFidelity(field, key)
+  if (fidelity !== 'verbatim' && fidelity !== 'paraphrase') return invalid(fidelity)
+  if (!numbersGrounded(contextualNumbersStripped(field.text, key), [])) return invalid('unsupported-context-number')
+  return { text: field.text, fidelity, passageId: `${id}:${key}`, corpus: field.corpus, start, end: start + field.quote.length, quote: field.quote }
 }
 
 export function buildResultHandoff(result) {
@@ -100,13 +131,24 @@ export function buildResultHandoff(result) {
     if (!Number.isInteger(index) || index < 0 || !rows[index]?.quantity || duplicate.has(index)) { diagnostics.push({ quantityIndex: index, reason: duplicate.has(index) ? 'duplicate-context-index' : 'invalid-context-index' }); continue }
     const recordId = `${id}:result:${index}`
     const fields = Object.fromEntries(CONTEXT_FIELDS.map(key => [key, locateField(context[key], source, recordId, key)]))
-    const qualifications = Array.isArray(context.qualifications) ? context.qualifications.map((f, i) => locateField(f, source, recordId, `qualification-${i}`)) : [{ invalid: true, reason: 'missing-qualifications-array' }]
-    const failures = [...Object.entries(fields), ...qualifications.map((f, i) => [`qualification-${i}`, f])].filter(([, f]) => f?.invalid)
-    const missing = ['outcome', 'intervention', 'comparator', 'effect'].filter(k => !fields[k])
+    if (!Array.isArray(context.qualifications)) { diagnostics.push({ quantityIndex: index, failures: [{ field: 'qualifications', reason: 'missing-qualifications-array' }], missing: [] }); continue }
+    const located = context.qualifications.map((f, i) => [`qualification-${i}`, locateField(f, source, recordId, `qualification-${i}`), f])
+    // A field failure removes the record: the statement's identity is unsourced. A
+    // qualification failure withholds only that caveat: the statement stays sourced, the
+    // withheld caveat is disclosed to the checker and never rendered, and the checker
+    // must refute the presentation if it misleads without it.
+    const failures = Object.entries(fields).filter(([, f]) => f?.invalid)
+    const comparison = ['intervention', 'comparator', 'effect'].filter(k => fields[k])
+    const kind = comparison.length === 3 ? 'comparative' : comparison.length === 0 ? 'descriptive' : 'partial'
+    const missing = [...(fields.outcome ? [] : ['outcome']), ...(kind === 'partial' ? ['intervention', 'comparator', 'effect'].filter(k => !fields[k]) : [])]
+    const withheld = located.filter(([, f]) => f?.invalid).map(([field, f, proposed]) => ({ field, reason: f.reason, text: typeof proposed?.text === 'string' ? proposed.text : '' }))
     if (failures.length || missing.length) { diagnostics.push({ quantityIndex: index, failures: failures.map(([field, f]) => ({ field, reason: f.reason })), missing }); continue }
+    if (withheld.length) diagnostics.push({ quantityIndex: index, withheld: withheld.map(({ field, reason }) => ({ field, reason })) })
+    const qualifications = located.filter(([, f]) => !f?.invalid).map(([, f]) => f)
     const quantity = rows[index].quantity
     const verdict = verify(quantity, source, { sourceTier: result?.source?.tier || 'full_text' })
-    records.push({ id: recordId, rowIndex: index, fields, qualifications, quantity, numeric: verdict.relationshipValidated === true && !verdict.flagged, numericStatus: verdict.relationshipValidated === true && !verdict.flagged ? 'tuple-verified' : verdict.numericCoverage ? 'tokens-present-tuple-unproven' : 'numeric-or-source-failure', verdict })
+    const numeric = verdict.relationshipValidated === true && !verdict.flagged
+    records.push({ id: recordId, rowIndex: index, kind, fields, qualifications, withheldQualifications: withheld, quantity, numeric, numericStatus: numeric ? 'tuple-verified' : verdict.numericCoverage ? 'tokens-present-tuple-unproven' : 'numeric-or-source-failure', verdict })
   }
   // Exact snapshot binding, deliberately not a lossy/non-cryptographic hash.
   // Kept app-side; never ask the checker to echo this potentially large string.
@@ -123,14 +165,17 @@ export function prepareResultPlan(handoff, selections) {
   return selections.flatMap(item => {
     const record = handoff.records.find(r => r.id === item?.id)
     if (!record || counts.get(item.id) !== 1 || typeof item.includeEstimate !== 'boolean') return []
-    // A failed numeric receipt can still support a checked qualitative result.
+    // A failed numeric receipt can still support a checked qualitative comparison. A
+    // descriptive result IS its number: without a verified tuple there is nothing to say.
+    if (record.kind === 'descriptive' && !(item.includeEstimate && record.numeric)) return []
     return [{ id: record.id, includeEstimate: item.includeEstimate && record.numeric }]
   })
 }
 
 export function renderResult(record, selection) {
   const f = record.fields
-  let text = `${f.outcome.text}: ${f.intervention.text} versus ${f.comparator.text}; ${f.effect.text}.`
+  // A descriptive result names no comparison and the template invents none.
+  let text = record.kind === 'descriptive' ? `${f.outcome.text}.` : `${f.outcome.text}: ${f.intervention.text} versus ${f.comparator.text}; ${f.effect.text}.`
   if (f.analysis) text += ` Analysis: ${f.analysis.text}${f.analysisRole ? ` (${f.analysisRole.text})` : ''}.`
   else if (f.analysisRole) text += ` Analysis role: ${f.analysisRole.text}.`
   if (f.endpointRole) text += ` Endpoint role: ${f.endpointRole.text}.`

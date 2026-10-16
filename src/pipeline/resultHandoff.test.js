@@ -218,6 +218,55 @@ it.each([
   result.resultContexts[0][key] = field(text, `${text}.`)
   expect(buildResultHandoff(result).records.map(r => r.rowIndex)).toContain(0)
 })
+it.each([['endpointRole', '30-day MACEs'], ['qualification', 'bleeding at 30 days'], ['intervention', 'bypasses longer than 75 mm'], ['comparator', 'aneurysms ≤ 20 mm']])('preserves typed contextual numbers in %s: %s', (key, text) => {
+  const result = fixture(); result.sourceDoc.text += ` ${text}.`
+  if (key === 'qualification') result.resultContexts[0].qualifications.push(field(text, `${text}.`))
+  else result.resultContexts[0][key] = field(text, `${text}.`)
+  const handoff = buildResultHandoff(result)
+  expect(handoff.records.map(r => r.rowIndex)).toContain(0)
+  expect(handoff.diagnostics).toEqual([])
+})
+it.each(['HR 0.44', 'CI 0.34–0.55', 'P = 0.01', 'mortality 40%', 'n = 638'])('withholds a qualification carrying a statistic and keeps the sourced result: %s', text => {
+  const result = fixture(); result.sourceDoc.text += ` ${text}.`
+  result.resultContexts[0].qualifications.push(field(text, `${text}.`))
+  const handoff = buildResultHandoff(result)
+  expect(handoff.records[0].qualifications).toEqual([])
+  expect(handoff.records[0].withheldQualifications).toEqual([{ field: 'qualification-0', reason: 'unsupported-context-number', text }])
+  expect(handoff.diagnostics).toEqual([{ quantityIndex: 0, withheld: [{ field: 'qualification-0', reason: 'unsupported-context-number' }] }])
+  expect(renderResult(handoff.records[0], { includeEstimate: false })).not.toContain(text)
+})
+it('accepts a label that drops or reorders quote words and rejects one that adds any', () => {
+  const result = fixture(); result.sourceDoc.text += ' Third, bleeding complications were not systematically captured.'
+  const quote = 'Third, bleeding complications were not systematically captured.'
+  result.resultContexts[0].qualifications.push(field('bleeding complications not systematically captured', quote), field('bleeding complications were not captured systematically', quote))
+  const ok = buildResultHandoff(result)
+  expect(ok.records[0].qualifications.map(q => q.fidelity)).toEqual(['paraphrase', 'paraphrase'])
+  result.resultContexts[0].qualifications = [field('bleeding complications were not captured in any center', quote)]
+  expect(buildResultHandoff(result).records[0].withheldQualifications[0].reason).toBe('label-not-in-quote')
+  result.resultContexts[0].effect = field('treatment A reduced bleeding', quote.replace('bleeding', 'bleeding'))
+  expect(buildResultHandoff(result).diagnostics[0].failures).toEqual([{ field: 'effect', reason: 'label-not-in-quote' }])
+})
+it('requires a comparison to be whole: intervention without comparator, or effect alone, is neither comparative nor descriptive', () => {
+  for (const [drop, missing] of [[['comparator'], ['comparator']], [['intervention', 'comparator'], ['intervention', 'comparator']], [['intervention', 'effect'], ['intervention', 'effect']]]) {
+    const result = fixture(); for (const k of drop) result.resultContexts[0][k] = null
+    const handoff = buildResultHandoff(result)
+    expect(handoff.records.map(r => r.rowIndex)).toEqual([1])
+    expect(handoff.diagnostics[0]).toEqual({ quantityIndex: 0, failures: [], missing })
+  }
+})
+it('renders a descriptive result with no comparison template and only with its verified tuple', () => {
+  const result = fixture(); result.sourceDoc.text += ' Overall survival was 90.3%.'
+  result.rows.push({ quantity: { name: 'Survival', quantity_type: 'single', source_quote: 'Overall survival was 90.3%.', unit: '%', value: 90.3, ci_low: null, ci_high: null } })
+  result.resultContexts.push({ quantity_index: 2, outcome: field('Overall survival', 'Overall survival was 90.3%.'), intervention: null, comparator: null, analysis: null,
+    interventionTiming: null, outcomeTimepoint: null, endpointRole: null, analysisRole: null, effect: null, qualifications: [] })
+  const handoff = buildResultHandoff(result)
+  const record = handoff.records.find(r => r.rowIndex === 2)
+  expect(record.kind).toBe('descriptive')
+  expect(record.numeric).toBe(false)
+  expect(prepareResultPlan(handoff, [{ id: record.id, includeEstimate: true }])).toEqual([])
+  expect(renderResult({ ...record, numeric: true }, { includeEstimate: true })).toBe('Overall survival. Estimate: 90.3%.')
+  expect(renderResult({ ...record, numeric: true }, { includeEstimate: true })).not.toContain('versus')
+})
 it.each(['HR 0.44', 'CI 0.34–0.55', 'P = 0.01', 'mortality 40%'])('rejects statistical numbers smuggled into labels with diagnostics: %s', text => {
   const result = fixture(); result.sourceDoc.text += ` ${text}.`
   result.resultContexts[0].analysis = field(text, `${text}.`)
