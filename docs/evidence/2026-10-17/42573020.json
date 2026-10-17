@@ -1,0 +1,735 @@
+{
+  "provenance": {
+    "artifact": "comparison-output/historical-comparison.json",
+    "recordPath": "arms.production.results[paper.id=42573020]",
+    "commit": "22c408a969b267d3c167036b2f1e891584788792",
+    "completed": "2026-10-16T01:23:04.698Z",
+    "classification": "saved controlled production-code comparison; not a capture of today's live daily digest"
+  },
+  "result": {
+    "paper": {
+      "id": "42573020",
+      "pmid": "42573020",
+      "title": "Drug-eluting balloon angioplasty versus uncoated balloon angioplasty for peripheral arterial disease of the lower limbs."
+    },
+    "citation": {
+      "pmid": "42573020",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/42573020/",
+      "author": "Ma GW et al.",
+      "year": "2026",
+      "journal": "Cochrane Database Syst Rev",
+      "title": "Drug-eluting balloon angioplasty versus uncoated balloon angioplasty for peripheral arterial disease of the lower limbs.",
+      "doi": "10.1002/14651858.CD011319.pub3",
+      "pubtypes": [
+        "Journal Article",
+        "Systematic Review",
+        "Meta-Analysis"
+      ],
+      "retracted": false,
+      "verified": true
+    },
+    "design": "meta_analysis",
+    "sourceDoc": {
+      "text": "Drug-eluting balloon angioplasty versus uncoated balloon angioplasty for \nperipheral arterial disease of the lower limbs.\n\nBACKGROUND: Atherosclerotic peripheral arterial disease (PAD) can lead to \nchronic limb-threatening ischemia (CLTI) and limb loss. Treatments include \nlifestyle modifications, medications, and both open and minimally invasive \noperative approaches, including balloon angioplasty. Drug-eluting balloon (DEB) \nangioplasty is a promising alternative to uncoated balloon angioplasty for \ntreating PAD. Ballooning and coating the inside of atherosclerotic vessels with \ncytotoxic agents inhibits cellular mechanisms responsible for atherosclerosis \nand neointimal hyperplasia, thereby preventing or postponing its complications. \nAlthough economic analyses may have demonstrated the cost-effectiveness of DEB \nangioplasty, they remain considerably more expensive than uncoated balloons, and \nthere is uncertainty around their effectiveness. This is an update of our \npreviously published 2016 review.\nOBJECTIVES: To evaluate the benefits and harms of DEB angioplasty compared with \nuncoated, plain old balloon angioplasty (POBA) in people with symptomatic \nlower-limb PAD.\nSEARCH METHODS: We systematically searched the following databases for \nrandomized controlled trials and controlled clinical trials: Cochrane Vascular \nSpecialised Register, Cochrane Central Register of Controlled Trials (CENTRAL), \nMEDLINE, Embase Ovid, and CINAHL EBSCO. We also searched the WHO International \nClinical Trials Registry Platform and ClinicalTrials.gov. We used the \nbibliographies of relevant papers to identify other studies. The most recent \nsearches were carried out on 13 March 2023.\nSELECTION CRITERIA: We included randomized controlled trials comparing DEB \nangioplasty with POBA for intermittent claudication or critical limb ischemia \n(CLI).\nDATA COLLECTION AND ANALYSIS: We used standard Cochrane methods. Our primary \noutcome was amputation. Our secondary outcomes included amputation-free \nsurvival, secondary vessel patency, change in ankle-brachial index (ABI), change \nin quality of life (QoL), change in functional walking ability, and all-cause \nmortality. We used GRADE to assess the certainty of evidence for selected \noutcomes (amputation, secondary vessel patency including target lesion \nrevascularization and binary restenosis, change in ABI, and all-cause \nmortality).\nMAIN RESULTS: A total of 31 trials randomizing 5292 participants met the \ninclusion criteria. Nineteen trials included femoropopliteal arterial lesions, \nnine included tibial arterial lesions, and three included both. The trials were \ncarried out in Europe, the US, China, Singapore, Jordan, Japan, and New Zealand. \nAll trials used paclitaxel. All but four trials were industry-sponsored. There \nwas heterogeneity in the frequency of stent deployment and antiplatelet regimens \nbetween trials. Participants were followed up for up to five years. There were \nbetter outcomes with DEB angioplasty for target lesion revascularization at one \nyear, from 204 per 1000 lesions with POBA to 80 per 1000 lesions with DEB \nangioplasty (odds ratio (OR) 0.34, 95% confidence interval (CI) 0.28 to 0.41; 23 \nstudies, 4172 participants; P < 0.00001; low-certainty evidence). DEB \nangioplasty was also superior for binary restenosis at one year, from 443 per \n1000 vessels with POBA to 187 per 1000 vessels with DEB angioplasty (OR 0.29, \n95% CI 0.23 to 0.38; 8 studies, 1288 participants; P < 0.00001; \nmoderate-certainty evidence). There was no difference between DEB angioplasty \nand POBA in amputation at one year, from 16 per 1000 participants with POBA to \n22 per 1000 participants with DEB angioplasty (OR 1.45, 95% CI 0.91 to 2.29; 27 \nstudies, 4469 participants; P = 0.12; moderate-certainty evidence); all-cause \nmortality, from 45 per 1000 participants with POBA to 44 per 1000 participants \nwith DEB angioplasty (OR 0.97, 95% CI 0.71 to 1.32; 25 studies, 4312 \nparticipants; P = 0.83; moderate-certainty evidence); or change in ABI, from 0.1 \nto 0.35 higher with POBA and 0.03 higher to 0.03 lower with DEB angioplasty \n(mean difference (MD) 0, 95% CI -0.03 to 0.03; 5 studies, 1156 participants; P = \n0.96; moderate-certainty evidence), although none of the studies were powered to \ndetect a significant difference in these clinical endpoints.\nAUTHORS' CONCLUSIONS: Meta-analysis of 31 trials with 5292 participants \ndemonstrated that there may be evidence of an advantage of DEB angioplasty \ncompared with POBA in several anatomic endpoints including late lumen loss, \ntarget lesion revascularization (low-certainty evidence), and binary restenosis \n(moderate-certainty evidence). Conversely, there may be little to no evidence of \nadvantage with DEB angioplasty for clinical endpoints such as amputation \n(moderate-quality evidence), amputation-free survival, death (moderate-quality \nevidence), change in ABI (moderate-quality evidence), QoL, or functional walking \nability. Well-designed randomized trials with long-term follow-up are needed to \nfurther compare DEB angioplasty with POBA adequately for both anatomic and \nclinical study endpoints.",
+      "tables": ""
+    },
+    "source": {
+      "tier": "abstract_only"
+    },
+    "extracted": {
+      "study_id": "42573020",
+      "design": "meta_analysis",
+      "quantities": [
+        {
+          "name": "Amputation at one year, DEB angioplasty vs POBA (OR)",
+          "quantity_type": "single",
+          "value": 1.45,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "odds ratio",
+          "ci_low": 0.91,
+          "ci_high": 2.29,
+          "p_value": 0.12,
+          "source_quote": "(OR 1.45, 95% CI 0.91 to 2.29; 27 studies, 4469 participants; P = 0.12; moderate-certainty evidence)",
+          "location_hint": "Main results, amputation"
+        },
+        {
+          "name": "Amputation at one year per 1000 participants, POBA vs DEB angioplasty",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": "POBA",
+          "first_value": 16,
+          "second_label": "DEB angioplasty",
+          "second_value": 22,
+          "unit": "per 1000 participants",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "from 16 per 1000 participants with POBA to 22 per 1000 participants with DEB angioplasty",
+          "location_hint": "Main results, amputation"
+        },
+        {
+          "name": "Target lesion revascularization at one year, DEB angioplasty vs POBA (OR)",
+          "quantity_type": "single",
+          "value": 0.34,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "odds ratio",
+          "ci_low": 0.28,
+          "ci_high": 0.41,
+          "p_value": 1e-05,
+          "source_quote": "(odds ratio (OR) 0.34, 95% confidence interval (CI) 0.28 to 0.41; 23 studies, 4172 participants; P < 0.00001; low-certainty evidence)",
+          "location_hint": "Main results, target lesion revascularization"
+        },
+        {
+          "name": "Target lesion revascularization at one year per 1000 lesions, POBA vs DEB angioplasty",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": "POBA",
+          "first_value": 204,
+          "second_label": "DEB angioplasty",
+          "second_value": 80,
+          "unit": "per 1000 lesions",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "from 204 per 1000 lesions with POBA to 80 per 1000 lesions with DEB angioplasty",
+          "location_hint": "Main results, target lesion revascularization"
+        },
+        {
+          "name": "Binary restenosis at one year, DEB angioplasty vs POBA (OR)",
+          "quantity_type": "single",
+          "value": 0.29,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "odds ratio",
+          "ci_low": 0.23,
+          "ci_high": 0.38,
+          "p_value": 1e-05,
+          "source_quote": "(OR 0.29, 95% CI 0.23 to 0.38; 8 studies, 1288 participants; P < 0.00001; moderate-certainty evidence)",
+          "location_hint": "Main results, binary restenosis"
+        },
+        {
+          "name": "Binary restenosis at one year per 1000 vessels, POBA vs DEB angioplasty",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": "POBA",
+          "first_value": 443,
+          "second_label": "DEB angioplasty",
+          "second_value": 187,
+          "unit": "per 1000 vessels",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "from 443 per 1000 vessels with POBA to 187 per 1000 vessels with DEB angioplasty",
+          "location_hint": "Main results, binary restenosis"
+        },
+        {
+          "name": "All-cause mortality, DEB angioplasty vs POBA (OR)",
+          "quantity_type": "single",
+          "value": 0.97,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "odds ratio",
+          "ci_low": 0.71,
+          "ci_high": 1.32,
+          "p_value": 0.83,
+          "source_quote": "(OR 0.97, 95% CI 0.71 to 1.32; 25 studies, 4312 participants; P = 0.83; moderate-certainty evidence)",
+          "location_hint": "Main results, all-cause mortality"
+        },
+        {
+          "name": "All-cause mortality per 1000 participants, POBA vs DEB angioplasty",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": "POBA",
+          "first_value": 45,
+          "second_label": "DEB angioplasty",
+          "second_value": 44,
+          "unit": "per 1000 participants",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "from 45 per 1000 participants with POBA to 44 per 1000 participants with DEB angioplasty",
+          "location_hint": "Main results, all-cause mortality"
+        },
+        {
+          "name": "Change in ankle-brachial index, DEB angioplasty vs POBA (MD)",
+          "quantity_type": "single",
+          "value": 0,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "mean difference",
+          "ci_low": -0.03,
+          "ci_high": 0.03,
+          "p_value": 0.96,
+          "source_quote": "(mean difference (MD) 0, 95% CI -0.03 to 0.03; 5 studies, 1156 participants; P = 0.96; moderate-certainty evidence)",
+          "location_hint": "Main results, change in ABI"
+        }
+      ]
+    },
+    "rows": [
+      {
+        "quantity": {
+          "name": "Amputation at one year, DEB angioplasty vs POBA (OR)",
+          "quantity_type": "single",
+          "value": 1.45,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "odds ratio",
+          "ci_low": 0.91,
+          "ci_high": 2.29,
+          "p_value": 0.12,
+          "source_quote": "(OR 1.45, 95% CI 0.91 to 2.29; 27 studies, 4469 participants; P = 0.12; moderate-certainty evidence)",
+          "location_hint": "Main results, amputation"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-14.estimates-v13",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 3651,
+            "length": 100,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            1.45,
+            95,
+            0.91,
+            2.29,
+            27,
+            4469,
+            0.12
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Amputation at one year per 1000 participants, POBA vs DEB angioplasty",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": "POBA",
+          "first_value": 16,
+          "second_label": "DEB angioplasty",
+          "second_value": 22,
+          "unit": "per 1000 participants",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "from 16 per 1000 participants with POBA to 22 per 1000 participants with DEB angioplasty",
+          "location_hint": "Main results, amputation"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-14.estimates-v13",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 3562,
+            "length": 88,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            16,
+            1000,
+            22,
+            1000
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Target lesion revascularization at one year, DEB angioplasty vs POBA (OR)",
+          "quantity_type": "single",
+          "value": 0.34,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "odds ratio",
+          "ci_low": 0.28,
+          "ci_high": 0.41,
+          "p_value": 1e-05,
+          "source_quote": "(odds ratio (OR) 0.34, 95% confidence interval (CI) 0.28 to 0.41; 23 studies, 4172 participants; P < 0.00001; low-certainty evidence)",
+          "location_hint": "Main results, target lesion revascularization"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-14.estimates-v13",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 3089,
+            "length": 133,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            0.34,
+            95,
+            0.28,
+            0.41,
+            23,
+            4172,
+            1e-05
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Target lesion revascularization at one year per 1000 lesions, POBA vs DEB angioplasty",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": "POBA",
+          "first_value": 204,
+          "second_label": "DEB angioplasty",
+          "second_value": 80,
+          "unit": "per 1000 lesions",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "from 204 per 1000 lesions with POBA to 80 per 1000 lesions with DEB angioplasty",
+          "location_hint": "Main results, target lesion revascularization"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-14.estimates-v13",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 3009,
+            "length": 79,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            204,
+            1000,
+            80,
+            1000
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Binary restenosis at one year, DEB angioplasty vs POBA (OR)",
+          "quantity_type": "single",
+          "value": 0.29,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "odds ratio",
+          "ci_low": 0.23,
+          "ci_high": 0.38,
+          "p_value": 1e-05,
+          "source_quote": "(OR 0.29, 95% CI 0.23 to 0.38; 8 studies, 1288 participants; P < 0.00001; moderate-certainty evidence)",
+          "location_hint": "Main results, binary restenosis"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-14.estimates-v13",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 3374,
+            "length": 102,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            0.29,
+            95,
+            0.23,
+            0.38,
+            8,
+            1288,
+            1e-05
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Binary restenosis at one year per 1000 vessels, POBA vs DEB angioplasty",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": "POBA",
+          "first_value": 443,
+          "second_label": "DEB angioplasty",
+          "second_value": 187,
+          "unit": "per 1000 vessels",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "from 443 per 1000 vessels with POBA to 187 per 1000 vessels with DEB angioplasty",
+          "location_hint": "Main results, binary restenosis"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-14.estimates-v13",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 3293,
+            "length": 80,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            443,
+            1000,
+            187,
+            1000
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "All-cause mortality, DEB angioplasty vs POBA (OR)",
+          "quantity_type": "single",
+          "value": 0.97,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "odds ratio",
+          "ci_low": 0.71,
+          "ci_high": 1.32,
+          "p_value": 0.83,
+          "source_quote": "(OR 0.97, 95% CI 0.71 to 1.32; 25 studies, 4312 participants; P = 0.83; moderate-certainty evidence)",
+          "location_hint": "Main results, all-cause mortality"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-14.estimates-v13",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 3863,
+            "length": 100,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            0.97,
+            95,
+            0.71,
+            1.32,
+            25,
+            4312,
+            0.83
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "All-cause mortality per 1000 participants, POBA vs DEB angioplasty",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": "POBA",
+          "first_value": 45,
+          "second_label": "DEB angioplasty",
+          "second_value": 44,
+          "unit": "per 1000 participants",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "from 45 per 1000 participants with POBA to 44 per 1000 participants with DEB angioplasty",
+          "location_hint": "Main results, all-cause mortality"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-14.estimates-v13",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 3774,
+            "length": 88,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            45,
+            1000,
+            44,
+            1000
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Change in ankle-brachial index, DEB angioplasty vs POBA (MD)",
+          "quantity_type": "single",
+          "value": 0,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "mean difference",
+          "ci_low": -0.03,
+          "ci_high": 0.03,
+          "p_value": 0.96,
+          "source_quote": "(mean difference (MD) 0, 95% CI -0.03 to 0.03; 5 studies, 1156 participants; P = 0.96; moderate-certainty evidence)",
+          "location_hint": "Main results, change in ABI"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-14.estimates-v13",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 4068,
+            "length": 115,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            0,
+            95,
+            -0.03,
+            0.03,
+            5,
+            1156,
+            0.96
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      }
+    ],
+    "extractionInput": "Drug-eluting balloon angioplasty versus uncoated balloon angioplasty for \nperipheral arterial disease of the lower limbs.\n\nBACKGROUND: Atherosclerotic peripheral arterial disease (PAD) can lead to \nchronic limb-threatening ischemia (CLTI) and limb loss. Treatments include \nlifestyle modifications, medications, and both open and minimally invasive \noperative approaches, including balloon angioplasty. Drug-eluting balloon (DEB) \nangioplasty is a promising alternative to uncoated balloon angioplasty for \ntreating PAD. Ballooning and coating the inside of atherosclerotic vessels with \ncytotoxic agents inhibits cellular mechanisms responsible for atherosclerosis \nand neointimal hyperplasia, thereby preventing or postponing its complications. \nAlthough economic analyses may have demonstrated the cost-effectiveness of DEB \nangioplasty, they remain considerably more expensive than uncoated balloons, and \nthere is uncertainty around their effectiveness. This is an update of our \npreviously published 2016 review.\nOBJECTIVES: To evaluate the benefits and harms of DEB angioplasty compared with \nuncoated, plain old balloon angioplasty (POBA) in people with symptomatic \nlower-limb PAD.\nSEARCH METHODS: We systematically searched the following databases for \nrandomized controlled trials and controlled clinical trials: Cochrane Vascular \nSpecialised Register, Cochrane Central Register of Controlled Trials (CENTRAL), \nMEDLINE, Embase Ovid, and CINAHL EBSCO. We also searched the WHO International \nClinical Trials Registry Platform and ClinicalTrials.gov. We used the \nbibliographies of relevant papers to identify other studies. The most recent \nsearches were carried out on 13 March 2023.\nSELECTION CRITERIA: We included randomized controlled trials comparing DEB \nangioplasty with POBA for intermittent claudication or critical limb ischemia \n(CLI).\nDATA COLLECTION AND ANALYSIS: We used standard Cochrane methods. Our primary \noutcome was amputation. Our secondary outcomes included amputation-free \nsurvival, secondary vessel patency, change in ankle-brachial index (ABI), change \nin quality of life (QoL), change in functional walking ability, and all-cause \nmortality. We used GRADE to assess the certainty of evidence for selected \noutcomes (amputation, secondary vessel patency including target lesion \nrevascularization and binary restenosis, change in ABI, and all-cause \nmortality).\nMAIN RESULTS: A total of 31 trials randomizing 5292 participants met the \ninclusion criteria. Nineteen trials included femoropopliteal arterial lesions, \nnine included tibial arterial lesions, and three included both. The trials were \ncarried out in Europe, the US, China, Singapore, Jordan, Japan, and New Zealand. \nAll trials used paclitaxel. All but four trials were industry-sponsored. There \nwas heterogeneity in the frequency of stent deployment and antiplatelet regimens \nbetween trials. Participants were followed up for up to five years. There were \nbetter outcomes with DEB angioplasty for target lesion revascularization at one \nyear, from 204 per 1000 lesions with POBA to 80 per 1000 lesions with DEB \nangioplasty (odds ratio (OR) 0.34, 95% confidence interval (CI) 0.28 to 0.41; 23 \nstudies, 4172 participants; P < 0.00001; low-certainty evidence). DEB \nangioplasty was also superior for binary restenosis at one year, from 443 per \n1000 vessels with POBA to 187 per 1000 vessels with DEB angioplasty (OR 0.29, \n95% CI 0.23 to 0.38; 8 studies, 1288 participants; P < 0.00001; \nmoderate-certainty evidence). There was no difference between DEB angioplasty \nand POBA in amputation at one year, from 16 per 1000 participants with POBA to \n22 per 1000 participants with DEB angioplasty (OR 1.45, 95% CI 0.91 to 2.29; 27 \nstudies, 4469 participants; P = 0.12; moderate-certainty evidence); all-cause \nmortality, from 45 per 1000 participants with POBA to 44 per 1000 participants \nwith DEB angioplasty (OR 0.97, 95% CI 0.71 to 1.32; 25 studies, 4312 \nparticipants; P = 0.83; moderate-certainty evidence); or change in ABI, from 0.1 \nto 0.35 higher with POBA and 0.03 higher to 0.03 lower with DEB angioplasty \n(mean difference (MD) 0, 95% CI -0.03 to 0.03; 5 studies, 1156 participants; P = \n0.96; moderate-certainty evidence), although none of the studies were powered to \ndetect a significant difference in these clinical endpoints.\nAUTHORS' CONCLUSIONS: Meta-analysis of 31 trials with 5292 participants \ndemonstrated that there may be evidence of an advantage of DEB angioplasty \ncompared with POBA in several anatomic endpoints including late lumen loss, \ntarget lesion revascularization (low-certainty evidence), and binary restenosis \n(moderate-certainty evidence). Conversely, there may be little to no evidence of \nadvantage with DEB angioplasty for clinical endpoints such as amputation \n(moderate-quality evidence), amputation-free survival, death (moderate-quality \nevidence), change in ABI (moderate-quality evidence), QoL, or functional walking \nability. Well-designed randomized trials with long-term follow-up are needed to \nfurther compare DEB angioplasty with POBA adequately for both anatomic and \nclinical study endpoints.",
+    "evidenceWindow": {
+      "version": "2026-10-12.window-v4",
+      "kind": "abstract",
+      "limited": false,
+      "hasResults": true,
+      "text": "[Evidence window: the paper's abstract]\nOBJECTIVES: To evaluate the benefits and harms of DEB angioplasty compared with uncoated, plain old balloon angioplasty (POBA) in people with symptomatic lower-limb PAD.\nSEARCH METHODS: We systematically searched the following databases for randomized controlled trials and controlled clinical trials: Cochrane Vascular Specialised Register, Cochrane Central Register of Controlled Trials (CENTRAL), MEDLINE, Embase Ovid, and CINAHL EBSCO. We also searched the WHO International Clinical Trials Registry Platform and ClinicalTrials.gov. … Our primary outcome was amputation.\nMAIN RESULTS: A total of 31 trials randomizing 5292 participants met the inclusion criteria. Nineteen trials included femoropopliteal arterial lesions, nine included tibial arterial lesions, and three included both. The trials were carried out in Europe, the US, China, Singapore, Jordan, Japan, and New Zealand. All trials used paclitaxel. All but four trials were industry-sponsored. There was heterogeneity in the frequency of stent deployment and antiplatelet regimens between trials. Participants were followed up for up to five years. There were better outcomes with DEB angioplasty for target lesion revascularization at one year, from 204 per 1000 lesions with POBA to 80 per 1000 lesions with DEB angioplasty (odds ratio (OR) 0.34, 95% confidence interval (CI) 0.28 to 0.41; 23 studies, 4172 participants; P < 0.00001; low-certainty evidence). DEB angioplasty was also superior for binary restenosis at one year, from 443 per 1000 vessels with POBA to 187 per 1000 vessels with DEB angioplasty (OR 0.29, 95% CI 0.23 to 0.38; 8 studies, 1288 participants; P < 0.00001; moderate-certainty evidence). There was no difference between DEB angioplasty and POBA in amputation at one year, from 16 per 1000 participants with POBA to 22 per 1000 participants with DEB angioplasty (OR 1.45, 95% CI 0.91 to 2.29; 27 studies, 4469 participants; P = 0.12; moderate-certainty evidence); all-cause mortality, from 45 per 1000 participants with POBA to 44 per 1000 participants with DEB angioplasty (OR 0.97, 95% CI 0.71 to 1.32; 25 studies, 4312 participants; P = 0.83; moderate-certainty evidence); or change in ABI, from 0.1 to 0.35 higher with POBA and 0.03 higher to 0.03 lower with DEB angioplasty (mean difference (MD) 0, 95% CI -0.03 to 0.03; 5 studies, 1156 participants; P = 0.96; moderate-certainty evidence), although none of the studies were powered to detect a significant difference in these clinical endpoints. …",
+      "parts": [
+        {
+          "label": "OBJECTIVES",
+          "kind": "objective",
+          "from": "abstract",
+          "chars": 169
+        },
+        {
+          "label": "SEARCH METHODS",
+          "kind": "methods",
+          "from": "abstract",
+          "chars": 404
+        },
+        {
+          "label": "MAIN RESULTS",
+          "kind": "results",
+          "from": "abstract",
+          "chars": 1921
+        }
+      ],
+      "basis": "abstract",
+      "structured": true,
+      "reason": "Abstract-only source."
+    }
+  },
+  "findingAndChecks": {
+    "id": "42573020",
+    "finding": "In a Cochrane meta-analysis of randomized and controlled trials in lower-limb PAD, drug-eluting balloons improved target lesion revascularization and restenosis at one year versus plain balloon angioplasty, with no statistically clear difference in the primary outcome of amputation or in mortality.",
+    "designCaution": "The trials were not powered for amputation or mortality, nearly all were industry-sponsored paclitaxel studies, and certainty for the revascularization outcome was low, so the patency benefit should not be read as a limb-salvage benefit.",
+    "check": {
+      "verdict": "supported",
+      "reason": "The snippet documents that DEB angioplasty improved target lesion revascularization (OR 0.34) and binary restenosis (OR 0.29) at one year versus POBA, and that there was 'no difference' in amputation (OR 1.45, 95% CI 0.91 to 2.29, P = 0.12) and all-cause mortality (OR 0.97, P = 0.83), matching the claim's language."
+    },
+    "cautionCheck": {
+      "verdict": "supported",
+      "reason": "The snippet explicitly states 'none of the studies were powered to detect a significant difference in these clinical endpoints' (amputation and mortality), notes that trials were 'All but four trials were industry-sponsored' and 'All trials used paclitaxel,' and rates the target lesion revascularization outcome as 'low-certainty evidence,' supporting all elements of the design caution."
+    }
+  },
+  "displayed": {
+    "id": "42573020",
+    "finding": "In a Cochrane meta-analysis of randomized and controlled trials in lower-limb PAD, drug-eluting balloons improved target lesion revascularization and restenosis at one year versus plain balloon angioplasty, with no statistically clear difference in the primary outcome of amputation or in mortality.",
+    "designCaution": "The trials were not powered for amputation or mortality, nearly all were industry-sponsored paclitaxel studies, and certainty for the revascularization outcome was low, so the patency benefit should not be read as a limb-salvage benefit.",
+    "withheld": false,
+    "reason": "The snippet documents that DEB angioplasty improved target lesion revascularization (OR 0.34) and binary restenosis (OR 0.29) at one year versus POBA, and that there was 'no difference' in amputation (OR 1.45, 95% CI 0.91 to 2.29, P = 0.12) and all-cause mortality (OR 0.97, P = 0.83), matching the claim's language.",
+    "cautionReason": "The snippet explicitly states 'none of the studies were powered to detect a significant difference in these clinical endpoints' (amputation and mortality), notes that trials were 'All but four trials were industry-sponsored' and 'All trials used paclitaxel,' and rates the target lesion revascularization outcome as 'low-certainty evidence,' supporting all elements of the design caution."
+  },
+  "frozenSourceRecord": {
+    "source": {
+      "hasBody": false,
+      "text": "Drug-eluting balloon angioplasty versus uncoated balloon angioplasty for \nperipheral arterial disease of the lower limbs.\n\nBACKGROUND: Atherosclerotic peripheral arterial disease (PAD) can lead to \nchronic limb-threatening ischemia (CLTI) and limb loss. Treatments include \nlifestyle modifications, medications, and both open and minimally invasive \noperative approaches, including balloon angioplasty. Drug-eluting balloon (DEB) \nangioplasty is a promising alternative to uncoated balloon angioplasty for \ntreating PAD. Ballooning and coating the inside of atherosclerotic vessels with \ncytotoxic agents inhibits cellular mechanisms responsible for atherosclerosis \nand neointimal hyperplasia, thereby preventing or postponing its complications. \nAlthough economic analyses may have demonstrated the cost-effectiveness of DEB \nangioplasty, they remain considerably more expensive than uncoated balloons, and \nthere is uncertainty around their effectiveness. This is an update of our \npreviously published 2016 review.\nOBJECTIVES: To evaluate the benefits and harms of DEB angioplasty compared with \nuncoated, plain old balloon angioplasty (POBA) in people with symptomatic \nlower-limb PAD.\nSEARCH METHODS: We systematically searched the following databases for \nrandomized controlled trials and controlled clinical trials: Cochrane Vascular \nSpecialised Register, Cochrane Central Register of Controlled Trials (CENTRAL), \nMEDLINE, Embase Ovid, and CINAHL EBSCO. We also searched the WHO International \nClinical Trials Registry Platform and ClinicalTrials.gov. We used the \nbibliographies of relevant papers to identify other studies. The most recent \nsearches were carried out on 13 March 2023.\nSELECTION CRITERIA: We included randomized controlled trials comparing DEB \nangioplasty with POBA for intermittent claudication or critical limb ischemia \n(CLI).\nDATA COLLECTION AND ANALYSIS: We used standard Cochrane methods. Our primary \noutcome was amputation. Our secondary outcomes included amputation-free \nsurvival, secondary vessel patency, change in ankle-brachial index (ABI), change \nin quality of life (QoL), change in functional walking ability, and all-cause \nmortality. We used GRADE to assess the certainty of evidence for selected \noutcomes (amputation, secondary vessel patency including target lesion \nrevascularization and binary restenosis, change in ABI, and all-cause \nmortality).\nMAIN RESULTS: A total of 31 trials randomizing 5292 participants met the \ninclusion criteria. Nineteen trials included femoropopliteal arterial lesions, \nnine included tibial arterial lesions, and three included both. The trials were \ncarried out in Europe, the US, China, Singapore, Jordan, Japan, and New Zealand. \nAll trials used paclitaxel. All but four trials were industry-sponsored. There \nwas heterogeneity in the frequency of stent deployment and antiplatelet regimens \nbetween trials. Participants were followed up for up to five years. There were \nbetter outcomes with DEB angioplasty for target lesion revascularization at one \nyear, from 204 per 1000 lesions with POBA to 80 per 1000 lesions with DEB \nangioplasty (odds ratio (OR) 0.34, 95% confidence interval (CI) 0.28 to 0.41; 23 \nstudies, 4172 participants; P < 0.00001; low-certainty evidence). DEB \nangioplasty was also superior for binary restenosis at one year, from 443 per \n1000 vessels with POBA to 187 per 1000 vessels with DEB angioplasty (OR 0.29, \n95% CI 0.23 to 0.38; 8 studies, 1288 participants; P < 0.00001; \nmoderate-certainty evidence). There was no difference between DEB angioplasty \nand POBA in amputation at one year, from 16 per 1000 participants with POBA to \n22 per 1000 participants with DEB angioplasty (OR 1.45, 95% CI 0.91 to 2.29; 27 \nstudies, 4469 participants; P = 0.12; moderate-certainty evidence); all-cause \nmortality, from 45 per 1000 participants with POBA to 44 per 1000 participants \nwith DEB angioplasty (OR 0.97, 95% CI 0.71 to 1.32; 25 studies, 4312 \nparticipants; P = 0.83; moderate-certainty evidence); or change in ABI, from 0.1 \nto 0.35 higher with POBA and 0.03 higher to 0.03 lower with DEB angioplasty \n(mean difference (MD) 0, 95% CI -0.03 to 0.03; 5 studies, 1156 participants; P = \n0.96; moderate-certainty evidence), although none of the studies were powered to \ndetect a significant difference in these clinical endpoints.\nAUTHORS' CONCLUSIONS: Meta-analysis of 31 trials with 5292 participants \ndemonstrated that there may be evidence of an advantage of DEB angioplasty \ncompared with POBA in several anatomic endpoints including late lumen loss, \ntarget lesion revascularization (low-certainty evidence), and binary restenosis \n(moderate-certainty evidence). Conversely, there may be little to no evidence of \nadvantage with DEB angioplasty for clinical endpoints such as amputation \n(moderate-quality evidence), amputation-free survival, death (moderate-quality \nevidence), change in ABI (moderate-quality evidence), QoL, or functional walking \nability. Well-designed randomized trials with long-term follow-up are needed to \nfurther compare DEB angioplasty with POBA adequately for both anatomic and \nclinical study endpoints.",
+      "tables": "",
+      "tier": "abstract_only",
+      "pmcid": null
+    },
+    "sourceHash": "09d71a5145414a423d0cce1c063d6bb7966249a3593495b60f05d54a07194be3",
+    "citation": {
+      "pmid": "42573020",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/42573020/",
+      "author": "Ma GW et al.",
+      "year": "2026",
+      "journal": "Cochrane Database Syst Rev",
+      "title": "Drug-eluting balloon angioplasty versus uncoated balloon angioplasty for peripheral arterial disease of the lower limbs.",
+      "doi": "10.1002/14651858.CD011319.pub3",
+      "pubtypes": [
+        "Journal Article",
+        "Systematic Review",
+        "Meta-Analysis"
+      ],
+      "retracted": false,
+      "verified": true
+    }
+  },
+  "missingFields": [
+    "result.extractionVersion",
+    "result.cache",
+    "result.source.hash"
+  ],
+  "notes": [
+    "sourceHash is copied from the separate frozen paper record; its original hash semantics are not redefined here.",
+    "source.sections and source.abstractParts are included only where originally saved."
+  ]
+}

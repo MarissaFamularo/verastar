@@ -1,0 +1,23 @@
+{
+  "baseCommit": "22c408a969b267d3c167036b2f1e891584788792",
+  "classification": "saved controlled production-code comparison; not a live digest capture",
+  "originalCaptureCompleted": "2026-10-16T01:23:04.698Z",
+  "packaged": "2026-10-17",
+  "files": [
+    {
+      "path": "42513277.json",
+      "sha256": "c6cd91f4503fc893c3e8667bde2d2bb8fc2df1a71468599fad62553b1fcbd5c4",
+      "bytes": 178683
+    },
+    {
+      "path": "42573020.json",
+      "sha256": "10e088aaaa3a7c3641849bee7890c84f8d4fcd0acdcb9455dba9e3845dc93e65",
+      "bytes": 45590
+    },
+    {
+      "path": "42769537.json",
+      "sha256": "95b059ff8d75061f0b6bef824180f6922625fe6c208f0142b546f427447addd1",
+      "bytes": 180156
+    }
+  ]
+}
