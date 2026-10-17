@@ -1,0 +1,43 @@
+
+ RUN  v4.1.11 [local evaluation checkout]
+
+ ❯ src/pipeline/summaryGateContract.test.js (6 tests | 4 failed) 4ms
+     × rejects outcome swap before preserving numbers 2ms
+     × rejects comparator reversal before preserving numbers 0ms
+     × rejects analysis substitution before preserving numbers 0ms
+     × rejects CI borrowed from another result before preserving numbers 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pipeline/summaryGateContract.test.js > source-bound summary retention acceptance contract > rejects outcome swap before preserving numbers
+ FAIL  src/pipeline/summaryGateContract.test.js > source-bound summary retention acceptance contract > rejects comparator reversal before preserving numbers
+ FAIL  src/pipeline/summaryGateContract.test.js > source-bound summary retention acceptance contract > rejects CI borrowed from another result before preserving numbers
+AssertionError: expected 'In the intention-to-treat analysis, t…' not to be 'In the intention-to-treat analysis, t…' // Object.is equality
+ ❯ src/pipeline/summaryGateContract.test.js:19:95
+     17|   ['analysis substitution',correct.replace('intention-to-treat','per-p…
+     18|   ['CI borrowed from another result',correct.replace('0.34–0.55','0.83…
+     19|  ])('rejects %s before preserving numbers', (_name, finding) => expect…
+       |                                                                                               ^
+     20|  it('rejects an unverified effect magnitude',()=>{const s=correct.repl…
+     21| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pipeline/summaryGateContract.test.js > source-bound summary retention acceptance contract > rejects analysis substitution before preserving numbers
+AssertionError: expected 'In the per-protocol analysis, treatme…' not to be 'In the per-protocol analysis, treatme…' // Object.is equality
+ ❯ src/pipeline/summaryGateContract.test.js:19:95
+     17|   ['analysis substitution',correct.replace('intention-to-treat','per-p…
+     18|   ['CI borrowed from another result',correct.replace('0.34–0.55','0.83…
+     19|  ])('rejects %s before preserving numbers', (_name, finding) => expect…
+       |                                                                                               ^
+     20|  it('rejects an unverified effect magnitude',()=>{const s=correct.repl…
+     21| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  18:36:50
+   Duration  173ms (transform 66ms, setup 0ms, import 110ms, tests 4ms, environment 0ms)
+

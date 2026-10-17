@@ -8,7 +8,7 @@ This evidence-only branch is based on verified production commit `22c408a969b267
 - [Aspirin — PMID 42769537](42769537.json): early aspirin discontinuation after PCI for acute coronary syndromes.
 - [Balloon — PMID 42573020](42573020.json): drug-eluting versus uncoated balloon angioplasty for lower-limb peripheral arterial disease.
 
-Each record identifies its original local artifact and selection path under `provenance`. Retained values are copied from the existing sanitized handoff without recomputation. Experimental, earlier-production and personal saved-library records are omitted.
+Each record identifies its original local artifact and selection path under `provenance`. Retained values are copied from the existing sanitized handoff without recomputation. These three records exclude experimental, earlier-production and personal saved-library data. The separately labeled verifier archive linked below contains experimental evidence.
 
 ## Reading the evidence
 
@@ -29,3 +29,7 @@ This repository is public. The packet contains scientific publication data and p
 Only this documentation directory is added. The existing GitHub workflow runs on pushes to main or pull requests; this branch has no pull request. Its commit uses `[skip ci] [skip netlify]`, which Netlify documents as skipping branch/production builds for direct branch pushes: https://docs.netlify.com/deploy/manage-deploys/manage-deploys-overview/#skip-a-deploy
 
 No application code, deployment settings or production branch is changed.
+
+## Archived verifier evidence extension
+
+[Start with the verifier archive index](verifier/README.md) for numeric-guard negative tests, round-three semantic failures, final candidate 170a26c outcomes and inert code diffs, and the preserved context-only checkpoint 575504a. These are clearly segregated experimental artifacts, not production changes. The manifest records their provenance, sanitization and omissions.

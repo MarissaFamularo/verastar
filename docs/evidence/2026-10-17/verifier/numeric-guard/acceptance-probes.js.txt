@@ -1,0 +1,21 @@
+// Acceptance probes for the requested change. No model calls. These deliberately
+// expose the current sentence-level provenance gap before numeric retention changes.
+import { describe, expect, it } from 'vitest'
+import { sanitizeRanking } from './triage.js'
+const verified = [
+  { name: 'Bleeding, treatment A vs treatment B, intention-to-treat hazard ratio', value: '0.44 hazard ratio (CI 0.34–0.55)', quote: 'In the intention-to-treat analysis, treatment A versus treatment B reduced bleeding (HR 0.44, CI 0.34–0.55).' },
+  { name: 'MACE, treatment A vs treatment B, intention-to-treat hazard ratio', value: '1.05 hazard ratio (CI 0.83–1.32)', quote: 'In the intention-to-treat analysis, MACE for treatment A versus treatment B had HR 1.05 (CI 0.83–1.32).' },
+]
+const primary = { state: 'identified', name: verified[0].name, verified: true, indexes: [0], basis: 'source' }
+const sanitize = finding => sanitizeRanking({ id: 'test', score: 80, tier: 1, finding, finding_plain: 'The trial compared treatment A with treatment B.', design_caution: '', relevance: '' }, verified, { primary }).finding
+const correct = 'In the intention-to-treat analysis, treatment A versus treatment B reduced bleeding (0.44 hazard ratio (CI 0.34–0.55)).'
+describe('source-bound summary retention acceptance contract', () => {
+ it('retains the exact matched outcome, comparison, analysis and estimate', () => expect(sanitize(correct)).toBe(correct))
+ it.each([
+  ['outcome swap',correct.replace('bleeding','MACE')],
+  ['comparator reversal',correct.replace('treatment A versus treatment B','treatment B versus treatment A')],
+  ['analysis substitution',correct.replace('intention-to-treat','per-protocol')],
+  ['CI borrowed from another result',correct.replace('0.34–0.55','0.83–1.32')],
+ ])('rejects %s before preserving numbers', (_name, finding) => expect(sanitize(finding)).not.toBe(finding))
+ it('rejects an unverified effect magnitude',()=>{const s=correct.replace('0.44','0.45');expect(sanitize(s)).not.toBe(s)})
+})

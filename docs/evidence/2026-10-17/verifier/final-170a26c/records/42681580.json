@@ -1,0 +1,1765 @@
+{
+  "provenance": {
+    "artifact": "final-evaluation-harness/run.json",
+    "recordPath": "trace.papers[id=42681580]",
+    "commit": "170a26c92f13b7d2aabc1704b34c931efe0921be",
+    "completed": "2026-10-16T22:36:27.404Z",
+    "classification": "experimental final five-paper evaluation, not deployed production"
+  },
+  "result": {
+    "paper": {
+      "id": "42681580",
+      "pmid": "42681580",
+      "title": "A Randomized Controlled Trial Evaluating Negative Pressure Therapy (NPT) to Reduce Wound Complications Following Major Lower Extremity Amputation."
+    },
+    "design": "RCT",
+    "source": {
+      "tier": "abstract_only"
+    },
+    "sourceDoc": {
+      "text": "A Randomized Controlled Trial Evaluating Negative Pressure Therapy (NPT) to \nReduce Wound Complications Following Major Lower Extremity Amputation.\n\nOBJECTIVE: This study hypothesizes that negative pressure therapy (NPT) reduces \nwound-healing complications following major amputation.\nBACKGROUND: Major lower extremity amputation carries a high incidence of \nincisional complications. NPT reduces these complications in other areas of the \nbody, suggesting a benefit following amputation.\nMETHODS: Patients undergoing above- or below-knee amputation (AKA, BKA) were \nrandomized in this multi-institution study into receiving NPT versus standard \ndressing. The primary endpoint was any wound complication within 30 days of \nsurgery; secondary endpoints included reoperation, readmission, and length of \nstay. Post hoc analyses were performed in patients considered high risk for \nwound complications.\nRESULTS: The overall 30-day mortality rate was 3.4%. The wound complication rate \nfor the NPT group was 19.4% (n=134) compared with 24% for controls (n=129; \nRR=0.80; 95% CI: 0.51, 1.26; P=0.339). No significant difference was observed \nfor reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77), \nor length of stay (10 vs. 9.3 d, RR=1.1). Post hoc analyses suggested a \nreduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, \nRR=0.36), those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66), \npatients with obesity (18.2% vs. 26.7%, RR=0.65), and those presenting without \ntissue loss (3.6% vs. 35.5%, RR=0.10).\nCONCLUSIONS: Wound complications remain a significant problem following major \nlower extremity amputation, leading to reoperation, readmission, and increased \nlength of stay. NPT does not significantly reduce the overall wound complication \nrate. Future studies should focus on high-risk subgroups that may benefit from \nthis therapy.",
+      "tables": ""
+    },
+    "sourceCoverage": {
+      "abstractPresent": true,
+      "bodyPresent": false,
+      "tablesPresent": false,
+      "figureImageTextExtracted": false
+    },
+    "extractionVersion": "2026-10-16.result-context-cache-v3",
+    "resultContract": "result-handoff-v4",
+    "resultContexts": [
+      {
+        "quantity_index": 0,
+        "outcome": {
+          "text": "any wound complication within 30 days of surgery",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "standard dressing",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "within 30 days of surgery",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "endpointRole": {
+          "text": "primary endpoint",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "does not significantly reduce the overall wound complication rate",
+          "quote": "NPT does not significantly reduce the overall wound complication rate.",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 1,
+        "outcome": {
+          "text": "any wound complication within 30 days of surgery",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "The wound complication rate for the NPT group was 19.4% (n=134) compared with 24% for controls (n=129",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "controls",
+          "quote": "The wound complication rate for the NPT group was 19.4% (n=134) compared with 24% for controls (n=129",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "within 30 days of surgery",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "endpointRole": {
+          "text": "primary endpoint",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "does not significantly reduce the overall wound complication rate",
+          "quote": "NPT does not significantly reduce the overall wound complication rate.",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 2,
+        "outcome": {
+          "text": "30-day mortality",
+          "quote": "The overall 30-day mortality rate was 3.4%.",
+          "corpus": "text"
+        },
+        "intervention": null,
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "30-day",
+          "quote": "The overall 30-day mortality rate was 3.4%.",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": []
+      },
+      {
+        "quantity_index": 3,
+        "outcome": {
+          "text": "reoperation",
+          "quote": "No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "standard dressing",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": {
+          "text": "secondary endpoints included reoperation",
+          "quote": "secondary endpoints included reoperation, readmission, and length of stay",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "No significant difference was observed",
+          "quote": "No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83)",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 4,
+        "outcome": {
+          "text": "readmission",
+          "quote": "readmission (9% vs. 11.6%, RR=0.77)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "standard dressing",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": {
+          "text": "secondary endpoints included reoperation, readmission",
+          "quote": "secondary endpoints included reoperation, readmission, and length of stay",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "No significant difference was observed",
+          "quote": "No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77)",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 5,
+        "outcome": {
+          "text": "length of stay",
+          "quote": "length of stay (10 vs. 9.3 d, RR=1.1)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "standard dressing",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": {
+          "text": "secondary endpoints included reoperation, readmission, and length of stay",
+          "quote": "secondary endpoints included reoperation, readmission, and length of stay",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "No significant difference was observed",
+          "quote": "No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77), or length of stay (10 vs. 9.3 d, RR=1.1)",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 6,
+        "outcome": {
+          "text": "complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "effect": {
+          "text": "suggested a reduction in complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "qualifications": [
+          {
+            "text": "Post hoc subgroup analysis; overall rate not significantly reduced",
+            "quote": "NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 7,
+        "outcome": {
+          "text": "complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36), those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "effect": {
+          "text": "suggested a reduction in complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "qualifications": [
+          {
+            "text": "Post hoc subgroup analysis; overall rate not significantly reduced",
+            "quote": "NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 8,
+        "outcome": {
+          "text": "complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "effect": {
+          "text": "suggested a reduction in complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "qualifications": [
+          {
+            "text": "Post hoc subgroup analysis; overall rate not significantly reduced",
+            "quote": "NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 9,
+        "outcome": {
+          "text": "complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "effect": {
+          "text": "suggested a reduction in complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "qualifications": [
+          {
+            "text": "Post hoc subgroup analysis; overall rate not significantly reduced",
+            "quote": "NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.",
+            "corpus": "text"
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "quantity": {
+          "name": "30-day wound complication rate, NPT vs standard dressing (risk ratio)",
+          "quantity_type": "single",
+          "value": 0.8,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "risk ratio",
+          "ci_low": 0.51,
+          "ci_high": 1.26,
+          "p_value": 0.339,
+          "source_quote": "RR=0.80; 95% CI: 0.51, 1.26; P=0.339",
+          "location_hint": "Results, primary outcome"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1047,
+            "length": 36,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            0.8,
+            95,
+            0.51,
+            1.26,
+            0.339
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "30-day wound complication rate, NPT vs controls",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": 19.4,
+          "second_label": null,
+          "second_value": 24,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "The wound complication rate for the NPT group was 19.4% (n=134) compared with 24% for controls (n=129",
+          "location_hint": "Results, primary outcome"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 944,
+            "length": 101,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            19.4,
+            134,
+            24,
+            129
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Overall 30-day mortality rate",
+          "quantity_type": "single",
+          "value": 3.4,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "The overall 30-day mortality rate was 3.4%.",
+          "location_hint": "Results"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 900,
+            "length": 43,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            30,
+            3.4
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Reoperation, NPT vs standard dressing",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": 3.7,
+          "second_label": null,
+          "second_value": 8.5,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "reoperation (3.7% vs. 8.5%, RR=0.83)",
+          "location_hint": "Results, secondary endpoints"
+        },
+        "verdict": {
+          "tier": "verified-comparison",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": false,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": true,
+          "endpointValidated": false,
+          "relationshipStatus": "comparison-validated",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1129,
+            "length": 36,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            3.7,
+            8.5,
+            0.83
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Both values verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Readmission, NPT vs standard dressing",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": 9,
+          "second_label": null,
+          "second_value": 11.6,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "readmission (9% vs. 11.6%, RR=0.77)",
+          "location_hint": "Results, secondary endpoints"
+        },
+        "verdict": {
+          "tier": "verified-comparison",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": false,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": true,
+          "endpointValidated": false,
+          "relationshipStatus": "comparison-validated",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1167,
+            "length": 35,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            9,
+            11.6,
+            0.77
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Both values verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Length of stay, NPT vs standard dressing",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": 10,
+          "second_label": null,
+          "second_value": 9.3,
+          "unit": "days",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "length of stay (10 vs. 9.3 d, RR=1.1)",
+          "location_hint": "Results, secondary endpoints"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1207,
+            "length": 37,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            10,
+            9.3,
+            1.1
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Wound complications in patients without diabetes, NPT vs control (post hoc)",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": 9.8,
+          "second_label": null,
+          "second_value": 27.6,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "location_hint": "Results, post hoc analyses"
+        },
+        "verdict": {
+          "tier": "verified-comparison",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": false,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": true,
+          "endpointValidated": false,
+          "relationshipStatus": "comparison-validated",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1316,
+            "length": 49,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            9.8,
+            27.6,
+            0.36
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Both values verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Wound complications in patients with ESRD, NPT vs control (post hoc)",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": 23.1,
+          "second_label": null,
+          "second_value": 37.5,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66)",
+          "location_hint": "Results, post hoc analyses"
+        },
+        "verdict": {
+          "tier": "verified-comparison",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": false,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": true,
+          "endpointValidated": false,
+          "relationshipStatus": "comparison-validated",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1367,
+            "length": 67,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            23.1,
+            37.5,
+            0.66
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Both values verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Wound complications in patients with obesity, NPT vs control (post hoc)",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": 18.2,
+          "second_label": null,
+          "second_value": 26.7,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "patients with obesity (18.2% vs. 26.7%, RR=0.65)",
+          "location_hint": "Results, post hoc analyses"
+        },
+        "verdict": {
+          "tier": "verified-comparison",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": false,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": true,
+          "endpointValidated": false,
+          "relationshipStatus": "comparison-validated",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1436,
+            "length": 48,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            18.2,
+            26.7,
+            0.65
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Both values verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Wound complications in patients without tissue loss, NPT vs control (post hoc)",
+          "quantity_type": "comparison",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": 3.6,
+          "second_label": null,
+          "second_value": 35.5,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "those presenting without tissue loss (3.6% vs. 35.5%, RR=0.10)",
+          "location_hint": "Results, post hoc analyses"
+        },
+        "verdict": {
+          "tier": "verified-comparison",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": false,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": true,
+          "endpointValidated": false,
+          "relationshipStatus": "comparison-validated",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1490,
+            "length": 62,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            3.6,
+            35.5,
+            0.1
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Both values verified as printed, in that order, in the abstract. Which groups and endpoint they belong to is not checked — read the quote.",
+          "warnings": []
+        }
+      }
+    ]
+  },
+  "extracted": {
+    "study_id": "42681580",
+    "design": "RCT",
+    "quantities": [
+      {
+        "name": "30-day wound complication rate, NPT vs standard dressing (risk ratio)",
+        "quantity_type": "single",
+        "value": 0.8,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": null,
+        "second_label": null,
+        "second_value": null,
+        "unit": "risk ratio",
+        "ci_low": 0.51,
+        "ci_high": 1.26,
+        "p_value": 0.339,
+        "source_quote": "RR=0.80; 95% CI: 0.51, 1.26; P=0.339",
+        "location_hint": "Results, primary outcome"
+      },
+      {
+        "name": "30-day wound complication rate, NPT vs controls",
+        "quantity_type": "comparison",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": 19.4,
+        "second_label": null,
+        "second_value": 24,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "The wound complication rate for the NPT group was 19.4% (n=134) compared with 24% for controls (n=129",
+        "location_hint": "Results, primary outcome"
+      },
+      {
+        "name": "Overall 30-day mortality rate",
+        "quantity_type": "single",
+        "value": 3.4,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": null,
+        "second_label": null,
+        "second_value": null,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "The overall 30-day mortality rate was 3.4%.",
+        "location_hint": "Results"
+      },
+      {
+        "name": "Reoperation, NPT vs standard dressing",
+        "quantity_type": "comparison",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": 3.7,
+        "second_label": null,
+        "second_value": 8.5,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "reoperation (3.7% vs. 8.5%, RR=0.83)",
+        "location_hint": "Results, secondary endpoints"
+      },
+      {
+        "name": "Readmission, NPT vs standard dressing",
+        "quantity_type": "comparison",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": 9,
+        "second_label": null,
+        "second_value": 11.6,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "readmission (9% vs. 11.6%, RR=0.77)",
+        "location_hint": "Results, secondary endpoints"
+      },
+      {
+        "name": "Length of stay, NPT vs standard dressing",
+        "quantity_type": "comparison",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": 10,
+        "second_label": null,
+        "second_value": 9.3,
+        "unit": "days",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "length of stay (10 vs. 9.3 d, RR=1.1)",
+        "location_hint": "Results, secondary endpoints"
+      },
+      {
+        "name": "Wound complications in patients without diabetes, NPT vs control (post hoc)",
+        "quantity_type": "comparison",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": 9.8,
+        "second_label": null,
+        "second_value": 27.6,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+        "location_hint": "Results, post hoc analyses"
+      },
+      {
+        "name": "Wound complications in patients with ESRD, NPT vs control (post hoc)",
+        "quantity_type": "comparison",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": 23.1,
+        "second_label": null,
+        "second_value": 37.5,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66)",
+        "location_hint": "Results, post hoc analyses"
+      },
+      {
+        "name": "Wound complications in patients with obesity, NPT vs control (post hoc)",
+        "quantity_type": "comparison",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": 18.2,
+        "second_label": null,
+        "second_value": 26.7,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "patients with obesity (18.2% vs. 26.7%, RR=0.65)",
+        "location_hint": "Results, post hoc analyses"
+      },
+      {
+        "name": "Wound complications in patients without tissue loss, NPT vs control (post hoc)",
+        "quantity_type": "comparison",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": 3.6,
+        "second_label": null,
+        "second_value": 35.5,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "those presenting without tissue loss (3.6% vs. 35.5%, RR=0.10)",
+        "location_hint": "Results, post hoc analyses"
+      }
+    ],
+    "result_contexts": [
+      {
+        "quantity_index": 0,
+        "outcome": {
+          "text": "any wound complication within 30 days of surgery",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "standard dressing",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "within 30 days of surgery",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "endpointRole": {
+          "text": "primary endpoint",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "does not significantly reduce the overall wound complication rate",
+          "quote": "NPT does not significantly reduce the overall wound complication rate.",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 1,
+        "outcome": {
+          "text": "any wound complication within 30 days of surgery",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "The wound complication rate for the NPT group was 19.4% (n=134) compared with 24% for controls (n=129",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "controls",
+          "quote": "The wound complication rate for the NPT group was 19.4% (n=134) compared with 24% for controls (n=129",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "within 30 days of surgery",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "endpointRole": {
+          "text": "primary endpoint",
+          "quote": "The primary endpoint was any wound complication within 30 days of surgery",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "does not significantly reduce the overall wound complication rate",
+          "quote": "NPT does not significantly reduce the overall wound complication rate.",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 2,
+        "outcome": {
+          "text": "30-day mortality",
+          "quote": "The overall 30-day mortality rate was 3.4%.",
+          "corpus": "text"
+        },
+        "intervention": null,
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "30-day",
+          "quote": "The overall 30-day mortality rate was 3.4%.",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": []
+      },
+      {
+        "quantity_index": 3,
+        "outcome": {
+          "text": "reoperation",
+          "quote": "No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "standard dressing",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": {
+          "text": "secondary endpoints included reoperation",
+          "quote": "secondary endpoints included reoperation, readmission, and length of stay",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "No significant difference was observed",
+          "quote": "No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83)",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 4,
+        "outcome": {
+          "text": "readmission",
+          "quote": "readmission (9% vs. 11.6%, RR=0.77)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "standard dressing",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": {
+          "text": "secondary endpoints included reoperation, readmission",
+          "quote": "secondary endpoints included reoperation, readmission, and length of stay",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "No significant difference was observed",
+          "quote": "No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77)",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 5,
+        "outcome": {
+          "text": "length of stay",
+          "quote": "length of stay (10 vs. 9.3 d, RR=1.1)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "comparator": {
+          "text": "standard dressing",
+          "quote": "randomized in this multi-institution study into receiving NPT versus standard dressing",
+          "corpus": "text"
+        },
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": {
+          "text": "secondary endpoints included reoperation, readmission, and length of stay",
+          "quote": "secondary endpoints included reoperation, readmission, and length of stay",
+          "corpus": "text"
+        },
+        "analysisRole": null,
+        "effect": {
+          "text": "No significant difference was observed",
+          "quote": "No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77), or length of stay (10 vs. 9.3 d, RR=1.1)",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 6,
+        "outcome": {
+          "text": "complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "effect": {
+          "text": "suggested a reduction in complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "qualifications": [
+          {
+            "text": "Post hoc subgroup analysis; overall rate not significantly reduced",
+            "quote": "NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 7,
+        "outcome": {
+          "text": "complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36), those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "effect": {
+          "text": "suggested a reduction in complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "qualifications": [
+          {
+            "text": "Post hoc subgroup analysis; overall rate not significantly reduced",
+            "quote": "NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 8,
+        "outcome": {
+          "text": "complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "effect": {
+          "text": "suggested a reduction in complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "qualifications": [
+          {
+            "text": "Post hoc subgroup analysis; overall rate not significantly reduced",
+            "quote": "NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 9,
+        "outcome": {
+          "text": "complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "NPT",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": {
+          "text": "Post hoc analyses",
+          "quote": "Post hoc analyses were performed in patients considered high risk for wound complications.",
+          "corpus": "text"
+        },
+        "effect": {
+          "text": "suggested a reduction in complications",
+          "quote": "Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)",
+          "corpus": "text"
+        },
+        "qualifications": [
+          {
+            "text": "Post hoc subgroup analysis; overall rate not significantly reduced",
+            "quote": "NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.",
+            "corpus": "text"
+          }
+        ]
+      }
+    ]
+  },
+  "extractionInput": "A Randomized Controlled Trial Evaluating Negative Pressure Therapy (NPT) to \nReduce Wound Complications Following Major Lower Extremity Amputation.\n\nOBJECTIVE: This study hypothesizes that negative pressure therapy (NPT) reduces \nwound-healing complications following major amputation.\nBACKGROUND: Major lower extremity amputation carries a high incidence of \nincisional complications. NPT reduces these complications in other areas of the \nbody, suggesting a benefit following amputation.\nMETHODS: Patients undergoing above- or below-knee amputation (AKA, BKA) were \nrandomized in this multi-institution study into receiving NPT versus standard \ndressing. The primary endpoint was any wound complication within 30 days of \nsurgery; secondary endpoints included reoperation, readmission, and length of \nstay. Post hoc analyses were performed in patients considered high risk for \nwound complications.\nRESULTS: The overall 30-day mortality rate was 3.4%. The wound complication rate \nfor the NPT group was 19.4% (n=134) compared with 24% for controls (n=129; \nRR=0.80; 95% CI: 0.51, 1.26; P=0.339). No significant difference was observed \nfor reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77), \nor length of stay (10 vs. 9.3 d, RR=1.1). Post hoc analyses suggested a \nreduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, \nRR=0.36), those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66), \npatients with obesity (18.2% vs. 26.7%, RR=0.65), and those presenting without \ntissue loss (3.6% vs. 35.5%, RR=0.10).\nCONCLUSIONS: Wound complications remain a significant problem following major \nlower extremity amputation, leading to reoperation, readmission, and increased \nlength of stay. NPT does not significantly reduce the overall wound complication \nrate. Future studies should focus on high-risk subgroups that may benefit from \nthis therapy.",
+  "resultHandoff": {
+    "version": "result-handoff-v4",
+    "paperId": "42681580",
+    "complete": true,
+    "source": {
+      "text": "A Randomized Controlled Trial Evaluating Negative Pressure Therapy (NPT) to \nReduce Wound Complications Following Major Lower Extremity Amputation.\n\nOBJECTIVE: This study hypothesizes that negative pressure therapy (NPT) reduces \nwound-healing complications following major amputation.\nBACKGROUND: Major lower extremity amputation carries a high incidence of \nincisional complications. NPT reduces these complications in other areas of the \nbody, suggesting a benefit following amputation.\nMETHODS: Patients undergoing above- or below-knee amputation (AKA, BKA) were \nrandomized in this multi-institution study into receiving NPT versus standard \ndressing. The primary endpoint was any wound complication within 30 days of \nsurgery; secondary endpoints included reoperation, readmission, and length of \nstay. Post hoc analyses were performed in patients considered high risk for \nwound complications.\nRESULTS: The overall 30-day mortality rate was 3.4%. The wound complication rate \nfor the NPT group was 19.4% (n=134) compared with 24% for controls (n=129; \nRR=0.80; 95% CI: 0.51, 1.26; P=0.339). No significant difference was observed \nfor reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77), \nor length of stay (10 vs. 9.3 d, RR=1.1). Post hoc analyses suggested a \nreduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, \nRR=0.36), those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66), \npatients with obesity (18.2% vs. 26.7%, RR=0.65), and those presenting without \ntissue loss (3.6% vs. 35.5%, RR=0.10).\nCONCLUSIONS: Wound complications remain a significant problem following major \nlower extremity amputation, leading to reoperation, readmission, and increased \nlength of stay. NPT does not significantly reduce the overall wound complication \nrate. Future studies should focus on high-risk subgroups that may benefit from \nthis therapy.",
+      "tables": ""
+    },
+    "records": [
+      {
+        "id": "42681580:result:2",
+        "rowIndex": 2,
+        "kind": "descriptive",
+        "fields": {
+          "outcome": {
+            "text": "30-day mortality",
+            "fidelity": "verbatim",
+            "passageId": "42681580:result:2:outcome",
+            "corpus": "text",
+            "start": 910,
+            "end": 953,
+            "quote": "The overall 30-day mortality rate was 3.4%."
+          },
+          "intervention": null,
+          "comparator": null,
+          "analysis": null,
+          "interventionTiming": null,
+          "outcomeTimepoint": {
+            "text": "30-day",
+            "fidelity": "verbatim",
+            "passageId": "42681580:result:2:outcomeTimepoint",
+            "corpus": "text",
+            "start": 910,
+            "end": 953,
+            "quote": "The overall 30-day mortality rate was 3.4%."
+          },
+          "endpointRole": null,
+          "analysisRole": null,
+          "effect": null
+        },
+        "qualifications": [],
+        "withheldQualifications": [],
+        "quantity": {
+          "name": "Overall 30-day mortality rate",
+          "quantity_type": "single",
+          "value": 3.4,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "The overall 30-day mortality rate was 3.4%.",
+          "location_hint": "Results"
+        },
+        "numeric": false,
+        "numericStatus": "tokens-present-tuple-unproven",
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 900,
+            "length": 43,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            30,
+            3.4
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      }
+    ],
+    "diagnostics": [
+      {
+        "quantityIndex": 0,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "intervention",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "comparator",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "outcomeTimepoint",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "endpointRole",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": []
+      },
+      {
+        "quantityIndex": 1,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "intervention",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "comparator",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "outcomeTimepoint",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "endpointRole",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": []
+      },
+      {
+        "quantityIndex": 3,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "intervention",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "comparator",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "endpointRole",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": []
+      },
+      {
+        "quantityIndex": 4,
+        "failures": [
+          {
+            "field": "intervention",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "comparator",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "endpointRole",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": []
+      },
+      {
+        "quantityIndex": 5,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "intervention",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "comparator",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "endpointRole",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": []
+      },
+      {
+        "quantityIndex": 6,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "intervention",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "analysis",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "analysisRole",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": [
+          "comparator"
+        ]
+      },
+      {
+        "quantityIndex": 7,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "intervention",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "analysis",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "analysisRole",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": [
+          "comparator"
+        ]
+      },
+      {
+        "quantityIndex": 8,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "intervention",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "analysis",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "analysisRole",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": [
+          "comparator"
+        ]
+      },
+      {
+        "quantityIndex": 9,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "intervention",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "analysis",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "analysisRole",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": [
+          "comparator"
+        ]
+      }
+    ],
+    "key": "[\"result-handoff-v4\",\"42681580\",\"abstract_only\",null,{\"text\":\"A Randomized Controlled Trial Evaluating Negative Pressure Therapy (NPT) to \\nReduce Wound Complications Following Major Lower Extremity Amputation.\\n\\nOBJECTIVE: This study hypothesizes that negative pressure therapy (NPT) reduces \\nwound-healing complications following major amputation.\\nBACKGROUND: Major lower extremity amputation carries a high incidence of \\nincisional complications. NPT reduces these complications in other areas of the \\nbody, suggesting a benefit following amputation.\\nMETHODS: Patients undergoing above- or below-knee amputation (AKA, BKA) were \\nrandomized in this multi-institution study into receiving NPT versus standard \\ndressing. The primary endpoint was any wound complication within 30 days of \\nsurgery; secondary endpoints included reoperation, readmission, and length of \\nstay. Post hoc analyses were performed in patients considered high risk for \\nwound complications.\\nRESULTS: The overall 30-day mortality rate was 3.4%. The wound complication rate \\nfor the NPT group was 19.4% (n=134) compared with 24% for controls (n=129; \\nRR=0.80; 95% CI: 0.51, 1.26; P=0.339). No significant difference was observed \\nfor reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77), \\nor length of stay (10 vs. 9.3 d, RR=1.1). Post hoc analyses suggested a \\nreduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, \\nRR=0.36), those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66), \\npatients with obesity (18.2% vs. 26.7%, RR=0.65), and those presenting without \\ntissue loss (3.6% vs. 35.5%, RR=0.10).\\nCONCLUSIONS: Wound complications remain a significant problem following major \\nlower extremity amputation, leading to reoperation, readmission, and increased \\nlength of stay. NPT does not significantly reduce the overall wound complication \\nrate. Future studies should focus on high-risk subgroups that may benefit from \\nthis therapy.\",\"tables\":\"\"},[{\"quantity_index\":0,\"outcome\":{\"text\":\"any wound complication within 30 days of surgery\",\"quote\":\"The primary endpoint was any wound complication within 30 days of surgery\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"NPT\",\"quote\":\"randomized in this multi-institution study into receiving NPT versus standard dressing\",\"corpus\":\"text\"},\"comparator\":{\"text\":\"standard dressing\",\"quote\":\"randomized in this multi-institution study into receiving NPT versus standard dressing\",\"corpus\":\"text\"},\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":{\"text\":\"within 30 days of surgery\",\"quote\":\"The primary endpoint was any wound complication within 30 days of surgery\",\"corpus\":\"text\"},\"endpointRole\":{\"text\":\"primary endpoint\",\"quote\":\"The primary endpoint was any wound complication within 30 days of surgery\",\"corpus\":\"text\"},\"analysisRole\":null,\"effect\":{\"text\":\"does not significantly reduce the overall wound complication rate\",\"quote\":\"NPT does not significantly reduce the overall wound complication rate.\",\"corpus\":\"text\"},\"qualifications\":[]},{\"quantity_index\":1,\"outcome\":{\"text\":\"any wound complication within 30 days of surgery\",\"quote\":\"The primary endpoint was any wound complication within 30 days of surgery\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"NPT\",\"quote\":\"The wound complication rate for the NPT group was 19.4% (n=134) compared with 24% for controls (n=129\",\"corpus\":\"text\"},\"comparator\":{\"text\":\"controls\",\"quote\":\"The wound complication rate for the NPT group was 19.4% (n=134) compared with 24% for controls (n=129\",\"corpus\":\"text\"},\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":{\"text\":\"within 30 days of surgery\",\"quote\":\"The primary endpoint was any wound complication within 30 days of surgery\",\"corpus\":\"text\"},\"endpointRole\":{\"text\":\"primary endpoint\",\"quote\":\"The primary endpoint was any wound complication within 30 days of surgery\",\"corpus\":\"text\"},\"analysisRole\":null,\"effect\":{\"text\":\"does not significantly reduce the overall wound complication rate\",\"quote\":\"NPT does not significantly reduce the overall wound complication rate.\",\"corpus\":\"text\"},\"qualifications\":[]},{\"quantity_index\":2,\"outcome\":{\"text\":\"30-day mortality\",\"quote\":\"The overall 30-day mortality rate was 3.4%.\",\"corpus\":\"text\"},\"intervention\":null,\"comparator\":null,\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":{\"text\":\"30-day\",\"quote\":\"The overall 30-day mortality rate was 3.4%.\",\"corpus\":\"text\"},\"endpointRole\":null,\"analysisRole\":null,\"effect\":null,\"qualifications\":[]},{\"quantity_index\":3,\"outcome\":{\"text\":\"reoperation\",\"quote\":\"No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83)\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"NPT\",\"quote\":\"randomized in this multi-institution study into receiving NPT versus standard dressing\",\"corpus\":\"text\"},\"comparator\":{\"text\":\"standard dressing\",\"quote\":\"randomized in this multi-institution study into receiving NPT versus standard dressing\",\"corpus\":\"text\"},\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":null,\"endpointRole\":{\"text\":\"secondary endpoints included reoperation\",\"quote\":\"secondary endpoints included reoperation, readmission, and length of stay\",\"corpus\":\"text\"},\"analysisRole\":null,\"effect\":{\"text\":\"No significant difference was observed\",\"quote\":\"No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83)\",\"corpus\":\"text\"},\"qualifications\":[]},{\"quantity_index\":4,\"outcome\":{\"text\":\"readmission\",\"quote\":\"readmission (9% vs. 11.6%, RR=0.77)\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"NPT\",\"quote\":\"randomized in this multi-institution study into receiving NPT versus standard dressing\",\"corpus\":\"text\"},\"comparator\":{\"text\":\"standard dressing\",\"quote\":\"randomized in this multi-institution study into receiving NPT versus standard dressing\",\"corpus\":\"text\"},\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":null,\"endpointRole\":{\"text\":\"secondary endpoints included reoperation, readmission\",\"quote\":\"secondary endpoints included reoperation, readmission, and length of stay\",\"corpus\":\"text\"},\"analysisRole\":null,\"effect\":{\"text\":\"No significant difference was observed\",\"quote\":\"No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77)\",\"corpus\":\"text\"},\"qualifications\":[]},{\"quantity_index\":5,\"outcome\":{\"text\":\"length of stay\",\"quote\":\"length of stay (10 vs. 9.3 d, RR=1.1)\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"NPT\",\"quote\":\"randomized in this multi-institution study into receiving NPT versus standard dressing\",\"corpus\":\"text\"},\"comparator\":{\"text\":\"standard dressing\",\"quote\":\"randomized in this multi-institution study into receiving NPT versus standard dressing\",\"corpus\":\"text\"},\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":null,\"endpointRole\":{\"text\":\"secondary endpoints included reoperation, readmission, and length of stay\",\"quote\":\"secondary endpoints included reoperation, readmission, and length of stay\",\"corpus\":\"text\"},\"analysisRole\":null,\"effect\":{\"text\":\"No significant difference was observed\",\"quote\":\"No significant difference was observed for reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77), or length of stay (10 vs. 9.3 d, RR=1.1)\",\"corpus\":\"text\"},\"qualifications\":[]},{\"quantity_index\":6,\"outcome\":{\"text\":\"complications\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"NPT\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":{\"text\":\"Post hoc analyses\",\"quote\":\"Post hoc analyses were performed in patients considered high risk for wound complications.\",\"corpus\":\"text\"},\"interventionTiming\":null,\"outcomeTimepoint\":null,\"endpointRole\":null,\"analysisRole\":{\"text\":\"Post hoc analyses\",\"quote\":\"Post hoc analyses were performed in patients considered high risk for wound complications.\",\"corpus\":\"text\"},\"effect\":{\"text\":\"suggested a reduction in complications\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"qualifications\":[{\"text\":\"Post hoc subgroup analysis; overall rate not significantly reduced\",\"quote\":\"NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.\",\"corpus\":\"text\"}]},{\"quantity_index\":7,\"outcome\":{\"text\":\"complications\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36), those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66)\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"NPT\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":{\"text\":\"Post hoc analyses\",\"quote\":\"Post hoc analyses were performed in patients considered high risk for wound complications.\",\"corpus\":\"text\"},\"interventionTiming\":null,\"outcomeTimepoint\":null,\"endpointRole\":null,\"analysisRole\":{\"text\":\"Post hoc analyses\",\"quote\":\"Post hoc analyses were performed in patients considered high risk for wound complications.\",\"corpus\":\"text\"},\"effect\":{\"text\":\"suggested a reduction in complications\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"qualifications\":[{\"text\":\"Post hoc subgroup analysis; overall rate not significantly reduced\",\"quote\":\"NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.\",\"corpus\":\"text\"}]},{\"quantity_index\":8,\"outcome\":{\"text\":\"complications\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"NPT\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":{\"text\":\"Post hoc analyses\",\"quote\":\"Post hoc analyses were performed in patients considered high risk for wound complications.\",\"corpus\":\"text\"},\"interventionTiming\":null,\"outcomeTimepoint\":null,\"endpointRole\":null,\"analysisRole\":{\"text\":\"Post hoc analyses\",\"quote\":\"Post hoc analyses were performed in patients considered high risk for wound complications.\",\"corpus\":\"text\"},\"effect\":{\"text\":\"suggested a reduction in complications\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"qualifications\":[{\"text\":\"Post hoc subgroup analysis; overall rate not significantly reduced\",\"quote\":\"NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.\",\"corpus\":\"text\"}]},{\"quantity_index\":9,\"outcome\":{\"text\":\"complications\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"NPT\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":{\"text\":\"Post hoc analyses\",\"quote\":\"Post hoc analyses were performed in patients considered high risk for wound complications.\",\"corpus\":\"text\"},\"interventionTiming\":null,\"outcomeTimepoint\":null,\"endpointRole\":null,\"analysisRole\":{\"text\":\"Post hoc analyses\",\"quote\":\"Post hoc analyses were performed in patients considered high risk for wound complications.\",\"corpus\":\"text\"},\"effect\":{\"text\":\"suggested a reduction in complications\",\"quote\":\"Post hoc analyses suggested a reduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"corpus\":\"text\"},\"qualifications\":[{\"text\":\"Post hoc subgroup analysis; overall rate not significantly reduced\",\"quote\":\"NPT does not significantly reduce the overall wound complication rate. Future studies should focus on high-risk subgroups that may benefit from this therapy.\",\"corpus\":\"text\"}]}],[{\"name\":\"30-day wound complication rate, NPT vs standard dressing (risk ratio)\",\"quantity_type\":\"single\",\"value\":0.8,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":null,\"second_label\":null,\"second_value\":null,\"unit\":\"risk ratio\",\"ci_low\":0.51,\"ci_high\":1.26,\"p_value\":0.339,\"source_quote\":\"RR=0.80; 95% CI: 0.51, 1.26; P=0.339\",\"location_hint\":\"Results, primary outcome\"},{\"name\":\"30-day wound complication rate, NPT vs controls\",\"quantity_type\":\"comparison\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":19.4,\"second_label\":null,\"second_value\":24,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"The wound complication rate for the NPT group was 19.4% (n=134) compared with 24% for controls (n=129\",\"location_hint\":\"Results, primary outcome\"},{\"name\":\"Overall 30-day mortality rate\",\"quantity_type\":\"single\",\"value\":3.4,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":null,\"second_label\":null,\"second_value\":null,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"The overall 30-day mortality rate was 3.4%.\",\"location_hint\":\"Results\"},{\"name\":\"Reoperation, NPT vs standard dressing\",\"quantity_type\":\"comparison\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":3.7,\"second_label\":null,\"second_value\":8.5,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"reoperation (3.7% vs. 8.5%, RR=0.83)\",\"location_hint\":\"Results, secondary endpoints\"},{\"name\":\"Readmission, NPT vs standard dressing\",\"quantity_type\":\"comparison\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":9,\"second_label\":null,\"second_value\":11.6,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"readmission (9% vs. 11.6%, RR=0.77)\",\"location_hint\":\"Results, secondary endpoints\"},{\"name\":\"Length of stay, NPT vs standard dressing\",\"quantity_type\":\"comparison\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":10,\"second_label\":null,\"second_value\":9.3,\"unit\":\"days\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"length of stay (10 vs. 9.3 d, RR=1.1)\",\"location_hint\":\"Results, secondary endpoints\"},{\"name\":\"Wound complications in patients without diabetes, NPT vs control (post hoc)\",\"quantity_type\":\"comparison\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":9.8,\"second_label\":null,\"second_value\":27.6,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"people without diabetes (9.8% vs. 27.6%, RR=0.36)\",\"location_hint\":\"Results, post hoc analyses\"},{\"name\":\"Wound complications in patients with ESRD, NPT vs control (post hoc)\",\"quantity_type\":\"comparison\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":23.1,\"second_label\":null,\"second_value\":37.5,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66)\",\"location_hint\":\"Results, post hoc analyses\"},{\"name\":\"Wound complications in patients with obesity, NPT vs control (post hoc)\",\"quantity_type\":\"comparison\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":18.2,\"second_label\":null,\"second_value\":26.7,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"patients with obesity (18.2% vs. 26.7%, RR=0.65)\",\"location_hint\":\"Results, post hoc analyses\"},{\"name\":\"Wound complications in patients without tissue loss, NPT vs control (post hoc)\",\"quantity_type\":\"comparison\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":3.6,\"second_label\":null,\"second_value\":35.5,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"those presenting without tissue loss (3.6% vs. 35.5%, RR=0.10)\",\"location_hint\":\"Results, post hoc analyses\"}]]"
+  },
+  "findingAndChecks": [
+    {
+      "id": "42681580",
+      "finding": "",
+      "designCaution": "",
+      "check": {
+        "verdict": "refuted",
+        "reason": "Complete result context unavailable."
+      },
+      "cautionCheck": {
+        "verdict": "refuted",
+        "reason": "Caution not checked."
+      }
+    }
+  ],
+  "displayed": {
+    "finding": "",
+    "designCaution": "",
+    "reason": "Complete result context unavailable."
+  },
+  "frozenSourceRecord": {
+    "artifact": "final-evaluation-harness/inputs.json",
+    "source": {
+      "hasBody": false,
+      "text": "A Randomized Controlled Trial Evaluating Negative Pressure Therapy (NPT) to \nReduce Wound Complications Following Major Lower Extremity Amputation.\n\nOBJECTIVE: This study hypothesizes that negative pressure therapy (NPT) reduces \nwound-healing complications following major amputation.\nBACKGROUND: Major lower extremity amputation carries a high incidence of \nincisional complications. NPT reduces these complications in other areas of the \nbody, suggesting a benefit following amputation.\nMETHODS: Patients undergoing above- or below-knee amputation (AKA, BKA) were \nrandomized in this multi-institution study into receiving NPT versus standard \ndressing. The primary endpoint was any wound complication within 30 days of \nsurgery; secondary endpoints included reoperation, readmission, and length of \nstay. Post hoc analyses were performed in patients considered high risk for \nwound complications.\nRESULTS: The overall 30-day mortality rate was 3.4%. The wound complication rate \nfor the NPT group was 19.4% (n=134) compared with 24% for controls (n=129; \nRR=0.80; 95% CI: 0.51, 1.26; P=0.339). No significant difference was observed \nfor reoperation (3.7% vs. 8.5%, RR=0.83), readmission (9% vs. 11.6%, RR=0.77), \nor length of stay (10 vs. 9.3 d, RR=1.1). Post hoc analyses suggested a \nreduction in complications using NPT in people without diabetes (9.8% vs. 27.6%, \nRR=0.36), those with end-stage renal disease (ESRD; 23.1% vs. 37.5%, RR=0.66), \npatients with obesity (18.2% vs. 26.7%, RR=0.65), and those presenting without \ntissue loss (3.6% vs. 35.5%, RR=0.10).\nCONCLUSIONS: Wound complications remain a significant problem following major \nlower extremity amputation, leading to reoperation, readmission, and increased \nlength of stay. NPT does not significantly reduce the overall wound complication \nrate. Future studies should focus on high-risk subgroups that may benefit from \nthis therapy.",
+      "tables": "",
+      "tier": "abstract_only",
+      "pmcid": null
+    }
+  },
+  "missingFields": [
+    "production-style evidenceWindow",
+    "source.hash",
+    "cache status"
+  ],
+  "notes": [
+    "resultHandoff is an experimental object, not an original production evidenceWindow. No source hash or missing section structure has been reconstructed."
+  ]
+}

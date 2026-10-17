@@ -19,5 +19,162 @@
       "sha256": "95b059ff8d75061f0b6bef824180f6922625fe6c208f0142b546f427447addd1",
       "bytes": 180156
     }
-  ]
+  ],
+  "extension": {
+    "classification": "archived experimental verifier evidence; not deployed",
+    "checkpoints": {
+      "575504a": "575504a0bba8d6ae31d015666f06c6ff2daf6e6e",
+      "95857d9": "95857d9171aa1a8c4998170c2df919af4319538f",
+      "170a26c": "170a26c92f13b7d2aabc1704b34c931efe0921be"
+    },
+    "files": [
+      {
+        "path": "verifier/numeric-guard/blocker.md",
+        "sha256": "4137551b608bbc0c0097f23288d348a693a04e7a23c41a997260d1019ff2fa8a",
+        "bytes": 3200,
+        "origin": "Verastar-summary-gate-implementation-blocker.md",
+        "omissions": "Spending/accounting paragraph omitted."
+      },
+      {
+        "path": "verifier/numeric-guard/acceptance-probes.js.txt",
+        "sha256": "d97d5325b5040afe5cdf6a42f2b7268f1c0b42c92ea8275af54d97ab70f427e2",
+        "bytes": 2018,
+        "origin": "comparison-output/summary-gate-acceptance/summaryGateContract.test.js",
+        "omissions": "Inert .txt copy; not installed or executed."
+      },
+      {
+        "path": "verifier/numeric-guard/saved-results.txt",
+        "sha256": "693ddcd13b88d109f8043ce6981aab8675e25d8b2d4384f4d0ce6479180ac7a2",
+        "bytes": 2716,
+        "origin": "comparison-output/summary-gate-acceptance/results.txt",
+        "omissions": "Absolute local path redacted; saved output, not a new test run."
+      },
+      {
+        "path": "verifier/round3-95857d9/semantic-review.md",
+        "sha256": "cfbdfe2dbdd6cac8a10b3f9c74cca5854446ef2233b80d011a79f382a9c7f1d7",
+        "bytes": 3182,
+        "origin": "Verastar-final-hill-climb-report.md",
+        "omissions": "Spending/accounting, local server details and private Library links omitted. Prior report summary of independent review; not a newly performed review."
+      },
+      {
+        "path": "verifier/round3-95857d9/recovered-outcome.md",
+        "sha256": "87ba42901ccd33620db61156337e5df1e087052de29511a5107a09854f5079e6",
+        "bytes": 3763,
+        "origin": "Verastar-round3-recovered-outcome.md",
+        "omissions": "Validation/budget section omitted. Historical pending-review wording retained; semantic-review.md records later review outcome."
+      },
+      {
+        "path": "verifier/round3-95857d9/selected-output-source-checks.md",
+        "sha256": "5737e31809c639e813f084abafe3d1cf41eb30abd81da97f77b736be8bdf9de7",
+        "bytes": 109330,
+        "origin": "Verastar-round3-development-review.md",
+        "omissions": "Only PARADE, aspirin, balloon and carotid selected; scores, relevance and other trace/input metadata omitted. Header retains actual generating commit; final repair-scoping candidate is 95857d9."
+      },
+      {
+        "path": "verifier/final-170a26c/evaluation.md",
+        "sha256": "be3ac70ecf9acb1959db07275d5584ed18d06cc9c5f170712def06336975c244",
+        "bytes": 8651,
+        "origin": "comparison-output/Verastar-final-170a26c-evaluation.md",
+        "omissions": "Cost/control accounting, per-paper costs, UI notes and private artifact inventory omitted. All scientific outcome and quote-audit text retained; these diagnostics were already saved, not rerun."
+      },
+      {
+        "path": "verifier/final-170a26c/records/42513277.json",
+        "sha256": "717d4d01c64e8932d58329805ecd6d0df277dceadd75bd99971ffce89aaf2d22",
+        "bytes": 327494,
+        "origin": "handoff-evidence-2026-10-17/experimental-170a26c/42513277.json",
+        "omissions": "Previously sanitized record copied exactly; original provenance and missingFields retained. No production evidenceWindow invented."
+      },
+      {
+        "path": "verifier/final-170a26c/records/42573020.json",
+        "sha256": "52eed7dae6b0e8ffbc67f4635c85e7b88c32cef76957fab0c7946726526054dd",
+        "bytes": 79618,
+        "origin": "handoff-evidence-2026-10-17/experimental-170a26c/42573020.json",
+        "omissions": "Previously sanitized record copied exactly; original provenance and missingFields retained. No production evidenceWindow invented."
+      },
+      {
+        "path": "verifier/final-170a26c/records/42600759.json",
+        "sha256": "705a2aa621627a2f126babb9481bdbb2b450f1f82c2df84b5034f93ddd9282ac",
+        "bytes": 58134,
+        "origin": "handoff-evidence-2026-10-17/experimental-170a26c/42600759.json",
+        "omissions": "Previously sanitized record copied exactly; original provenance and missingFields retained. No production evidenceWindow invented."
+      },
+      {
+        "path": "verifier/final-170a26c/records/42681580.json",
+        "sha256": "dd42323a48476ae28269e194c247971ea7b7cf2b06c3e641c74c4963172f8295",
+        "bytes": 85578,
+        "origin": "handoff-evidence-2026-10-17/experimental-170a26c/42681580.json",
+        "omissions": "Previously sanitized record copied exactly; original provenance and missingFields retained. No production evidenceWindow invented."
+      },
+      {
+        "path": "verifier/final-170a26c/records/42769537.json",
+        "sha256": "cd68b86aacca185d0b06e57941fdc8486cce7867f1200ef33fdf57f0bbe12ee5",
+        "bytes": 315500,
+        "origin": "handoff-evidence-2026-10-17/experimental-170a26c/42769537.json",
+        "omissions": "Previously sanitized record copied exactly; original provenance and missingFields retained. No production evidenceWindow invented."
+      },
+      {
+        "path": "verifier/final-170a26c/implementation-review.md",
+        "sha256": "489c76f2c4164e5874c9a950c861108dea4d668a12daf1df1382324a00aa801f",
+        "bytes": 4082,
+        "origin": "comparison-output/Verastar-integrated-handoff-review-170a26c.md",
+        "omissions": "Credential dependency and spending paragraph omitted; generated bundle/raw diff replaced by scoped inert snapshots. This is the pre-evaluation report, superseded for outcome by evaluation.md."
+      },
+      {
+        "path": "verifier/context-only-575504a/context-recovery-round1.md",
+        "sha256": "299ae69622ecdceb5f7d2728b6df8460903d624ef3368b25746a653f4b73f55b",
+        "bytes": 3236,
+        "origin": "git 575504a0bba8d6ae31d015666f06c6ff2daf6e6e:docs/reviews/context-recovery-round1.md",
+        "omissions": "Spending paragraphs omitted. Historical authorization/next-step language is archival, not an instruction or current authorization. Initial fixed size limits in complete-evidence-passages.md were superseded by context-recovery-round1.md."
+      },
+      {
+        "path": "verifier/context-only-575504a/complete-evidence-passages.md",
+        "sha256": "d7aacfacb31b0f7844264e7942de8038c3153b38eee2fca44321d215e84dcdac",
+        "bytes": 2342,
+        "origin": "git 575504a0bba8d6ae31d015666f06c6ff2daf6e6e:docs/reviews/complete-evidence-passages.md",
+        "omissions": "Spending paragraphs omitted. Historical authorization/next-step language is archival, not an instruction or current authorization. Initial fixed size limits in complete-evidence-passages.md were superseded by context-recovery-round1.md."
+      },
+      {
+        "path": "verifier/context-only-575504a/implementation.diff.txt",
+        "sha256": "3f5fb31bdfc9378bd3b31ff7ca76efa452e36b5a8f6408c42f9384a3d632f328",
+        "bytes": 32441,
+        "origin": "git diff 22c408a969b267d3c167036b2f1e891584788792 575504a0bba8d6ae31d015666f06c6ff2daf6e6e -- src/pipeline/check.js src/pipeline/evidenceWindow.js src/pipeline/triage.js",
+        "omissions": "Readable inert diff only. Test files, fixtures, generated digest bundle/manifest and unrelated docs omitted; runtime source in this branch is unchanged."
+      },
+      {
+        "path": "verifier/round3-95857d9/implementation.diff.txt",
+        "sha256": "12f51ff06983797d84572f37d4fdc22c22bd0d245e3deab52f6d62e630f66ed5",
+        "bytes": 19410,
+        "origin": "git diff 575504a0bba8d6ae31d015666f06c6ff2daf6e6e 95857d9171aa1a8c4998170c2df919af4319538f -- src/lib/format.js src/pipeline/check.js src/pipeline/proseGrounding.js src/pipeline/triage.js",
+        "omissions": "Readable inert diff only. Test files, fixtures, generated digest bundle/manifest and unrelated docs omitted; runtime source in this branch is unchanged."
+      },
+      {
+        "path": "verifier/final-170a26c/implementation.diff.txt",
+        "sha256": "2e4aed758107f6e8caa1dd24124af8b1b4dbeaf45296171ce47d03b8f4b5d032",
+        "bytes": 66622,
+        "origin": "git diff 22c408a969b267d3c167036b2f1e891584788792 170a26c92f13b7d2aabc1704b34c931efe0921be -- src/components/AddPaper.jsx src/components/KnowledgeBase.jsx src/components/SpineCheck.jsx src/lib/anthropic.js src/lib/claimCheck.js src/lib/digestRunAndRank.js src/lib/digestStore.js src/lib/evidenceVersion.js src/lib/findingGate.js src/lib/libraryFormat.js src/lib/validateExtractionSchema.js src/pipeline/check.js src/pipeline/dailyDigest.js src/pipeline/evidenceCache.js src/pipeline/extract.js src/pipeline/pipeline.js src/pipeline/refreshEvidence.js src/pipeline/resultHandoff.js src/pipeline/save.js src/pipeline/triage.js src/pipeline/verify.js supabase/functions/_shared/extractionContract.js supabase/functions/_shared/validateExtractionSchema.js supabase/functions/model/handler.js supabase/functions/model/logic.js",
+        "omissions": "Readable inert diff only. Test files, fixtures, generated digest bundle/manifest and unrelated docs omitted; runtime source in this branch is unchanged."
+      },
+      {
+        "path": "verifier/numeric-guard/production-verify.js.txt",
+        "sha256": "db4fd828eacbaa5ddf00c09c55a6c29d5bdc9742c9c1fc757e343887681a7967",
+        "bytes": 75822,
+        "origin": "git 22c408a969b267d3c167036b2f1e891584788792:src/pipeline/verify.js",
+        "omissions": "Inert baseline snapshot to distinguish numeric-row relationship verification from summary numeric-membership checks."
+      },
+      {
+        "path": "verifier/numeric-guard/production-triage.js.txt",
+        "sha256": "7c82c17f6af5351e3405f7e17cd48b027474f7f44183f200a3435dae233839f1",
+        "bytes": 23851,
+        "origin": "git 22c408a969b267d3c167036b2f1e891584788792:src/pipeline/triage.js",
+        "omissions": "Inert baseline snapshot; includes sanitizer and prose policy, not applied code."
+      },
+      {
+        "path": "verifier/README.md",
+        "sha256": "9b74428c07f0789dfe359eadd07a96e7f0d07abb3262649b1508d7399a954940",
+        "bytes": 4603,
+        "origin": "Packaging index authored 2026-10-17 from the listed existing artifacts",
+        "omissions": "Index is a navigation/provenance summary, not a new experiment."
+      }
+    ]
+  }
 }

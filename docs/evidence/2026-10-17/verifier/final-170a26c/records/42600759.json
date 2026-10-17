@@ -1,0 +1,1048 @@
+{
+  "provenance": {
+    "artifact": "final-evaluation-harness/run.json",
+    "recordPath": "trace.papers[id=42600759]",
+    "commit": "170a26c92f13b7d2aabc1704b34c931efe0921be",
+    "completed": "2026-10-16T22:36:46.698Z",
+    "classification": "experimental final five-paper evaluation, not deployed production"
+  },
+  "result": {
+    "paper": {
+      "id": "42600759",
+      "pmid": "42600759",
+      "title": "Quantification of Hemodynamic Changes and Wound Healing Following Transcatheter Arterialization of the Deep Veins (TADV) in No-Option Chronic Limb-Threatening Ischemia."
+    },
+    "design": "prospective_cohort",
+    "source": {
+      "tier": "abstract_only"
+    },
+    "sourceDoc": {
+      "text": "Quantification of hemodynamic changes and wound healing following transcatheter \narterialization of the deep veins in no-option chronic limb-threatening \nischemia.\n\nOBJECTIVE: Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI) that delivers \noxygenated blood to the foot via the venous system and has demonstrated \nfavorable limb salvage outcomes in several studies, including the Pivotal \nRevascularization or Limb Restoration in Patients With Chronic Limb-Threatening \nIschemia (PROMISE) II trial. The present study characterizes circuit maturation \nin the PROMISE II cohort by examining its longitudinal hemodynamic development \nand associated wound healing, with the goal of better defining the mechanism of \naction of TADV.\nMETHODS: PROMISE II (NCT03970538) was a prospective, multicenter study on TADV \nin patients with no-option CLTI due to \"desert foot\" arterial anatomy. The \nobjective was to evaluate longitudinal changes following TADV including \nhemodynamics from duplex ultrasound, distal perfusion, and wound healing over \ntime. Clinical outcomes, perfusion metrics, and serial duplex ultrasound data \nwere collected through 1 year using standardized protocols. Duplex studies \nevaluated volume flow and spectral Doppler parameters across the TADV circuit. \nDistal perfusion was assessed using toe-brachial index and toe pressures. \nDuplex-derived waveforms were categorized as low resistance or high resistance, \nand longitudinal hemodynamic changes were analyzed. Circuit maturation was \nassessed using characteristics such as waveform achieving high-resistance \nconfiguration and decreased acceleration time indicating vascular remodeling.\nRESULTS: A total of 105 patients from PROMISE II were included in the analysis. \nLimb salvage was 68.7% at 1 year. Among patients with adjudicated wound data, \n75.5% were healed/healing at 1 year; patients with worsening status decreased \nfrom 52.6% to 14.3%, whereas complete healing increased to 46.9%. Circuits \ntransitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001). At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3% \nindicating greater distal perfusion.\nCONCLUSIONS: TADV promotes limb salvage through staged hemodynamic maturation \ndemonstrated by duplex ultrasound, microvascular remodeling, sustaining \nperfusion, and supporting its durable benefit in no-option CLTI.",
+      "tables": ""
+    },
+    "sourceCoverage": {
+      "abstractPresent": true,
+      "bodyPresent": false,
+      "tablesPresent": false,
+      "figureImageTextExtracted": false
+    },
+    "extractionVersion": "2026-10-16.result-context-cache-v3",
+    "resultContract": "result-handoff-v4",
+    "resultContexts": [
+      {
+        "quantity_index": 0,
+        "outcome": {
+          "text": "Limb salvage",
+          "quote": "Limb salvage was 68.7% at 1 year.",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "1 year",
+          "quote": "Limb salvage was 68.7% at 1 year.",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": []
+      },
+      {
+        "quantity_index": 1,
+        "outcome": {
+          "text": "healed/healing",
+          "quote": "Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "1 year",
+          "quote": "Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": [
+          {
+            "text": "Among patients with adjudicated wound data",
+            "quote": "Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 2,
+        "outcome": {
+          "text": "low- to high-resistance waveforms",
+          "quote": "Circuits transitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "longitudinal hemodynamic changes were analyzed",
+          "quote": "Duplex-derived waveforms were categorized as low resistance or high resistance, \nand longitudinal hemodynamic changes were analyzed.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "baseline to 1 year",
+          "quote": "(7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": {
+          "text": "Circuits transitioned from low- to high-resistance waveforms",
+          "quote": "Circuits transitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 3,
+        "outcome": {
+          "text": "worsening wound status",
+          "quote": "patients with worsening status decreased \nfrom 52.6% to 14.3%",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": {
+          "text": "decreased",
+          "quote": "patients with worsening status decreased \nfrom 52.6% to 14.3%",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 4,
+        "outcome": {
+          "text": "healed/healing wound status",
+          "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "At 1 year",
+          "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": [
+          {
+            "text": "in patients with high-resistance circuits",
+            "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 5,
+        "outcome": {
+          "text": "toe pressure ≥40 mmHg",
+          "quote": "toe pressure ≥40 mmHg was 78.3% \nindicating greater distal perfusion",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "At 1 year",
+          "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": [
+          {
+            "text": "in patients with high-resistance circuits",
+            "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 6,
+        "outcome": {
+          "text": "toe-brachial index ≥ 0.3",
+          "quote": "toe-brachial index ≥ 0.3 was 57.1%",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "At 1 year",
+          "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": [
+          {
+            "text": "in patients with high-resistance circuits",
+            "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%",
+            "corpus": "text"
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "quantity": {
+          "name": "1-year limb salvage after TADV",
+          "quantity_type": "single",
+          "value": 68.7,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "Limb salvage was 68.7% at 1 year.",
+          "location_hint": "Results"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1794,
+            "length": 33,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            68.7,
+            1
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Proportion healed/healing at 1 year among patients with adjudicated wound data",
+          "quantity_type": "single",
+          "value": 75.5,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year",
+          "location_hint": "Results"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1828,
+            "length": 79,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            75.5,
+            1
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Proportion of circuits with high-resistance waveform, baseline to 1 year",
+          "quantity_type": "change",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": "baseline",
+          "first_value": 7.9,
+          "second_label": "1 year",
+          "second_value": 81.1,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": 0.0001,
+          "source_quote": "Circuits transitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at 3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)",
+          "location_hint": "Results"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 2016,
+            "length": 145,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            7.9,
+            24.6,
+            3,
+            37.7,
+            6,
+            81.1,
+            1,
+            0.0001
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "Proportion with worsening wound status, change over follow-up",
+          "quantity_type": "change",
+          "value": null,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": 52.6,
+          "second_label": null,
+          "second_value": 14.3,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "patients with worsening status decreased from 52.6% to 14.3%",
+          "location_hint": "Results"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 1909,
+            "length": 60,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            52.6,
+            14.3
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "1-year healed/healing wound status in patients with high-resistance circuits",
+          "quantity_type": "single",
+          "value": 86.7,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%",
+          "location_hint": "Results"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 2163,
+            "length": 91,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            1,
+            86.7
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "1-year toe pressure ≥40 mmHg in patients with high-resistance circuits",
+          "quantity_type": "single",
+          "value": 78.3,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "toe pressure ≥40 mmHg was 78.3%",
+          "location_hint": "Results"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 2296,
+            "length": 31,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            40,
+            78.3
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      },
+      {
+        "quantity": {
+          "name": "1-year toe-brachial index ≥0.3 in patients with high-resistance circuits",
+          "quantity_type": "single",
+          "value": 57.1,
+          "range_low": null,
+          "range_high": null,
+          "first_label": null,
+          "first_value": null,
+          "second_label": null,
+          "second_value": null,
+          "unit": "%",
+          "ci_low": null,
+          "ci_high": null,
+          "p_value": null,
+          "source_quote": "toe-brachial index ≥ 0.3 was 57.1%",
+          "location_hint": "Results"
+        },
+        "verdict": {
+          "tier": "source-located",
+          "verificationVersion": "2026-10-16.estimates-v14",
+          "flagged": true,
+          "sourceLocated": true,
+          "numericCoverage": true,
+          "relationshipValidated": false,
+          "endpointValidated": false,
+          "relationshipStatus": "unresolved",
+          "sourceTier": "abstract_only",
+          "found": true,
+          "consistent": true,
+          "matched": {
+            "corpus": "prose",
+            "index": 2256,
+            "length": 34,
+            "fuzzy": false
+          },
+          "quoteNums": [
+            0.3,
+            57.1
+          ],
+          "badNums": [],
+          "shapeError": "",
+          "reason": "Quote and numeric tokens located; endpoint, units, groups, timepoints or statistical relationships remain unresolved. Check the source before using this claim.",
+          "warnings": []
+        }
+      }
+    ]
+  },
+  "extracted": {
+    "study_id": "42600759",
+    "design": "prospective_cohort",
+    "quantities": [
+      {
+        "name": "1-year limb salvage after TADV",
+        "quantity_type": "single",
+        "value": 68.7,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": null,
+        "second_label": null,
+        "second_value": null,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "Limb salvage was 68.7% at 1 year.",
+        "location_hint": "Results"
+      },
+      {
+        "name": "Proportion healed/healing at 1 year among patients with adjudicated wound data",
+        "quantity_type": "single",
+        "value": 75.5,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": null,
+        "second_label": null,
+        "second_value": null,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year",
+        "location_hint": "Results"
+      },
+      {
+        "name": "Proportion of circuits with high-resistance waveform, baseline to 1 year",
+        "quantity_type": "change",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": "baseline",
+        "first_value": 7.9,
+        "second_label": "1 year",
+        "second_value": 81.1,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": 0.0001,
+        "source_quote": "Circuits transitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at 3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)",
+        "location_hint": "Results"
+      },
+      {
+        "name": "Proportion with worsening wound status, change over follow-up",
+        "quantity_type": "change",
+        "value": null,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": 52.6,
+        "second_label": null,
+        "second_value": 14.3,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "patients with worsening status decreased from 52.6% to 14.3%",
+        "location_hint": "Results"
+      },
+      {
+        "name": "1-year healed/healing wound status in patients with high-resistance circuits",
+        "quantity_type": "single",
+        "value": 86.7,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": null,
+        "second_label": null,
+        "second_value": null,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%",
+        "location_hint": "Results"
+      },
+      {
+        "name": "1-year toe pressure ≥40 mmHg in patients with high-resistance circuits",
+        "quantity_type": "single",
+        "value": 78.3,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": null,
+        "second_label": null,
+        "second_value": null,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "toe pressure ≥40 mmHg was 78.3%",
+        "location_hint": "Results"
+      },
+      {
+        "name": "1-year toe-brachial index ≥0.3 in patients with high-resistance circuits",
+        "quantity_type": "single",
+        "value": 57.1,
+        "range_low": null,
+        "range_high": null,
+        "first_label": null,
+        "first_value": null,
+        "second_label": null,
+        "second_value": null,
+        "unit": "%",
+        "ci_low": null,
+        "ci_high": null,
+        "p_value": null,
+        "source_quote": "toe-brachial index ≥ 0.3 was 57.1%",
+        "location_hint": "Results"
+      }
+    ],
+    "result_contexts": [
+      {
+        "quantity_index": 0,
+        "outcome": {
+          "text": "Limb salvage",
+          "quote": "Limb salvage was 68.7% at 1 year.",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "1 year",
+          "quote": "Limb salvage was 68.7% at 1 year.",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": []
+      },
+      {
+        "quantity_index": 1,
+        "outcome": {
+          "text": "healed/healing",
+          "quote": "Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "1 year",
+          "quote": "Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": [
+          {
+            "text": "Among patients with adjudicated wound data",
+            "quote": "Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 2,
+        "outcome": {
+          "text": "low- to high-resistance waveforms",
+          "quote": "Circuits transitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": {
+          "text": "longitudinal hemodynamic changes were analyzed",
+          "quote": "Duplex-derived waveforms were categorized as low resistance or high resistance, \nand longitudinal hemodynamic changes were analyzed.",
+          "corpus": "text"
+        },
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "baseline to 1 year",
+          "quote": "(7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": {
+          "text": "Circuits transitioned from low- to high-resistance waveforms",
+          "quote": "Circuits transitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 3,
+        "outcome": {
+          "text": "worsening wound status",
+          "quote": "patients with worsening status decreased \nfrom 52.6% to 14.3%",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": null,
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": {
+          "text": "decreased",
+          "quote": "patients with worsening status decreased \nfrom 52.6% to 14.3%",
+          "corpus": "text"
+        },
+        "qualifications": []
+      },
+      {
+        "quantity_index": 4,
+        "outcome": {
+          "text": "healed/healing wound status",
+          "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "At 1 year",
+          "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": [
+          {
+            "text": "in patients with high-resistance circuits",
+            "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 5,
+        "outcome": {
+          "text": "toe pressure ≥40 mmHg",
+          "quote": "toe pressure ≥40 mmHg was 78.3% \nindicating greater distal perfusion",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "At 1 year",
+          "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": [
+          {
+            "text": "in patients with high-resistance circuits",
+            "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%",
+            "corpus": "text"
+          }
+        ]
+      },
+      {
+        "quantity_index": 6,
+        "outcome": {
+          "text": "toe-brachial index ≥ 0.3",
+          "quote": "toe-brachial index ≥ 0.3 was 57.1%",
+          "corpus": "text"
+        },
+        "intervention": {
+          "text": "TADV",
+          "quote": "Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI)",
+          "corpus": "text"
+        },
+        "comparator": null,
+        "analysis": null,
+        "interventionTiming": null,
+        "outcomeTimepoint": {
+          "text": "At 1 year",
+          "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%",
+          "corpus": "text"
+        },
+        "endpointRole": null,
+        "analysisRole": null,
+        "effect": null,
+        "qualifications": [
+          {
+            "text": "in patients with high-resistance circuits",
+            "quote": "At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%",
+            "corpus": "text"
+          }
+        ]
+      }
+    ]
+  },
+  "extractionInput": "Quantification of hemodynamic changes and wound healing following transcatheter \narterialization of the deep veins in no-option chronic limb-threatening \nischemia.\n\nOBJECTIVE: Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI) that delivers \noxygenated blood to the foot via the venous system and has demonstrated \nfavorable limb salvage outcomes in several studies, including the Pivotal \nRevascularization or Limb Restoration in Patients With Chronic Limb-Threatening \nIschemia (PROMISE) II trial. The present study characterizes circuit maturation \nin the PROMISE II cohort by examining its longitudinal hemodynamic development \nand associated wound healing, with the goal of better defining the mechanism of \naction of TADV.\nMETHODS: PROMISE II (NCT03970538) was a prospective, multicenter study on TADV \nin patients with no-option CLTI due to \"desert foot\" arterial anatomy. The \nobjective was to evaluate longitudinal changes following TADV including \nhemodynamics from duplex ultrasound, distal perfusion, and wound healing over \ntime. Clinical outcomes, perfusion metrics, and serial duplex ultrasound data \nwere collected through 1 year using standardized protocols. Duplex studies \nevaluated volume flow and spectral Doppler parameters across the TADV circuit. \nDistal perfusion was assessed using toe-brachial index and toe pressures. \nDuplex-derived waveforms were categorized as low resistance or high resistance, \nand longitudinal hemodynamic changes were analyzed. Circuit maturation was \nassessed using characteristics such as waveform achieving high-resistance \nconfiguration and decreased acceleration time indicating vascular remodeling.\nRESULTS: A total of 105 patients from PROMISE II were included in the analysis. \nLimb salvage was 68.7% at 1 year. Among patients with adjudicated wound data, \n75.5% were healed/healing at 1 year; patients with worsening status decreased \nfrom 52.6% to 14.3%, whereas complete healing increased to 46.9%. Circuits \ntransitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001). At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3% \nindicating greater distal perfusion.\nCONCLUSIONS: TADV promotes limb salvage through staged hemodynamic maturation \ndemonstrated by duplex ultrasound, microvascular remodeling, sustaining \nperfusion, and supporting its durable benefit in no-option CLTI.",
+  "resultHandoff": {
+    "version": "result-handoff-v4",
+    "paperId": "42600759",
+    "complete": true,
+    "source": {
+      "text": "Quantification of hemodynamic changes and wound healing following transcatheter \narterialization of the deep veins in no-option chronic limb-threatening \nischemia.\n\nOBJECTIVE: Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI) that delivers \noxygenated blood to the foot via the venous system and has demonstrated \nfavorable limb salvage outcomes in several studies, including the Pivotal \nRevascularization or Limb Restoration in Patients With Chronic Limb-Threatening \nIschemia (PROMISE) II trial. The present study characterizes circuit maturation \nin the PROMISE II cohort by examining its longitudinal hemodynamic development \nand associated wound healing, with the goal of better defining the mechanism of \naction of TADV.\nMETHODS: PROMISE II (NCT03970538) was a prospective, multicenter study on TADV \nin patients with no-option CLTI due to \"desert foot\" arterial anatomy. The \nobjective was to evaluate longitudinal changes following TADV including \nhemodynamics from duplex ultrasound, distal perfusion, and wound healing over \ntime. Clinical outcomes, perfusion metrics, and serial duplex ultrasound data \nwere collected through 1 year using standardized protocols. Duplex studies \nevaluated volume flow and spectral Doppler parameters across the TADV circuit. \nDistal perfusion was assessed using toe-brachial index and toe pressures. \nDuplex-derived waveforms were categorized as low resistance or high resistance, \nand longitudinal hemodynamic changes were analyzed. Circuit maturation was \nassessed using characteristics such as waveform achieving high-resistance \nconfiguration and decreased acceleration time indicating vascular remodeling.\nRESULTS: A total of 105 patients from PROMISE II were included in the analysis. \nLimb salvage was 68.7% at 1 year. Among patients with adjudicated wound data, \n75.5% were healed/healing at 1 year; patients with worsening status decreased \nfrom 52.6% to 14.3%, whereas complete healing increased to 46.9%. Circuits \ntransitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001). At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3% \nindicating greater distal perfusion.\nCONCLUSIONS: TADV promotes limb salvage through staged hemodynamic maturation \ndemonstrated by duplex ultrasound, microvascular remodeling, sustaining \nperfusion, and supporting its durable benefit in no-option CLTI.",
+      "tables": ""
+    },
+    "records": [],
+    "diagnostics": [
+      {
+        "quantityIndex": 0,
+        "failures": [],
+        "missing": [
+          "comparator",
+          "effect"
+        ]
+      },
+      {
+        "quantityIndex": 1,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "outcomeTimepoint",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": [
+          "comparator",
+          "effect"
+        ]
+      },
+      {
+        "quantityIndex": 2,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "context-not-located"
+          },
+          {
+            "field": "outcomeTimepoint",
+            "reason": "label-not-in-quote"
+          },
+          {
+            "field": "effect",
+            "reason": "context-not-located"
+          }
+        ],
+        "missing": [
+          "comparator"
+        ]
+      },
+      {
+        "quantityIndex": 3,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "label-not-in-quote"
+          }
+        ],
+        "missing": [
+          "comparator"
+        ]
+      },
+      {
+        "quantityIndex": 4,
+        "failures": [],
+        "missing": [
+          "comparator",
+          "effect"
+        ]
+      },
+      {
+        "quantityIndex": 5,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "unsupported-context-number"
+          }
+        ],
+        "missing": [
+          "comparator",
+          "effect"
+        ]
+      },
+      {
+        "quantityIndex": 6,
+        "failures": [
+          {
+            "field": "outcome",
+            "reason": "numeric-expression-not-in-quote"
+          }
+        ],
+        "missing": [
+          "comparator",
+          "effect"
+        ]
+      }
+    ],
+    "key": "[\"result-handoff-v4\",\"42600759\",\"abstract_only\",null,{\"text\":\"Quantification of hemodynamic changes and wound healing following transcatheter \\narterialization of the deep veins in no-option chronic limb-threatening \\nischemia.\\n\\nOBJECTIVE: Transcatheter arterialization of the deep veins (TADV) is a novel \\ntherapy for no-option chronic limb-threatening ischemia (CLTI) that delivers \\noxygenated blood to the foot via the venous system and has demonstrated \\nfavorable limb salvage outcomes in several studies, including the Pivotal \\nRevascularization or Limb Restoration in Patients With Chronic Limb-Threatening \\nIschemia (PROMISE) II trial. The present study characterizes circuit maturation \\nin the PROMISE II cohort by examining its longitudinal hemodynamic development \\nand associated wound healing, with the goal of better defining the mechanism of \\naction of TADV.\\nMETHODS: PROMISE II (NCT03970538) was a prospective, multicenter study on TADV \\nin patients with no-option CLTI due to \\\"desert foot\\\" arterial anatomy. The \\nobjective was to evaluate longitudinal changes following TADV including \\nhemodynamics from duplex ultrasound, distal perfusion, and wound healing over \\ntime. Clinical outcomes, perfusion metrics, and serial duplex ultrasound data \\nwere collected through 1 year using standardized protocols. Duplex studies \\nevaluated volume flow and spectral Doppler parameters across the TADV circuit. \\nDistal perfusion was assessed using toe-brachial index and toe pressures. \\nDuplex-derived waveforms were categorized as low resistance or high resistance, \\nand longitudinal hemodynamic changes were analyzed. Circuit maturation was \\nassessed using characteristics such as waveform achieving high-resistance \\nconfiguration and decreased acceleration time indicating vascular remodeling.\\nRESULTS: A total of 105 patients from PROMISE II were included in the analysis. \\nLimb salvage was 68.7% at 1 year. Among patients with adjudicated wound data, \\n75.5% were healed/healing at 1 year; patients with worsening status decreased \\nfrom 52.6% to 14.3%, whereas complete healing increased to 46.9%. Circuits \\ntransitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \\n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001). At 1 year, in patients \\nwith high-resistance circuits, healed/healing wound status was 86.7%, \\ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3% \\nindicating greater distal perfusion.\\nCONCLUSIONS: TADV promotes limb salvage through staged hemodynamic maturation \\ndemonstrated by duplex ultrasound, microvascular remodeling, sustaining \\nperfusion, and supporting its durable benefit in no-option CLTI.\",\"tables\":\"\"},[{\"quantity_index\":0,\"outcome\":{\"text\":\"Limb salvage\",\"quote\":\"Limb salvage was 68.7% at 1 year.\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"TADV\",\"quote\":\"Transcatheter arterialization of the deep veins (TADV) is a novel \\ntherapy for no-option chronic limb-threatening ischemia (CLTI)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":{\"text\":\"1 year\",\"quote\":\"Limb salvage was 68.7% at 1 year.\",\"corpus\":\"text\"},\"endpointRole\":null,\"analysisRole\":null,\"effect\":null,\"qualifications\":[]},{\"quantity_index\":1,\"outcome\":{\"text\":\"healed/healing\",\"quote\":\"Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"TADV\",\"quote\":\"Transcatheter arterialization of the deep veins (TADV) is a novel \\ntherapy for no-option chronic limb-threatening ischemia (CLTI)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":{\"text\":\"1 year\",\"quote\":\"Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year\",\"corpus\":\"text\"},\"endpointRole\":null,\"analysisRole\":null,\"effect\":null,\"qualifications\":[{\"text\":\"Among patients with adjudicated wound data\",\"quote\":\"Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year\",\"corpus\":\"text\"}]},{\"quantity_index\":2,\"outcome\":{\"text\":\"low- to high-resistance waveforms\",\"quote\":\"Circuits transitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \\n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"TADV\",\"quote\":\"Transcatheter arterialization of the deep veins (TADV) is a novel \\ntherapy for no-option chronic limb-threatening ischemia (CLTI)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":{\"text\":\"longitudinal hemodynamic changes were analyzed\",\"quote\":\"Duplex-derived waveforms were categorized as low resistance or high resistance, \\nand longitudinal hemodynamic changes were analyzed.\",\"corpus\":\"text\"},\"interventionTiming\":null,\"outcomeTimepoint\":{\"text\":\"baseline to 1 year\",\"quote\":\"(7.9% at baseline; 24.6% at \\n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)\",\"corpus\":\"text\"},\"endpointRole\":null,\"analysisRole\":null,\"effect\":{\"text\":\"Circuits transitioned from low- to high-resistance waveforms\",\"quote\":\"Circuits transitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \\n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)\",\"corpus\":\"text\"},\"qualifications\":[]},{\"quantity_index\":3,\"outcome\":{\"text\":\"worsening wound status\",\"quote\":\"patients with worsening status decreased \\nfrom 52.6% to 14.3%\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"TADV\",\"quote\":\"Transcatheter arterialization of the deep veins (TADV) is a novel \\ntherapy for no-option chronic limb-threatening ischemia (CLTI)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":null,\"endpointRole\":null,\"analysisRole\":null,\"effect\":{\"text\":\"decreased\",\"quote\":\"patients with worsening status decreased \\nfrom 52.6% to 14.3%\",\"corpus\":\"text\"},\"qualifications\":[]},{\"quantity_index\":4,\"outcome\":{\"text\":\"healed/healing wound status\",\"quote\":\"At 1 year, in patients \\nwith high-resistance circuits, healed/healing wound status was 86.7%\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"TADV\",\"quote\":\"Transcatheter arterialization of the deep veins (TADV) is a novel \\ntherapy for no-option chronic limb-threatening ischemia (CLTI)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":{\"text\":\"At 1 year\",\"quote\":\"At 1 year, in patients \\nwith high-resistance circuits, healed/healing wound status was 86.7%\",\"corpus\":\"text\"},\"endpointRole\":null,\"analysisRole\":null,\"effect\":null,\"qualifications\":[{\"text\":\"in patients with high-resistance circuits\",\"quote\":\"At 1 year, in patients \\nwith high-resistance circuits, healed/healing wound status was 86.7%\",\"corpus\":\"text\"}]},{\"quantity_index\":5,\"outcome\":{\"text\":\"toe pressure ≥40 mmHg\",\"quote\":\"toe pressure ≥40 mmHg was 78.3% \\nindicating greater distal perfusion\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"TADV\",\"quote\":\"Transcatheter arterialization of the deep veins (TADV) is a novel \\ntherapy for no-option chronic limb-threatening ischemia (CLTI)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":{\"text\":\"At 1 year\",\"quote\":\"At 1 year, in patients \\nwith high-resistance circuits, healed/healing wound status was 86.7%, \\ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%\",\"corpus\":\"text\"},\"endpointRole\":null,\"analysisRole\":null,\"effect\":null,\"qualifications\":[{\"text\":\"in patients with high-resistance circuits\",\"quote\":\"At 1 year, in patients \\nwith high-resistance circuits, healed/healing wound status was 86.7%, \\ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%\",\"corpus\":\"text\"}]},{\"quantity_index\":6,\"outcome\":{\"text\":\"toe-brachial index ≥ 0.3\",\"quote\":\"toe-brachial index ≥ 0.3 was 57.1%\",\"corpus\":\"text\"},\"intervention\":{\"text\":\"TADV\",\"quote\":\"Transcatheter arterialization of the deep veins (TADV) is a novel \\ntherapy for no-option chronic limb-threatening ischemia (CLTI)\",\"corpus\":\"text\"},\"comparator\":null,\"analysis\":null,\"interventionTiming\":null,\"outcomeTimepoint\":{\"text\":\"At 1 year\",\"quote\":\"At 1 year, in patients \\nwith high-resistance circuits, healed/healing wound status was 86.7%, \\ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%\",\"corpus\":\"text\"},\"endpointRole\":null,\"analysisRole\":null,\"effect\":null,\"qualifications\":[{\"text\":\"in patients with high-resistance circuits\",\"quote\":\"At 1 year, in patients \\nwith high-resistance circuits, healed/healing wound status was 86.7%, \\ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3%\",\"corpus\":\"text\"}]}],[{\"name\":\"1-year limb salvage after TADV\",\"quantity_type\":\"single\",\"value\":68.7,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":null,\"second_label\":null,\"second_value\":null,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"Limb salvage was 68.7% at 1 year.\",\"location_hint\":\"Results\"},{\"name\":\"Proportion healed/healing at 1 year among patients with adjudicated wound data\",\"quantity_type\":\"single\",\"value\":75.5,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":null,\"second_label\":null,\"second_value\":null,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"Among patients with adjudicated wound data, 75.5% were healed/healing at 1 year\",\"location_hint\":\"Results\"},{\"name\":\"Proportion of circuits with high-resistance waveform, baseline to 1 year\",\"quantity_type\":\"change\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":\"baseline\",\"first_value\":7.9,\"second_label\":\"1 year\",\"second_value\":81.1,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":0.0001,\"source_quote\":\"Circuits transitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at 3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001)\",\"location_hint\":\"Results\"},{\"name\":\"Proportion with worsening wound status, change over follow-up\",\"quantity_type\":\"change\",\"value\":null,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":52.6,\"second_label\":null,\"second_value\":14.3,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"patients with worsening status decreased from 52.6% to 14.3%\",\"location_hint\":\"Results\"},{\"name\":\"1-year healed/healing wound status in patients with high-resistance circuits\",\"quantity_type\":\"single\",\"value\":86.7,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":null,\"second_label\":null,\"second_value\":null,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"At 1 year, in patients \\nwith high-resistance circuits, healed/healing wound status was 86.7%\",\"location_hint\":\"Results\"},{\"name\":\"1-year toe pressure ≥40 mmHg in patients with high-resistance circuits\",\"quantity_type\":\"single\",\"value\":78.3,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":null,\"second_label\":null,\"second_value\":null,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"toe pressure ≥40 mmHg was 78.3%\",\"location_hint\":\"Results\"},{\"name\":\"1-year toe-brachial index ≥0.3 in patients with high-resistance circuits\",\"quantity_type\":\"single\",\"value\":57.1,\"range_low\":null,\"range_high\":null,\"first_label\":null,\"first_value\":null,\"second_label\":null,\"second_value\":null,\"unit\":\"%\",\"ci_low\":null,\"ci_high\":null,\"p_value\":null,\"source_quote\":\"toe-brachial index ≥ 0.3 was 57.1%\",\"location_hint\":\"Results\"}]]"
+  },
+  "findingAndChecks": [
+    {
+      "id": "42600759",
+      "finding": "",
+      "designCaution": "",
+      "check": {
+        "verdict": "refuted",
+        "reason": "Complete result context unavailable."
+      },
+      "cautionCheck": {
+        "verdict": "refuted",
+        "reason": "Caution not checked."
+      }
+    }
+  ],
+  "displayed": {
+    "finding": "",
+    "designCaution": "",
+    "reason": "Complete result context unavailable."
+  },
+  "frozenSourceRecord": {
+    "artifact": "final-evaluation-harness/inputs.json",
+    "source": {
+      "hasBody": false,
+      "text": "Quantification of hemodynamic changes and wound healing following transcatheter \narterialization of the deep veins in no-option chronic limb-threatening \nischemia.\n\nOBJECTIVE: Transcatheter arterialization of the deep veins (TADV) is a novel \ntherapy for no-option chronic limb-threatening ischemia (CLTI) that delivers \noxygenated blood to the foot via the venous system and has demonstrated \nfavorable limb salvage outcomes in several studies, including the Pivotal \nRevascularization or Limb Restoration in Patients With Chronic Limb-Threatening \nIschemia (PROMISE) II trial. The present study characterizes circuit maturation \nin the PROMISE II cohort by examining its longitudinal hemodynamic development \nand associated wound healing, with the goal of better defining the mechanism of \naction of TADV.\nMETHODS: PROMISE II (NCT03970538) was a prospective, multicenter study on TADV \nin patients with no-option CLTI due to \"desert foot\" arterial anatomy. The \nobjective was to evaluate longitudinal changes following TADV including \nhemodynamics from duplex ultrasound, distal perfusion, and wound healing over \ntime. Clinical outcomes, perfusion metrics, and serial duplex ultrasound data \nwere collected through 1 year using standardized protocols. Duplex studies \nevaluated volume flow and spectral Doppler parameters across the TADV circuit. \nDistal perfusion was assessed using toe-brachial index and toe pressures. \nDuplex-derived waveforms were categorized as low resistance or high resistance, \nand longitudinal hemodynamic changes were analyzed. Circuit maturation was \nassessed using characteristics such as waveform achieving high-resistance \nconfiguration and decreased acceleration time indicating vascular remodeling.\nRESULTS: A total of 105 patients from PROMISE II were included in the analysis. \nLimb salvage was 68.7% at 1 year. Among patients with adjudicated wound data, \n75.5% were healed/healing at 1 year; patients with worsening status decreased \nfrom 52.6% to 14.3%, whereas complete healing increased to 46.9%. Circuits \ntransitioned from low- to high-resistance waveforms (7.9% at baseline; 24.6% at \n3 months; 37.7% at 6 months; 81.1% at 1 year; P < .0001). At 1 year, in patients \nwith high-resistance circuits, healed/healing wound status was 86.7%, \ntoe-brachial index ≥ 0.3 was 57.1%, and toe pressure ≥40 mmHg was 78.3% \nindicating greater distal perfusion.\nCONCLUSIONS: TADV promotes limb salvage through staged hemodynamic maturation \ndemonstrated by duplex ultrasound, microvascular remodeling, sustaining \nperfusion, and supporting its durable benefit in no-option CLTI.",
+      "tables": "",
+      "tier": "abstract_only",
+      "pmcid": null
+    }
+  },
+  "missingFields": [
+    "production-style evidenceWindow",
+    "source.hash",
+    "cache status"
+  ],
+  "notes": [
+    "resultHandoff is an experimental object, not an original production evidenceWindow. No source hash or missing section structure has been reconstructed."
+  ]
+}

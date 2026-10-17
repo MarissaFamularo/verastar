@@ -1,0 +1,251 @@
+diff --git a/src/lib/format.js b/src/lib/format.js
+index ec57bd7..0c21333 100644
+--- a/src/lib/format.js
++++ b/src/lib/format.js
+@@ -235,6 +235,16 @@ export function ciLabel(quantity) {
+ // The p-value carries an operator ONLY when the quote states one ("P<0.001", "P=0.02");
+ // otherwise it renders operator-free ("P 0.02") — an "=" the source never said is a
+ // misstatement in the fact channel.
++// Preserve an explicit delta label only when the quote binds that unit to this
++// exact value. Do not infer change from the model-proposed name or from another
++// statistic elsewhere in the quote.
++export function isQuotedChange(q) {
++  if (q.value == null || !q.unit) return false
++  const unit = String(q.unit).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[- ]+/g, '[-\\s]+')
++  const re = new RegExp('(?:[∆Δ]|\\b(?:delta|change in|increase in|improvement in)\\s+)\\s*' + unit + '\\s*[,=:]?\\s*(?:of\\s+)?([-+]?\\d*\\.?\\d+)', 'gi')
++  return [...String(q.source_quote || '').matchAll(re)].some(m => Number(m[1]) === q.value)
++}
++
+ export function fmtNum(q) {
+   const hasPair = q.first_value != null && q.second_value != null
+   const hasRange = q.range_low != null && q.range_high != null
+@@ -263,7 +273,7 @@ export function fmtNum(q) {
+   } else {
+     s = hasRange ? printedRange(q) + (pct ? '%' : '') : v('value')
+   }
+-  if (q.unit && !pct) s += ` ${q.unit}`
++  if (q.unit && !pct) s += ` ${isQuotedChange(q) ? 'change in ' : ''}${q.unit}`
+   if (ciBelongsToEstimate(q)) {
+     s += ` (${ciLabel(q)} ${printedValue(q, 'ci_low')}–${printedValue(q, 'ci_high')})`
+   }
+diff --git a/src/pipeline/check.js b/src/pipeline/check.js
+index 0ba40d9..612c662 100644
+--- a/src/pipeline/check.js
++++ b/src/pipeline/check.js
+@@ -13,6 +13,7 @@
+ // existed. Wired inside triage() so the digest and Add-a-paper are both covered with no
+ // opt-out at the call sites.
+ 
++import { PROSE_GROUNDING } from './proseGrounding.js'
+ import { extractStructured, MODELS } from '../lib/anthropic.js'
+ import { sectionKind, SECTION_WINDOW_CHARS, assertEvidenceBatch, assertProseRequest, proseRequestBudget } from './evidenceWindow.js'
+ 
+@@ -49,7 +50,7 @@ const SYSTEM = `You are a skeptical peer reviewer auditing one-sentence claims a
+ - for a design caution, whether the named design, selection mechanism, matching method, exposure identification, setting, endpoint limitation, or causal constraint is supported by the snippet rather than invented
+ - the analysis and hypothesis: a claim that headlines a secondary, subgroup, per-protocol, or as-treated result as the study's main result, presents it as the randomized comparison, or omits or contradicts the PRIMARY result named in the item's CONTEXT line is unsupported; a noninferiority result stated as superiority (or the reverse), or a result at one timepoint or endpoint stated as another, is unsupported
+ - composite endpoint fidelity: the claim must not broaden, narrow, or re-define a composite endpoint's components or time window beyond what the snippet states. Refute a claim that treats any stroke as ipsilateral stroke, early-only (e.g. periprocedural or 30-day) death as death over all follow-up, or names components the snippet does not list, and refute a claim that states a definition of the primary endpoint when the snippet does not contain that definition (a claim that says only "the reported primary composite endpoint" is acceptable). Judge the claim AS RENDERED, including the meaning of any timepoint or component it names.
+-Numeric values in the claim were already verified against the source by a separate deterministic gate — do NOT judge the numbers themselves, only the prose claim around them. But number verification does NOT establish that the sentence means what the source means: still check which endpoint, component, population, and time window the numbers are attached to. A claim that is vaguer or more cautious than the snippet is supported. Refute (supported=false) when the claim reverses or overstates the direction, asserts an outcome the snippet does not state, or misattributes the population, intervention, or comparator. When genuinely uncertain whether the snippet supports the claim, refute — an unsupported claim shown to a clinician is worse than a supported one withheld. Return a verdict for EVERY item id you were given, each with a one-clause reason.`
++Numeric values in the claim were already verified against the source by a separate deterministic gate — do NOT judge the numbers themselves, only the prose claim around them. But number verification does NOT establish that the sentence means what the source means: still check which endpoint, component, population, and time window the numbers are attached to. A claim that is vaguer or more cautious than the snippet is supported. Refute (supported=false) when the claim reverses or overstates the direction, asserts an outcome the snippet does not state, or misattributes the population, intervention, or comparator. When genuinely uncertain whether the snippet supports the claim, refute — an unsupported claim shown to a clinician is worse than a supported one withheld. Return a verdict for EVERY item id you were given, each with a one-clause reason. For design cautions, the accompanying finding in CONTEXT identifies the comparison to assess; it is not additional source evidence. An unsupported factual limitation remains unsupported even when qualified with likely. Reject a main finding whose decisive uncertainty is only supplied in a separate caution.\n\n${PROSE_GROUNDING}`
+ 
+ // Audit findings against their source snippets. `items` is [{ id, finding, snippet }].
+ // Returns a Map of String(id) -> { verdict: 'supported'|'refuted'|'unchecked', reason }.
+diff --git a/src/pipeline/proseGrounding.js b/src/pipeline/proseGrounding.js
+new file mode 100644
+index 0000000..ef4081f
+--- /dev/null
++++ b/src/pipeline/proseGrounding.js
+@@ -0,0 +1,8 @@
++// Shared source-fidelity rules for the writer and independent prose check. These
++// constrain interpretation, not numeric verification or which papers are shown.
++export const PROSE_GROUNDING = `SOURCE FIDELITY — the main finding must be safe on its own, without its design caution:
++- Preserve decisive exceptions, the comparator, population, composite endpoint, and material treatment/follow-up timing. State only that an interaction was not statistically detected; do not infer identical treatment effects. Follow-up duration is not proof that every event occurred that long after baseline. A broad anatomic benefit is not necessarily a clinical benefit.
++- Identify the analysis when conclusions differ: intention-to-treat versus on-treatment, conventional multivariable adjustment versus propensity weighting, exploratory subgroup versus prespecified comparison. A significant association in one adjusted model does not establish it in another. Put the material uncertainty in the MAIN finding, not only the caution. Detailed Results govern when a conclusion generalizes beyond them. Do not describe a nonsignificant result as zero effect, a null effect, equivalence, or proof of no benefit.
++- Match the evidence certainty separately for each outcome. Statistical significance does not justify confident benefit language when the source grades evidence low or uncertain. Preserve changes versus levels (for example, an increase in a discrimination statistic is not its absolute value); verified digits alone do not validate their label.
++- A caution must address the comparison or inference in its accompanying finding. State a factual limitation only when supported by the supplied source. Not mentioned is NOT demonstrated absent: do not invent lack of external validation, blinding, controls, power, or study heterogeneity. Do not infer an underpowered analysis from nonsignificance. For an explicitly exploratory or observational analysis, describe the uncertainty that design entails without inventing an unreported method or defect. If no specific limitation is established, state the limit of what the provided evidence establishes rather than fabricate one.
++- Keep a useful source-supported finding even when no numbers are eligible. In number-free text, express material timing in words when needed; do not remove the timing or analysis qualifier. Apply the same fidelity rules to the number-free fallback. A hypothetical bias must be clearly conditional and tied to a reported design/selection feature, not presented as an observed flaw.`
+diff --git a/src/pipeline/triage.js b/src/pipeline/triage.js
+index 01824da..4dc83d7 100644
+--- a/src/pipeline/triage.js
++++ b/src/pipeline/triage.js
+@@ -1,3 +1,4 @@
++import { PROSE_GROUNDING } from './proseGrounding.js'
+ import { PILOT_DIGEST_LIMIT } from './digestLimit.js'
+ // pipeline/triage.js — the REASONING channel (one cheap call, not the gated facts).
+ //
+@@ -45,6 +46,27 @@ export const TRIAGE_SCHEMA = {
+   },
+ }
+ 
++// A single reusable row schema avoids provider grammar growth with paper count.
++// Exact membership and uniqueness are enforced before any downstream map.
++export function rankingSchema() {
++  return TRIAGE_SCHEMA
++}
++export const RANKING_BATCH_LIMIT = 3
++export function validatedRankings(result, ids) {
++  const expected = new Set(ids)
++  if (expected.size !== ids.length) throw new Error('Duplicate requested paper IDs; no ranking can be assigned safely.')
++  const raw = result?.rankings
++  const rows = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? Object.entries(raw).map(([id, row]) => ({ ...row, id })) : []
++  const seen = new Set()
++  for (const row of rows) {
++    const id = String(row?.id)
++    if (!expected.has(id) || seen.has(id)) throw new Error(`Invalid ranking identity: unexpected or duplicate paper ID ${id}.`)
++    seen.add(id)
++  }
++  if (seen.size !== expected.size) throw new Error('Incomplete ranking identities: one result is required for every requested paper.')
++  return rows
++}
++
+ // The app's integrity contract — output shape + the verified-numbers-only rule. This is
+ // NOT user-editable; it guarantees the digest prose never carries an unverified number.
+ // The prompt is only the first line of defense: sanitizeRanking() re-checks every digit
+@@ -160,13 +182,14 @@ export function sanitizeRanking(rk, verified, { primary = null } = {}) {
+   }
+   const finding = dedupeEstimateLabels(String(rk?.finding ?? '').trim())
+   const ciLevels = allowedCiLevels(verified)
+-  const grounded = numbersGrounded(finding, allowed, timepoints, ciLevels) &&
++  const grounded = Boolean(finding) && numbersGrounded(finding, allowed, timepoints, ciLevels) &&
+     !headlinesNonPrimary({ finding, verified, primary })
+   return {
+     id: rk?.id,
+-    score: rk?.score,
++    score: (grounded ? finding : cleanFallback(rk?.finding_plain)) ? rk?.score : null,
+     tier: rk?.tier,
+     finding: grounded ? finding : cleanFallback(rk?.finding_plain),
++    ...(!(grounded ? finding : cleanFallback(rk?.finding_plain)) ? { summaryIssue: !finding ? 'Writer returned no finding and no usable number-free fallback.' : !String(rk?.finding_plain || '').trim() ? 'Finding failed numeric or primary-scope checks; writer supplied no number-free fallback.' : 'Finding failed numeric or primary-scope checks; fallback also contains unverified numeric text.' } : {}),
+     designCaution: numberFree(rk?.design_caution),
+     relevance: numberFree(rk?.relevance),
+   }
+@@ -187,7 +210,7 @@ function buildSystem(rubric) {
+   const header = criteria
+     ? `The clinician's digest rubric — their editorial priorities, in their words. Treat it as the deciding voice on what ranks high and what to downrank:\n\n${criteria}\n\n---\n\n`
+     : ''
+-  return header + OUTPUT_CONTRACT
++  return header + OUTPUT_CONTRACT + '\n\n' + PROSE_GROUNDING
+ }
+ 
+ // Primary state for a candidate. findPrimary() never returns null; an explicit null from a
+@@ -215,18 +238,32 @@ export async function triage({
+   candidates,
+   model = MODELS.triage,
+   maxTokens,
++  onTrace,
+ }) {
+   // Nothing new to rank: do not send a model call. An empty finish, an empty rank phase,
+   // and a caller that already filtered the list all land here.
+   if (!Array.isArray(candidates) || candidates.length === 0) return []
+   if (candidates.length > PILOT_DIGEST_LIMIT) throw new Error('Pilot digests are limited to 20 papers; no ranking request was sent.')
+   assertEvidenceBatch(candidates.map(c => c.summary || ''))
++  const trace = event => { try { onTrace?.(event) } catch { /* optional local diagnostics must not change production behavior */ } }
++  const ids = candidates.map(c => String(c.id))
++  if (new Set(ids).size !== ids.length) throw new Error('Duplicate requested paper IDs; no request was sent.')
++  // Keep writer/checker requests small independently of the evidence-token cap.
++  if (candidates.length > RANKING_BATCH_LIMIT) {
++    const rankings = []
++    for (let i = 0; i < candidates.length; i += RANKING_BATCH_LIMIT) {
++      rankings.push(...await triage({ northStars, projects, journalPreferences, rubric,
++        candidates: candidates.slice(i, i + RANKING_BATCH_LIMIT), model, maxTokens, onTrace }))
++    }
++    return validatedRankings({ rankings }, ids)
++  }
++  const schema = rankingSchema(ids)
+   const stars = northStars.length ? northStars.join(', ') : '(none set)'
+   const projs = projects.length ? projects.join(', ') : '(none set)'
+-  const content =
++  const header =
+     `North stars: ${stars}\nActive projects: ${projs}\n` +
+-    `Journal preferences (structured signal; they do not override hard exclusions):\n${journalPreferenceText(journalPreferences)}\n\nCandidates:\n\n` +
+-    candidates
++    `Journal preferences (structured signal; they do not override hard exclusions):\n${journalPreferenceText(journalPreferences)}\n\nCandidates:\n\n`
++  const paperContents = candidates
+       .map((c) => {
+         const facts = (c.verified || []).length
+           ? c.verified.map((v) => {
+@@ -249,23 +286,23 @@ export async function triage({
+           .join('; ')
+         return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\nSearch steering: ${steering || '(not available)'}\n${c.summary || ''}\n${primaryLine}Verified results:\n${facts}`
+       })
+-      .join('\n\n')
++  const content = header + paperContents.join('\n\n')
+ 
+   const outputTokens = maxTokens ?? triageMaxTokens(candidates.length)
+-  if (!proseRequestBudget(buildSystem(rubric), content, TRIAGE_SCHEMA, outputTokens).fits && candidates.length > 1) {
++  if (!proseRequestBudget(buildSystem(rubric), content, schema, outputTokens).fits && candidates.length > 1) {
+     const middle = Math.ceil(candidates.length / 2)
+     const rankings = []
+     for (const group of [candidates.slice(0, middle), candidates.slice(middle)]) {
+-      rankings.push(...await triage({ northStars, projects, journalPreferences, rubric, candidates: group, model, maxTokens }))
++      rankings.push(...await triage({ northStars, projects, journalPreferences, rubric, candidates: group, model, maxTokens, onTrace }))
+     }
+     return rankings
+   }
+-  assertProseRequest(buildSystem(rubric), content, TRIAGE_SCHEMA, outputTokens)
++  assertProseRequest(buildSystem(rubric), content, schema, outputTokens)
+   const result = await extractStructured({
+     model,
+     system: buildSystem(rubric),
+     content,
+-    schema: TRIAGE_SCHEMA,
++    schema,
+     maxTokens: outputTokens,
+     thinking: { type: 'disabled' }, // ranking/summary is not a reasoning task; keep output for JSON
+   })
+@@ -277,10 +314,33 @@ export async function triage({
+   // finding); only a caller that omits the key keeps the pre-contract behaviour.
+   const UNKNOWN_PRIMARY = { state: 'unknown', name: null, verified: false, indexes: [], basis: null }
+   const primaryById = new Map(candidates.map((c) => [String(c.id), 'primary' in (c || {}) ? c.primary || UNKNOWN_PRIMARY : null]))
+-  const sanitized = (result.rankings ?? []).map((rk) =>
++  trace({ stage: 'raw', requestedIds: ids, result })
++  const rawRankings = validatedRankings(result, ids)
++  let sanitized = rawRankings.map((rk) =>
+     sanitizeRanking(rk, verifiedById.get(String(rk?.id)) || [], { primary: primaryById.get(String(rk?.id)) })
+   )
+ 
++  trace({ stage: 'sanitized', rankings: sanitized })
++  const emptyIds = sanitized.filter(rk => !rk.finding).map(rk => String(rk.id))
++  if (emptyIds.length) {
++    // One bounded rewrite, never deletion of digits or a relaxed number gate.
++    const repairSystem = buildSystem(rubric) + `\nREWRITE REQUEST: Return exactly these paper IDs and no others: ${emptyIds.join(', ')}. Their prior main finding or fallback was unusable. Write a complete source-supported finding and finding_plain using words for material timing; no numerical estimates or digit-bearing timepoints. Preserve analysis-specific uncertainty in the finding itself. Do not omit a finding merely because its numeric rows cannot be used.`
++    const repairContent = header + paperContents.filter((_, i) => emptyIds.includes(ids[i])).join('\n\n')
++    const repairSchema = rankingSchema(emptyIds)
++    assertProseRequest(repairSystem, repairContent, repairSchema, outputTokens)
++    try {
++      const repaired = await extractStructured({ model, system: repairSystem, content: repairContent, schema: repairSchema, maxTokens: outputTokens, thinking: { type: 'disabled' } })
++      trace({ stage: 'repair_raw', requestedIds: emptyIds, result: repaired })
++      const replacements = new Map(validatedRankings(repaired, emptyIds).map(rk => [String(rk.id), sanitizeRanking(rk, verifiedById.get(String(rk.id)) || [], { primary: primaryById.get(String(rk.id)) })]))
++      sanitized = sanitized.map(rk => replacements.get(String(rk.id)) || rk)
++    } catch (error) {
++      trace({ stage: 'repair_failed', reason: String(error.message) })
++      // Respect the existing cap/uncertain-call behavior; do not mask paid-call errors.
++      throw error
++    }
++    trace({ stage: 'repair_sanitized', rankings: sanitized })
++  }
++
+   // Deterministic scope check before the model audit: a finding whose numbers come only
+   // from per-protocol / as-treated analyses is refuted outright (primaryResult.js) and is
+   // not sent to the checker.
+@@ -318,7 +378,7 @@ export async function triage({
+           : ''
+         return [
+           ...(scope.has(String(rk.id)) ? [] : [{ id: rk.id, finding: rk.finding, snippet, context }]),
+-          { id: `design-caution:${rk.id}`, claimType: 'design-caution', finding: rk.designCaution, snippet },
++          { id: `design-caution:${rk.id}`, claimType: 'design-caution', finding: rk.designCaution, snippet, context: `Accompanying finding (alignment only, not source evidence): ${rk.finding}` },
+         ]
+       }),
+     })
+@@ -329,9 +389,11 @@ export async function triage({
+   const fallback = failure
+     ? { verdict: 'unchecked', reason: `Not checked: the source check failed (${failure}).` }
+     : { verdict: 'unchecked', reason: '' }
+-  return sanitized.map((rk) => ({
++  const finalRankings = sanitized.map((rk) => ({
+     ...rk,
+-    check: scope.get(String(rk.id)) || checks.get(String(rk.id)) || fallback,
++    check: rk.summaryIssue ? { verdict: 'unchecked', reason: rk.summaryIssue } : scope.get(String(rk.id)) || checks.get(String(rk.id)) || fallback,
+     cautionCheck: checks.get(`design-caution:${rk.id}`) || fallback,
+   }))
++  trace({ stage: 'final', rankings: finalRankings })
++  return finalRankings
+ }
