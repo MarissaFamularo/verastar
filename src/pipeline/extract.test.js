@@ -17,7 +17,7 @@ import { verify } from './verify.js'
 
 beforeEach(() => {
   vi.mocked(extractStructured).mockReset()
-  vi.mocked(extractStructured).mockResolvedValue({ study_id: '123', design: 'other', quantities: [] })
+  vi.mocked(extractStructured).mockResolvedValue({ study_id: '123', design: 'other', quantities: [], result_contexts: [] })
 })
 
 describe('extraction quantity semantics', () => {
@@ -43,7 +43,7 @@ describe('extraction quantity semantics', () => {
   it('retries incomplete structured output once with a larger allowance', async () => {
     vi.mocked(extractStructured)
       .mockRejectedValueOnce(Object.assign(new Error('Claude structured output was incomplete.'), { retryable: true }))
-      .mockResolvedValueOnce({ study_id: '123', design: 'other', quantities: [] })
+      .mockResolvedValueOnce({ study_id: '123', design: 'other', quantities: [], result_contexts: [] })
 
     await expect(extractQuantities({ studyId: '123', sourceText: 'Abstract text.' })).resolves.toMatchObject({ study_id: '123' })
 
@@ -84,7 +84,7 @@ describe('quote rule ↔ verifier contract', () => {
     expect(v.relationshipStatus).toBe('comparison-validated')
   })
   it('the prompt states the rule', async () => {
-    await extractQuantities({ studyId: '1', sourceText: SRC })
+    await extractQuantities({ studyId: '123', sourceText: SRC })
     const { system } = vi.mocked(extractStructured).mock.calls[0][0]
     expect(system).toMatch(/shortest contiguous span/)
     expect(system).toMatch(/ALWAYS extract\s+the primary outcome/)
@@ -93,7 +93,7 @@ describe('quote rule ↔ verifier contract', () => {
 
 describe('CI and P-value binding rules in the prompt', () => {
   const system = async () => {
-    await extractQuantities({ studyId: '1', sourceText: 'x' })
+    await extractQuantities({ studyId: '123', sourceText: 'x' })
     return vi.mocked(extractStructured).mock.calls[0][0].system.replace(/\s+/g, ' ')
   }
   it('ties a CI to the single estimate it is printed for, never to a pair', async () => {

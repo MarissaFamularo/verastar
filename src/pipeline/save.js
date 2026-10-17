@@ -5,6 +5,7 @@
 // writes it to the connected on-disk folder. The background work never blocks (or breaks) the save.
 
 import { evidenceVerdict } from '../lib/evidenceVersion.js'
+import { summaryFields, SUMMARY_TAKE_FIELDS } from './resultHandoff.js'
 import { store } from '../lib/store.js'
 import { logEvent } from '../lib/events.js'
 import { filePaper, synthesizeGroup, consolidateDomains } from './deposit.js'
@@ -49,6 +50,10 @@ export function buildPaperRecord(res, take, { title, source = 'unknown', notes =
     // digest withheld this sentence; stored so Library surfaces can honor it too.
     check: take?.check ?? { verdict: 'unchecked', reason: '' },
     cautionCheck: take?.cautionCheck ?? { verdict: 'unchecked', reason: '' },
+    // The summary path's categories and approval (resultHandoff.js), re-validated on read.
+    ...summaryFields(take),
+    resultContexts: Array.isArray(res.resultContexts) ? res.resultContexts : [],
+    evidenceSource: res.evidenceSource || null,
     quantities: evidenceRows.map((r) => ({ ...r.quantity, tier: evidenceVerdict(r.verdict).tier, verdict: evidenceVerdict(r.verdict) })),
     fullText: res.sourceDoc?.text || '', // untruncated — the concept summarizer + library note use it
     tables: res.sourceDoc?.tables || '',
@@ -96,6 +101,9 @@ export function mergeRefreshedEvidence(existing, fresh, refreshedAt = new Date()
     relevance: fresh.relevance || '',
     check: fresh.check || { verdict: 'unchecked', reason: '' },
     cautionCheck: fresh.cautionCheck || { verdict: 'unchecked', reason: '' },
+    ...Object.fromEntries(SUMMARY_TAKE_FIELDS.map((key) => [key, fresh[key] ?? null])),
+    resultContexts: Array.isArray(fresh.resultContexts) ? fresh.resultContexts : [],
+    evidenceSource: fresh.evidenceSource || null,
     quantities: Array.isArray(fresh.quantities) ? fresh.quantities : [],
     fullText: fresh.fullText || '',
     tables: fresh.tables || '',

@@ -26,6 +26,7 @@ const SYNTH = `<?xml version="1.0"?><pmc-articleset><article><front><article-met
 const FAKE = {
   study_id: '1',
   design: 'RCT',
+  result_contexts: [],
   quantities: [
     { name: 'primary composite, stenting vs surgery (HR)', quantity_type: 'single', value: 1.11, range_low: null, range_high: null, first_label: null, first_value: null, second_label: null, second_value: null, unit: 'HR', ci_low: 0.81, ci_high: 1.51, p_value: 0.51, source_quote: 'hazard ratio, 1.11; 95% CI, 0.81 to 1.51; P = 0.51', location_hint: 'Results' },
     // Arms reversed relative to the reference (stenting first).
@@ -62,7 +63,7 @@ describe('planning makes no model call', () => {
   })
   it('the planned request is exactly the one extractQuantities sends', async () => {
     const plan = await planSinglePaper({ caseId: 'CAR-10', pmid: '1', pmcXml: SYNTH, model: 'claude-sonnet-5-5' })
-    anthropic.extractStructured.mockResolvedValueOnce({ study_id: '1', design: 'RCT', quantities: [] })
+    anthropic.extractStructured.mockResolvedValueOnce({ study_id: '1', design: 'RCT', quantities: [], result_contexts: [] })
     const sourceText = plan.assembled.modelText
     await extractQuantities({ studyId: '1', sourceText, model: 'claude-sonnet-5-5' })
     const sent = anthropic.extractStructured.mock.calls[0][0]
@@ -400,7 +401,7 @@ describe('Haiku 5.5 — evaluation-only model', () => {
     expect(receipts[1]).toMatchObject({ status: 'failed', outcome: 'ambiguous', timeoutMs: 25 })
   })
   it('keeps the parsed extraction before label post-processing, distinct from the rows', async () => {
-    const raw = { study_id: '1', design: 'RCT', quantities: [{ ...FAKE.quantities[0], quantity_type: 'comparison', value: null, first_label: 'an arm the quote never prints', first_value: FAKE.quantities[0].value ?? 1, second_label: 'another unprinted arm', second_value: 2 }] }
+    const raw = { study_id: '1', design: 'RCT', result_contexts: [], quantities: [{ ...FAKE.quantities[0], quantity_type: 'comparison', value: null, first_label: 'an arm the quote never prints', first_value: FAKE.quantities[0].value ?? 1, second_label: 'another unprinted arm', second_value: 2 }] }
     const run = await runSinglePaper(await plan(), async () => raw, { label: 'fake' })
     expect(run.rawExtraction).toEqual(raw)
     expect(run.rawExtraction.quantities[0].first_label).toBe('an arm the quote never prints')

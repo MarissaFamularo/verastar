@@ -75,8 +75,10 @@ export async function handleModelRequest(req, deps) {
         .eq('source_hash', cacheKey.source_hash)
         .maybeSingle()
       if (!error && hit?.extraction && hit.provenance?.writer === 'digest-run') {
+        // A row in an unsupported representation throws here and is treated as a miss.
+        const response = cachedResponse(hit, body.model, cacheKey.pmid)
         await deps.admin.from('model_spend').insert({ user_id: user.id, model: hit.model || body.model, purpose, usd: 0, cache_hit: true }).then(() => {}, () => {})
-        return respond({ status: 200, body: JSON.stringify(cachedResponse(hit, body.model)) }, { 'x-verastar-cache': 'hit' })
+        return respond({ status: 200, body: JSON.stringify(response) }, { 'x-verastar-cache': 'hit' })
       }
     } catch { /* a cache failure is a cache miss */ }
   }

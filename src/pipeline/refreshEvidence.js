@@ -1,3 +1,4 @@
+import { resultCandidate } from './resultHandoff.js'
 // Refresh one incomplete saved paper through the same fetch -> extract -> deterministic verify ->
 // triage path as a manual add. This is deliberately user-triggered and atomic at the Library
 // record: paid work can fail, but the existing notes/tags/favorite/concept and old evidence remain
@@ -33,6 +34,7 @@ function candidateFromResult(res, id) {
     title: res.paper.title || res.citation?.title || `PMID ${id}`,
     design: res.design,
     summary: evidenceSummary(res),
+    ...resultCandidate(res),
     primary: findPrimary(res.rows, (row) => !row.verdict.flagged, verificationCorpus(res)),
     verified: res.rows
       .filter((row) => !row.verdict.flagged)

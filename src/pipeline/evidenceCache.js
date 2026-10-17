@@ -22,6 +22,8 @@
 // untouched and never read: a row without provenance is a miss. The browser never writes.
 // Signed-out or unconfigured, every function here is a silent no-op.
 
+import { cacheWireExtraction, encodeCachedExtraction } from '../../supabase/functions/_shared/extractionContract.js'
+import { normalizeResultContexts } from './resultHandoff.js'
 import { supabase, supabaseConfigured, isSignedIn } from '../lib/supabase.js'
 import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 import { currentServerScope } from '../lib/serverScope.js'
@@ -90,7 +92,10 @@ export async function lookupCachedExtraction({ pmid, hash, version = CURRENT_EXT
       .eq('source_hash', String(hash).toLowerCase())
       .maybeSingle()
     if (error || !data?.extraction || !isTrustedProvenance(data.provenance)) return null
-    return data
+    // Trusted rows hold an explicit envelope; anything else (older formats, foreign papers,
+    // malformed rows) is a miss, never an inferred representation.
+    const wire = cacheWireExtraction(data.extraction, pmid)
+    return { ...data, extraction: { ...wire, result_contexts: normalizeResultContexts(wire.result_contexts) } }
   } catch {
     return null
   }
@@ -111,7 +116,7 @@ export async function storeCachedExtraction({ pmid, hash, tier, extraction, mode
       source_hash: String(hash).toLowerCase(),
       source_tier: tier,
       citation,
-      extraction,
+      extraction: encodeCachedExtraction(extraction, pmid),
       model: model || 'unknown',
       provenance: { ...writer.provenance, extraction_version: version, source_tier: tier },
       created_by: writer.userId || null,

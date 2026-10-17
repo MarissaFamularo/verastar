@@ -13,6 +13,7 @@ import { evidenceVerdict, isRelationshipValidated, VERIFICATION_VERSION } from '
 import { verify } from '../pipeline/verify.js'
 import { allowedNumbers, allowedTimepoints, allowedCiLevels, numbersGrounded } from '../pipeline/numberFree.js'
 import { fmtNum } from './format.js'
+import { restoreSummaryApproval } from '../pipeline/resultHandoff.js'
 import { store } from './store.js'
 
 const COLLECTION = 'digests'
@@ -75,6 +76,12 @@ export function regateTriaged(triaged, results) {
   for (const [id, take] of Object.entries(triaged)) {
     const finding = String(take?.finding ?? '')
     const result = byId.get(String(id))
+    // A summary-path take binds to the source, the proposals, its own text and the contract
+    // version; a mismatch withholds it (resultHandoff.js restoreSummaryApproval).
+    if (take && (take.summaryApproval || take.summaryKind)) {
+      out[id] = result ? restoreSummaryApproval(result, take) : restoreSummaryApproval({ paper: { id }, sourceDoc: {}, rows: [], resultContexts: [] }, take)
+      continue
+    }
     if (!finding || !take || !result) {
       out[id] = take
       continue

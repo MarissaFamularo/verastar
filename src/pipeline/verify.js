@@ -8,7 +8,7 @@
 //
 // Spec: docs/VERIFICATION_SPEC.md. Eval: docs/EVAL.md.
 
-export const VERIFICATION_VERSION = '2026-10-14.estimates-v13'
+export const VERIFICATION_VERSION = '2026-10-16.estimates-v14'
 // v12 refuses a question or an exclamation for the two shapes added in v10. The
 // terminator is read from the source sentence, including punctuation immediately
 // outside the quote. v11 stripped "?" and treated "?" and "!" as sentence
@@ -23,7 +23,10 @@ export const VERIFICATION_VERSION = '2026-10-14.estimates-v13'
 // heterogeneity P with an exponent or a trailing qualifier. No earlier stamp is a subset,
 // so none is fully compatible: older verdicts are re-derived from saved source text where
 // it exists, and shown as legacy-unchecked otherwise.
-export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = []
+// v14 (2026-10-16) admits one more printed CI joiner, "95% CI of 1.04–1.61" (MDPI
+// style, PARADE), and refuses nothing v13 accepted, so a v13 verdict is a strict subset
+// of the current guarantees in every tier and stays as stamped.
+export const FULLY_COMPATIBLE_VERIFICATION_VERSIONS = ['2026-10-14.estimates-v13']
 // Earlier stamps whose guarantees are a strict subset of the current rules. A verdict
 // stamped with one of these is still honest to display as-is (it can only be MORE
 // conservative); anything else is downgraded at read time.
@@ -582,7 +585,7 @@ const QUALIFIER = `\\s+(?:for|in|among|comparing|between|across|after|with)\\s+(
 // overall" closes the whole estimate instead, and its P stays unbound.
 const ESTIMATE_TUPLE = new RegExp(
   `(${MEASURE})(?![a-z])${ABBREV}(?:${QUALIFIER}|\\s*(?:[,:=]|\\s(?:was|were|of|is|are)))?\\s*${UNSIGNED}` +
-  `\\s*(?:([(\\[])|[,;])?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval(?:\\s*[(\\[]ci[)\\]])?)\\s*[,:=]?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
+  `\\s*(?:([(\\[])|[,;])?\\s*(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:ci|confidence interval(?:\\s*[(\\[]ci[)\\]])?)\\s*(?:[,:=]|of)?\\s*${UNSIGNED}\\s*(?:-|to)\\s*${UNSIGNED}` +
   `(?:\\s*([)\\]])?\\s*[,;]\\s*p\\s*(?:-?\\s*value)?\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${UNSIGNED})?`,
   'g',
 )

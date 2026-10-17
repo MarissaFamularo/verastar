@@ -40,7 +40,7 @@ describe('trusted cache boundary', () => {
     })
     return { ops, client: { from: (table) => chain(table) } }
   }
-  const good = { pmid: '1', hash: 'a'.repeat(64), tier: 'full_text', extraction: { quantities: [] }, model: 'claude-sonnet-5-5' }
+  const good = { pmid: '1', hash: 'a'.repeat(64), tier: 'full_text', extraction: { study_id: '1', design: 'other', quantities: [], result_contexts: [] }, model: 'claude-sonnet-5-5' }
   afterEach(() => configureEvidenceCacheServer({}))
 
   it('the browser has no writer: a store is a no-op', async () => {
@@ -71,11 +71,15 @@ describe('trusted cache boundary', () => {
     expect(w.ops).toEqual([])
   })
   it('lookups read only the trusted table, and a row without provenance is a miss', async () => {
-    const trusted = writer({ extraction: { quantities: [1] }, model: 'm', source_tier: 'full_text', provenance: PROV })
+    const trusted = writer({ extraction: { format: 'extraction-wire-v2', value: { study_id: '1', design: 'other', quantities: [], result_contexts: [] } }, model: 'm', source_tier: 'full_text', provenance: PROV })
     configureEvidenceCacheServer({ client: trusted.client, userId: 'acct-1', provenance: PROV })
-    expect((await lookupCachedExtraction({ pmid: '1', hash: 'a'.repeat(64) }))?.extraction).toEqual({ quantities: [1] })
+    expect((await lookupCachedExtraction({ pmid: '1', hash: 'a'.repeat(64) }))?.extraction).toEqual({ study_id: '1', design: 'other', quantities: [], result_contexts: [] })
+    // An untagged row (the pre-envelope representation) is a miss, never an inferred shape.
+    const untagged = writer({ extraction: { study_id: '1', design: 'other', quantities: [], result_contexts: [] }, model: 'm', source_tier: 'full_text', provenance: PROV })
+    configureEvidenceCacheServer({ client: untagged.client, userId: 'acct-1', provenance: PROV })
+    expect(await lookupCachedExtraction({ pmid: '1', hash: 'a'.repeat(64) })).toBeNull()
     expect(trusted.ops.map((o) => o.table)).toEqual([TRUSTED_CACHE_TABLE])
-    const legacy = writer({ extraction: { quantities: [1] }, model: 'm', source_tier: 'full_text' })
+    const legacy = writer({ extraction: { format: 'extraction-wire-v2', value: { study_id: '1', design: 'other', quantities: [], result_contexts: [] } }, model: 'm', source_tier: 'full_text' })
     configureEvidenceCacheServer({ client: legacy.client, userId: 'acct-1', provenance: PROV })
     expect(await lookupCachedExtraction({ pmid: '1', hash: 'a'.repeat(64) })).toBeNull()
   })

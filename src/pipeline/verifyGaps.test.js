@@ -162,9 +162,9 @@ describe('heterogeneity I² (frailty meta-analysis)', () => {
 })
 
 describe('version', () => {
-  it('bumps; v13 refuses shapes every earlier stamp admitted, so no stamp is fully compatible', () => {
-    expect(VERIFICATION_VERSION).toBe('2026-10-14.estimates-v13')
-    expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).toEqual([])
+  it('bumps; v14 only admits "CI of", so v13 is the one fully compatible stamp', () => {
+    expect(VERIFICATION_VERSION).toBe('2026-10-16.estimates-v14')
+    expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).toEqual(['2026-10-14.estimates-v13'])
     expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v12')
     expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v10')
     expect(FULLY_COMPATIBLE_VERIFICATION_VERSIONS).not.toContain('2026-10-12.estimates-v11')

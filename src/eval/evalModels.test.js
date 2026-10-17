@@ -64,7 +64,7 @@ describe('Haiku 5.5 stays out of production', () => {
     expect(MODELS.extraction).toBe('claude-sonnet-5-5')
     expect(thinkingParam('claude-sonnet-5-5', { type: 'disabled' })).toEqual({ type: 'between_tools' })
     expect(thinkingParam('claude-haiku-4-5-20251001', { type: 'disabled' })).toEqual({ type: 'disabled' })
-    expect(CURRENT_EXTRACTION_VERSION).toBe('2026-10-10.sonnet-5-5-v5')
+    expect(CURRENT_EXTRACTION_VERSION).toBe('2026-10-17.result-context-v4')
   })
   it('already supported models are delegated to the shared routines unchanged', () => {
     const usage = { input_tokens: 11481, output_tokens: 2321, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, service_tier: 'standard', inference_geo: 'global' }

@@ -17,51 +17,11 @@ export const EXTRACTION_RETRY_MAX_TOKENS = 16384
 // Strict JSON schema per docs/FACTS.md, adjusted to the locked structured-output rules:
 // every object has additionalProperties:false + required; optional fields are nullable
 // via anyOf and listed in required (the API rejects properties-not-in-required patterns).
-export const EXTRACTION_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['study_id', 'design', 'quantities'],
-  properties: {
-    study_id: { type: 'string' },
-    design: {
-      type: 'string',
-      enum: [
-        'RCT',
-        'prospective_cohort',
-        'retrospective_cohort',
-        'meta_analysis',
-        'single_arm',
-        'case_series',
-        'other',
-      ],
-    },
-    quantities: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['name', 'quantity_type', 'value', 'range_low', 'range_high', 'first_label', 'first_value', 'second_label', 'second_value', 'unit', 'ci_low', 'ci_high', 'p_value', 'source_quote', 'location_hint'],
-        properties: {
-          name: { type: 'string' },
-          quantity_type: { type: 'string', enum: ['single', 'range', 'change', 'comparison'] },
-          value: { anyOf: [{ type: 'number' }, { type: 'null' }] },
-          range_low: { anyOf: [{ type: 'number' }, { type: 'null' }] },
-          range_high: { anyOf: [{ type: 'number' }, { type: 'null' }] },
-          first_label: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-          first_value: { anyOf: [{ type: 'number' }, { type: 'null' }] },
-          second_label: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-          second_value: { anyOf: [{ type: 'number' }, { type: 'null' }] },
-          unit: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-          ci_low: { anyOf: [{ type: 'number' }, { type: 'null' }] },
-          ci_high: { anyOf: [{ type: 'number' }, { type: 'null' }] },
-          p_value: { anyOf: [{ type: 'number' }, { type: 'null' }] },
-          source_quote: { type: 'string' },
-          location_hint: { type: 'string' },
-        },
-      },
-    },
-  },
-}
+// The schema is the shared contract (supabase/functions/_shared/extractionContract.js):
+// typed quantities plus per-result quoted context spans.
+export { EXTRACTION_SCHEMA } from '../../supabase/functions/_shared/extractionContract.js'
+import { EXTRACTION_SCHEMA, validateWireExtraction } from '../../supabase/functions/_shared/extractionContract.js'
+import { RESULT_CONTEXT_INSTRUCTIONS, normalizeResultContexts } from './resultHandoff.js'
 
 const SYSTEM = `You extract headline quantitative results from a biomedical paper into a strict schema.
 
@@ -148,7 +108,9 @@ Non-negotiable rules:
   prints verbatim; a deterministic downstream plausibility pass will warn separately.
 
 A downstream verifier will re-check every quote and number against the source text and
-flag anything it cannot prove. Precision beats recall.`
+flag anything it cannot prove. Precision beats recall.
+
+${RESULT_CONTEXT_INSTRUCTIONS}`
 
 // Exported read-only so the offline single-paper evaluation harness (src/eval/) sends the
 // exact request extractQuantities sends.
@@ -170,6 +132,7 @@ export async function extractQuantities({ studyId, sourceText, model = MODELS.ex
         maxTokens: attempt === 1 ? maxTokens : Math.max(maxTokens, EXTRACTION_RETRY_MAX_TOKENS),
         thinking: { type: 'disabled' },
         purpose: 'extraction',
+        rawJson: true,
         cacheKey,
       })
       break
@@ -181,8 +144,10 @@ export async function extractQuantities({ studyId, sourceText, model = MODELS.ex
       }
     }
   }
-  // Guarantee study_id is set even if the model omitted it.
-  if (!result.study_id) result.study_id = studyId
+  // Validate the complete response before any caller can verify or save a quantity.
+  // Outside the retry loop: invalid data is rejected, never repaired or retried.
+  validateWireExtraction(result, studyId)
+  result.result_contexts = normalizeResultContexts(result.result_contexts)
   return result
 }
 

@@ -144,7 +144,7 @@ async function facadeRun() {
   const res = await getClient().messages.create({ model: MODELS.fast, max_tokens: 16, messages: [{ role: 'user', content: `paper for ${profile.name}` }] })
   await sleep(Math.random() * 10)
   await store.put('digests', 'daily:latest', { owner: profile.name, mode: accessMode(), msg: res.id, runBy: 'scheduler', server: { phase: 'done' }, results: [] })
-  await storeCachedExtraction({ pmid: `pmid-${profile.name}`, hash: HASH, tier: 'full_text', extraction: { for: profile.name }, model: MODELS.extraction })
+  await storeCachedExtraction({ pmid: `pmid-${profile.name}`, hash: HASH, tier: 'full_text', extraction: { study_id: `pmid-${profile.name}`, design: 'other', quantities: [], result_contexts: [] }, model: MODELS.extraction })
   return { phase: 'done', papers: 0, read: 1 }
 }
 
@@ -180,7 +180,7 @@ describe('account isolation', () => {
     for (const u of ['A', 'B']) {
       const latest = db.t.kv.find((r) => r.user_id === u && r.key === 'daily:latest').value
       expect(latest).toMatchObject({ owner: u, mode: 'server' })
-      expect(db.t.evidence_cache_trusted.find((r) => r.pmid === `pmid-${u}`)).toMatchObject({ created_by: u, extraction: { for: u }, provenance: { writer: 'digest-run' } })
+      expect(db.t.evidence_cache_trusted.find((r) => r.pmid === `pmid-${u}`)).toMatchObject({ created_by: u, extraction: { format: 'extraction-wire-v2', value: { study_id: `pmid-${u}` } }, provenance: { writer: 'digest-run' } })
     }
     // Each provider attempt was reserved against the account whose prompt it carried.
     expect(h.provider.sent).toHaveLength(2)

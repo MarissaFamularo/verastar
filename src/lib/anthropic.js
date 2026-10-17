@@ -425,7 +425,14 @@ export function thinkingParam(model, thinking) {
   return thinking
 }
 
-export async function extractStructured({ model = MODELS.extraction, system, content, schema, maxTokens = 4096, thinking, purpose, cacheKey }) {
+// `rawJson` (extraction only, 170a26c): the provider's structured-output grammar rejects
+// the extraction schema once it carries per-result context spans, so extraction asks for
+// plain JSON and validates the complete response locally (validateWireExtraction).
+export function rawJsonContent(schema, content) {
+  return `Return only a JSON object matching this schema, without Markdown or commentary.\nSCHEMA:\n${JSON.stringify(schema)}\n\n${content}`
+}
+export async function extractStructured({ model = MODELS.extraction, system, content, schema, maxTokens = 4096, thinking, purpose, cacheKey, rawJson = false }) {
+  if (rawJson && purpose !== 'extraction') throw new Error('Raw response transport is restricted to extraction')
   const client = getClient()
   const thinkingConfig = thinkingParam(model, thinking)
   const res = await guarded(() => client.messages.create({
@@ -433,10 +440,11 @@ export async function extractStructured({ model = MODELS.extraction, system, con
     max_tokens: maxTokens,
     ...(system ? { system } : {}),
     ...(thinkingConfig ? { thinking: thinkingConfig } : {}),
-    messages: [{ role: 'user', content }],
-    output_config: { format: { type: 'json_schema', schema } },
+    messages: [{ role: 'user', content: rawJson ? rawJsonContent(schema, content) : content }],
+    ...(!rawJson ? { output_config: { format: { type: 'json_schema', schema } } } : {}),
   }, requestOptions({ purpose, cacheKey })))
   recordUsage(model, res.usage)
+  if (rawJson && !res?.stop_reason) throw new StructuredOutputError('Extraction completion status missing.')
   return parseStructuredResponse(res)
 }
 

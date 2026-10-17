@@ -8,6 +8,7 @@
 // (lib/kb.js) does the pure search/filter. Styled to the observatory design (Verastar.dc.html);
 // the flat-file vault lives on its own Library surface now.
 
+import { currentResultPaper } from '../pipeline/resultHandoff.js'
 import { useEffect, useMemo, useState } from 'react'
 import { ClaimCheckMark } from './ClaimCheckMark.jsx'
 import SourceViewer from './SourceViewer.jsx'
@@ -503,7 +504,9 @@ function ConceptCard({ concept, papers, query, topicColor, topicLabel, onRemoveC
 // The saved snapshot from the paper's digest/manual-add run. One disclosure owns the whole
 // context so the summary, project connection, caution, verified values, and reading links do not
 // look like unrelated fragments. Exported for focused rendering tests.
-export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
+export function SavedDigestDetails({ paper: savedPaper, initialEvidenceOpen = false }) {
+  // Summary-path papers re-derive their approval from the saved source on every read.
+  const paper = useMemo(() => currentResultPaper(savedPaper), [savedPaper])
   // Re-derived under the current verifier when the saved stamp is stale (read-time only).
   const evidenceRows = useMemo(() => currentPaperQuantities(paper), [paper])
   const verifiedCount = evidenceRows.filter((quantity) => isRelationshipValidated(quantity.verdict)).length
@@ -553,7 +556,7 @@ export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
           </p>
         ) : (
           <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-dim)' }}>
-            <span style={{ fontWeight: 600, color: 'var(--color-fg-soft)' }}>Summary:</span>{' '}
+            <span style={{ fontWeight: 600, color: 'var(--color-fg-soft)' }}>{paper.summaryKind === 'excerpt' ? 'Source excerpt (verbatim), summary withheld:' : paper.summaryKind === 'validated' ? 'Validated summary:' : 'Summary:'}</span>{' '}
             {linkFindingNumbers(paper.finding, verifiedRows).map((seg, i) =>
               seg.row && canOpen(seg.row.quantity) ? (
                 <button key={i} type="button" onClick={() => openSource(seg.row.quantity)} title={`Matched to the source by the app — open the quote for ${seg.row.quantity.name}`} style={linkStyle}>
@@ -563,9 +566,14 @@ export function SavedDigestDetails({ paper, initialEvidenceOpen = false }) {
                 <span key={i}>{seg.text}</span>
               )
             )}
-            {' '}<ClaimCheckMark check={paper.check} size={12} />
+            {paper.summaryKind !== 'excerpt' && <>{' '}<ClaimCheckMark check={paper.check} size={12} /></>}
           </p>
         )
+      )}
+      {!paper.finding && paper.summaryKind === 'unavailable' && (
+        <p style={{ margin: '10px 0 0', borderLeft: '2px solid var(--hairline)', paddingLeft: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--color-abstract)' }}>
+          ⚠︎ Summary unavailable — {paper.summaryReason || 'the written summary did not pass its source checks.'}
+        </p>
       )}
 
       {paper.designCaution && paper.cautionCheck?.verdict !== 'refuted' && (

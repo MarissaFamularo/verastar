@@ -1,3 +1,4 @@
+import { resultCandidate, summaryFields } from '../pipeline/resultHandoff.js'
 import { fitDigestPapers, PILOT_DIGEST_LIMIT, DIGEST_LIMIT_NOTE, LEGACY_DIGEST_LIMIT_NOTE } from '../pipeline/digestLimit.js'
 // lib/digestRunAndRank.js — the digest screen's read-then-rank run, outside the component.
 //
@@ -199,6 +200,7 @@ export async function runAndRankDigest(papers, {
             topics: r.paper.topics,
             topicSteering: r.paper.topicSteering,
             summary: evidenceSummary(r),
+            ...resultCandidate(r),
             primary: findPrimary(r.rows, (row) => isRelationshipValidated(row.verdict), verificationCorpus(r)),
             // The finding is written only from values the app verified.
             verified: r.rows
@@ -219,6 +221,7 @@ export async function runAndRankDigest(papers, {
             relevance: rk.relevance,
             check: rk.check,
             cautionCheck: rk.cautionCheck,
+            ...summaryFields(rk),
           }
         }
         ui.setTriaged(byId)

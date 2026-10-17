@@ -71,7 +71,7 @@ describe('model proxy', () => {
   })
 
   it('D-6 (low): a shared-cache hit is served before the spending guard, so it works while spending is paused and writes one unthrottled model_spend row per hit', async () => {
-    const cacheRow = { extraction: { quantities: [] }, model: 'claude-sonnet-5-5', source_hash: HASH, provenance: { writer: 'digest-run' } }
+    const cacheRow = { extraction: { format: 'extraction-wire-v2', value: { study_id: '123', design: 'other', quantities: [], result_contexts: [] } }, model: 'claude-sonnet-5-5', source_hash: HASH, provenance: { writer: 'digest-run' } }
     const admin = proxyAdmin({ cacheRow })
     const ledger = fakeLedger({ deny: 'spending_paused' })
     const provider = fakeProvider(okResponse)

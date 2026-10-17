@@ -1,0 +1,612 @@
+<?xml version="1.0"  ?><!DOCTYPE pmc-articleset PUBLIC "-//NLM//DTD ARTICLE SET 2.0//EN" "https://dtd.nlm.nih.gov/ncbi/pmc/articleset/nlm-articleset-2.0.dtd"><pmc-articleset><article xml:lang="en" article-type="research-article" dtd-version="1.4"><processing-meta base-tagset="archiving" mathml-version="3.0" table-model="xhtml" tagset-family="jats"><restricted-by>pmc</restricted-by></processing-meta><front><journal-meta><journal-id journal-id-type="nlm-ta">Arch Endocrinol Metab</journal-id><journal-id journal-id-type="iso-abbrev">Arch Endocrinol Metab</journal-id><journal-id journal-id-type="pmc-domain-id">4353</journal-id><journal-id journal-id-type="pmc-domain">archem</journal-id><journal-id journal-id-type="nlm-id">101652058</journal-id><journal-id journal-id-type="publisher-id">aem</journal-id><journal-title-group><journal-title>Archives of Endocrinology and Metabolism</journal-title></journal-title-group><issn pub-type="ppub">2359-3997</issn><issn pub-type="epub">2359-4292</issn><publisher><publisher-name>Sociedade Brasileira de Endocrinologia e Metabologia</publisher-name></publisher></journal-meta><article-meta><article-id pub-id-type="pmcid">PMC13668020</article-id><article-id pub-id-type="pmcid-ver">PMC13668020.1</article-id><article-id pub-id-type="pmcaid">13668020</article-id><article-id pub-id-type="pmcaiid">13668020</article-id><article-id pub-id-type="pmid">42878421</article-id><article-id pub-id-type="doi">10.20945/2359-4292-2026-0121</article-id><article-id pub-id-type="other">02605</article-id><article-version article-version-type="pmc-version">1</article-version><article-categories><subj-group subj-group-type="heading"><subject>Original</subject></subj-group></article-categories><title-group><article-title>Impact of diabetic foot ulcers on mortality risk: Lessons from a
+35-year Brazilian cohort followed at an association of people living with
+diabetes</article-title></title-group><contrib-group><contrib contrib-type="author"><contrib-id contrib-id-type="orcid" authenticated="false">http://orcid.org/0000-0003-3720-1183</contrib-id><name name-style="western"><surname>Negrato</surname><given-names initials="CA">Carlos Antonio</given-names></name><xref rid="aff1" ref-type="aff">1</xref><role content-type="https://credit.niso.org/contributor-roles/conceptualization/">Conceptualization</role><role content-type="https://credit.niso.org/contributor-roles/data-curation/">Data curation</role><role content-type="https://credit.niso.org/contributor-roles/software/">Software</role><role content-type="https://credit.niso.org/contributor-roles/supervision/">Supervision</role><role content-type="https://credit.niso.org/contributor-roles/validation/">Validation</role><role content-type="https://credit.niso.org/contributor-roles/visualization/">Visualization</role><role content-type="https://credit.niso.org/contributor-roles/writing-original-draft/">Roles/Writing – original draft</role><role content-type="https://credit.niso.org/contributor-roles/writing-review-editing/">Writing – review &amp; editing</role></contrib><contrib contrib-type="author"><contrib-id contrib-id-type="orcid" authenticated="false">http://orcid.org/0000-0002-2266-8082</contrib-id><name name-style="western"><surname>Pedrosa</surname><given-names initials="HC">Hermelinda Cordeiro</given-names></name><xref rid="aff2" ref-type="aff">2</xref><role content-type="https://credit.niso.org/contributor-roles/visualization/">Visualization</role><role content-type="https://credit.niso.org/contributor-roles/writing-original-draft/">Roles/Writing – original draft</role><role content-type="https://credit.niso.org/contributor-roles/writing-review-editing/">Writing – review &amp; editing</role></contrib><contrib contrib-type="author"><contrib-id contrib-id-type="orcid" authenticated="false">http://orcid.org/0000-0002-5126-7640</contrib-id><name name-style="western"><surname>Chaparim</surname><given-names initials="LA">Letícia Alcântara</given-names></name><xref rid="aff1" ref-type="aff">1</xref><role content-type="https://credit.niso.org/contributor-roles/formal-analysis/">Formal analysis</role><role content-type="https://credit.niso.org/contributor-roles/funding-acquisition/">Funding acquisition</role><role content-type="https://credit.niso.org/contributor-roles/investigation/">Investigation</role><role content-type="https://credit.niso.org/contributor-roles/methodology/">Methodology</role><role content-type="https://credit.niso.org/contributor-roles/project-administration/">Project administration</role><role content-type="https://credit.niso.org/contributor-roles/resources/">Resources</role><role content-type="https://credit.niso.org/contributor-roles/software/">Software</role><role content-type="https://credit.niso.org/contributor-roles/supervision/">Supervision</role><role content-type="https://credit.niso.org/contributor-roles/validation/">Validation</role></contrib><contrib contrib-type="author"><contrib-id contrib-id-type="orcid" authenticated="false">http://orcid.org/0000-0001-8029-4560</contrib-id><name name-style="western"><surname>Catelli</surname><given-names initials="MF">Monize Ferreira</given-names></name><xref rid="aff1" ref-type="aff">1</xref><role content-type="https://credit.niso.org/contributor-roles/formal-analysis/">Formal analysis</role><role content-type="https://credit.niso.org/contributor-roles/funding-acquisition/">Funding acquisition</role><role content-type="https://credit.niso.org/contributor-roles/investigation/">Investigation</role><role content-type="https://credit.niso.org/contributor-roles/methodology/">Methodology</role><role content-type="https://credit.niso.org/contributor-roles/project-administration/">Project administration</role><role content-type="https://credit.niso.org/contributor-roles/resources/">Resources</role></contrib><contrib contrib-type="author"><contrib-id contrib-id-type="orcid" authenticated="false">http://orcid.org/0009-0006-3205-7249</contrib-id><name name-style="western"><surname>Lopes</surname><given-names initials="LCP">Lucas Casagrande Passoni</given-names></name><xref rid="aff1" ref-type="aff">1</xref><role content-type="https://credit.niso.org/contributor-roles/conceptualization/">Conceptualization</role><role content-type="https://credit.niso.org/contributor-roles/data-curation/">Data curation</role><role content-type="https://credit.niso.org/contributor-roles/formal-analysis/">Formal analysis</role><role content-type="https://credit.niso.org/contributor-roles/funding-acquisition/">Funding acquisition</role><role content-type="https://credit.niso.org/contributor-roles/investigation/">Investigation</role><role content-type="https://credit.niso.org/contributor-roles/methodology/">Methodology</role><role content-type="https://credit.niso.org/contributor-roles/project-administration/">Project administration</role><role content-type="https://credit.niso.org/contributor-roles/resources/">Resources</role><role content-type="https://credit.niso.org/contributor-roles/software/">Software</role><role content-type="https://credit.niso.org/contributor-roles/supervision/">Supervision</role><role content-type="https://credit.niso.org/contributor-roles/validation/">Validation</role></contrib></contrib-group><aff id="aff1">
+<label>1</label> Faculdade de Medicina de Bauru, Universidade de São Paulo,
+Bauru, SP, Brasil </aff><aff id="aff2">
+<label>2</label> Unidade de Endocrinologia, Hospital Regional de Taquaritinga,
+Brasília, DF, Brasil </aff><author-notes><corresp id="c1"><bold>Correspondence to:</bold> Lucas Casagrande Passoni Lopes
+Faculdade de Medicina de Bauru, Universidade de São Paulo, Alameda Doutor
+Octávio Pinheiro Brisolla, 9-75, 17012-901 – Bauru, SP, Brasil.
+<email>lucaspassoni@usp.br</email></corresp></author-notes><pub-date date-type="pub" publication-format="electronic"><day>11</day><month>10</month><year>2026</year></pub-date><pub-date date-type="collection" publication-format="electronic"><year>2026</year></pub-date><volume>70</volume><issue>6</issue><issue-id pub-id-type="pmc-issue-id">523323</issue-id><elocation-id>e260121</elocation-id><history><date date-type="received"><day>11</day><month>8</month><year>2025</year></date><date date-type="accepted"><day>16</day><month>7</month><year>2026</year></date></history><pub-history><event event-type="pmc-release"><date><day>11</day><month>10</month><year>2026</year></date></event><event event-type="pmc-live"><date><day>15</day><month>10</month><year>2026</year></date></event><event event-type="pmc-last-change"><date iso-8601-date="2026-10-16 03:38:05.947"><day>16</day><month>10</month><year>2026</year></date></event></pub-history><permissions><license><ali:license_ref xmlns:ali="http://www.niso.org/schemas/ali/1.0/" specific-use="textmining" content-type="ccbylicense">https://creativecommons.org/licenses/by/4.0/</ali:license_ref><license-p>This is an Open Access article distributed under the terms of the
+Creative Commons Attribution License, which permits unrestricted use,
+distribution, and reproduction in any medium, provided the original work is
+properly cited.</license-p></license></permissions><self-uri xmlns:xlink="http://www.w3.org/1999/xlink" content-type="pmc-pdf" xlink:href="2359-4292-aem-70-06-e260121.pdf"/><abstract><sec><title>Objective</title><p>To evaluate the impact of diabetic foot ulcers (DFUs) on mortality risk in a
+Brazilian cohort of individuals followed at an association of people living
+with diabetes mellitus.</p></sec><sec><title>Subjects and methods</title><p>This retrospective, population-based epidemiological study assessed the
+impact of DFUs on mortality risk in a cohort of Brazilian individuals with
+types 1 and 2 diabetes mellitus. Data were obtained from medical records
+covering the period from 1990 to 2024 and included sociodemographic,
+clinical, laboratory, and therapeutic variables. Survival analyses were
+conducted using Cox proportional hazards models, with death as the event of
+interest, and were adjusted for potential confounders.</p></sec><sec><title>Results</title><p>Among the 382 participants included in the final analysis, DFUs, amputations,
+and diabetic peripheral neuropathy were associated with increased mortality
+risk by 89%, 123%, and 37%, respectively. Peripheral artery disease showed a
+modest, but not statistically significant, increase in mortality risk.
+Patients with DFUs who were not using oral antidiabetic drugs had a 165%
+higher mortality risk, and those with prior amputations and poor fasting
+glucose levels had a 41% increased mortality risk.</p></sec><sec><title>Conclusion</title><p>Overall, DFUs were identified as critical predictors of mortality in people
+living with diabetes mellitus, mostly among those with type 2 diabetes
+mellitus. The impact of DFUs on mortality risk is multifaceted and
+context-dependent, highlighting the leading role of prior amputations. These
+findings underscore the need for targeted early interventions and the
+implementation of strategies aimed at reducing mortality in this high-risk
+population.</p></sec></abstract><kwd-group><kwd>Diabetes mortality</kwd><kwd>diabetic foot ulcers</kwd><kwd>Brazil</kwd></kwd-group><custom-meta-group><custom-meta><meta-name>pmc-status-qastatus</meta-name><meta-value>0</meta-value></custom-meta><custom-meta><meta-name>pmc-status-live</meta-name><meta-value>yes</meta-value></custom-meta><custom-meta><meta-name>pmc-status-embargo</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-status-released</meta-name><meta-value>yes</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-open-access</meta-name><meta-value>yes</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-olf</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-manuscript</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-legally-suppressed</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-has-pdf</meta-name><meta-value>yes</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-has-supplement</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-pdf-only</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-suppress-copyright</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-is-real-version</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-is-scanned-article</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-preprint</meta-name><meta-value>no</meta-value></custom-meta><custom-meta><meta-name>pmc-prop-in-epmc</meta-name><meta-value>yes</meta-value></custom-meta><custom-meta><meta-name>pmc-license-ref</meta-name><meta-value>CC BY</meta-value></custom-meta></custom-meta-group></article-meta></front><body><sec sec-type="intro"><title>INTRODUCTION</title><p>Diabetes mellitus (DM) is a chronic metabolic disorder characterized by persistent
+hyperglycemia resulting from altered insulin secretion, insulin resistance, or both
+(<sup><xref rid="r1" ref-type="bibr">1</xref></sup>). This condition is
+broadly classified into two main groups: type 1 (T1DM) and type 2 (T2DM).</p><p>The former is an autoimmune disease resulting from immune-mediated destruction of
+pancreatic beta cells, whereas the latter is primarily associated with insulin
+resistance and progressive beta-cell dysfunction (<sup><xref rid="r1" ref-type="bibr">1</xref></sup>).</p><p>The global burden of DM has increased steadily over the last decades (<sup><xref rid="r1" ref-type="bibr">1</xref></sup>). The 11th edition of the
+International Diabetes Federation Diabetes Atlas estimated that 589 million people
+are living with DM (PLWDM) around the world, with a projected 45% increase by 2050.
+This would mean that more than 853 million people will be affected, with Brazil
+being among the countries with the highest number of T1DM and T2DM cases (<sup><xref rid="r1" ref-type="bibr">1</xref></sup>).</p><p>The International Working Group on the Diabetic Foot defines a DM-related foot ulcer
+(DFU) as an ulcer occurring in an individual with current or previously diagnosed
+DM, typically accompanied by diabetic peripheral neuropathy (DPN) and/or peripheral
+artery disease (PAD) in the lower extremity (<sup><xref rid="r2" ref-type="bibr">2</xref></sup>). Ulcers arise from a combination of factors besides DPN and
+PAD, such as poor glycemic control, long disease duration, and mechanical stress,
+often exacerbated by inadequate footwear and reduced foot sensation (<sup><xref rid="r3" ref-type="bibr">3</xref></sup>).</p><p>Overall, DFUs significantly increase the risk of infections, lower limb amputations,
+and mortality, placing a considerable burden on affected individuals and health care
+systems (<sup><xref rid="r2" ref-type="bibr">2</xref></sup>,<sup><xref rid="r3" ref-type="bibr">3</xref></sup>). The lifetime incidence of DFUs
+among PLWDM ranges from 19% to 34% (<sup><xref rid="r4" ref-type="bibr">4</xref></sup>,<sup><xref rid="r5" ref-type="bibr">5</xref></sup>). Of those
+who develop DFUs, approximately 20% will require lower limb amputation, either minor
+(below the ankle), major (above the ankle), or both, and about 10% will die within
+one year of the initial DFU (<sup><xref rid="r4" ref-type="bibr">4</xref></sup>,<sup><xref rid="r5" ref-type="bibr">5</xref></sup>). A
+recent meta-analysis reported an overall five-year mortality rate following a DFU of
+approximately 50%, with cardiovascular disease and foot infections identified as
+leading causes of death (<sup><xref rid="r6" ref-type="bibr">6</xref></sup>). In
+addition, a North American study estimated that the direct annual costs of hospital
+treatment for DFUs in the United States range between USD 9 billion and USD 13
+billion, excluding the costs incurred in managing DM itself (<sup><xref rid="r7" ref-type="bibr">7</xref></sup>).</p><p>Despite global evidence of the negative impact of DFUs, significant gaps remain in
+the literature regarding their burden and mortality impact in Brazil. Given the
+rising prevalence of DM and its complications in the country, understanding the
+local impact of DFUs is essential for designing effective public health strategies
+and clinical interventions. Therefore, this study aimed to evaluate the impact of
+DFUs on mortality risk in a Brazilian cohort of PLWDM and to determine whether the
+presence of DPN, PAD, and lower limb amputations further influences mortality
+risk.</p></sec><sec sec-type="methods"><title>SUBJECTS AND METHODS</title><p>This study employed a retrospective, population-based epidemiological design using
+data retrieved from medical records of individuals followed at an association of
+PLWDM between 1990 and 2024. The sample consisted of patients from the city of Bauru
+(São Paulo State, Brazil) and its surrounding areas, ensuring representative
+population coverage. It comprised individuals from diverse socioeconomic levels who
+were treated at the association after referral by the local public health network or
+by private endocrinologists.</p><p>Data were classified as sociodemographic (age at death, sex, ethnicity [White, Black,
+Brown, Yellow, Indigenous], and socioeconomic status [very high, high, medium,
+low]), clinical (DM type, DFU, DPN, PAD, amputation), laboratory (fasting glycemia
+[FG], glycated hemoglobin (HbA1c), lipid profile (high-density lipoprotein [HDL],
+low-density lipoprotein [LDL], triglycerides [TG], total cholesterol [TC]), and
+therapeutic (adherence to diet, oral antidiabetic drugs [OAD], and insulin use).</p><p>Socioeconomic status and ethnicity were self-reported according to the criteria of
+the Brazilian Institute of Geography and Statistics (<sup><xref rid="r8" ref-type="bibr">8</xref></sup>). For statistical purposes, ethnicity was grouped as
+White and Non-white, and socioeconomic status as high and non-high. DM diagnoses
+were made in accordance with the criteria of the Brazilian Diabetes Society
+(<sup><xref rid="r9" ref-type="bibr">9</xref></sup>).</p><p>The DPN was defined by the presence of symptoms (numbness, tingling, and/or burning
+pain) and/or evidence of large fiber deficits: loss of protective sensation
+(assessed with the 10g Semmes-Weinstein monofilament SORRI®), reduced or
+absent vibration sensation (tested with a 128 Hz tuning fork), and/or reduced or
+absent reflexes (assessed with a neurological hammer). Peripheral artery disease was
+assessed by the presence of clinical signs (cold skin, pale skin, edema, skin
+thinning, or color changes), in combination with diminished or absent distal pulses
+(anterior and posterior tibial) and/or an ankle-brachial index less than 0.9,
+according to International Working Group on the Diabetic Foot criteria (<sup><xref rid="r2" ref-type="bibr">2</xref></sup>,<sup><xref rid="r3" ref-type="bibr">3</xref></sup>).</p><p>All laboratory tests were conducted at the same clinical analysis laboratory. Fasting
+glycemia values between 80 and 130 mg/dL, HbA1c below 7.0% for individuals under 60
+years of age, and below 7.5% for those 60 years or older were considered on target
+according to American Diabetes Association and Brazilian Diabetes Society guidelines
+(<sup><xref rid="r10" ref-type="bibr">10</xref></sup>,<sup><xref rid="r11" ref-type="bibr">11</xref></sup>). Regarding lipids, LDL levels
+below 100, 70, and 50 mg/dL were considered on target for individuals with low,
+high, and very high cardiovascular disease risk, respectively. Additionally, HDL
+levels above 40 mg/dL in men and 50 mg/dL in women were considered on target. The TG
+levels below 150 mg/dL and TC below 200 mg/dL were considered on target according to
+the Brazilian Cardiology Society guidelines (<sup><xref rid="r10" ref-type="bibr">10</xref></sup>).</p><p>In this study, DFUs were treated as a binary variable (presence/absence). Ulcer
+severity, duration, infection status, and recurrence were not reported. The absence
+of severity stratification markedly limits the interpretation and comparison with
+other cohorts. Cox proportional hazards models were used to estimate the impact of
+selected variables on individual mortality risk. Variables were included
+individually or in multivariable analyses, and potential interactions were tested
+using interaction terms in the Cox regression model. The proportionality of hazards
+was assumed for all variables. Multivariate analysis was performed by associating
+DFUs, amputation, DPN, and PAD with patients' clinical and demographic
+characteristics. This approach was chosen to assess whether any of these covariates
+could adjust the impact of DFUs, amputation, DPN, and PAD on patient mortality.</p><p>The primary analytic focus was on evaluating the association between these variables
+and mortality, rather than including all variables simultaneously in a single model.
+Therefore, multicollinearity among these four variables was not formally assessed,
+which is acknowledged as a potential limitation given that correlations could exist
+and may affect interpretation of their individual effects.</p><p>Kaplan-Meier curves were generated to visualize survival distributions, and
+differences between groups were evaluated using the log-rank test. Hazard ratios
+(HRs) and 95% confidence intervals (CIs) were reported for all variables; HR &gt; 1
+indicated increased mortality risk; HR &lt;1 indicated reduced risk; and HR = 1
+indicated no effect. Two-sided p-values &lt;0.05 were considered statistically
+significant. All statistical analyses were performed using R software (v.
+4.4.2®). Survival analyses were conducted with the survival and survminer
+packages. Graphs, including KaplanMeier curves and risk tables, were created using
+gg-plot2 and related functions. This study was approved by the Research Ethics
+Committee of Bauru Dental School (protocol no. 37022120.4.0000.5417).</p></sec><sec sec-type="results"><title>RESULTS</title><p>The final study sample consisted of 382 individuals, with their characteristics
+detailed in <bold><xref rid="T1" ref-type="table">Table 1</xref>.</bold> Patients
+with DFUs exhibited an 89% increased risk of mortality compared to those without
+ulcers (HR: 1.89; 95% CI: 1.31-2.73; <italic toggle="yes">p</italic> &lt; 0.01; <bold><xref rid="f1" ref-type="fig">Figure 1</xref>).</bold> Individuals who had
+undergone amputation faced a 123% higher mortality risk than those without
+amputations (HR: 2.23; 95% CI: 1.22-4.08; <italic toggle="yes">p</italic> &lt; 0.01; <bold><xref rid="f2" ref-type="fig">Figure 2</xref>).</bold> Additionally, DPN was
+associated with a 37% increase in mortality risk compared to those without DPN (HR:
+1.37; 95% CI: 1.09-1.72; <italic toggle="yes">p</italic> &lt; 0.01; <bold><xref rid="f3" ref-type="fig">Figure 3</xref>).</bold> Although patients with PAD had a 22%
+higher mortality risk compared to those without, this difference did not reach
+statistical significance (HR: 1.22; 95% CI: 0.76-1.97; <italic toggle="yes">p</italic> = 0.390).
+Individuals with DFUs not using OADs had a 165% higher risk of mortality than those
+without DFUs who were on these medications (HR: 2.65; 95% CI: 1.14-6.14;
+<italic toggle="yes">p</italic> = 0.023). Notably, patients with a history of amputation
+combined with inadequate FG levels exhibited a 41% higher risk of death (HR: 1.41;
+95% CI: 1.25-1.88; <italic toggle="yes">p</italic> = 0.043). The other variables did not show a
+statistically significant impact on mortality <bold>(<xref rid="T2" ref-type="table">Table 2</xref>).</bold></p><table-wrap position="float" id="T1" orientation="portrait"><label>Table 1</label><caption><p>Demographic, laboratory, and therapeutic characteristics of the sample</p></caption><table frame="hsides" rules="groups" style="border-bottom:1pt solid black"><thead><tr><th style="background-color:#1E3265; color:#ffffff" align="left" valign="middle" rowspan="1" colspan="1">
+<bold>Variable</bold>
+</th><th style="background-color:#1E3265; color:#ffffff" align="center" valign="middle" rowspan="1" colspan="1">
+<bold>Sample (n = 382)</bold>
+</th></tr></thead><tbody><tr><td colspan="2" align="left" valign="middle" style="background-color:#1E3265; color:#ffffff" rowspan="1">Demographic
+characteristics, n (%)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">Male</td><td align="center" valign="middle" rowspan="1" colspan="1">191 (49.99)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">Female</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">190
+(50.01)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">White</td><td align="center" valign="middle" rowspan="1" colspan="1">317 (82.98)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">Non-white</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">65
+(17.02)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">High socioeconomic class</td><td align="center" valign="middle" rowspan="1" colspan="1">67 (17.53)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">Non-high socioeconomic class</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">315
+(82.47)</td></tr><tr><td colspan="2" align="left" valign="middle" rowspan="1">Laboratory characteristics,
+n (%)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">FG on
+target</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">141
+(36.91)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">FG out of target</td><td align="center" valign="middle" rowspan="1" colspan="1">241 (63.09)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">HbA1c
+on target</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">75
+(19.63)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">HbA1c out of target</td><td align="center" valign="middle" rowspan="1" colspan="1">307 (80.37)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">HDL on
+target</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">153
+(40.05)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">HDL out of target</td><td align="center" valign="middle" rowspan="1" colspan="1">229 (59.95)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">LDL on
+target</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">144
+(37.69)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">LDL out of target</td><td align="center" valign="middle" rowspan="1" colspan="1">238 (62.31)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">TG on
+target</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">221
+(57.85)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">TG out of target</td><td align="center" valign="middle" rowspan="1" colspan="1">161 (42.15)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">TC on
+target</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">218
+(57.06)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">TC out of target</td><td align="center" valign="middle" rowspan="1" colspan="1">164 (42.94)</td></tr><tr><td style="background-color:#eeedf3" colspan="2" align="left" valign="middle" rowspan="1">Therapeutic approaches, n (%)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">Adherence to diet</td><td align="center" valign="middle" rowspan="1" colspan="1">351 (91.88)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">Non-adherence to diet</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">31
+(8.12)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">Insulin use</td><td align="center" valign="middle" rowspan="1" colspan="1">91 (23.82)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">Non-insulin use</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">291
+(76.17)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">AOD</td><td align="center" valign="middle" rowspan="1" colspan="1">218 (57.06)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">Non-AOD use</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">164
+(42.94)</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">AOD and insulin (simultaneous use)</td><td align="center" valign="middle" rowspan="1" colspan="1">54 (14.13)</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">Non-AOD and insulin (simultaneous use)</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">328
+(85.87)</td></tr></tbody></table><table-wrap-foot><fn id="TFN1"><p>FG: fasting glycemia; HbA1c: glycated hemoglobin; HDL: high-density
+lipoprotein; LDL: low-density lipoprotein; TC: total cholesterol; TG:
+triglycerides; AOD: antidiabetic oral drugs.</p></fn></table-wrap-foot></table-wrap><table-wrap position="float" id="T2" orientation="portrait"><label>Table 2</label><caption><p>Statistical significance (<italic toggle="yes">p</italic>-value) of variables associated
+with mortality risk</p></caption><table frame="hsides" rules="groups" style="border-bottom:1pt solid black"><thead><tr><th style="background-color:#1E3265; color:#ffffff" align="left" valign="middle" rowspan="1" colspan="1">
+<bold>Variable</bold>
+</th><th style="background-color:#1E3265; color:#ffffff" align="center" valign="middle" rowspan="1" colspan="1">
+<bold>DFU</bold>
+</th><th style="background-color:#1E3265; color:#ffffff" align="center" valign="middle" rowspan="1" colspan="1">
+<bold>Amputation</bold>
+</th><th style="background-color:#1E3265; color:#ffffff" align="center" valign="middle" rowspan="1" colspan="1">
+<bold>DPN</bold>
+</th><th style="background-color:#1E3265; color:#ffffff" align="center" valign="middle" rowspan="1" colspan="1">
+<bold>PAD</bold>
+</th></tr></thead><tbody><tr><td align="left" valign="middle" rowspan="1" colspan="1">Sex</td><td align="center" valign="middle" rowspan="1" colspan="1">0.334</td><td align="center" valign="middle" rowspan="1" colspan="1">0.170</td><td align="center" valign="middle" rowspan="1" colspan="1">0.590</td><td align="center" valign="middle" rowspan="1" colspan="1">0.812</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">Ethnicity</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.428</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.214</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.278</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.712</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">Socioeconomic status</td><td align="center" valign="middle" rowspan="1" colspan="1">0.512</td><td align="center" valign="middle" rowspan="1" colspan="1">0.849</td><td align="center" valign="middle" rowspan="1" colspan="1">0.864</td><td align="center" valign="middle" rowspan="1" colspan="1">0.147</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">DM
+type</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.159</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.716</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.186</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.388</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">FG</td><td align="center" valign="middle" rowspan="1" colspan="1">0.975</td><td align="center" valign="middle" rowspan="1" colspan="1">0.007*</td><td align="center" valign="middle" rowspan="1" colspan="1">0.790</td><td align="center" valign="middle" rowspan="1" colspan="1">0.526</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">HbA1c</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.331</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.057</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.712</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.667</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">HDL</td><td align="center" valign="middle" rowspan="1" colspan="1">0.435</td><td align="center" valign="middle" rowspan="1" colspan="1">0.659</td><td align="center" valign="middle" rowspan="1" colspan="1">0.274</td><td align="center" valign="middle" rowspan="1" colspan="1">0.220</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">LDL</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.112</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.751</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.581</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.383</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">TG</td><td align="center" valign="middle" rowspan="1" colspan="1">0.673</td><td align="center" valign="middle" rowspan="1" colspan="1">0.277</td><td align="center" valign="middle" rowspan="1" colspan="1">0.634</td><td align="center" valign="middle" rowspan="1" colspan="1">0.227</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">TC</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.138</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.240</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.549</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.214</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">Diet</td><td align="center" valign="middle" rowspan="1" colspan="1">0.158</td><td align="center" valign="middle" rowspan="1" colspan="1">0.797</td><td align="center" valign="middle" rowspan="1" colspan="1">0.670</td><td align="center" valign="middle" rowspan="1" colspan="1">0.469</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">OAD</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.023</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.883</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.314</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.552</td></tr><tr><td align="left" valign="middle" rowspan="1" colspan="1">Insulin</td><td align="center" valign="middle" rowspan="1" colspan="1">0.900</td><td align="center" valign="middle" rowspan="1" colspan="1">0.934</td><td align="center" valign="middle" rowspan="1" colspan="1">0.164</td><td align="center" valign="middle" rowspan="1" colspan="1">0.563</td></tr><tr><td style="background-color:#eeedf3" align="left" valign="middle" rowspan="1" colspan="1">AOD
+and insulin use</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.721</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.419</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.527</td><td style="background-color:#eeedf3" align="center" valign="middle" rowspan="1" colspan="1">0.313</td></tr></tbody></table><table-wrap-foot><fn id="TFN2"><p>* Statistical significance. AOD: antidiabetic oral drug; DFU: diabetic
+foot ulcers; DM: diabetes mellitus type; DPN: diabetic peripheral
+neuropathy; PAD: peripheral artery disease; FG: fasting glycemia; HbA1c:
+glycated hemoglobin; HDL: high-density lipoprotein: LDL: low-density
+lipoprotein; TC: total cholesterol; TG: triglycerides.</p></fn></table-wrap-foot></table-wrap><p>
+<fig position="float" id="f1" orientation="portrait"><label>Figure 1</label><caption><p>Survival probability according to the presence or absence of diabetic
+foot ulcers.</p></caption><graphic xmlns:xlink="http://www.w3.org/1999/xlink" position="float" orientation="portrait" xlink:href="2359-4292-aem-70-06-e260121-g01.webp"/></fig>
+</p><p>
+<fig position="float" id="f2" orientation="portrait"><label>Figure 2</label><caption><p>Survival probability according to the presence or absence of
+amputations.</p></caption><graphic xmlns:xlink="http://www.w3.org/1999/xlink" position="float" orientation="portrait" xlink:href="2359-4292-aem-70-06-e260121-g02.webp"/></fig>
+</p><p>
+<fig position="float" id="f3" orientation="portrait"><label>Figure 3</label><caption><p>Survival probability according to the presence or absence of diabetic
+peripheral neuropathy.</p></caption><graphic xmlns:xlink="http://www.w3.org/1999/xlink" position="float" orientation="portrait" xlink:href="2359-4292-aem-70-06-e260121-g03.webp"/></fig>
+</p></sec><sec sec-type="discussion"><title>DISCUSSION</title><p>In this cohort of 382 participants, DFUs, amputations, and DPN were each associated
+with significantly elevated risks of death, with HRs of 1.89, 2.23, and 1.37,
+respectively. The PAD showed a modest but nonsignificant increase in mortality risk.
+The combined effect of complications and inadequate metabolic control was especially
+detrimental: patients with foot ulcers who did not receive OADs experienced a 165%
+higher risk of mortality, and those with prior amputations and poor FG had a 41%
+increased mortality risk. The remaining variables did not show statistically
+significant impacts on individual mortality risk.</p><p>Our study identified a significant association between DFUs and increased mortality
+risk. Consistently, a meta-analysis including over 446,000 individuals found that
+the presence of DFUs was associated with a 2.45-fold increase in all-cause mortality
+(<sup><xref rid="r11" ref-type="bibr">11</xref></sup>). This elevated risk
+is often attributed to prolonged inflammation, recurrent infections, and impaired
+wound healing characteristic of DFUs, which may exacerbate systemic inflammation and
+lead to multi-organ dysfunction (<sup><xref rid="r11" ref-type="bibr">11</xref></sup>). In contrast, a Danish nationwide cohort study reported no
+significant difference in mortality between individuals with and without DFUs,
+suggesting that ulceration alone may not determine increased mortality risk
+(<sup><xref rid="r12" ref-type="bibr">12</xref></sup>). Meanwhile, a French
+cohort study found that individuals with neuropathic DFUs had a five-year survival
+rate of 84% (<sup><xref rid="r13" ref-type="bibr">13</xref></sup>). These findings
+indicate that DFUs type and associated comorbidities may play critical roles in
+determining outcomes, beyond the mere occurrence of DFUs itself (<sup><xref rid="r12" ref-type="bibr">12</xref></sup>,<sup><xref rid="r13" ref-type="bibr">13</xref></sup>).</p><p>In this study, a history of amputation was associated with higher mortality risk. A
+United Kingdom cohort study reported a twofold increase in mortality risk among
+individuals after lower extremity amputations, especially within the first year
+post-amputation, potentially reflecting differences in the timing of amputation and
+baseline comorbidities (<sup><xref rid="r14" ref-type="bibr">14</xref></sup>).
+Similarly, a Brazilian study found that individuals with major amputations had an
+almost 1.8-fold higher mortality risk than those without amputations, noting that
+severity and comorbidities likely influence survival outcomes (<sup><xref rid="r15" ref-type="bibr">15</xref></sup>). In contrast, a German
+prospective cohort study found no significant increase in long-term mortality among
+individuals undergoing minor amputations when early multidisciplinary care was
+provided, emphasizing the importance of timely intervention (<sup><xref rid="r16" ref-type="bibr">16</xref></sup>).</p><p>The presence of DPN was associated with increased mortality risk in our study
+population. A retrospective study conducted in Nottingham (UK) observed that
+individuals with neuropathic osteoarthropathy had higher-than-expected mortality
+rates (<sup><xref rid="r17" ref-type="bibr">17</xref></sup>). Nonetheless, another
+study from the United Kingdom found that increased mortality in patients with DFUs
+occurred regardless of the presence of neuropathy (<sup><xref rid="r18" ref-type="bibr">18</xref></sup>).</p><p>Our results align with other studies that did not observe a significant association
+between PAD and increased mortality among PLWDM. For instance, the ADVANCE study
+found that, while macrovascular complications such as PAD were strongly associated
+with cardiovascular events, they did not independently predict all-cause mortality,
+as other factors (e.g., glycemic control, blood pressure, and renal function
+impairment) could account for this (<sup><xref rid="r19" ref-type="bibr">19</xref></sup>). Conversely, a decade-long cohort study in China observed that
+patients with severe PAD experienced more than a 3.5-fold increase in mortality
+(<sup><xref rid="r20" ref-type="bibr">20</xref></sup>).</p><p>We found that individuals with DFUs who were not using OADs experienced a
+significantly increased mortality risk. A North American study reported similar
+findings, with non-OADs users exhibiting approximately a 2.5-fold higher risk of
+death, supporting the reliability of this association (<sup><xref rid="r21" ref-type="bibr">21</xref></sup>). One possible explanation is that OADs may
+improve glucose control, reduce systemic inflammation, and prevent the progression
+of microvascular complications, thereby lowering mortality risk (<sup><xref rid="r21" ref-type="bibr">21</xref></sup>). Conversely, a Spanish study
+found no statistically significant difference in mortality risk between patients
+with DFUs who did and did not use OADs (<sup><xref rid="r22" ref-type="bibr">22</xref></sup>). Their study suggested that the severity of comorbid
+conditions, such as cardiovascular disease or renal insufficiency, as well as ulcer
+severity and access to wound care, may have diluted the effect of OADs use on
+survival (<sup><xref rid="r22" ref-type="bibr">22</xref></sup>).</p><p>An Australian study noted an increased mortality risk for patients with PAD and T2DM
+who were using insulin (<sup><xref rid="r23" ref-type="bibr">23</xref></sup>). In
+this relationship, insulin acts not as a direct cause, but rather the observed
+higher mortality is attributed to more advanced T2DM, since insulin therapy in these
+patients typically indicates longstanding poor glycemic control, a higher burden of
+comorbidities, and greater overall clinical complexity (<sup><xref rid="r23" ref-type="bibr">23</xref></sup>). Nevertheless, in our study, insulin use was not
+a statistically significant modifier of mortality risk. Similar findings were
+reported in a meta-analysis, which demonstrated that the presence of a DFU
+significantly increased mortality regardless of insulin use or DM type (<sup><xref rid="r24" ref-type="bibr">24</xref></sup>). These findings suggest that
+while insulin therapy may serve as a surrogate marker of disease severity in some
+contexts, its role as an independent predictor of mortality in patients with DFUs
+remains uncertain and may vary depending on population characteristics and study
+design (<sup><xref rid="r24" ref-type="bibr">24</xref></sup>).</p><p>Our study also observed that patients with a history of amputation and inadequate FG
+had a higher risk of death. Supporting this finding, a South Korean study reported
+that individuals with higher FG levels at hospital admission had an increased risk
+of both amputation and mortality (<sup><xref rid="r25" ref-type="bibr">25</xref></sup>). However, the relationship between FG and mortality appears
+complex and not strictly linear. Another South Korean study demonstrated that this
+association may follow a J-shaped curve, suggesting that both low and high FG levels
+are associated with increased mortality (<sup><xref rid="r26" ref-type="bibr">26</xref></sup>). Multiple clinical factors, including age, hypertension,
+sarcope-nia, coronary artery disease, and cerebrovascular disease, are likely to
+influence this relationship, highlighting that FG should not be interpreted in
+isolation, but rather in the broader clinical context (<sup><xref rid="r26" ref-type="bibr">26</xref></sup>). Although FG was used as a prognostic marker in
+our analysis, its role as a predictor of long-term mortality remains limited
+compared to more integrative measures of glycemic exposure.</p><p>A US study showed that PLWDM and DFUs with elevated HbA1c levels are at higher risk
+of developing new ulcers, undergoing lower limb amputations, and experiencing higher
+mortality (<sup><xref rid="r27" ref-type="bibr">27</xref></sup>). This association
+is biologically plausible, as chronic hyperglycemia contributes to impaired wound
+healing, increased susceptibility to infections, and the progression of
+microvascular and macrovascular complications (<sup><xref rid="r27" ref-type="bibr">27</xref></sup>). Nonetheless, HbA1c was not a significant predictor of
+mortality in our study. It is important to highlight evidence from a large cohort
+study involving British and Taiwanese populations, which demonstrated that
+individuals with a higher burden of comorbidities had lower HbA1c levels but a
+higher risk of mortality (<sup><xref rid="r28" ref-type="bibr">28</xref></sup>)
+suggesting that HbA1c alone may not be sufficient to capture mortality risk,
+particularly in more clinically complex patients (<sup><xref rid="r28" ref-type="bibr">28</xref></sup>).</p><p>Some studies have identified demographic, clinical, and laboratory parameters as
+important mortality predictors among individuals with DFUs. An Italian study
+observed that HDL levels were independent predictors of mortality in a cohort of
+patients with T2DM (<sup><xref rid="r29" ref-type="bibr">29</xref></sup>).
+Similarly, an Australian study noted that, after multivariate adjustment, age,
+chronic kidney disease, and low plasma albumin were independent predictors of
+mortality in individuals with DFUs (<sup><xref rid="r30" ref-type="bibr">30</xref></sup>). As observed in our study, one study found that DFU-related
+mortality was independent of demographic, clinical, and laboratory parameters (e.g.,
+age, sex, HbA1c, and other variables) (<sup><xref rid="r31" ref-type="bibr">31</xref></sup>). These findings may be attributed to methodological
+variations such as population heterogeneity, endpoint definitions, and follow-up
+duration (<sup><xref rid="r31" ref-type="bibr">31</xref></sup>). Additionally, the
+influence of healthcare access and the timing of interventions may outweigh
+traditional risk factors in certain cohorts, thereby obscuring the expected
+relationships (<sup><xref rid="r31" ref-type="bibr">31</xref></sup>). As such, these
+studies have highlighted the necessity of context-aware analyses when interpreting
+the prognostic significance of clinical and laboratory data (<sup><xref rid="r31" ref-type="bibr">31</xref></sup>).</p><p>The economic and societal burden of DFUs is profound, with costs varying
+substantially across regions due to differences in healthcare infrastructure,
+service delivery models, and disease prevalence (<sup><xref rid="r32" ref-type="bibr">32</xref></sup>,<sup><xref rid="r33" ref-type="bibr">33</xref></sup>,<sup><xref rid="r34" ref-type="bibr">34</xref></sup>). Numerous
+studies have consistently demonstrated that individuals with DFUs incur markedly
+higher healthcare expenditures, primarily driven by extended hospital stays, complex
+surgical procedures, intensive wound management, and prolonged rehabilitation
+(<sup><xref rid="r33" ref-type="bibr">33</xref></sup>). Indeed, research
+from Iran, the US, and Turkey have reported that over USD 10 billion are spent
+annually on direct and indirect costs related to hospitalization for patients with
+DFUs, with these expenditures increasing exponentially in recent years (<sup><xref rid="r32" ref-type="bibr">32</xref></sup>,<sup><xref rid="r33" ref-type="bibr">33</xref></sup>,<sup><xref rid="r34" ref-type="bibr">34</xref></sup>). However, the magnitude of this financial burden is highly
+context-dependent (<sup><xref rid="r32" ref-type="bibr">32</xref></sup>), as
+high-income countries may partially mitigate costs through integrated care pathways,
+multidisciplinary foot care teams, and robust preventive programs that reduce
+hospitalizations and amputations (<sup><xref rid="r32" ref-type="bibr">32</xref></sup>). In low- and middle-income countries, the absence of
+subsidized care, coupled with limited access to specialized surgical interventions
+and preventive services, amplifies both the economic and human burden of DFUs
+(<sup><xref rid="r33" ref-type="bibr">33</xref></sup>,<sup><xref rid="r34" ref-type="bibr">34</xref></sup>).</p><p>Beyond economic considerations, DFUs have a profound impact on individuals' quality
+of life, affecting physical, psychological, and social well-being (<sup><xref rid="r35" ref-type="bibr">35</xref></sup>). Physically, individuals with
+DFUs often experience chronic pain, limited mobility, and an increased risk of
+infections and amputations, all of which significantly impair daily functioning and
+autonomy (<sup><xref rid="r36" ref-type="bibr">36</xref></sup>). Psychologically,
+the persistent nature of these ulcers, combined with the looming threat of limb
+loss, contributes to heightened levels of anxiety, depression, and emotional
+distress (<sup><xref rid="r35" ref-type="bibr">35</xref></sup>,<sup><xref rid="r36" ref-type="bibr">36</xref></sup>). Individuals with DFUs have
+reported markedly lower scores across multiple dimensions of health-related quality
+of life compared to both the general population and PLWDM without foot complications
+(<sup><xref rid="r35" ref-type="bibr">35</xref></sup>). Socially, the
+debilitating nature of DFUs can reduce participation in occupational and
+recreational activities, social isolation, and increase reliance on caregivers,
+thereby intensifying both personal and familial burdens (<sup><xref rid="r36" ref-type="bibr">36</xref></sup>). Furthermore, the stigma associated with visible
+wounds or amputations may further worsen self-esteem and social connectedness
+(<sup><xref rid="r36" ref-type="bibr">36</xref></sup>).</p><p>This study has several limitations that should be addressed. As a retrospective study
+based on medical records, it is inherently susceptible to information bias and
+missing data, which may impact the completeness and accuracy of the dataset.
+Additionally, the cross-sectional design did not allow inclusion of individuals with
+DFUs who died prematurely. Since PLWDM were recruited from a single center, our
+findings may not be fully generalizable to the broader Brazilian population,
+particularly those without access to specialized DM care. Data regarding the causes
+of death, as well as DFUs characteristics (e.g., severity, recurrence, and
+infection) were unavailable, limiting in-depth analysis on this subject. Hence, we
+suggest that future studies address this topic to contribute to a better
+understanding of the subject. In future research, it would be beneficial to perform
+clinical tests to diagnose small fibers and arteries alterations, rather than
+relying solely on clinical data, to assess whether this alters the total prevalence
+of neuropathy and vasculopathy and their relationship with mortality.</p><p>In conclusion, this study demonstrated that the presence of DFUs is a critical
+determinant of increased mortality risk in PLWDM, particularly among those with
+T2DM. The impact of DFUs on mortality risk is complex and dependent on several
+factors, including demographic, social, and economic considerations. The results
+highlight the urgency of implementing targeted interventions and early detection
+strategies for DFUs to improve prognosis, reduce mortality, and enhance quality of
+life for PLWDM.</p></sec></body><back><fn-group><fn fn-type="financial-disclosure"><p><bold>Funding:</bold> this research received no external funding.</p></fn><fn fn-type="COI-statement"><p><bold>Disclosure:</bold> no potential conflict of interest relevant to this article was reported.</p></fn><fn fn-type="edited-by"><p><bold>Associated editor:</bold> Melanie Rodacki, <ext-link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://orcid.org/0000-0002-9007-1325" ext-link-type="uri">https://orcid.org/0000-0002-9007-1325</ext-link></p></fn></fn-group><sec sec-type="data-availability"><title>Data availability:</title><p>any data pertaining to this study will be available upon request to the corresponding
+author.</p></sec><ref-list><title>REFERENCES</title><ref id="r1"><label>1</label><element-citation publication-type="book"><person-group person-group-type="author">
+<collab>International Diabetes Federation</collab>
+</person-group><source>IDF Diabetes Atlas</source><edition>11th</edition><publisher-loc>Brussels</publisher-loc><publisher-name>International Diabetes Federation</publisher-name><year>2025</year><comment>Available from: IDF Diabetes Atlas</comment></element-citation></ref><ref id="r2"><label>2</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>van Netten</surname><given-names>JJ</given-names></name>
+<name name-style="western"><surname>Bus</surname><given-names>SA</given-names></name>
+<name name-style="western"><surname>Apelqvist</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Chen</surname><given-names>P</given-names></name>
+<name name-style="western"><surname>Chuter</surname><given-names>V</given-names></name>
+<name name-style="western"><surname>Fitridge</surname><given-names>R</given-names></name>
+<etal/>
+</person-group><article-title>Definitions and criteria for diabetes-related foot disease (IWGDF
+2023 update)</article-title><source>Diabetes Metab Res Rev</source><year>2024</year><volume>40</volume><issue>3</issue><fpage>e3654</fpage><lpage>e3654</lpage><pub-id pub-id-type="doi">10.1002/dmrr.3654</pub-id><pub-id pub-id-type="pmid">37186781</pub-id></element-citation></ref><ref id="r3"><label>3</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Schaper</surname><given-names>NC</given-names></name>
+<name name-style="western"><surname>van Netten</surname><given-names>JJ</given-names></name>
+<name name-style="western"><surname>Apelqvist</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Bus</surname><given-names>SA</given-names></name>
+<name name-style="western"><surname>Fitridge</surname><given-names>R</given-names></name>
+<name name-style="western"><surname>Game</surname><given-names>F</given-names></name>
+<collab>IWGDF Editorial Board</collab>
+<etal/>
+</person-group><article-title>Practical guidelines on the prevention and management of
+diabetes-related foot disease (IWGDF 2023 update)</article-title><source>Diabetes Metab Res Rev</source><year>2024</year><volume>40</volume><issue>3</issue><fpage>e3657</fpage><lpage>e3657</lpage><pub-id pub-id-type="doi">10.1002/dmrr.3657</pub-id><pub-id pub-id-type="pmid">37243927</pub-id></element-citation></ref><ref id="r4"><label>4</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>McDermott</surname><given-names>K</given-names></name>
+<name name-style="western"><surname>Fang</surname><given-names>M</given-names></name>
+<name name-style="western"><surname>Boulton</surname><given-names>AJM</given-names></name>
+<name name-style="western"><surname>Selvin</surname><given-names>E</given-names></name>
+<name name-style="western"><surname>Hicks</surname><given-names>CW</given-names></name>
+</person-group><article-title>Etiology, Epidemiology, and Disparities in the Burden of Diabetic
+Foot Ulcers</article-title><source>Diabetes Care</source><year>2023</year><month>01</month><day>1</day><volume>46</volume><issue>1</issue><fpage>209</fpage><lpage>221</lpage><pub-id pub-id-type="doi">10.2337/dci22-0043</pub-id><pub-id pub-id-type="pmcid">PMC9797649</pub-id><pub-id pub-id-type="pmid">36548709</pub-id></element-citation></ref><ref id="r5"><label>5</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Armstrong</surname><given-names>DG</given-names></name>
+<name name-style="western"><surname>Tan</surname><given-names>TW</given-names></name>
+<name name-style="western"><surname>Boulton</surname><given-names>AJM</given-names></name>
+<name name-style="western"><surname>Bus</surname><given-names>SA</given-names></name>
+</person-group><article-title>Diabetic Foot Ulcers: A Review</article-title><source>JAMA</source><year>2023</year><month>07</month><day>3</day><volume>330</volume><issue>1</issue><fpage>62</fpage><lpage>75</lpage><pub-id pub-id-type="doi">10.1001/jama.2023.10578</pub-id><pub-id pub-id-type="pmcid">PMC10723802</pub-id><pub-id pub-id-type="pmid">37395769</pub-id></element-citation></ref><ref id="r6"><label>6</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Chen</surname><given-names>L</given-names></name>
+<name name-style="western"><surname>Sun</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Gao</surname><given-names>Y</given-names></name>
+<name name-style="western"><surname>Ran</surname><given-names>X</given-names></name>
+</person-group><article-title>Global mortality of diabetic foot ulcer: A systematic review and
+meta-analysis of observational studies</article-title><source>Diabetes Obes Metab</source><year>2023</year><month>01</month><volume>25</volume><issue>1</issue><fpage>36</fpage><lpage>45</lpage><pub-id pub-id-type="doi">10.1111/dom.14840</pub-id><pub-id pub-id-type="pmid">36054820</pub-id></element-citation></ref><ref id="r7"><label>7</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Rice</surname><given-names>JB</given-names></name>
+<name name-style="western"><surname>Desai</surname><given-names>U</given-names></name>
+<name name-style="western"><surname>Cummings</surname><given-names>AK</given-names></name>
+<name name-style="western"><surname>Birnbaum</surname><given-names>HG</given-names></name>
+<name name-style="western"><surname>Skornicki</surname><given-names>M</given-names></name>
+<name name-style="western"><surname>Parsons</surname><given-names>NB</given-names></name>
+</person-group><article-title>Burden of diabetic foot ulcers for medicare and private
+insurers</article-title><source>Diabetes Care</source><year>2014</year><volume>37</volume><issue>3</issue><fpage>651</fpage><lpage>658</lpage><pub-id pub-id-type="doi">10.2337/dc13-2176</pub-id><comment>Epub 2013 Nov 1. Erratum in: Diabetes Care. 2014 Sep;37(9):2660. PMID:
+24186882.</comment><pub-id pub-id-type="pmid">24186882</pub-id></element-citation></ref><ref id="r8"><label>8</label><element-citation publication-type="book"><person-group person-group-type="author">
+<collab>Instituto Brasileiro de Geografia e Estatística</collab>
+</person-group><source>Características étnicoraciais da população:
+um estudo das categorias de classificação de cor ou
+raça</source><publisher-loc>Rio de Janeiro</publisher-loc><publisher-name>IBGE</publisher-name><year>2011</year></element-citation></ref><ref id="r9"><label>9</label><element-citation publication-type="book"><person-group person-group-type="author">
+<collab>Sociedade Brasileira de Diabetes</collab>
+</person-group><source>Diretrizes da Sociedade Brasileira de Diabetes 2023-2024: manejo do
+risco cardiovascular – dislipidemia</source><publisher-loc>São Paulo</publisher-loc><publisher-name>SBD</publisher-name><year>2023</year></element-citation></ref><ref id="r10"><label>10</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<collab>Sociedade Brasileira de Cardiologia (SBC)</collab>
+</person-group><article-title>Diretrizes SBC 2023: dislipidemias e prevenção da
+aterosclerose</article-title><source>Arq Bras Cardiol</source><year>2023</year><volume>121</volume><issue>4</issue><fpage>e20230350</fpage><lpage>e20230350</lpage></element-citation></ref><ref id="r11"><label>11</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Saluja</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Anderson</surname><given-names>SG</given-names></name>
+<name name-style="western"><surname>Hambleton</surname><given-names>I</given-names></name>
+<name name-style="western"><surname>Shoo</surname><given-names>H</given-names></name>
+<name name-style="western"><surname>Livingston</surname><given-names>M</given-names></name>
+<name name-style="western"><surname>Jude</surname><given-names>EB</given-names></name>
+<etal/>
+</person-group><article-title>Foot ulceration and its association with mortality in diabetes
+mellitus: a meta-analysis</article-title><source>Diabet Med</source><year>2020</year><month>02</month><volume>37</volume><issue>2</issue><fpage>211</fpage><lpage>218</lpage><pub-id pub-id-type="doi">10.1111/dme.14151</pub-id><pub-id pub-id-type="pmid">31613404</pub-id></element-citation></ref><ref id="r12"><label>12</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Schäfer</surname><given-names>Z</given-names></name>
+<name name-style="western"><surname>Mathisen</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Svendsen</surname><given-names>K</given-names></name>
+<name name-style="western"><surname>Engberg</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Rolighed Thomsen</surname><given-names>T</given-names></name>
+<name name-style="western"><surname>Kirketerp-Møller</surname><given-names>K</given-names></name>
+</person-group><article-title>Toward Machine-Learning-Based Decision Support in Diabetes Care:
+A Risk Stratification Study on Diabetic Foot Ulcer and
+Amputation</article-title><source>Front Med (Lausanne)</source><year>2021</year><month>02</month><day>18</day><volume>7</volume><fpage>601602</fpage><lpage>601602</lpage><pub-id pub-id-type="doi">10.3389/fmed.2020.601602</pub-id><pub-id pub-id-type="pmcid">PMC7931152</pub-id><pub-id pub-id-type="pmid">33681236</pub-id></element-citation></ref><ref id="r13"><label>13</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Amadou</surname><given-names>C</given-names></name>
+<name name-style="western"><surname>Carlier</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Amouyal</surname><given-names>C</given-names></name>
+<name name-style="western"><surname>Bourron</surname><given-names>O</given-names></name>
+<name name-style="western"><surname>Aubert</surname><given-names>C</given-names></name>
+<name name-style="western"><surname>Couture</surname><given-names>T</given-names></name>
+<etal/>
+</person-group><article-title>Five-year mortality in patients with diabetic foot ulcer during
+2009-2010 was lower than expected</article-title><source>Diabetes Metab</source><year>2020</year><month>06</month><volume>46</volume><issue>3</issue><fpage>230</fpage><lpage>235</lpage><pub-id pub-id-type="doi">10.1016/j.diabet.2019.04.010</pub-id><pub-id pub-id-type="pmid">31400509</pub-id></element-citation></ref><ref id="r14"><label>14</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Hayes</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Rafferty</surname><given-names>JM</given-names></name>
+<name name-style="western"><surname>Cheung</surname><given-names>WY</given-names></name>
+<name name-style="western"><surname>Akbari</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Thomas</surname><given-names>RL</given-names></name>
+<name name-style="western"><surname>Bain</surname><given-names>S</given-names></name>
+<etal/>
+</person-group><article-title>Impact of diabetes on long-term mortality following major lower
+limb amputation: A population-based cohort study in Wales</article-title><source>Diabetes Res Clin Pract</source><year>2025</year><month>05</month><volume>223</volume><fpage>112156</fpage><lpage>112156</lpage><pub-id pub-id-type="doi">10.1016/j.diabres.2025.112156</pub-id><pub-id pub-id-type="pmid">40216200</pub-id></element-citation></ref><ref id="r15"><label>15</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Costa</surname><given-names>RHR</given-names></name>
+<name name-style="western"><surname>Cardoso</surname><given-names>NA</given-names></name>
+<name name-style="western"><surname>Procópio</surname><given-names>RJ</given-names></name>
+<name name-style="western"><surname>Navarro</surname><given-names>TP</given-names></name>
+<name name-style="western"><surname>Dardik</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>de Loiola Cisneros</surname><given-names>L</given-names></name>
+</person-group><article-title>Diabetic foot ulcer carries high amputation and mortality rates,
+particularly in the presence of advanced age, peripheral artery disease and
+anemia</article-title><source>Diabetes Metab Syndr</source><year>2017</year><month>12</month><volume>11</volume><issue>Suppl 2</issue><fpage>S583</fpage><lpage>S587</lpage><pub-id pub-id-type="doi">10.1016/j.dsx.2017.04.008</pub-id><pub-id pub-id-type="pmid">28465149</pub-id></element-citation></ref><ref id="r16"><label>16</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Icks</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Scheer</surname><given-names>M</given-names></name>
+<name name-style="western"><surname>Morbach</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Genz</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Haastert</surname><given-names>B</given-names></name>
+<name name-style="western"><surname>Giani</surname><given-names>G</given-names></name>
+<etal/>
+</person-group><article-title>Time-dependent impact of diabetes on mortality in patients after
+major lower extremity amputation: survival in a population-based 5-year
+cohort in Germany</article-title><source>Diabetes Care</source><year>2011</year><month>06</month><volume>34</volume><issue>6</issue><fpage>1350</fpage><lpage>1354</lpage><pub-id pub-id-type="doi">10.2337/dc10-2341</pub-id><pub-id pub-id-type="pmcid">PMC3114367</pub-id><pub-id pub-id-type="pmid">21540432</pub-id></element-citation></ref><ref id="r17"><label>17</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Gazis</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Pound</surname><given-names>N</given-names></name>
+<name name-style="western"><surname>Macfarlane</surname><given-names>R</given-names></name>
+<name name-style="western"><surname>Treece</surname><given-names>K</given-names></name>
+<name name-style="western"><surname>Game</surname><given-names>F</given-names></name>
+<name name-style="western"><surname>Jeffcoate</surname><given-names>W</given-names></name>
+</person-group><article-title>Mortality in patients with diabetic neuropathic osteoarthropathy
+(Charcot foot)</article-title><source>Diabet Med</source><year>2004</year><month>11</month><volume>21</volume><issue>11</issue><fpage>1243</fpage><lpage>1246</lpage><pub-id pub-id-type="doi">10.1111/j.1464-5491.2004.01215.x</pub-id><pub-id pub-id-type="pmid">15498092</pub-id></element-citation></ref><ref id="r18"><label>18</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Moulik</surname><given-names>PK</given-names></name>
+<name name-style="western"><surname>Mtonga</surname><given-names>R</given-names></name>
+<name name-style="western"><surname>Gill</surname><given-names>GV</given-names></name>
+</person-group><article-title>Amputation and mortality in new-onset diabetic foot ulcers
+stratified by etiology</article-title><source>Diabetes Care</source><year>2003</year><month>02</month><volume>26</volume><issue>2</issue><fpage>491</fpage><lpage>494</lpage><pub-id pub-id-type="doi">10.2337/diacare.26.2.491</pub-id><pub-id pub-id-type="pmid">12547887</pub-id></element-citation></ref><ref id="r19"><label>19</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<collab>ADVANCE Collaborative Group</collab>
+<name name-style="western"><surname>Patel</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>MacMahon</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Chalmers</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Neal</surname><given-names>B</given-names></name>
+<name name-style="western"><surname>Billot</surname><given-names>L</given-names></name>
+<name name-style="western"><surname>Woodward</surname><given-names>M</given-names></name>
+<etal/>
+</person-group><article-title>Intensive blood glucose control and vascular outcomes in patients
+with type 2 diabetes</article-title><source>N Engl J Med</source><year>2008</year><month>06</month><day>12</day><volume>358</volume><issue>24</issue><fpage>2560</fpage><lpage>2572</lpage><pub-id pub-id-type="doi">10.1056/NEJMoa0802987</pub-id><pub-id pub-id-type="pmid">18539916</pub-id></element-citation></ref><ref id="r20"><label>20</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Li</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Shi</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Gu</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Cai</surname><given-names>H</given-names></name>
+<name name-style="western"><surname>Gu</surname><given-names>X</given-names></name>
+<name name-style="western"><surname>Yang</surname><given-names>J</given-names></name>
+<etal/>
+</person-group><article-title>Mortality predictors and survival nomogram for hospitalized
+diabetic foot patients: a decade-long cohort</article-title><source>Front Endocrinol (Lausanne)</source><year>2026</year><month>02</month><day>25</day><volume>17</volume><fpage>1688571</fpage><lpage>1688571</lpage><pub-id pub-id-type="doi">10.3389/fendo.2026.1688571</pub-id><pub-id pub-id-type="pmcid">PMC12975560</pub-id><pub-id pub-id-type="pmid">41821738</pub-id></element-citation></ref><ref id="r21"><label>21</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Boyko</surname><given-names>EJ</given-names></name>
+<name name-style="western"><surname>Ahroni</surname><given-names>JH</given-names></name>
+<name name-style="western"><surname>Smith</surname><given-names>DG</given-names></name>
+<name name-style="western"><surname>Davignon</surname><given-names>D</given-names></name>
+</person-group><article-title>Increased mortality associated with diabetic foot
+ulcer</article-title><source>Diabet Med</source><year>1996</year><month>11</month><volume>13</volume><issue>11</issue><fpage>967</fpage><lpage>972</lpage><pub-id pub-id-type="doi">10.1002/(SICI)1096-9136(199611)13:11&lt;967::AID-DIA266&gt;3.0.CO;2-K</pub-id><comment>PMID: 8946155.</comment><pub-id pub-id-type="pmid">8946155</pub-id></element-citation></ref><ref id="r22"><label>22</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Rubio</surname><given-names>JA</given-names></name>
+<name name-style="western"><surname>Jiménez</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Lázaro-Martínez</surname><given-names>JL</given-names></name>
+</person-group><article-title>Mortality in Patients with Diabetic Foot Ulcers: Causes, Risk
+Factors, and Their Association with Evolution and Severity of
+Ulcer</article-title><source>J Clin Med</source><year>2020</year><volume>9</volume><issue>9</issue><fpage>3009</fpage><lpage>3009</lpage><pub-id pub-id-type="doi">10.3390/jcm9093009</pub-id><pub-id pub-id-type="pmcid">PMC7565534</pub-id><pub-id pub-id-type="pmid">32961974</pub-id></element-citation></ref><ref id="r23"><label>23</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Golledge</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Quigley</surname><given-names>F</given-names></name>
+<name name-style="western"><surname>Velu</surname><given-names>R</given-names></name>
+<name name-style="western"><surname>Walker</surname><given-names>PJ</given-names></name>
+<name name-style="western"><surname>Moxon</surname><given-names>JV</given-names></name>
+</person-group><article-title>Association of impaired fasting glucose, diabetes and their
+management with the presentation and outcome of peripheral artery disease: a
+cohort study</article-title><source>Cardiovasc Diabetol</source><year>2014</year><month>11</month><day>1</day><volume>13</volume><fpage>147</fpage><lpage>147</lpage><pub-id pub-id-type="doi">10.1186/s12933-014-0147-2</pub-id><pub-id pub-id-type="pmcid">PMC4230372</pub-id><pub-id pub-id-type="pmid">25361884</pub-id></element-citation></ref><ref id="r24"><label>24</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Brownrigg</surname><given-names>JR</given-names></name>
+<name name-style="western"><surname>Davey</surname><given-names>J</given-names></name>
+<name name-style="western"><surname>Holt</surname><given-names>PJ</given-names></name>
+<name name-style="western"><surname>Davis</surname><given-names>WA</given-names></name>
+<name name-style="western"><surname>Thompson</surname><given-names>MM</given-names></name>
+<name name-style="western"><surname>Ray</surname><given-names>KK</given-names></name>
+<etal/>
+</person-group><article-title>The association of ulceration of the foot with cardiovascular and
+all-cause mortality in patients with diabetes: a
+meta-analysis</article-title><source>Diabetologia</source><year>2012</year><month>11</month><volume>55</volume><issue>11</issue><fpage>2906</fpage><lpage>2912</lpage><pub-id pub-id-type="doi">10.1007/s00125-012-2673-3</pub-id><pub-id pub-id-type="pmid">22890823</pub-id></element-citation></ref><ref id="r25"><label>25</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Namgoong</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Jung</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Han</surname><given-names>SK</given-names></name>
+<name name-style="western"><surname>Jeong</surname><given-names>SH</given-names></name>
+<name name-style="western"><surname>Dhong</surname><given-names>ES</given-names></name>
+<name name-style="western"><surname>Kim</surname><given-names>WK</given-names></name>
+</person-group><article-title>Risk factors for major amputation in hospitalised diabetic foot
+patients</article-title><source>Int Wound J</source><year>2016</year><month>03</month><volume>13</volume><issue>Suppl 1(Suppl 1)</issue><fpage>13</fpage><lpage>19</lpage><pub-id pub-id-type="doi">10.1111/iwj.12526</pub-id><pub-id pub-id-type="pmcid">PMC7949865</pub-id><pub-id pub-id-type="pmid">26478562</pub-id></element-citation></ref><ref id="r26"><label>26</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Lee</surname><given-names>JH</given-names></name>
+<name name-style="western"><surname>Han</surname><given-names>K</given-names></name>
+<name name-style="western"><surname>Huh</surname><given-names>JH</given-names></name>
+</person-group><article-title>The sweet spot: fasting glucose, cardiovascular disease, and
+mortality in older adults with diabetes: a nationwide population-based
+study</article-title><source>Cardiovasc Diabetol</source><year>2020</year><month>04</month><day>1</day><volume>19</volume><issue>1</issue><fpage>44</fpage><lpage>44</lpage><pub-id pub-id-type="doi">10.1186/s12933-020-01021-8</pub-id><pub-id pub-id-type="pmcid">PMC7110776</pub-id><pub-id pub-id-type="pmid">32238157</pub-id></element-citation></ref><ref id="r27"><label>27</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Armstrong</surname><given-names>DG</given-names></name>
+<name name-style="western"><surname>Boulton</surname><given-names>AJM</given-names></name>
+<name name-style="western"><surname>Bus</surname><given-names>SA</given-names></name>
+</person-group><article-title>Diabetic foot ulcers and their recurrence</article-title><source>N Engl J Med</source><year>2017</year><volume>376</volume><issue>24</issue><fpage>2367</fpage><lpage>2375</lpage><pub-id pub-id-type="doi">10.1056/NEJMra1615439</pub-id><pub-id pub-id-type="pmid">28614678</pub-id></element-citation></ref><ref id="r28"><label>28</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Chiang</surname><given-names>JI</given-names></name>
+<name name-style="western"><surname>Hanlon</surname><given-names>P</given-names></name>
+<name name-style="western"><surname>Li</surname><given-names>TC</given-names></name>
+<name name-style="western"><surname>Jani</surname><given-names>BD</given-names></name>
+<name name-style="western"><surname>Manski-Nankervis</surname><given-names>JA</given-names></name>
+<name name-style="western"><surname>Furler</surname><given-names>J</given-names></name>
+<etal/>
+</person-group><article-title>Multimorbidity, mortality, and HbA1c in type 2 diabetes: A cohort
+study with UK and Taiwanese cohorts</article-title><source>PLoS Med</source><year>2020</year><month>05</month><day>7</day><volume>17</volume><issue>5</issue><fpage>e1003094</fpage><lpage>e1003094</lpage><pub-id pub-id-type="doi">10.1371/journal.pmed.1003094</pub-id><pub-id pub-id-type="pmcid">PMC7205223</pub-id><pub-id pub-id-type="pmid">32379755</pub-id></element-citation></ref><ref id="r29"><label>29</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Vitale</surname><given-names>M</given-names></name>
+<name name-style="western"><surname>Orsi</surname><given-names>E</given-names></name>
+<name name-style="western"><surname>Solini</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Garofolo</surname><given-names>M</given-names></name>
+<name name-style="western"><surname>Resi</surname><given-names>V</given-names></name>
+<name name-style="western"><surname>Bonora</surname><given-names>E</given-names></name>
+<etal/>
+</person-group><article-title>Independent association of history of diabetic foot with
+all-cause mortality in patients with type 2 diabetes: the Renal
+Insufficiency And Cardiovascular Events (RIACE) Italian Multicenter
+Study</article-title><source>Cardiovasc Diabetol</source><year>2024</year><month>01</month><day>13</day><volume>23</volume><issue>1</issue><fpage>34</fpage><lpage>34</lpage><pub-id pub-id-type="doi">10.1186/s12933-023-02107-9</pub-id><pub-id pub-id-type="pmcid">PMC10787405</pub-id><pub-id pub-id-type="pmid">38218843</pub-id></element-citation></ref><ref id="r30"><label>30</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Jeyaraman</surname><given-names>K</given-names></name>
+<name name-style="western"><surname>Berhane</surname><given-names>T</given-names></name>
+<name name-style="western"><surname>Hamilton</surname><given-names>M</given-names></name>
+<name name-style="western"><surname>Chandra</surname><given-names>AP</given-names></name>
+<name name-style="western"><surname>Falhammar</surname><given-names>H</given-names></name>
+</person-group><article-title>Mortality in patients with diabetic foot ulcer: a retrospective
+study of 513 cases from a single Centre in the Northern Territory of
+Australia</article-title><source>BMC Endocr Disord</source><year>2019</year><month>01</month><day>3</day><volume>19</volume><issue>1</issue><fpage>1</fpage><lpage>1</lpage><pub-id pub-id-type="doi">10.1186/s12902-018-0327-2</pub-id><pub-id pub-id-type="pmcid">PMC6318899</pub-id><pub-id pub-id-type="pmid">30606164</pub-id></element-citation></ref><ref id="r31"><label>31</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Schofield</surname><given-names>H</given-names></name>
+<name name-style="western"><surname>Haycocks</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Robinson</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Edmonds</surname><given-names>M</given-names></name>
+<name name-style="western"><surname>Anderson</surname><given-names>SG</given-names></name>
+<name name-style="western"><surname>Heald</surname><given-names>AH</given-names></name>
+</person-group><article-title>Mortality in 98 type 1 diabetes mellitus and type 2 diabetes
+mellitus: Foot ulcer location is an independent risk
+determinant</article-title><source>Diabet Med</source><year>2021</year><month>10</month><volume>38</volume><issue>10</issue><fpage>e14568</fpage><lpage>e14568</lpage><pub-id pub-id-type="doi">10.1111/dme.14568</pub-id><pub-id pub-id-type="pmid">33772856</pub-id></element-citation></ref><ref id="r32"><label>32</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Hicks</surname><given-names>CW</given-names></name>
+<name name-style="western"><surname>Selvarajah</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Mathioudakis</surname><given-names>N</given-names></name>
+<name name-style="western"><surname>Sherman</surname><given-names>RE</given-names></name>
+<name name-style="western"><surname>Hines</surname><given-names>KF</given-names></name>
+<name name-style="western"><surname>Black</surname><given-names>JH</given-names><suffix>3rd</suffix></name>
+<etal/>
+</person-group><article-title>Burden of Infected Diabetic Foot Ulcers on Hospital Admissions
+and Costs</article-title><source>Ann Vasc Surg</source><year>2016</year><month>05</month><volume>33</volume><fpage>149</fpage><lpage>158</lpage><pub-id pub-id-type="doi">10.1016/j.avsg.2015.11.025</pub-id><pub-id pub-id-type="pmcid">PMC6048950</pub-id><pub-id pub-id-type="pmid">26907372</pub-id></element-citation></ref><ref id="r33"><label>33</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Hashempour</surname><given-names>R</given-names></name>
+<name name-style="western"><surname>MirHashemi</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Mollajafari</surname><given-names>F</given-names></name>
+<name name-style="western"><surname>Damiri</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>ArabAhmadi</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Raei</surname><given-names>B</given-names></name>
+</person-group><article-title>Economic burden of diabetic foot ulcer: a case of
+Iran</article-title><source>BMC Health Serv Res</source><year>2024</year><month>03</month><day>21</day><volume>24</volume><issue>1</issue><fpage>363</fpage><lpage>363</lpage><pub-id pub-id-type="doi">10.1186/s12913-024-10873-9</pub-id><pub-id pub-id-type="pmcid">PMC10958898</pub-id><pub-id pub-id-type="pmid">38515182</pub-id></element-citation></ref><ref id="r34"><label>34</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Oksuz</surname><given-names>E</given-names></name>
+<name name-style="western"><surname>Malhan</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Sonmez</surname><given-names>B</given-names></name>
+<name name-style="western"><surname>Numanoglu Tekin</surname><given-names>R</given-names></name>
+</person-group><article-title>Cost of illness among patients with diabetic foot ulcer in
+Turkey</article-title><source>World J Diabetes</source><year>2016</year><month>10</month><day>15</day><volume>7</volume><issue>18</issue><fpage>462</fpage><lpage>469</lpage><pub-id pub-id-type="doi">10.4239/wjd.v7.i18.462</pub-id><pub-id pub-id-type="pmcid">PMC5065666</pub-id><pub-id pub-id-type="pmid">27795820</pub-id></element-citation></ref><ref id="r35"><label>35</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Schofield</surname><given-names>H</given-names></name>
+<name name-style="western"><surname>Haycocks</surname><given-names>S</given-names></name>
+<name name-style="western"><surname>Robinson</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Edmonds</surname><given-names>M</given-names></name>
+<name name-style="western"><surname>Anderson</surname><given-names>SG</given-names></name>
+<name name-style="western"><surname>Heald</surname><given-names>AH</given-names></name>
+</person-group><article-title>Mortality in 98 type 1 diabetes mellitus and type 2 diabetes
+mellitus: Foot ulcer location is an independent risk
+determinant</article-title><source>Diabet Med</source><year>2021</year><month>10</month><volume>38</volume><issue>10</issue><fpage>e14568</fpage><lpage>e14568</lpage><pub-id pub-id-type="doi">10.1111/dme.14568</pub-id><pub-id pub-id-type="pmid">33772856</pub-id></element-citation></ref><ref id="r36"><label>36</label><element-citation publication-type="journal"><person-group person-group-type="author">
+<name name-style="western"><surname>Zhao</surname><given-names>H</given-names></name>
+<name name-style="western"><surname>McClure</surname><given-names>NS</given-names></name>
+<name name-style="western"><surname>Johnson</surname><given-names>JA</given-names></name>
+<name name-style="western"><surname>Soprovich</surname><given-names>A</given-names></name>
+<name name-style="western"><surname>Al Sayah</surname><given-names>F</given-names></name>
+<name name-style="western"><surname>Eurich</surname><given-names>DT</given-names></name>
+</person-group><article-title>A Longitudinal Study on the Association Between Diabetic Foot
+Disease and Health-Related Quality of Life in Adults With Type 2
+Diabetes</article-title><source>Can J Diabetes</source><year>2020</year><month>04</month><volume>44</volume><issue>3</issue><fpage>280</fpage><lpage>286.e1</lpage><pub-id pub-id-type="doi">10.1016/j.jcjd.2019.08.008</pub-id><pub-id pub-id-type="pmid">31669187</pub-id></element-citation></ref></ref-list></back></article></pmc-articleset>

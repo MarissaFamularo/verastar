@@ -1,4 +1,5 @@
 import { PILOT_DIGEST_LIMIT, DIGEST_LIMIT_NOTE, fitDigestPapers } from '../pipeline/digestLimit.js'
+import { UNAVAILABLE_SUMMARY_REASON } from '../pipeline/triage.js'
 import { evidenceVerdict, isRelationshipValidated } from '../lib/evidenceVersion.js'
 import { linkFindingNumbers, rowsInFinding } from '../lib/claimCheck.js'
 import { ClaimCheckMark } from './ClaimCheckMark.jsx'
@@ -1966,6 +1967,13 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                 </p>
               )}
 
+              {/* Summary path (pipeline/triage.js triageWithObligations): a paper with nothing
+                  displayable says so explicitly — never a silent blank. */}
+              {!take?.finding && take?.summaryKind === 'unavailable' && (
+                <p style={{ margin: '11px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--color-abstract)' }}>
+                  ⚠︎ Summary unavailable — {take.summaryReason || UNAVAILABLE_SUMMARY_REASON}
+                </p>
+              )}
               {!take?.finding && heroRow && (
                 <p style={{ margin: '11px 0 0', fontSize: 15, lineHeight: 1.55, color: 'var(--color-fg-soft)' }}>
                   <span style={{ color: 'var(--color-fg-muted)' }}>Checked result: </span>
@@ -1985,6 +1993,12 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                   an unsupported claim on screen is fatal, a withheld one is not. */}
               {take?.finding && take?.check?.verdict !== 'refuted' && (
                 <p style={{ margin: '11px 0 0', fontSize: 15.5, lineHeight: 1.65, color: 'var(--color-fg-soft)' }}>
+                  {take.summaryKind === 'validated' && (
+                    <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.06em', color: 'var(--color-verified-soft)', fontFamily: 'var(--font-mono)', marginRight: 8 }}>VALIDATED SUMMARY</span>
+                  )}
+                  {take.summaryKind === 'excerpt' && (
+                    <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.06em', color: 'var(--color-abstract)', fontFamily: 'var(--font-mono)', marginRight: 8 }}>SOURCE EXCERPT (VERBATIM) — summary withheld</span>
+                  )}
                   {linkFindingNumbers(take.finding, verifiedRows).map((seg, i) =>
                     seg.row ? (
                       <button
@@ -2000,7 +2014,7 @@ export default function SpineCheck({ onDigestDate = () => {}, demo = false }) {
                       <span key={i}>{seg.text}</span>
                     )
                   )}{' '}
-                  <ClaimCheckMark check={take.check} size={12} />
+                  {take.summaryKind !== 'excerpt' && <ClaimCheckMark check={take.check} size={12} />}
                 </p>
               )}
               {take?.finding && take?.check?.verdict === 'refuted' && (

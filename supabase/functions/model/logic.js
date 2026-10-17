@@ -1,3 +1,4 @@
+import { cacheWireExtraction } from '../_shared/extractionContract.js'
 // supabase/functions/model/logic.js — the pure half of the model proxy.
 //
 // Everything here is plain ESM with no Deno or network dependency so the app's vitest
@@ -77,13 +78,13 @@ export function parseCacheHeader(value) {
 
 // Build a synthetic Messages response from a cached extraction so the client's existing
 // parseStructuredResponse() works unchanged. Usage is zero: nothing was billed.
-export function cachedResponse(row, model) {
+export function cachedResponse(row, model, studyId) {
   return {
     id: `msg_cache_${row.source_hash.slice(0, 12)}`,
     type: 'message',
     role: 'assistant',
     model: row.model || model,
-    content: [{ type: 'text', text: JSON.stringify(row.extraction) }],
+    content: [{ type: 'text', text: JSON.stringify(cacheWireExtraction(row.extraction, studyId)) }],
     stop_reason: 'end_turn',
     stop_sequence: null,
     usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },

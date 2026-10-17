@@ -1,0 +1,62 @@
+{
+ "harnessVersion": "2026-10-17.summary-eval-v1",
+ "mode": "fake",
+ "command": "dev",
+ "checkerModel": "claude-haiku-4-5-20251001",
+ "writerModel": "claude-sonnet-5-5",
+ "extractionModel": "claude-sonnet-5-5",
+ "profileSha256": "3cdf6a40bc626c514e90e2bbdade217115453cde7310e7f911f6b73d43db2eb4",
+ "cases": [
+  {
+   "id": "PARADE",
+   "pmid": "42513277",
+   "sourceSha256": "79c5286a222d6606d7e7ccfa8ee03b95c89f6daca4d90bcb3262bd0a3e81bf32",
+   "extractionInputSha256": "79c5286a222d6606d7e7ccfa8ee03b95c89f6daca4d90bcb3262bd0a3e81bf32",
+   "extractionReused": true
+  },
+  {
+   "id": "ASPIRIN",
+   "pmid": "42769537",
+   "sourceSha256": "dcc5139fa2332df7afdf7fc8fdbf428e6e6aa369700a7a475511dfb07d1daecf",
+   "extractionInputSha256": "dcc5139fa2332df7afdf7fc8fdbf428e6e6aa369700a7a475511dfb07d1daecf",
+   "extractionReused": true
+  },
+  {
+   "id": "BALLOON",
+   "pmid": "42573020",
+   "sourceSha256": "6d74c50e823b8a943663c2a5d55f7dfe25c800055b7717856e822f57e5882948",
+   "extractionInputSha256": "6d74c50e823b8a943663c2a5d55f7dfe25c800055b7717856e822f57e5882948",
+   "extractionReused": true
+  },
+  {
+   "id": "CAROTID",
+   "pmid": "42637117",
+   "sourceSha256": "bfd3f03e6749dcda740e4b373bf322d1018b04384ab14945daf3cacc80398ba4",
+   "extractionInputSha256": "bfd3f03e6749dcda740e4b373bf322d1018b04384ab14945daf3cacc80398ba4",
+   "extractionReused": false
+  },
+  {
+   "id": "NPT",
+   "pmid": "42681580",
+   "sourceSha256": "b6a2e9c40842e470a35134e16e0cdf1d99966dc6e7445098b07b75cc1e6a360a",
+   "extractionInputSha256": "b6a2e9c40842e470a35134e16e0cdf1d99966dc6e7445098b07b75cc1e6a360a",
+   "extractionReused": true
+  },
+  {
+   "id": "TADV",
+   "pmid": "42600759",
+   "sourceSha256": "a8cf774c81bfb9a16f46df90fff45b9543e1f904c47e6ef0eed4d799504600c9",
+   "extractionInputSha256": "a8cf774c81bfb9a16f46df90fff45b9543e1f904c47e6ef0eed4d799504600c9",
+   "extractionReused": true
+  }
+ ],
+ "excluded": [
+  {
+   "id": "TEVAR",
+   "pmid": "42693683",
+   "reason": "Frozen inputs (source, extraction, writer and repair outputs) are not in the evidence archive; only the offline diagnosis in round3-95857d9/semantic-review.md survives, so the case cannot be reconstructed without a new fetch and extraction, which would not be the frozen case."
+  }
+ ],
+ "authorization": "dev:bfa900bc620a",
+ "capUsd": null
+}

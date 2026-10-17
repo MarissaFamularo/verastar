@@ -43,10 +43,12 @@ describe('cache header', () => {
 
 describe('cache responses', () => {
   it('a cached row becomes a clean end_turn response with zero usage', () => {
-    const res = cachedResponse({ source_hash: 'b'.repeat(64), extraction: { study_id: 'x', quantities: [] }, model: 'claude-sonnet-5' }, 'claude-sonnet-5')
+    const res = cachedResponse({ source_hash: 'b'.repeat(64), extraction: { format: 'extraction-wire-v2', value: { study_id: 'x', design: 'other', quantities: [], result_contexts: [] } }, model: 'claude-sonnet-5' }, 'claude-sonnet-5', 'x')
     expect(res.stop_reason).toBe('end_turn')
     expect(res.usage.input_tokens).toBe(0)
-    expect(JSON.parse(res.content[0].text)).toEqual({ study_id: 'x', quantities: [] })
+    expect(JSON.parse(res.content[0].text)).toEqual({ study_id: 'x', design: 'other', quantities: [], result_contexts: [] })
+    // A row in any other representation is refused (the handler treats a throw as a miss).
+    expect(() => cachedResponse({ source_hash: 'b'.repeat(64), extraction: { study_id: 'x', quantities: [] }, model: 'claude-sonnet-5' }, 'claude-sonnet-5', 'x')).toThrow(/unsupported cache representation/)
   })
 })
 

@@ -1,3 +1,4 @@
+import { currentResultPaper } from '../pipeline/resultHandoff.js'
 // lib/findingGate.js — the ONE rule for reusing a saved paper's finding sentence.
 //
 // The prose gate (pipeline/check.js) stamps every finding { verdict }. A 'refuted' finding is
@@ -8,6 +9,7 @@
 // Pure; no store or model dependency so components and pipeline modules can share it.
 
 export function usableFinding(paper) {
+  paper = currentResultPaper(paper)
   if (!paper || paper.check?.verdict === 'refuted') return ''
   return String(paper.finding ?? '')
 }

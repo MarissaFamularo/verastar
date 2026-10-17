@@ -1,3 +1,4 @@
+import { currentResultPaper } from '../pipeline/resultHandoff.js'
 import { evidenceVerdict, isRelationshipValidated } from './evidenceVersion.js'
 // lib/libraryFormat.js — PURE formatters that turn Verastar records into human-scannable markdown.
 //
@@ -104,6 +105,7 @@ export function conceptSlug(node) {
 // leads with why it mattered (relevance), then the finding, then the verifier's honest edge: every
 // number listed WITH the tier the app proved it at. Never asserts a field the record doesn't have.
 export function sourceNoteMd(paper) {
+  paper = currentResultPaper(paper)
   const p = paper || {}
   const fm = frontmatter([
     ['title', p.title || ''],
@@ -136,6 +138,8 @@ export function sourceNoteMd(paper) {
     parts.push(
       `> ⚠︎ ${withheldSummaryCopy(p.check?.reason)}`
     )
+  } else if (p.finding && p.summaryKind === 'excerpt') {
+    parts.push('', '## Source excerpt (verbatim)', '', p.finding)
   } else if (p.finding) {
     parts.push('', '## Finding', '', p.finding)
   }

@@ -64,7 +64,7 @@ export function hasValidatedPaperEvidence(paper) {
 // App-owned provenance for the extraction that created a paper's structured evidence.
 // Bump this whenever the extraction model, prompt, schema, or source-assembly contract changes in a way that could
 // alter saved quantities. A missing stamp is intentionally legacy, never assumed current.
-export const CURRENT_EXTRACTION_VERSION = '2026-10-10.sonnet-5-5-v5'
+export const CURRENT_EXTRACTION_VERSION = '2026-10-17.result-context-v4'
 
 export function extractionVersionStatus(record) {
   const version = String(record?.extractionVersion || '').trim()

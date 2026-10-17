@@ -20,3 +20,7 @@ Exact quote location, numeric relationship verification, semantic model judgment
 The parent manifest lists source artifacts, transformations and SHA-256 of packaged files. Historical reports retain their original tense and recommendations; none authorizes new work. Spending/accounting, credential discussion, absolute user paths, personal scoring/relevance metadata and private Library links are omitted. Publication citations/source text and scientific outputs are retained. No credentials, profiles or account records are packaged.
 
 All requested topical evidence and all three Git checkpoints were found locally. No Library download was needed. The original standalone independent-review transcript was not located; `semantic-review.md` is the saved closeout report summarizing that review, supported by selected exact outputs and checker reasons. Full raw provider journals, omitted papers from round three, test suites, bundles and unrelated files are not included. No fresh reproduction or generalized accuracy claim is made. No release, migration or deployment is performed by this branch.
+
+## Candidate 2026-10-17
+
+[candidate-20261017/README.md](candidate-20261017/README.md): the obligation-checked summary candidate built from this archive (implementation, offline tests, frozen holdout set, exact live-evaluation commands). Live evaluation was blocked by a missing API key; nothing is deployed.

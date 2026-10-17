@@ -1,3 +1,4 @@
+import { resultCandidate } from '../pipeline/resultHandoff.js'
 // components/AddPaper.jsx — add a paper to the Library from OUTSIDE the digest. Paste a PMID, DOI,
 // or PubMed/PMC link for something you're reading, and it goes through the EXACT same pipeline a
 // digest paper does: fetch source → Claude extracts → the deterministic verifier gates every number
@@ -118,6 +119,7 @@ export default function AddPaper({ onAdded }) {
             title: res.paper.title || res.citation?.title || `PMID ${pmid}`,
             design: res.design,
             summary: evidenceSummary(res),
+            ...(res.error ? {} : resultCandidate(res)),
             primary: findPrimary(res.error ? [] : res.rows, (row) => !row.verdict.flagged, res.error ? '' : verificationCorpus(res)),
             verified: res.error
               ? []

@@ -18,6 +18,12 @@ import { checkFindings, SNIPPET_CHARS } from './check.js'
 import { repairNumberFree, allowedNumbers, allowedTimepoints, allowedCiLevels, numbersGrounded, CI_LEVEL_RE } from './numberFree.js'
 import { tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary } from './primaryResult.js'
 import { journalPreferenceText } from './journals.js'
+import { bindFindingNumbers } from './numberBinding.js'
+import { PROSE_GROUNDING } from './proseGrounding.js'
+import { buildObligations, primaryFromLocatedQuotes } from './obligations.js'
+import { checkSummary, evaluateSummaryCheck, rewriteInstructions, SUMMARY_CHECK_VERSION } from './summaryCheck.js'
+import { assertProseRequest, proseRequestBudget } from './evidencePassages.js'
+import { summaryApprovalFor, HANDOFF_VERSION } from './resultHandoff.js'
 
 export const TRIAGE_SCHEMA = {
   type: 'object',
@@ -159,7 +165,12 @@ export function sanitizeRanking(rk, verified, { primary = null } = {}) {
   }
   const finding = dedupeEstimateLabels(String(rk?.finding ?? '').trim())
   const ciLevels = allowedCiLevels(verified)
-  const grounded = numbersGrounded(finding, allowed, timepoints, ciLevels) &&
+  // Every digit must be verified (numbersGrounded) AND bound to the result it belongs to
+  // (numberBinding.js): a verified number attached to the other endpoint, a reversed
+  // comparator, a substituted analysis or a borrowed interval falls back like an
+  // unverified digit (2026-10-17 numeric-guard probes).
+  const binding = bindFindingNumbers(finding, verified)
+  const grounded = numbersGrounded(finding, allowed, timepoints, ciLevels) && binding.ok &&
     !headlinesNonPrimary({ finding, verified, primary })
   return {
     id: rk?.id,
@@ -168,8 +179,30 @@ export function sanitizeRanking(rk, verified, { primary = null } = {}) {
     finding: grounded ? finding : cleanFallback(rk?.finding_plain),
     designCaution: numberFree(rk?.design_caution),
     relevance: numberFree(rk?.relevance),
+    ...(binding.ok ? {} : { bindingViolations: binding.violations }),
   }
 }
+
+// Strict identity check for a writer response: every requested id exactly once, nothing
+// else (round-3 checkpoint 95857d9). Only the obligation path uses it; the production
+// path keeps its tolerant mapping.
+export function validatedRankings(result, ids) {
+  const expected = new Set(ids)
+  if (expected.size !== ids.length) throw new Error('Duplicate requested paper IDs; no ranking can be assigned safely.')
+  const raw = result?.rankings
+  const rows = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? Object.entries(raw).map(([id, row]) => ({ ...row, id })) : []
+  const seen = new Set()
+  for (const row of rows) {
+    const id = String(row?.id)
+    if (!expected.has(id) || seen.has(id)) throw new Error(`Invalid ranking identity: unexpected or duplicate paper ID ${id}.`)
+    seen.add(id)
+  }
+  if (seen.size !== expected.size) throw new Error('Incomplete ranking identities: one result is required for every requested paper.')
+  return rows
+}
+// Writer batches on the obligation path (complete passages per paper): at most this many
+// papers per request, independently of the token budget check.
+export const RANKING_BATCH_LIMIT = 3
 
 // Output budget for one ranking call. Every paper gets four prose fields plus JSON
 // framing (~500 tokens in practice); a fixed 8192 could truncate a combined re-rank of
@@ -213,12 +246,19 @@ export async function triage({
   rubric = '',
   candidates,
   model = MODELS.triage,
+  checkModel = MODELS.fast,
   maxTokens,
+  onTrace,
 }) {
   // Nothing new to rank: do not send a model call. An empty finish, an empty rank phase,
   // and a caller that already filtered the list all land here.
   if (!Array.isArray(candidates) || candidates.length === 0) return []
   if (candidates.length > PILOT_DIGEST_LIMIT) throw new Error('Pilot digests are limited to 20 papers; no ranking request was sent.')
+  // Candidates carrying a result handoff (resultHandoff.js resultCandidate) take the
+  // obligation path below; everything else keeps the production path unchanged.
+  if (candidates.some((c) => c?.resultHandoff)) {
+    return triageWithObligations({ northStars, projects, journalPreferences, rubric, candidates, model, checkModel, maxTokens, onTrace })
+  }
   const stars = northStars.length ? northStars.join(', ') : '(none set)'
   const projs = projects.length ? projects.join(', ') : '(none set)'
   const content =
@@ -322,4 +362,252 @@ export async function triage({
     check: scope.get(String(rk.id)) || checks.get(String(rk.id)) || fallback,
     cautionCheck: checks.get(`design-caution:${rk.id}`) || fallback,
   }))
+}
+
+
+// ---------------------------------------------------------------------------------------
+// The OBLIGATION path (2026-10-17 candidate). Same writer contract as production plus the
+// shared fidelity rules and a per-paper list of located coverage obligations; the number
+// guard plus claim binding; then the structured checker (summaryCheck.js) with
+// deterministic consequences:
+//   fail -> ONE targeted rewrite naming the failures -> check again;
+//   still failing with a contradiction, overstatement or wrong number binding -> the claim
+//     is removed (summaryKind 'unavailable');
+//   still failing only by material omission -> a clearly labelled verbatim source excerpt
+//     replaces the prose (summaryKind 'excerpt');
+//   pass -> summaryKind 'validated'.
+// A misleading sentence is never kept with a quote appended beneath it, and a checker that
+// cannot answer never approves: the paper shows the unavailable-summary notice.
+// ---------------------------------------------------------------------------------------
+
+export const SUMMARY_PATH_VERSION = 'summary-path-v1'
+export const UNAVAILABLE_SUMMARY_REASON = 'No summary is available for this paper: the written summary did not pass its source checks and no verbatim excerpt could replace it. Read the paper\'s results directly.'
+export const EXCERPT_LABEL = 'Source excerpt (verbatim):'
+const EXCERPT_MAX_CHARS = 1400
+
+function obligationPrompt(obligations) {
+  if (!obligations.length) return 'Coverage obligations: (none located in the source)\n'
+  return 'Coverage obligations — address EACH in the finding, or omit it only when its absence cannot change how a clinician reads the finding (a null or nonsignificant result, a certainty grade, a conflicting weighted or sensitivity analysis, and intervention timing are never immaterial):\n' +
+    obligations.map((o) => `  [${o.id}] (${o.kind}) "${o.quote.replace(/\s+/g, ' ')}"`).join('\n') + '\n'
+}
+
+function primaryPrompt(primary) {
+  if (primary?.state === 'identified') {
+    const names = primary.names || [primary.name]
+    return `Primary result (established by a located endpoint-role quote${primary.basis === 'located-endpoint-role' ? '' : ' or declaration'}): ${names.join('; ')}${primary.verified ? ' (verified; listed below)' : ' (NOT verified by the app — describe it in words from the evidence, never copy numbers for it)'}\n`
+  }
+  if (primary?.state === 'no-results') return ''
+  return 'Primary result: NOT established by any located quote — do not call any listed result the primary result; describe the results for what they are.\n'
+}
+
+function paperBlock(c, { verified, obligations, primary }) {
+  const facts = verified.length
+    ? verified.map((v) => {
+        const tps = [...new Set(allowedTimepoints([v]))]
+        const isPrimary = primary?.state === 'identified' && (primary.names || [primary.name]).includes(v.name)
+        const tags = describeTags(tagResult({ name: v.name, source_quote: v.quote }), { isPrimary })
+        return `  - ${v.name}: ${v.value}${tps.length ? ` (timepoint as printed: ${tps.join(', ')})` : ''}${tags ? ` ${tags}` : ''}`
+      }).join('\n')
+    : '  (no verified values)'
+  const steering = (Array.isArray(c.topicSteering) ? c.topicSteering : [])
+    .map((row) => `${row.topic || 'Unnamed topic'} → ${(row.northStars || []).length ? row.northStars.join(', ') : '(unmapped)'}`)
+    .join('; ')
+  return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\nSearch steering: ${steering || '(not available)'}\n${c.evidence || ''}\n${obligationPrompt(obligations)}${primaryPrompt(primary)}Verified results:\n${facts}`
+}
+
+function buildObligationSystem(rubric) {
+  return buildSystem(rubric) + '\n\n' + PROSE_GROUNDING
+}
+
+// A verified entry's record (by exact name and quote), for the checker's binding context.
+function recordFor(handoff, v) {
+  return (handoff?.records || []).find((r) => r.quantity?.name === v.name && r.quantity?.source_quote === v.quote) || null
+}
+function bindingContext(record) {
+  if (!record) return null
+  const out = {}
+  for (const key of ['outcome', 'intervention', 'comparator', 'analysis', 'interventionTiming', 'outcomeTimepoint', 'endpointRole', 'analysisRole', 'effect']) {
+    const f = record.fields?.[key]
+    if (f?.status === 'located') out[key] = f.text
+  }
+  return out
+}
+
+// Verbatim excerpt fallback for a summary that failed only by material omission: the
+// material obligations the checker named, plus the primary result's own quote, in source
+// order, whole quotes only.
+export function buildExcerpt({ handoff, obligations, failures, primary }) {
+  const source = handoff?.source || { text: '', tables: '' }
+  const spans = []
+  const seen = new Set()
+  const add = (corpus, start, end, kind) => {
+    if (!(end > start)) return
+    const key = `${corpus}:${start}:${end}`
+    if (seen.has(key)) return
+    seen.add(key)
+    spans.push({ corpus, start, end, kind, text: source[corpus].slice(start, end).replace(/\s+/g, ' ').trim() })
+  }
+  for (const index of primary?.state === 'identified' ? primary.indexes || [] : []) {
+    const record = (handoff.records || []).find((r) => r.rowIndex === index)
+    if (record?.anchor?.corpus) add(record.anchor.corpus, record.anchor.start, record.anchor.end, 'primary-result')
+  }
+  for (const f of failures || []) {
+    if (f.check !== 'obligation' || f.kind !== 'absent-material') continue
+    const o = obligations.find((x) => x.id === f.id)
+    if (o) add(o.corpus, o.start, o.end, o.kind)
+  }
+  spans.sort((a, b) => (a.corpus === b.corpus ? a.start - b.start : a.corpus < b.corpus ? -1 : 1))
+  const kept = []
+  let used = 0
+  for (const span of spans) {
+    if (used + span.text.length + 4 > EXCERPT_MAX_CHARS) continue
+    kept.push(span)
+    used += span.text.length + 4
+  }
+  if (!kept.length) return { text: '', spans: [] }
+  return { text: `${EXCERPT_LABEL} ${kept.map((s) => `“${s.text}”`).join(' … ')}`, spans: kept }
+}
+
+async function writeBatch({ system, header, blocks, ids, model, maxTokens, trace, stage }) {
+  const content = header + blocks.join('\n\n')
+  const outputTokens = maxTokens ?? triageMaxTokens(ids.length)
+  assertProseRequest(system, content, TRIAGE_SCHEMA, outputTokens)
+  const result = await extractStructured({ model, system, content, schema: TRIAGE_SCHEMA, maxTokens: outputTokens, thinking: { type: 'disabled' }, purpose: stage })
+  trace({ stage, requestedIds: ids, system, content, result })
+  return validatedRankings(result, ids)
+}
+
+async function triageWithObligations({ northStars, projects, journalPreferences, rubric, candidates, model, checkModel, maxTokens, onTrace }) {
+  const trace = (event) => { try { onTrace?.(event) } catch { /* diagnostics never change behaviour */ } }
+  const ids = candidates.map((c) => String(c.id))
+  if (new Set(ids).size !== ids.length) throw new Error('Duplicate requested paper IDs; no request was sent.')
+  const stars = northStars.length ? northStars.join(', ') : '(none set)'
+  const projs = projects.length ? projects.join(', ') : '(none set)'
+  const header = `North stars: ${stars}\nActive projects: ${projs}\n` +
+    `Journal preferences (structured signal; they do not override hard exclusions):\n${journalPreferenceText(journalPreferences)}\n\nCandidates:\n\n`
+  const system = buildObligationSystem(rubric)
+
+  // Per-paper preparation: handoff, complete evidence, located obligations, primary status.
+  const prepared = candidates.map((c) => {
+    const handoff = c.resultHandoff || null
+    // Complete passages only: the production clipped window is never a substitute here.
+    const evidence = String(c.evidence || '')
+    const verified = (c.verified || []).map((v) => ({ name: v.name, value: v.value, quote: v.quote }))
+    const { obligations, unlocated, key: obligationsKey } = handoff ? buildObligations(handoff, { abstract: c.abstract || '' }) : { obligations: [], unlocated: [], key: '[]' }
+    const primary = handoff ? primaryFromLocatedQuotes(handoff, { fallback: c.primary || null }) : (c.primary || null)
+    const blocked = !handoff ? 'No result handoff for this paper.' : !handoff.complete ? 'Complete source unavailable or over the evidence budget.' : !evidence.trim() ? 'Complete evidence passages unavailable.' : ''
+    return { c, id: String(c.id), handoff, evidence, verified, obligations, unlocated, obligationsKey, primary, blocked }
+  })
+  trace({ stage: 'prepared', papers: prepared.map((p) => ({ id: p.id, blocked: p.blocked, obligations: p.obligations, unlocated: p.unlocated, primary: p.primary, audit: p.handoff?.audit, verified: p.verified.length })) })
+
+  const unavailable = (p, reason, extra = {}) => ({
+    id: p.id, score: null, tier: null, finding: '', designCaution: '', relevance: '',
+    summaryKind: 'unavailable', summaryReason: reason, summaryPath: SUMMARY_PATH_VERSION,
+    check: { verdict: 'refuted', reason }, cautionCheck: { verdict: 'refuted', reason }, ...extra,
+  })
+  const out = new Map(prepared.filter((p) => p.blocked).map((p) => [p.id, unavailable(p, p.blocked)]))
+  const writable = prepared.filter((p) => !p.blocked)
+
+  // Writer, in bounded batches of complete passages; a batch that does not fit the
+  // conservative budget is split at paper boundaries.
+  const rawById = new Map()
+  const batches = []
+  for (let i = 0; i < writable.length; i += RANKING_BATCH_LIMIT) batches.push(writable.slice(i, i + RANKING_BATCH_LIMIT))
+  const write = async (group) => {
+    const blocks = group.map((p) => paperBlock(p.c, p))
+    const content = header + blocks.join('\n\n')
+    const outputTokens = maxTokens ?? triageMaxTokens(group.length)
+    if (!proseRequestBudget(system, content, TRIAGE_SCHEMA, outputTokens).fits && group.length > 1) {
+      const middle = Math.ceil(group.length / 2)
+      await write(group.slice(0, middle))
+      await write(group.slice(middle))
+      return
+    }
+    const rankings = await writeBatch({ system, header, blocks, ids: group.map((p) => p.id), model, maxTokens, trace, stage: 'writer' })
+    for (const rk of rankings) rawById.set(String(rk.id), rk)
+  }
+  for (const group of batches) await write(group)
+
+  const sanitizeFor = (p, rk) => sanitizeRanking(rk, p.verified, { primary: p.primary?.state === 'identified' ? p.primary : null })
+
+  // Per paper: sanitize, deterministic scope, structured check; one rewrite; consequences.
+  for (const p of writable) {
+    const raw = rawById.get(p.id)
+    let attempt = 0
+    let rk = raw
+    let sanitized = sanitizeFor(p, rk)
+    let evaluation = null
+    let checkRecord = null
+    let failures = []
+    const audit = async () => {
+      failures = []
+      if (!sanitized.finding) {
+        failures.push({ check: 'number-guard', kind: 'wrong-binding', quote: '', reason: sanitized.bindingViolations ? sanitized.bindingViolations.map((v) => `${v.kind}: ${v.reason}`).join(' ') : 'The finding carried an unverified number and the number-free fallback was unusable.' })
+        return { verdict: 'fail', blocking: failures, failures, categories: { wrongBinding: true, contradiction: false, overstatement: false, materialOmission: false }, caution: { supported: false, reason: 'Finding unusable; caution not checked.' } }
+      }
+      const scope = primaryScopeVerdict({ finding: sanitized.finding, verified: p.verified, primary: p.primary })
+      if (scope) {
+        failures.push({ check: 'primary-scope', kind: 'contradiction', quote: p.primary?.quote || '', reason: scope.reason })
+        return { verdict: 'fail', blocking: failures, failures, categories: { wrongBinding: false, contradiction: true, overstatement: false, materialOmission: false }, caution: { supported: false, reason: 'Finding refuted; caution not checked.' } }
+      }
+      const binding = bindFindingNumbers(sanitized.finding, p.verified)
+      const bindings = binding.bindings.map((b) => ({ ...b, context: b.rowIndex != null ? bindingContext(recordFor(p.handoff, p.verified[b.rowIndex])) : null }))
+      const checked = await checkSummary({
+        paperId: p.id, title: p.c.title, design: p.c.design, evidence: p.evidence, finding: sanitized.finding,
+        designCaution: sanitized.designCaution, obligations: p.obligations, bindings, verified: p.verified, primary: p.primary,
+      }, { model: checkModel })
+      checkRecord = checked
+      const ev = evaluateSummaryCheck(checked.response, { obligations: p.obligations, bindings })
+      failures = ev.failures
+      trace({ stage: 'check', id: p.id, attempt, model: checkModel, content: checked.content, response: checked.response, evaluation: ev, finding: sanitized.finding, designCaution: sanitized.designCaution })
+      return ev
+    }
+    try {
+      evaluation = await audit()
+      if (evaluation.verdict === 'fail') {
+        // ONE targeted rewrite naming every blocking failure, with the same evidence.
+        attempt = 1
+        const rewriteSystem = system + '\n\n' + rewriteInstructions(evaluation)
+        const rankings = await writeBatch({ system: rewriteSystem, header, blocks: [paperBlock(p.c, p)], ids: [p.id], model, maxTokens, trace, stage: 'rewrite' })
+        rk = rankings[0]
+        sanitized = sanitizeFor(p, rk)
+        evaluation = await audit()
+      }
+    } catch (error) {
+      const reason = `Summary check unavailable: ${String(error?.message || error).slice(0, 200)}`
+      trace({ stage: 'check_failed', id: p.id, attempt, reason })
+      out.set(p.id, unavailable(p, reason, { score: rk?.score ?? null, tier: rk?.tier ?? null, relevance: numberFree(rk?.relevance) }))
+      continue
+    }
+    const base = {
+      id: p.id, score: rk?.score ?? null, tier: rk?.tier ?? null, relevance: sanitized.relevance,
+      summaryPath: SUMMARY_PATH_VERSION, rewriteUsed: attempt > 0,
+      summaryChecks: evaluation.failures, checkerModel: checkRecord?.model || checkModel, checkVersion: SUMMARY_CHECK_VERSION,
+    }
+    const caution = evaluation.caution?.supported && sanitized.designCaution ? sanitized.designCaution : ''
+    const cautionCheck = caution
+      ? { verdict: 'supported', reason: evaluation.caution.reason || 'Design caution checked against the complete evidence.' }
+      : { verdict: 'refuted', reason: evaluation.caution?.reason || 'Caution not approved.' }
+    let take
+    if (evaluation.verdict === 'pass') {
+      take = { ...base, finding: sanitized.finding, summaryKind: 'validated', summaryReason: 'Finding passed every source check.', designCaution: caution, cautionCheck,
+        check: { verdict: 'supported', reason: `Checked against the complete evidence: ${p.obligations.length} obligation${p.obligations.length === 1 ? '' : 's'}, number bindings, equivalence, causal and certainty language, direction and comparator.` } }
+    } else if (evaluation.categories.contradiction || evaluation.categories.overstatement || evaluation.categories.wrongBinding) {
+      const named = evaluation.blocking.map((f) => `${f.kind}${f.reason ? `: ${f.reason}` : ''}`).join(' | ')
+      take = { ...base, finding: '', summaryKind: 'unavailable', summaryReason: UNAVAILABLE_SUMMARY_REASON, designCaution: caution, cautionCheck,
+        check: { verdict: 'refuted', reason: `Withheld after one rewrite — ${named}` } }
+    } else {
+      const excerpt = buildExcerpt({ handoff: p.handoff, obligations: p.obligations, failures: evaluation.blocking, primary: p.primary })
+      take = excerpt.text
+        ? { ...base, finding: excerpt.text, summaryKind: 'excerpt', excerptSpans: excerpt.spans, summaryReason: 'The written summary omitted material source qualifications after one rewrite; verbatim source passages are shown instead.', designCaution: caution, cautionCheck,
+          check: { verdict: 'excerpt', reason: `Verbatim source passages replace the written summary, which omitted: ${evaluation.blocking.map((f) => f.id || f.kind).join(', ')}.` } }
+        : { ...base, finding: '', summaryKind: 'unavailable', summaryReason: UNAVAILABLE_SUMMARY_REASON, designCaution: caution, cautionCheck,
+          check: { verdict: 'refuted', reason: 'Withheld after one rewrite: material omissions and no locatable excerpt.' } }
+    }
+    take.summaryApproval = summaryApprovalFor(p.handoff, take, { checkerModel: checkModel, writerModel: model, obligationsKey: p.obligationsKey })
+    take.resultContract = HANDOFF_VERSION
+    out.set(p.id, take)
+    trace({ stage: 'final', id: p.id, take })
+  }
+  return ids.map((id) => out.get(id))
 }

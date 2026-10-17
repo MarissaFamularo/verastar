@@ -101,10 +101,10 @@ describe('shared cache trust', () => {
   const header = (tier = 'full_text', version = '2026-10-04.sonnet-5-5-v2') => ({ 'x-verastar-cache': `12345|${version}|${HASH}|${tier}` })
   const PROV = { writer: 'digest-run', bundle_source_sha256: 'b'.repeat(64) }
   it('a trusted cache hit returns the stored extraction with no reservation and no model call', async () => {
-    const h = harness({ admin: fakeAdmin({ cacheRow: { extraction: { quantities: [1] }, model: 'claude-sonnet-5-5', source_hash: HASH, provenance: PROV } }) })
+    const h = harness({ admin: fakeAdmin({ cacheRow: { extraction: { format: 'extraction-wire-v2', value: { study_id: '12345', design: 'other', quantities: [], result_contexts: [] } }, model: 'claude-sonnet-5-5', source_hash: HASH, provenance: PROV } }) })
     const res = await handleModelRequest(request(goodBody, header()), h.deps)
     expect(res.headers.get('x-verastar-cache')).toBe('hit')
-    expect(JSON.parse((await res.json()).content[0].text)).toEqual({ quantities: [1] })
+    expect(JSON.parse((await res.json()).content[0].text)).toEqual({ study_id: '12345', design: 'other', quantities: [], result_contexts: [] })
     expect(h.ledger.calls).toEqual([])
     expect(h.provider.sent).toHaveLength(0)
     expect(h.admin.ops.filter((o) => o.op === 'read').map((o) => o.table)).toContain('evidence_cache_trusted')
@@ -114,7 +114,7 @@ describe('shared cache trust', () => {
     ['no provenance (a legacy-shaped row)', undefined],
     ['provenance from another writer', { writer: 'browser', bundle_source_sha256: 'b'.repeat(64) }],
   ])('a row with %s is a miss: the model is called', async (_label, provenance) => {
-    const h = harness({ admin: fakeAdmin({ cacheRow: { extraction: { quantities: [99] }, model: 'claude-sonnet-5-5', source_hash: HASH, provenance } }) })
+    const h = harness({ admin: fakeAdmin({ cacheRow: { extraction: { format: 'extraction-wire-v2', value: { study_id: '12345', design: 'other', quantities: [], result_contexts: [] } }, model: 'claude-sonnet-5-5', source_hash: HASH, provenance } }) })
     const res = await handleModelRequest(request(goodBody, header()), h.deps)
     expect(res.headers.get('x-verastar-cache')).toBe('miss')
     expect(h.provider.sent).toHaveLength(1)

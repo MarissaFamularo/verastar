@@ -1,3 +1,4 @@
+import { resultCandidate, summaryFields } from './resultHandoff.js'
 import { digestCount, fitDigestPapers, PILOT_DIGEST_LIMIT, LEGACY_DIGEST_LIMIT_NOTE } from './digestLimit.js'
 // pipeline/dailyDigest.js — the daily digest as a headless run.
 //
@@ -75,6 +76,7 @@ export function takesById(rankings) {
       relevance: rk.relevance,
       check: rk.check,
       cautionCheck: rk.cautionCheck,
+      ...summaryFields(rk),
     }
   }
   return byId
@@ -239,6 +241,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
             topics: r.paper.topics,
             topicSteering: r.paper.topicSteering,
             summary: evidenceSummary(r),
+            ...resultCandidate(r),
             primary: findPrimary(r.rows, (row) => isRelationshipValidated(row.verdict), verificationCorpus(r)),
             verified: r.rows.filter((row) => isRelationshipValidated(row.verdict)).map((row) => ({ name: row.quantity.name, value: fmtNum(row.quantity), quote: row.quantity.source_quote })),
           })),

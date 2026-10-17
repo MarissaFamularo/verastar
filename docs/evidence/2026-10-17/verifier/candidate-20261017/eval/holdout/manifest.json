@@ -1,0 +1,1084 @@
+{
+ "harnessVersion": "2026-10-17.summary-eval-v1",
+ "frozenAt": "2026-10-17T04:50:10.284Z",
+ "days": 540,
+ "topics": [
+  "chronic limb-threatening ischemia",
+  "peripheral artery disease revascularization",
+  "diabetic foot ulcer amputation",
+  "abdominal aortic aneurysm repair",
+  "carotid artery stenosis endarterectomy stenting",
+  "venous thromboembolism anticoagulation",
+  "vascular surgery randomized trial",
+  "dialysis access arteriovenous fistula",
+  "artificial intelligence clinical prediction surgery"
+ ],
+ "count": 20,
+ "requested": 20,
+ "usedExcluded": 33,
+ "papers": [
+  {
+   "pmid": "42878421",
+   "pmcid": "PMC13668020",
+   "topic": "diabetic foot ulcer amputation",
+   "title": "Impact of diabetic foot ulcers on mortality risk: Lessons from a 35-year Brazilian cohort followed at an association of people living with diabetes.",
+   "journal": "Arch Endocrinol Metab",
+   "year": "2026",
+   "sourceSha256": "6668ed952e01739cb5204aada54f17cc9a5eb7c62ff0d62efcf4bff6a382c70e",
+   "extractionInputSha256": "243110d4afb9f981e08cc08369a8d0a5cce317ec1f44e8fba0db3535ca8ccdc6",
+   "chars": 24793,
+   "abstractChars": 1669
+  },
+  {
+   "pmid": "42866545",
+   "pmcid": "PMC13656915",
+   "topic": "dialysis access arteriovenous fistula",
+   "title": "Coronary artery calcium burden and metabolic indices in relation to arteriovenous fistula functionality and post-functionality failure.",
+   "journal": "Front Surg",
+   "year": "2026",
+   "sourceSha256": "17faf0dc82c0e63b63dc1c586c128997f2b1b9f97e4c886f12732dc6a7c56183",
+   "extractionInputSha256": "084180a7ea6ec69d0464c216526b28ab89eeb80efb17ac0058a8c557bc48b48a",
+   "chars": 48562,
+   "abstractChars": 2348
+  },
+  {
+   "pmid": "42859795",
+   "pmcid": "PMC13653530",
+   "topic": "dialysis access arteriovenous fistula",
+   "title": "Doppler Ultrasound-Derived Blood Flow Parameters Associated with Significant Arteriovenous Fistula Stenosis in a Large Vietnamese Hemodialysis Cohort.",
+   "journal": "Vasc Health Risk Manag",
+   "year": "2026",
+   "sourceSha256": "28a98a4e2378e920a88c5b755b0ba1985ada28b5aba54c99338eda313190900d",
+   "extractionInputSha256": "76a12f79947a9c1fa07f52c5ce6f0bc47ccc0167ff791c94269bc8bf4856254d",
+   "chars": 25160,
+   "abstractChars": 2055
+  },
+  {
+   "pmid": "42876520",
+   "pmcid": "PMC13661405",
+   "topic": "peripheral artery disease revascularization",
+   "title": "Sarcopenia and outcomes after revascularization for peripheral arterial disease: a scoping review.",
+   "journal": "Front Med (Lausanne)",
+   "year": "2026",
+   "sourceSha256": "3d87608c4354b02ac22e0884d714759c95f529413bb2d376b6dda0a7365bb5d5",
+   "extractionInputSha256": "16587f4489d577ea202243f996f66884745632347805321807d41e7e4ac29089",
+   "chars": 26618,
+   "abstractChars": 2202
+  },
+  {
+   "pmid": "42866392",
+   "pmcid": "PMC13657688",
+   "topic": "chronic limb-threatening ischemia",
+   "title": "Impact of Limb Severity on the Wall Structure of the Great Saphenous Vein and Its Involvement in Vein Graft Patency.",
+   "journal": "Ann Vasc Dis",
+   "year": "2026",
+   "sourceSha256": "9523dceb846cf724a23e81c222a76d31221866693a4f66703d6c7f75b3e6f9a8",
+   "extractionInputSha256": "ad231128543a5ce1b1b2b4e1481b802b194d8ef828da9c3eaf3d7e3f61e24a03",
+   "chars": 28583,
+   "abstractChars": 1362
+  },
+  {
+   "pmid": "42835834",
+   "pmcid": "PMC13635851",
+   "topic": "dialysis access arteriovenous fistula",
+   "title": "Endovascular management of brachiocephalic vein stenosis and occlusion in hemodialysis patients: Technical outcomes and 6-month dialysis access patency.",
+   "journal": "J Vasc Surg Cases Innov Tech",
+   "year": "2026",
+   "sourceSha256": "a948459e2ca7cf8649154ee393cd4cdf7d78812884a0f5ee1803f0c9fb5707a5",
+   "extractionInputSha256": "7ab6c753034007709d5ffa14dcd7c306197a282244ac9b48aee2e0c7ec1e5543",
+   "chars": 19191,
+   "abstractChars": 2268
+  },
+  {
+   "pmid": "42876773",
+   "pmcid": "PMC13661453",
+   "topic": "vascular surgery randomized trial",
+   "title": "Comparison of angioplasty, stents and conventional medical therapy for symptomatic intracranial atherosclerosis: a network meta-analysis.",
+   "journal": "Front Neurol",
+   "year": "2026",
+   "sourceSha256": "e1f9d5bd795f977f218a6bf85c73563a7f3d1a0ed77ec45098bf3c9d481f75cd",
+   "extractionInputSha256": "0867f54e453f24d674d705ceaa90c9ddb8fceea783d33362ad98685a5c23a547",
+   "chars": 36834,
+   "abstractChars": 2153
+  },
+  {
+   "pmid": "42864772",
+   "pmcid": "PMC13658843",
+   "topic": "diabetic foot ulcer amputation",
+   "title": "Gait and Plantar Pressure Analysis in Charcot Neuroarthropathy: A Clinic-Based Biomechanical Study.",
+   "journal": "J Foot Ankle Res",
+   "year": "2026",
+   "sourceSha256": "13f4801395eaf841657bdf704dd8089e5ec2b7886a55f4c1d918cc7e4126e742",
+   "extractionInputSha256": "db15efa5b8cd13b127088f61c5596b34e231ed4a12259052ae6a7a61b880046a",
+   "chars": 36194,
+   "abstractChars": 2334
+  },
+  {
+   "pmid": "42871901",
+   "pmcid": "PMC13660730",
+   "topic": "venous thromboembolism anticoagulation",
+   "title": "Impact of Perioperative Buyang Huanwu-Based Traditional Chinese Medicine Intervention on Postoperative Venous Thromboembolism, Coagulation Markers and Systemic Inflammation: A Propensity Score-Weighted Retrospective Cohort Study.",
+   "journal": "J Inflamm Res",
+   "year": "2026",
+   "sourceSha256": "97c22adc74d6b247a8f000ce092fc66ed277ba671e04dbfdf92802d75b2f07e0",
+   "extractionInputSha256": "50c6ffdb149c6ad49a0c60d5867ff90c2f0d1d2589d3ace8d5332beef68cac8e",
+   "chars": 50756,
+   "abstractChars": 3805
+  },
+  {
+   "pmid": "42846394",
+   "pmcid": "PMC13642701",
+   "topic": "peripheral artery disease revascularization",
+   "title": "Age-dependent associations of peripheral immune-inflammatory indices with cerebrovascular remodeling after revascularization in ischemic moyamoya disease.",
+   "journal": "Front Immunol",
+   "year": "2026",
+   "sourceSha256": "1e4fb9fbc2f5135516921399d5fdfc5ce4949c53a063895b9c470da416b68f18",
+   "extractionInputSha256": "69d4b1911630f09f0f22d90765fc96c94c347287b3fab48b8c5c0dda45948122",
+   "chars": 34384,
+   "abstractChars": 2576
+  },
+  {
+   "pmid": "42739554",
+   "pmcid": "PMC13566745",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "title": "Determinants of Prolonged Postoperative Length of Stay After Carotid Revascularization: A Single-Center Registry Analysis from Kazakhstan.",
+   "journal": "J Clin Med",
+   "year": "2026",
+   "sourceSha256": "bea8f7c8fd907e846a9a563629c2c2cf1a65b2c830375425265af66938b057b7",
+   "extractionInputSha256": "ad36fb21512d75185f1e45a4a91dbf2cd183a1067afae1f200e327452f36484e",
+   "chars": 24935,
+   "abstractChars": 2418
+  },
+  {
+   "pmid": "42862842",
+   "pmcid": "PMC13657312",
+   "topic": "diabetic foot ulcer amputation",
+   "title": "Texture-aware diffusion modelling for severity-conditioned synthetic progression-like visualization of diabetic foot ulcers from single images.",
+   "journal": "PLoS One",
+   "year": "2026",
+   "sourceSha256": "b204cfd24d82ad6e938dee12f8ff2532e45a709c6dd46c2df461d28f1781bdb6",
+   "extractionInputSha256": "1a2476537852b649481af8dc89ddd26e57038d46283d219ede78d569a208b1c5",
+   "chars": 114811,
+   "abstractChars": 2467
+  },
+  {
+   "pmid": "42871239",
+   "pmcid": "PMC13658856",
+   "topic": "vascular surgery randomized trial",
+   "title": "Evidence, strategies, and pathways for thrombectomy in medium vessel occlusion stroke: a systematic review.",
+   "journal": "Front Neurol",
+   "year": "2026",
+   "sourceSha256": "eccad3a57498f7bacc200791bf2c843880505804b78b047d70889425a8ba998d",
+   "extractionInputSha256": "01bcf500de8af9167dbaafdae499b2592973e318ef646a099afc924afe3b771c",
+   "chars": 98775,
+   "abstractChars": 2286
+  },
+  {
+   "pmid": "42810794",
+   "pmcid": "PMC13629999",
+   "topic": "dialysis access arteriovenous fistula",
+   "title": "Initial vascular access type and associated factors among incident haemodialysis patients: a multicentre retrospective observational study.",
+   "journal": "BMJ Open",
+   "year": "2026",
+   "sourceSha256": "cd29190494f661251962b8c314a87d93a8e77528299ef4241c357142afabf3e8",
+   "extractionInputSha256": "9bccbf04534ad120b8374a6dc487e80fd556c6a15979d16e99c3503e005f6ea9",
+   "chars": 22556,
+   "abstractChars": 1983
+  },
+  {
+   "pmid": "42794578",
+   "pmcid": "PMC13607795",
+   "topic": "dialysis access arteriovenous fistula",
+   "title": "Alterations of Gene Expression and Signaling Pathway Activity in Venous Smooth Muscle Cells After Uremic Serum Exposure.",
+   "journal": "Int J Mol Sci",
+   "year": "2026",
+   "sourceSha256": "7a9c4fa5a57dd898c5c9f115b476db240aff8943f0f899b4f8f33ee65484d7c6",
+   "extractionInputSha256": "ce8e96fce420f210b6248e33b999cd0c72db6be9bac0f2f6125c5ba1c296d12b",
+   "chars": 34618,
+   "abstractChars": 2225
+  },
+  {
+   "pmid": "42831067",
+   "pmcid": "PMC13634526",
+   "topic": "peripheral artery disease revascularization",
+   "title": "TET 2-mutant clonal hematopoiesis is associated with peripheral bypass graft occlusion: A multicenter retrospective cohort pilot study.",
+   "journal": "JVS Vasc Sci",
+   "year": "2026",
+   "sourceSha256": "bf2ed3fa447f14b044f9d03f979660d533ea9cad67f602592f378a7554d2b46b",
+   "extractionInputSha256": "2a23c126d2a7e00087fa752ff31c04bc5faf165d31d5b09ec828d7bfcc35b257",
+   "chars": 39865,
+   "abstractChars": 2587
+  },
+  {
+   "pmid": "42856782",
+   "pmcid": "PMC13650000",
+   "topic": "diabetic foot ulcer amputation",
+   "title": "Delayed standard care in diabetic foot ulcers: the roles of initial response pathways and non-professional health information.",
+   "journal": "Front Public Health",
+   "year": "2026",
+   "sourceSha256": "42829e0eb99f07730458d3e408ec496b06f2ae2a2e4d873c0255e62a2271529f",
+   "extractionInputSha256": "b84bb452167a505e71ec3e3b27f78bad82ca852bb8c88c2a5ffdb9a3bbb41ef7",
+   "chars": 53756,
+   "abstractChars": 2108
+  },
+  {
+   "pmid": "42775324",
+   "pmcid": "PMC13596841",
+   "topic": "dialysis access arteriovenous fistula",
+   "title": "Thyroid hormone sensitivity indices and hs-CRP as biochemical predictors of arteriovenous fistula maturation in diabetic nephropathy.",
+   "journal": "J Med Biochem",
+   "year": "2026",
+   "sourceSha256": "da55f81d19c81b28d58037721618fb0e2cf6fb93281c3095966dd3118da9027b",
+   "extractionInputSha256": "91c8bb492ed160812b9fc840df4ad7c9c6c568ed4228af7a12624b757eaf03bc",
+   "chars": 29070,
+   "abstractChars": 1772
+  },
+  {
+   "pmid": "42840081",
+   "pmcid": "PMC13659164",
+   "topic": "chronic limb-threatening ischemia",
+   "title": "Retrograde pedal access to facilitate intraluminal recanalization in complex infrainguinal chronic total occlusions.",
+   "journal": "Turk Gogus Kalp Damar Cerrahisi Derg",
+   "year": "2026",
+   "sourceSha256": "c5ac4239a9eeb22139a32af3a09dfc454098d9f283ae38fd7df2385e52fed09b",
+   "extractionInputSha256": "efec0ee5ff46dc99ac5f3c91cfb4c6e5428bd97b91c78a94642e38ddd6f76ecf",
+   "chars": 35720,
+   "abstractChars": 2155
+  },
+  {
+   "pmid": "42824761",
+   "pmcid": "PMC13629318",
+   "topic": "peripheral artery disease revascularization",
+   "title": "Poor glycemic control is independently associated with fibrinolysis shutdown in patients with peripheral artery disease.",
+   "journal": "JVS Vasc Sci",
+   "year": "2026",
+   "sourceSha256": "fb7c36f001ae2d5ac6fc7b1efc024f0f51cd08de644d9a1d658b62f4bdccbc8c",
+   "extractionInputSha256": "5875bc7f67d93a834197e745e023862922d67e371f752de2c8dc5c5aee9642c3",
+   "chars": 38291,
+   "abstractChars": 3770
+  }
+ ],
+ "considered": [
+  {
+   "pmid": "42887569",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42887735",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42886425",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42887645",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42887734",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42887290",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42886241",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42884289",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42886571",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42878127",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42887644",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42884498",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42887407",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42872293",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "publication type: Case Reports, Journal Article"
+  },
+  {
+   "pmid": "42885465",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42885780",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42876051",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42886228",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42874861",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42886844",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42878421",
+   "topic": "diabetic foot ulcer amputation",
+   "selected": true
+  },
+  {
+   "pmid": "42886133",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "publication type: Case Reports, Journal Article"
+  },
+  {
+   "pmid": "42833891",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42883774",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42885759",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42876049",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42886039",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42873349",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42886506",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "publication type: Letter"
+  },
+  {
+   "pmid": "42877575",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42885732",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42833588",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42881892",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42885718",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42866545",
+   "topic": "dialysis access arteriovenous fistula",
+   "selected": true
+  },
+  {
+   "pmid": "42885781",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42870417",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42882226",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42877535",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "publication type: Case Reports, Journal Article"
+  },
+  {
+   "pmid": "42874867",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42831341",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42881855",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42883781",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42864269",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42885249",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42869535",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "publication type: Letter"
+  },
+  {
+   "pmid": "42880660",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42875725",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42874855",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42831336",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "publication type: Journal Article, Review, English Abstract"
+  },
+  {
+   "pmid": "42881015",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42882155",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42859795",
+   "topic": "dialysis access arteriovenous fistula",
+   "selected": true
+  },
+  {
+   "pmid": "42882806",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42869178",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42876520",
+   "topic": "peripheral artery disease revascularization",
+   "selected": true
+  },
+  {
+   "pmid": "42875422",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "publication type: Letter"
+  },
+  {
+   "pmid": "42874792",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42806719",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42878554",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42881459",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42854017",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "publication type: Journal Article, Case Reports"
+  },
+  {
+   "pmid": "42882409",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42869176",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42875213",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42869965",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42873216",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42799807",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42876548",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42880395",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42852648",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42881863",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42866392",
+   "topic": "chronic limb-threatening ischemia",
+   "selected": true
+  },
+  {
+   "pmid": "42874868",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42869884",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42872579",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42780722",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "publication type: Case Reports, Journal Article"
+  },
+  {
+   "pmid": "42875307",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42879937",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42838482",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42881768",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42865128",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42872886",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42867960",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42872029",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "publication type: Case Reports, Journal Article"
+  },
+  {
+   "pmid": "42767435",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42875264",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42878725",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42837302",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42881708",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42857320",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "publication type: Case Reports, Journal Article"
+  },
+  {
+   "pmid": "42867592",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "publication type: Letter"
+  },
+  {
+   "pmid": "42867810",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42871548",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "publication type: Case Reports, Journal Article"
+  },
+  {
+   "pmid": "42754225",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42872752",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42878614",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42835834",
+   "topic": "dialysis access arteriovenous fistula",
+   "selected": true
+  },
+  {
+   "pmid": "42881472",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42855021",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42865619",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42867096",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42860936",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42747844",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42872004",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42876773",
+   "topic": "vascular surgery randomized trial",
+   "selected": true
+  },
+  {
+   "pmid": "42831141",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42881371",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42855020",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42862007",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42864772",
+   "topic": "diabetic foot ulcer amputation",
+   "selected": true
+  },
+  {
+   "pmid": "42851764",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42747834",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42871901",
+   "topic": "venous thromboembolism anticoagulation",
+   "selected": true
+  },
+  {
+   "pmid": "42875381",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42829231",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42881091",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42853290",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42846394",
+   "topic": "peripheral artery disease revascularization",
+   "selected": true
+  },
+  {
+   "pmid": "42863445",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42847200",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42739554",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "selected": true
+  },
+  {
+   "pmid": "42871704",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42873487",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42811660",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42880914",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42852953",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42838480",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42862842",
+   "topic": "diabetic foot ulcer amputation",
+   "selected": true
+  },
+  {
+   "pmid": "42847199",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42735963",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42871644",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "publication type: Case Reports, Journal Article"
+  },
+  {
+   "pmid": "42871239",
+   "topic": "vascular surgery randomized trial",
+   "selected": true
+  },
+  {
+   "pmid": "42811640",
+   "topic": "dialysis access arteriovenous fistula",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42880450",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42852883",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42838477",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42861119",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "publication type: Case Reports, Journal Article"
+  },
+  {
+   "pmid": "42842955",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "publication type: Published Erratum"
+  },
+  {
+   "pmid": "42735962",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "abstract has no Results section or too few numbers"
+  },
+  {
+   "pmid": "42868038",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42869337",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42810794",
+   "topic": "dialysis access arteriovenous fistula",
+   "selected": true
+  },
+  {
+   "pmid": "42880407",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Letter"
+  },
+  {
+   "pmid": "42842706",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42833583",
+   "topic": "peripheral artery disease revascularization",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42860699",
+   "topic": "diabetic foot ulcer amputation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42838505",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42732613",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "publication type: Journal Article, Review, English Abstract"
+  },
+  {
+   "pmid": "42866706",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42868963",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42794578",
+   "topic": "dialysis access arteriovenous fistula",
+   "selected": true
+  },
+  {
+   "pmid": "42879167",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "publication type: Journal Article, Review"
+  },
+  {
+   "pmid": "42841362",
+   "topic": "chronic limb-threatening ischemia",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42831067",
+   "topic": "peripheral artery disease revascularization",
+   "selected": true
+  },
+  {
+   "pmid": "42856782",
+   "topic": "diabetic foot ulcer amputation",
+   "selected": true
+  },
+  {
+   "pmid": "42838481",
+   "topic": "abdominal aortic aneurysm repair",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42732603",
+   "topic": "carotid artery stenosis endarterectomy stenting",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42862737",
+   "topic": "venous thromboembolism anticoagulation",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42868701",
+   "topic": "vascular surgery randomized trial",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42775324",
+   "topic": "dialysis access arteriovenous fistula",
+   "selected": true
+  },
+  {
+   "pmid": "42878658",
+   "topic": "artificial intelligence clinical prediction surgery",
+   "skipped": "no PMC open-access record"
+  },
+  {
+   "pmid": "42840081",
+   "topic": "chronic limb-threatening ischemia",
+   "selected": true
+  },
+  {
+   "pmid": "42824761",
+   "topic": "peripheral artery disease revascularization",
+   "selected": true
+  }
+ ],
+ "authorization": "holdout-run:eedb8f954655"
+}

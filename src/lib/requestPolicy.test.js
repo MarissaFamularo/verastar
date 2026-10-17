@@ -35,7 +35,7 @@ afterEach(() => configureServerClient({}))
 
 describe('the app\'s real requests are admitted', () => {
   it('extraction (Sonnet 5.5, between_tools thinking, structured output)', async () => {
-    const { client, bodies } = capturingClient('{"study_id":"s","design":"rct","quantities":[]}')
+    const { client, bodies } = capturingClient('{"study_id":"s","design":"RCT","quantities":[],"result_contexts":[]}')
     configureServerClient({ client })
     await extractQuantities({ studyId: 's', sourceText: 'Mortality was 12% vs 15% (HR 0.80, 95% CI 0.70–0.91).' })
     expect(bodies).toHaveLength(1)
@@ -46,7 +46,7 @@ describe('the app\'s real requests are admitted', () => {
     expect(r.forward).toEqual(bodies[0])
   })
   it('extraction at the retry output ceiling', async () => {
-    const { client, bodies } = capturingClient('{"study_id":"s","design":"rct","quantities":[]}')
+    const { client, bodies } = capturingClient('{"study_id":"s","design":"RCT","quantities":[],"result_contexts":[]}')
     configureServerClient({ client })
     await extractQuantities({ studyId: 's', sourceText: 'x', maxTokens: EXTRACTION_RETRY_MAX_TOKENS })
     expect(checkPaidRequest(bodies[0]).ok).toBe(true)

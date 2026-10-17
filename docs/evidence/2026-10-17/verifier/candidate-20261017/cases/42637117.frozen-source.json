@@ -1,0 +1,21 @@
+{
+ "provenance": {
+  "artifact": "docs/evidence/2026-10-17/verifier/round3-95857d9/selected-output-source-checks.md",
+  "section": "PMID 42637117 — Complete source snapshot",
+  "note": "Abstract-only source frozen in round 3 (checkpoint 95857d9). No extraction or result contexts were archived for this paper; the development evaluation must re-run extraction from this frozen text (a paid call) before the summary stage."
+ },
+ "paper": {
+  "id": "42637117",
+  "pmid": "42637117",
+  "title": "Outcomes After Intervention in Radiation-Induced Carotid Artery Stenosis: A Systematic Review and Meta-Analysis."
+ },
+ "source": {
+  "hasBody": false,
+  "text": "Outcomes After Intervention in Radiation-Induced Carotid Artery Stenosis: A \nSystematic Review and Meta-Analysis.\n\nBACKGROUND: To assess clinical outcomes after carotid endarterectomy (CEA), \ntransfemoral carotid artery stenting (CAS), and transcarotid artery \nrevascularization in patients with radiation-induced carotid artery stenosis \n(RICS) utilizing a systematic review and meta-analysis.\nMETHODS: A systematic review and meta-analysis of the literature was performed. \nWe focused on 30-day and long-term outcomes. Study quality was assessed using \nthe Newcastle-Ottawa Scale.\nRESULTS: Among 36 study-arms (32 publications, 6,695 patients), the pooled \n30-day stroke rate was 1.93% (95% confidence interval [CI] 1.36-2.74%) and \n30-day composite outcome rate was 2.75% (95% CI 1.89-3.99%). Restenosis occurred \nin 10.51% (95% CI 7.61-14.33%) and reintervention in 6.53% (95% CI 4.29-9.83%) \nof patients. Subgroup analysis showed numerically higher restenosis (12.0% vs. \n5.98%; P = 0.05) and significantly higher reintervention rates (8.06% vs. 2.21%; \nP = 0.004) after CAS than CEA. In the comparative analysis against nonirradiated \ncontrols, perioperative outcomes were similar between groups; however, \nrestenosis (odds ratio [OR] 3.13, 95% CI 1.24-7.89; P = 0.028) and \nreintervention rates (OR 3.86, 95% CI 1.13-13.17; P = 0.022) were significantly \nhigher in RICS patients. Time from radiotherapy to revascularization was not \nassociated with restenosis or reintervention rates (P = 0.46 and P = 0.34, \nrespectively).\nCONCLUSION: Carotid revascularization in patients with RICS appears to be safe, \nwith perioperative outcomes similar to those in nonirradiated patients. The main \ndifference was in long-term follow-up, where restenosis and reintervention occur \n3-4 times more frequently than in atherosclerotic controls. CEA also showed \nbetter long-term durability than CAS. These findings support close long-term \nsurveillance in this population.\n",
+  "tables": "",
+  "tier": "abstract_only",
+  "pmcid": null
+ },
+ "sourceSha256": "bfd3f03e6749dcda740e4b373bf322d1018b04384ab14945daf3cacc80398ba4",
+ "round3DisplayedFinding": "Revascularization in radiation-induced carotid stenosis appeared as safe perioperatively as in nonirradiated patients, but restenosis and reintervention were significantly more frequent over long-term follow-up, and stenting had higher reintervention rates than endarterectomy."
+}

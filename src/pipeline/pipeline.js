@@ -30,6 +30,7 @@ import { CURRENT_EXTRACTION_VERSION } from '../lib/evidenceVersion.js'
 import { citationIndicatesRetraction } from './retractions.js'
 import { verify, normalize, extractNumbers, numbersEqual } from './verify.js'
 import { selectEvidenceWindow } from './evidenceWindow.js'
+import { HANDOFF_VERSION } from './resultHandoff.js'
 import {
   profileTopics,
   normalizeSearchDays,
@@ -290,7 +291,7 @@ export async function runPaper(paper, { onStage, userText = null, cacheOnly = fa
     let cache = 'none'
     const cached = await lookupCachedExtraction({ pmid: paper.pmid, hash: sourceHash })
     if (cached?.extraction) {
-      extracted = { ...cached.extraction, study_id: cached.extraction.study_id || paper.id }
+      extracted = cached.extraction
       cache = 'hit'
     } else if (cacheOnly) {
       throw new Error('Not in the shared evidence cache yet.')
@@ -330,7 +331,17 @@ export async function runPaper(paper, { onStage, userText = null, cacheOnly = fa
       // The bounded ranking/prose-check window, chosen from the source's structure. Ranking
       // input only — sourceDoc above stays the complete verification corpus.
       evidenceWindow: selectEvidenceWindow(source),
+      // The complete section tree and abstract parts, so the summary path can build its
+      // complete evidence passages (evidencePassages.js) without a refetch.
+      evidenceSource: {
+        tier: source.tier,
+        abstractParts: Array.isArray(source.abstractParts) ? source.abstractParts : [],
+        abstract: source.abstract || '',
+        sections: Array.isArray(source.sections) ? source.sections : [],
+      },
       rows,
+      resultContract: HANDOFF_VERSION,
+      resultContexts: Array.isArray(extracted.result_contexts) ? extracted.result_contexts : [],
       cache,
     }
   } catch (err) {
