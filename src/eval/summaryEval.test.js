@@ -37,6 +37,47 @@ describe('spend ledger', () => {
     expect(trace.requestSha256).toMatch(/^[0-9a-f]{64}$/)
     expect(trace.request.messages[0].content).toBe(body.messages[0].content)
   })
+  it('charges the conservative bound as a liability for an ambiguous failure after dispatch, and nothing for a provider rejection', async () => {
+    const dir = tmp()
+    const context = { caseId: 'c', purpose: 'p' }
+    const body = { model: 'claude-haiku-4-5-20251001', max_tokens: 4096, messages: [{ role: 'user', content: 'x'.repeat(4000) }] }
+    const bound = requestBoundUsd(body)
+    const ledger = makeLedger({ capUsd: 2.5 * bound, dir }) // room for two bounds, not three
+    const failing = (status) => wrapClient({ messages: { create: async () => { const e = new Error('boom'); e.status = status; e.name = status ? 'APIError' : 'APIConnectionTimeoutError'; throw e } } }, { ledger, traceDir: dir, context })
+    await expect(failing(undefined).messages.create(body)).rejects.toThrow('boom') // timeout: ambiguous
+    expect(ledger.total).toBe(Number(bound.toFixed(6)))
+    expect(ledger.state).toMatchObject({ calls: 1, unpricedCalls: 1, liabilityUsd: Number(bound.toFixed(6)) })
+    await expect(failing(400).messages.create(body)).rejects.toThrow('boom') // refused before processing: $0
+    expect(ledger.total).toBe(Number(bound.toFixed(6)))
+    await expect(failing(529).messages.create(body)).rejects.toThrow('boom') // overloaded: ambiguous
+    expect(ledger.total).toBe(Number((2 * bound).toFixed(6)))
+    expect(ledger.state.calls).toBe(3)
+    const entries = readFileSync(join(dir, 'ledger.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    expect(entries.map((e) => [e.outcome, e.liability, e.chargedUsd > 0])).toEqual([['ambiguous', true, true], ['rejected', false, false], ['ambiguous', true, true]])
+    // The liabilities count against the cap: the next request is refused before dispatch.
+    await expect(failing(undefined).messages.create(body)).rejects.toBeInstanceOf(CapReached)
+    expect(ledger.state.calls).toBe(3)
+  })
+  it('charges the bound for a response the table cannot price or that names another model', async () => {
+    const dir = tmp()
+    const ledger = makeLedger({ capUsd: 1, dir })
+    const context = { caseId: 'c', purpose: 'p' }
+    const body = { model: 'claude-haiku-4-5-20251001', max_tokens: 4096, messages: [{ role: 'user', content: 'x'.repeat(4000) }] }
+    const bound = Number(requestBoundUsd(body).toFixed(6))
+    const msg = (usage, model = body.model) => ({ id: 'm', model, content: [{ type: 'text', text: '{}' }], stop_reason: 'end_turn', usage })
+    const respond = (res) => wrapClient({ messages: { create: async () => res } }, { ledger, traceDir: dir, context })
+    await respond(msg({ input_tokens: 10, output_tokens: 10, server_tool_use: { web_search_requests: 1 } })).messages.create(body)
+    expect(ledger.total).toBe(bound)
+    await respond(msg(undefined)).messages.create(body)
+    expect(ledger.total).toBe(Number((2 * bound).toFixed(6)))
+    await respond(msg({ input_tokens: 10, output_tokens: 10 }, 'claude-sonnet-5-5')).messages.create(body)
+    expect(ledger.total).toBe(Number((3 * bound).toFixed(6)))
+    await respond(msg({ input_tokens: 10, output_tokens: 10 })).messages.create(body) // priceable: actual usage, far below the bound
+    expect(ledger.total).toBeLessThan(Number((4 * bound).toFixed(6)))
+    expect(ledger.state).toMatchObject({ calls: 4, unpricedCalls: 3 })
+    const last = readFileSync(join(dir, 'ledger.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    expect(last.map((e) => e.unpricedReason)).toEqual(['server_tool_use', 'missing_usage', 'response_model_mismatch', null])
+  })
   it('refuses an unpriced model before dispatch', () => {
     const ledger = makeLedger({ capUsd: 1, dir: tmp() })
     expect(() => ledger.assertRoom({ model: 'claude-opus-9', max_tokens: 10 })).toThrow(/not in the shared price table/)
@@ -74,6 +115,25 @@ describe('frozen cases', () => {
     expect(input.source.hash).toMatch(/^[0-9a-f]{64}$/)
     expect(ledger.state.calls).toBe(2) // one writer batch, one check
     expect(existsSync(join(dir, 'calls'))).toBe(true)
+  })
+  it('two checker-model runs into one output directory keep both sets of traces when each run has its own trace directory', async () => {
+    const out = tmp()
+    const ledger = makeLedger({ capUsd: 5, dir: out }) // one ledger at the output root
+    const loaded = loadFrozenCase(FROZEN_CASES[2])
+    const runs = []
+    for (const checkerModel of ['claude-haiku-4-5-20251001', 'claude-sonnet-5-5']) {
+      const traceDir = join(out, 'runs', `dev-${checkerModel}`)
+      const context = { caseId: null, purpose: null }
+      installClient(fakeClient(), { ledger, traceDir, context })
+      runs.push({ traceDir, out: await runSummary({ loaded, checkerModel, traceDir, context }) })
+    }
+    for (const run of runs) {
+      const take = JSON.parse(readFileSync(join(run.traceDir, 'papers', 'BALLOON', 'take.json'), 'utf8'))
+      expect(take.checkerModel).toBe(run.out.checkerModel)
+      expect(readdirSync(join(run.traceDir, 'calls'))).toHaveLength(2)
+    }
+    expect(ledger.state.calls).toBe(4)
+    expect(existsSync(join(out, 'papers'))).toBe(false)
   })
   it('builds the candidate the way the digest does: complete evidence, handoff, located primary, verified rows', () => {
     const loaded = loadFrozenCase(FROZEN_CASES[1]) // aspirin

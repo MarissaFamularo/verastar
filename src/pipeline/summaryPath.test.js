@@ -11,7 +11,8 @@ vi.mock('../lib/anthropic.js', () => ({
 
 import { extractStructured } from '../lib/anthropic.js'
 import { triage, TRIAGE_SCHEMA, UNAVAILABLE_SUMMARY_REASON, EXCERPT_LABEL, RANKING_BATCH_LIMIT, buildExcerpt } from './triage.js'
-import { SUMMARY_CHECK_SCHEMA, evaluateSummaryCheck, rewriteInstructions } from './summaryCheck.js'
+import { SUMMARY_CHECK_SCHEMA, evaluateSummaryCheck, rewriteInstructions, summaryCheckContent } from './summaryCheck.js'
+import { bindFindingNumbers } from './numberBinding.js'
 import { resultCandidate, buildResultHandoff, restoreSummaryApproval, currentResultPaper, normalizeResultContexts, STALE_SUMMARY_REASON, HANDOFF_VERSION } from './resultHandoff.js'
 import { buildObligations } from './obligations.js'
 import { regateTriaged } from '../lib/digestStore.js'
@@ -55,7 +56,7 @@ const GOOD = 'Drug-coated balloons showed no statistically clear difference in o
 // A checker response that passes everything the request lists, with overrides.
 function checkerResponse(content, over = {}) {
   const obligations = [...content.matchAll(/\[(ob\d+)\]/g)].map((m) => ({ id: m[1], status: 'present', quote: '', reason: 'carried' }))
-  const numbers = [...content.matchAll(/\[number ([^\]\s]+)/g)].map((m) => ({ number: m[1], row_id: '0', outcome_ok: true, comparator_ok: true, analysis_ok: true, timepoint_ok: true, direction_ok: true, quote: AMP_QUOTE, reason: 'matches' }))
+  const numbers = [...content.matchAll(/\[binding (b\d+): number ([^\]\s]+)/g)].map((m) => ({ binding_id: m[1], number: m[2], row_id: '0', outcome_ok: true, comparator_ok: true, analysis_ok: true, timepoint_ok: true, direction_ok: true, quote: AMP_QUOTE, reason: 'matches' }))
   const base = {
     obligations, number_bindings: numbers,
     equivalence_from_nonsignificant: { failed: false, quote: '', reason: '' },
@@ -99,7 +100,7 @@ describe('triage — obligation path', () => {
     expect(calls[0].content).toMatch(/\[ob1\] \(endpoint-role\) "The primary outcome was major amputation at one year\."/)
     expect(calls[0].content).toMatch(/Primary result \(established by a located endpoint-role quote\): Amputation at one year, DEB vs POBA \(verified/)
     expect(calls[1].content).toMatch(/EVIDENCE \(complete passages, verbatim\):\n\[Evidence window: the paper's complete abstract\]/)
-    expect(calls[1].content).toMatch(/\[number 1.45 with interval 0.91–2.29\].*bound to result 0/)
+    expect(calls[1].content).toMatch(/\[binding b1: number 1.45 with interval 0.91–2.29\].*bound to result 0/)
     expect(calls[1].content).toContain('context: outcome: "Amputation"')
   })
 
@@ -127,7 +128,7 @@ describe('triage — obligation path', () => {
     ['equivalence from a nonsignificant comparison', { equivalence_from_nonsignificant: { failed: true, quote: AMP_QUOTE, reason: 'states as safe' } }],
     ['causal language the design does not support', { causal_overclaim: { failed: true, quote: 'Pooled trials', reason: 'observational' } }],
     ['certainty stronger than the source grade', { certainty_overclaim: { failed: true, quote: 'low-certainty evidence', reason: 'says clearly' } }],
-    ['a number bound to the wrong outcome', { number_bindings: [{ number: '1.45', row_id: '0', outcome_ok: false, comparator_ok: true, analysis_ok: true, timepoint_ok: true, direction_ok: true, quote: AMP_QUOTE, reason: 'wrong outcome' }] }],
+    ['a number bound to the wrong outcome', { number_bindings: [{ binding_id: 'b1', number: '1.45', row_id: '0', outcome_ok: false, comparator_ok: true, analysis_ok: true, timepoint_ok: true, direction_ok: true, quote: AMP_QUOTE, reason: 'wrong outcome' }] }],
   ])('%s surviving the rewrite removes the claim rather than keeping it with a quote beneath', async (_label, over) => {
     script({ writer: [() => ranking(GOOD), () => ranking(GOOD)], checker: [(c) => checkerResponse(c, over), (c) => checkerResponse(c, over)] })
     const [take] = await triage({ candidates: [makeCandidate()] })
@@ -214,6 +215,32 @@ describe('triage — obligation path', () => {
 describe('evaluateSummaryCheck — deterministic consequences', () => {
   const obligations = [{ id: 'ob1', quote: 'q1' }, { id: 'ob2', quote: 'q2' }]
   const bindings = [{ number: 1.45 }]
+  it('keys number verdicts by binding id, so a value that occurs twice cannot inherit the other occurrence\'s verdict', () => {
+    // Two verified rows print the same value; the deterministic guard leaves both occurrences unbound.
+    const rows = [
+      { name: 'Bleeding, A vs B, hazard ratio', value: '0.44 hazard ratio (CI 0.34–0.55)', quote: 'A versus B reduced bleeding (HR 0.44, CI 0.34–0.55).' },
+      { name: 'Stroke, A vs B, hazard ratio', value: '0.44 hazard ratio (CI 0.20–0.90)', quote: 'A versus B reduced stroke (HR 0.44, CI 0.20–0.90).' },
+    ]
+    const det = bindFindingNumbers('A versus B reduced bleeding (0.44 hazard ratio) and reduced MACE (0.44 hazard ratio).', rows)
+    expect(det.ok).toBe(true)
+    expect(det.bindings.map((b) => b.rowIndex)).toEqual([null, null])
+    const ok = { outcome_ok: true, comparator_ok: true, analysis_ok: true, timepoint_ok: true, direction_ok: true, quote: 'q', reason: '' }
+    const second = { binding_id: 'b2', number: '0.44', row_id: '1', ...ok, outcome_ok: false, reason: 'MACE is not stroke' }
+    const first = { binding_id: 'b1', number: '0.44', row_id: '0', ...ok }
+    for (const order of [[first, second], [second, first]]) {
+      const ev = evaluateSummaryCheck({ obligations: [], number_bindings: order }, { obligations: [], bindings: det.bindings })
+      expect(ev.verdict).toBe('fail')
+      expect(ev.blocking).toEqual([expect.objectContaining({ kind: 'wrong-binding', bindingId: 'b2', dimensions: ['outcome'] })])
+    }
+    // Value-only entries for a duplicated value are not matched: both occurrences are unreported.
+    const noIds = evaluateSummaryCheck({ obligations: [], number_bindings: [{ number: '0.44', row_id: '0', ...ok }, { number: '0.44', row_id: '1', ...ok }] }, { obligations: [], bindings: det.bindings })
+    expect(noIds.blocking.map((f) => [f.kind, f.bindingId])).toEqual([['unreported-binding', 'b1'], ['unreported-binding', 'b2']])
+    // A value that occurs once may still be matched by value (older or terse checker output).
+    expect(evaluateSummaryCheck({ obligations: [], number_bindings: [{ number: '1.45', row_id: '0', ...ok }] }, { obligations: [], bindings }).verdict).toBe('pass')
+    // The checker prompt labels every occurrence with its id.
+    const content = summaryCheckContent({ paperId: 'p', evidence: 'e', finding: 'f', designCaution: '', obligations: [], bindings: det.bindings, verified: rows, primary: null })
+    expect(content).toMatch(/\[binding b1: number 0.44\][\s\S]*\[binding b2: number 0.44\]/)
+  })
   it('an obligation or number the checker did not report fails closed', () => {
     const ev = evaluateSummaryCheck({ obligations: [{ id: 'ob1', status: 'present', quote: '', reason: '' }], number_bindings: [] }, { obligations, bindings })
     expect(ev.verdict).toBe('fail')

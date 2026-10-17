@@ -25,7 +25,7 @@ import { reasonAdmitsMissingEvidence } from './check.js'
 import { PROSE_GROUNDING } from './proseGrounding.js'
 import { assertProseRequest } from './evidencePassages.js'
 
-export const SUMMARY_CHECK_VERSION = 'summary-check-v1'
+export const SUMMARY_CHECK_VERSION = 'summary-check-v2'
 
 const object = (properties) => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties })
 const string = { type: 'string' }
@@ -36,7 +36,9 @@ export const SUMMARY_CHECK_SCHEMA = object({
   equivalence_from_nonsignificant: failure,
   causal_overclaim: failure,
   certainty_overclaim: failure,
-  number_bindings: { type: 'array', items: object({ number: string, row_id: string, outcome_ok: boolean, comparator_ok: boolean, analysis_ok: boolean, timepoint_ok: boolean, direction_ok: boolean, quote: string, reason: string }) },
+  // One entry per BINDING id (an occurrence of a number in the finding), never per value:
+  // the same value can occur twice, bound to different results.
+  number_bindings: { type: 'array', items: object({ binding_id: string, number: string, row_id: string, outcome_ok: boolean, comparator_ok: boolean, analysis_ok: boolean, timepoint_ok: boolean, direction_ok: boolean, quote: string, reason: string }) },
   refutation: object({ refuted: boolean, quote: string, reason: string }),
   caution: object({ supported: boolean, quote: string, reason: string }),
 })
@@ -48,12 +50,15 @@ Return every check separately. Judge the finding AS RENDERED, on its own, withou
 2. equivalence_from_nonsignificant: failed when the finding states or implies equivalence, no difference, no effect, non-inferiority or safety ("as safe", "similar safety", "did not increase risk") on the basis of a comparison the source reports as not statistically significant or as having a confidence interval including the null, unless the source itself tested equivalence or noninferiority, or the finding explicitly attributes the wording to the authors. Quote the comparison.
 3. causal_overclaim: failed when the finding uses causal language ("reduced", "prevented", "improved", "caused", "led to") for an observational, single-arm, registry, retrospective or post hoc comparison without "associated with" or equivalent hedging, or asserts a benefit from a secondary, subgroup or exploratory analysis as if it were the study's answer. Quote the design or analysis passage.
 4. certainty_overclaim: failed when the finding's confidence exceeds the source's grade: "clearly", "demonstrated", "proved", "robust", "strong" for a result the source grades low-certainty, calls exploratory, hypothesis-generating, underpowered, or reports with conflicting analyses. Quote the grade or qualification.
-5. number_bindings: for EVERY binding, say whether the sentence around that number names the same outcome, the same ordered comparison (intervention versus comparator), the same analysis or population, the same timepoint, and the same direction as the bound result's own quote and context. A number attached to the wrong outcome, a reversed comparator, a substituted analysis, a different timepoint or a reversed direction is a failed dimension. Quote the result's passage.
+5. number_bindings: for EVERY binding id (echo binding_id exactly; a value that occurs twice has two ids), say whether the sentence around that number names the same outcome, the same ordered comparison (intervention versus comparator), the same analysis or population, the same timepoint, and the same direction as the bound result's own quote and context. A number attached to the wrong outcome, a reversed comparator, a substituted analysis, a different timepoint or a reversed direction is a failed dimension. Quote the result's passage.
 6. refutation: refuted when the finding reverses or overstates the direction of effect, asserts an outcome the source does not state, or misattributes the population, intervention or comparator. Quote the contradicting passage.
 caution: supported when every factual clause of the design caution is stated in the source (design, selection, matching, exposure identification, setting, endpoint limitation); a limitation the source does not state is unsupported, even when hedged with "likely".
 A claim vaguer or more cautious than the source is fine. When genuinely uncertain, fail the check: an unsupported claim shown to a clinician is worse than a supported one withheld. Every failed check or absent obligation MUST carry the exact source quote that triggered it. Do not judge the digits themselves; a separate deterministic gate verified them.
 
 ${PROSE_GROUNDING}`
+
+// The id of one number occurrence in the finding: its position among the bindings.
+export const bindingId = (binding, index) => binding?.id || `b${index + 1}`
 
 export function summaryCheckContent({ paperId, title, design, evidence, finding, designCaution, obligations, bindings, verified, primary }) {
   const lines = []
@@ -70,11 +75,11 @@ export function summaryCheckContent({ paperId, title, design, evidence, finding,
   lines.push('')
   lines.push('NUMBER BINDINGS:')
   if (!bindings.length) lines.push('(the finding carries no verified numbers)')
-  for (const b of bindings) {
+  bindings.forEach((b, i) => {
     const row = b.rowIndex != null ? verified[b.rowIndex] : null
     const ctx = b.context ? Object.entries(b.context).filter(([, v]) => v).map(([k, v]) => `${k}: "${v}"`).join('; ') : ''
-    lines.push(`[number ${b.number}${b.interval ? ` with interval ${b.interval[0]}–${b.interval[1]}` : ''}] sentence segment: "${b.segment}" → ${row ? `bound to result ${b.rowIndex}: ${row.name} = ${row.value}; quote: "${row.quote}"${ctx ? `; context: ${ctx}` : ''}` : b.candidates.length > 1 ? `AMBIGUOUS between results ${b.candidates.join(', ')}` : 'bound to no verified result'}`)
-  }
+    lines.push(`[binding ${bindingId(b, i)}: number ${b.number}${b.interval ? ` with interval ${b.interval[0]}–${b.interval[1]}` : ''}] sentence segment: "${b.segment}" → ${row ? `bound to result ${b.rowIndex}: ${row.name} = ${row.value}; quote: "${row.quote}"${ctx ? `; context: ${ctx}` : ''}` : b.candidates.length > 1 ? `AMBIGUOUS between results ${b.candidates.join(', ')}` : 'bound to no verified result'}`)
+  })
   lines.push('')
   lines.push(`FINDING: ${finding}`)
   lines.push(`DESIGN CAUTION: ${designCaution || '(none)'}`)
@@ -114,13 +119,19 @@ export function evaluateSummaryCheck(response, { obligations = [], bindings = []
   flag('equivalence_from_nonsignificant', 'equivalence-from-nonsignificant', 'overstatement')
   flag('causal_overclaim', 'causal-overclaim', 'overstatement')
   flag('certainty_overclaim', 'certainty-overclaim', 'overstatement')
-  const byNumber = new Map((response?.number_bindings || []).map((b) => [String(b.number).trim(), b]))
-  for (const b of bindings) {
-    const r = byNumber.get(String(b.number)) || byNumber.get(String(b.number).replace(/^0\./, '.'))
-    if (!r) { failures.push({ check: 'number_binding', kind: 'unreported-binding', number: b.number, quote: '', reason: 'The checker returned no verdict for this number.' }); categories.wrongBinding = true; continue }
+  // Match by binding id. A value-only match is accepted only when that value occurs once
+  // among the bindings; a duplicated value with no id match is unreported (fail closed).
+  const reportedBindings = response?.number_bindings || []
+  const byId = new Map(reportedBindings.map((b) => [String(b.binding_id ?? '').trim(), b]))
+  const byNumber = new Map(reportedBindings.map((b) => [String(b.number).trim(), b]))
+  const valueCount = (n) => bindings.filter((x) => String(x.number) === String(n)).length
+  bindings.forEach((b, i) => {
+    const id = bindingId(b, i)
+    const r = byId.get(id) || (valueCount(b.number) === 1 ? byNumber.get(String(b.number)) || byNumber.get(String(b.number).replace(/^0\./, '.')) : null)
+    if (!r) { failures.push({ check: 'number_binding', kind: 'unreported-binding', bindingId: id, number: b.number, quote: '', reason: 'The checker returned no verdict for this number occurrence.' }); categories.wrongBinding = true; return }
     const bad = ['outcome', 'comparator', 'analysis', 'timepoint', 'direction'].filter((d) => r[`${d}_ok`] !== true)
-    if (bad.length) { failures.push({ check: 'number_binding', kind: 'wrong-binding', number: b.number, dimensions: bad, quote: r.quote || '', reason: r.reason || '', quoteMissing: !String(r.quote || '').trim() }); categories.wrongBinding = true }
-  }
+    if (bad.length) { failures.push({ check: 'number_binding', kind: 'wrong-binding', bindingId: id, number: b.number, dimensions: bad, quote: r.quote || '', reason: r.reason || '', quoteMissing: !String(r.quote || '').trim() }); categories.wrongBinding = true }
+  })
   if (response?.refutation?.refuted === true) {
     failures.push({ check: 'refutation', kind: 'contradiction', quote: response.refutation.quote || '', reason: response.refutation.reason || '', quoteMissing: !String(response.refutation.quote || '').trim() })
     categories.contradiction = true

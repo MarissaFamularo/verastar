@@ -86,11 +86,20 @@ function writeReport(dir, name, data) {
   writeFileSync(join(dir, name), `${JSON.stringify(data, null, 1)}\n`)
 }
 
-async function setupClient(args, { label, env }) {
+// One ledger per output directory (the cap's running total); every run writes its calls
+// and per-paper traces under its own runs/<command>-<checker>-<timestamp>/ so a second
+// checker model never overwrites the first model's traces.
+function runDirFor(args, command) {
+  const checker = args.checker.includes('haiku') ? 'haiku' : 'sonnet'
+  const dir = join(args.out, 'runs', `${command}-${checker}-${new Date().toISOString().replace(/[:.]/g, '-')}`)
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+async function setupClient(args, { label, env, traceDir }) {
   const ledger = makeLedger({ capUsd: args.live ? args.maxUsd : 1e9, dir: args.out, label })
   const context = { caseId: null, purpose: null }
   const inner = args.live ? await makeLiveClient({ apiKey: env.ANTHROPIC_API_KEY }) : fakeClient()
-  installClient(inner, { ledger, traceDir: args.out, context })
+  installClient(inner, { ledger, traceDir, context })
   return { ledger, context }
 }
 
@@ -102,8 +111,10 @@ async function dev(args, env) {
   const plan = { harnessVersion: HARNESS_VERSION, mode: args.live ? 'live' : 'fake', command: 'dev', checkerModel: args.checker, writerModel: MODELS.triage, extractionModel: MODELS.extraction, profileSha256: sha256(JSON.stringify(EVAL_PROFILE)), cases: manifest, excluded: EXCLUDED_CASES, authorization: expected, capUsd: args.maxUsd }
   console.log(JSON.stringify(plan, null, 1))
   if (args.live) liveGate(args, expected, env)
-  const { ledger, context } = await setupClient(args, { label: 'dev', env })
+  const traceDir = runDirFor(args, 'dev')
+  const { ledger, context } = await setupClient(args, { label: 'dev', env, traceDir })
   writeReport(args.out, 'plan.dev.json', plan)
+  writeReport(traceDir, 'plan.dev.json', plan)
   const outcomes = []
   let stopped = null
   for (const l of loaded) {
@@ -112,25 +123,26 @@ async function dev(args, env) {
         context.caseId = l.case.id
         context.purpose = 'extraction'
         await extractCase(l)
-        writeFileSync(join(args.out, `extraction.${l.case.id}.json`), `${JSON.stringify(l.extraction, null, 1)}\n`)
+        writeFileSync(join(traceDir, `extraction.${l.case.id}.json`), `${JSON.stringify(l.extraction, null, 1)}\n`)
       }
       context.purpose = null
-      outcomes.push(await runSummary({ loaded: l, checkerModel: args.checker, traceDir: args.out, context }))
+      outcomes.push(await runSummary({ loaded: l, checkerModel: args.checker, traceDir, context }))
     } catch (err) {
       if (err instanceof CapReached) { stopped = { at: l.case.id, message: err.message }; break }
       outcomes.push({ case: l.case, error: String(err?.message || err) })
     }
   }
   const report = {
-    ...plan, completedAt: new Date().toISOString(), spendUsd: ledger.total, ledger: ledger.state, stopped,
+    ...plan, traceDir, completedAt: new Date().toISOString(), spendUsd: ledger.total, ledger: ledger.state, stopped,
     counts: reportCounts(outcomes),
     papers: outcomes.map((o) => o.error ? { id: o.case.id, error: o.error } : {
       id: o.case.id, pmid: o.case.pmid, summaryKind: o.take.summaryKind, finding: o.take.finding, designCaution: o.take.designCaution, rewriteUsed: o.take.rewriteUsed,
       checkReason: o.take.check?.reason, summaryReason: o.take.summaryReason, failures: (o.take.summaryChecks || []).filter((f) => !f.informational), latencyMs: o.latencyMs, expectations: o.case.expectations,
     }),
   }
+  writeReport(traceDir, 'report.json', report)
   writeReport(args.out, `report.dev.${args.live ? 'live' : 'fake'}.${args.checker.includes('haiku') ? 'haiku' : 'sonnet'}.json`, report)
-  console.log(JSON.stringify({ counts: report.counts, spendUsd: report.spendUsd, stopped }, null, 1))
+  console.log(JSON.stringify({ traceDir, counts: report.counts, spendUsd: report.spendUsd, stopped }, null, 1))
   return report
 }
 
@@ -140,18 +152,20 @@ async function probes(args, env) {
   const plan = { harnessVersion: HARNESS_VERSION, mode: args.live ? 'live' : 'fake', command: 'probes', checkerModel: args.checker, repeats, probes: PROBES.map((p) => p.id), authorization: expected, capUsd: args.maxUsd }
   console.log(JSON.stringify(plan, null, 1))
   if (args.live) liveGate(args, expected, env)
-  const { ledger, context } = await setupClient(args, { label: 'probes', env })
+  const traceDir = runDirFor(args, 'probes')
+  const { ledger, context } = await setupClient(args, { label: 'probes', env, traceDir })
   let results = []
   let stopped = null
   try {
-    results = await runProbes({ checkerModel: args.checker, repeats, traceDir: args.out, context })
+    results = await runProbes({ checkerModel: args.checker, repeats, traceDir, context })
   } catch (err) {
     if (!(err instanceof CapReached)) throw err
     stopped = err.message
   }
-  const report = { ...plan, completedAt: new Date().toISOString(), spendUsd: ledger.total, stopped, summary: summarizeProbes(results), results }
+  const report = { ...plan, traceDir, completedAt: new Date().toISOString(), spendUsd: ledger.total, stopped, summary: summarizeProbes(results), results }
+  writeReport(traceDir, 'report.json', report)
   writeReport(args.out, `report.probes.${args.live ? 'live' : 'fake'}.${args.checker.includes('haiku') ? 'haiku' : 'sonnet'}.json`, report)
-  console.log(JSON.stringify({ summary: report.summary, spendUsd: report.spendUsd, stopped }, null, 1))
+  console.log(JSON.stringify({ traceDir, summary: report.summary, spendUsd: report.spendUsd, stopped }, null, 1))
   return report
 }
 
@@ -234,7 +248,8 @@ async function holdoutRun(args, env) {
   const plan = { harnessVersion: HARNESS_VERSION, mode: args.live ? 'live' : 'fake', command: 'holdout-run', checkerModel: args.checker, graderModel: args.grader || 'claude-sonnet-5-5', papers: manifest.papers.length, authorization: expected, capUsd: args.maxUsd }
   console.log(JSON.stringify(plan, null, 1))
   if (args.live) liveGate(args, expected, env)
-  const { ledger, context } = await setupClient(args, { label: 'holdout', env })
+  const traceDir = runDirFor(args, 'holdout-run')
+  const { ledger, context } = await setupClient(args, { label: 'holdout', env, traceDir })
   const limit = args.limit ? Number(args.limit) : manifest.papers.length
   const outcomes = []
   let stopped = null
@@ -248,14 +263,14 @@ async function holdoutRun(args, env) {
       context.caseId = caseId
       context.purpose = 'extraction'
       await extractCase(loaded)
-      writeFileSync(join(dir, `extraction.${p.pmid}.json`), `${JSON.stringify(loaded.extraction, null, 1)}\n`)
+      writeFileSync(join(traceDir, `extraction.${p.pmid}.json`), `${JSON.stringify(loaded.extraction, null, 1)}\n`)
       context.purpose = null
-      const out = await runSummary({ loaded, checkerModel: args.checker, traceDir: dir, context })
+      const out = await runSummary({ loaded, checkerModel: args.checker, traceDir, context })
       context.purpose = 'holdout-grade'
       const candidate = candidateFor(result)
       const grade = await gradeTake({ take: out.take, candidate, model: plan.graderModel })
       outcomes.push({ ...out, grade })
-      writeFileSync(join(dir, 'papers', caseId, 'grade.json'), `${JSON.stringify(grade, null, 1)}\n`)
+      writeFileSync(join(traceDir, 'papers', caseId, 'grade.json'), `${JSON.stringify(grade, null, 1)}\n`)
     } catch (err) {
       if (err instanceof CapReached) { stopped = { at: p.pmid, message: err.message, completed: outcomes.length }; break }
       outcomes.push({ case: { id: caseId, pmid: p.pmid }, error: String(err?.message || err) })
@@ -263,7 +278,7 @@ async function holdoutRun(args, env) {
   }
   const graded = outcomes.filter((o) => o.grade)
   const report = {
-    ...plan, completedAt: new Date().toISOString(), spendUsd: ledger.total, ledger: ledger.state, stopped, completed: outcomes.length,
+    ...plan, traceDir, completedAt: new Date().toISOString(), spendUsd: ledger.total, ledger: ledger.state, stopped, completed: outcomes.length,
     counts: reportCounts(outcomes),
     hardFailures: graded.reduce((n, o) => n + (o.grade.response.hard_failures || []).length, 0),
     primaryCovered: graded.filter((o) => o.grade.response.primary_covered).length,
@@ -273,8 +288,9 @@ async function holdoutRun(args, env) {
     papers: outcomes.map((o) => o.error ? { id: o.case.id, error: o.error } : { id: o.case.id, pmid: o.case.pmid, summaryKind: o.take.summaryKind, finding: o.take.finding, designCaution: o.take.designCaution, rewriteUsed: o.take.rewriteUsed, failures: (o.take.summaryChecks || []).filter((f) => !f.informational), grade: o.grade.response, latencyMs: o.latencyMs }),
     note: 'The model pre-grade is provisional. Physician grading of at least ten holdout papers decides.',
   }
+  writeReport(traceDir, 'report.json', report)
   writeReport(dir, `report.holdout.${args.live ? 'live' : 'fake'}.${args.checker.includes('haiku') ? 'haiku' : 'sonnet'}.json`, report)
-  console.log(JSON.stringify({ completed: report.completed, counts: report.counts, hardFailures: report.hardFailures, spendUsd: report.spendUsd, stopped }, null, 1))
+  console.log(JSON.stringify({ traceDir, completed: report.completed, counts: report.counts, hardFailures: report.hardFailures, spendUsd: report.spendUsd, stopped }, null, 1))
   return report
 }
 

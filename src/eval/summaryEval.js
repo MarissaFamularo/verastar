@@ -73,18 +73,24 @@ export function makeLedger({ capUsd, dir, label = 'run' }) {
       }
       return bound
     },
-    record({ model, usage, purpose, requestSha256, requestId, latencyMs, stopReason, boundUsd, caseId }) {
-      const priced = priceUsage(model, usage)
+    // Every dispatched request is charged to the running total: at its priced usage when
+    // the response names the requested model and the shared table prices its usage, else
+    // at its conservative bound as a LIABILITY (a timeout or connection error after
+    // dispatch may have been processed and billed; an unpriceable or foreign-model response
+    // was billed at some rate). The same policy the sponsored proxy applies to ambiguous
+    // attempts (supabase/functions/_shared/spending.js).
+    record({ model, responseModel = null, usage, purpose, requestSha256, requestId, latencyMs, stopReason, boundUsd, caseId, outcome = 'completed', error = null }) {
+      const priced = outcome === 'completed' && (responseModel == null || responseModel === model) ? priceUsage(model, usage) : { ok: false, reason: outcome !== 'completed' ? outcome : 'response_model_mismatch' }
       const usd = priced.ok ? microToUsd(priced.micro) : null
+      const liability = usd == null && outcome !== 'rejected'
+      const charged = usd != null ? usd : liability ? Number(boundUsd) || 0 : 0
       state.calls += 1
-      if (usd == null) state.unpricedCalls += 1
-      else {
-        state.totalUsd = Number((state.totalUsd + usd).toFixed(6))
-        state.byModel[model] = Number(((state.byModel[model] || 0) + usd).toFixed(6))
-        state.byPurpose[purpose || 'unknown'] = Number(((state.byPurpose[purpose || 'unknown'] || 0) + usd).toFixed(6))
-      }
+      if (liability) { state.unpricedCalls += 1; state.liabilityUsd = Number(((state.liabilityUsd || 0) + charged).toFixed(6)) }
+      state.totalUsd = Number((state.totalUsd + charged).toFixed(6))
+      state.byModel[model] = Number(((state.byModel[model] || 0) + charged).toFixed(6))
+      state.byPurpose[purpose || 'unknown'] = Number(((state.byPurpose[purpose || 'unknown'] || 0) + charged).toFixed(6))
       state.updatedAt = new Date().toISOString()
-      const entry = { at: state.updatedAt, caseId: caseId || null, purpose: purpose || null, model, usage, usd, unpricedReason: priced.ok ? null : priced.reason, boundUsd, requestSha256, requestId, latencyMs, stopReason, runningTotalUsd: state.totalUsd }
+      const entry = { at: state.updatedAt, caseId: caseId || null, purpose: purpose || null, model, responseModel, outcome, error, usage: usage ?? null, usd, liability, chargedUsd: charged, unpricedReason: priced.ok ? null : priced.reason, boundUsd, requestSha256, requestId, latencyMs, stopReason, runningTotalUsd: state.totalUsd }
       appendFileSync(lines, `${JSON.stringify(entry)}\n`)
       save()
       return entry
@@ -116,6 +122,11 @@ export function wrapClient(inner, { ledger, traceDir, context, now = () => Date.
         } catch (err) {
           record.error = { name: err?.name, status: err?.status ?? null, message: String(err?.message || err) }
           record.latencyMs = now() - t0
+          // A 4xx other than 408 was refused before processing; anything else (timeout,
+          // connection failure, 408, 5xx) may have been processed and billed: liability.
+          const status = typeof err?.status === 'number' ? err.status : null
+          record.outcome = status != null && status >= 400 && status < 500 && status !== 408 ? 'rejected' : 'ambiguous'
+          if (ledger) record.ledger = ledger.record({ model: body.model, usage: null, purpose, requestSha256, requestId: err?.requestID ?? null, latencyMs: record.latencyMs, stopReason: null, boundUsd, caseId: context.caseId, outcome: record.outcome, error: record.error })
           writeFileSync(file, `${JSON.stringify(record, null, 1)}\n`)
           throw err
         }
@@ -125,7 +136,7 @@ export function wrapClient(inner, { ledger, traceDir, context, now = () => Date.
         record.usage = res?.usage ?? null
         record.responseText = (res?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('')
         record.responseSha256 = sha256(record.responseText)
-        if (ledger) record.ledger = ledger.record({ model: body.model, usage: res?.usage, purpose, requestSha256, requestId: res?.id ?? null, latencyMs: record.latencyMs, stopReason: res?.stop_reason, boundUsd, caseId: context.caseId })
+        if (ledger) record.ledger = ledger.record({ model: body.model, responseModel: res?.model ?? null, usage: res?.usage, purpose, requestSha256, requestId: res?.id ?? null, latencyMs: record.latencyMs, stopReason: res?.stop_reason, boundUsd, caseId: context.caseId })
         writeFileSync(file, `${JSON.stringify(record, null, 1)}\n`)
         return res
       },
@@ -152,7 +163,7 @@ export function fakeClient({ findingFor = () => 'The fake writer reports no stat
         }
         if (schema?.properties?.obligations) {
           const obligations = [...content.matchAll(/\[(ob\d+)\]/g)].map((m) => ({ id: m[1], status: 'present', quote: '', reason: 'fake' }))
-          const numbers = [...content.matchAll(/\[number ([^\]\s]+)/g)].map((m) => ({ number: m[1], row_id: '0', outcome_ok: true, comparator_ok: true, analysis_ok: true, timepoint_ok: true, direction_ok: true, quote: '', reason: 'fake' }))
+          const numbers = [...content.matchAll(/\[binding (b\d+): number ([^\]\s]+)/g)].map((m) => ({ binding_id: m[1], number: m[2], row_id: '0', outcome_ok: true, comparator_ok: true, analysis_ok: true, timepoint_ok: true, direction_ok: true, quote: '', reason: 'fake' }))
           return message(JSON.stringify({ obligations, number_bindings: numbers, equivalence_from_nonsignificant: { failed: false, quote: '', reason: '' }, causal_overclaim: { failed: false, quote: '', reason: '' }, certainty_overclaim: { failed: false, quote: '', reason: '' }, refutation: { refuted: false, quote: '', reason: '' }, caution: { supported: true, quote: '', reason: 'fake' } }), body.model)
         }
         if (schema?.properties?.hard_failures) return message(JSON.stringify({ hard_failures: [], primary_covered: true, numeric_binding_ok: true, readability: 4, notes: 'fake grade' }), body.model)
