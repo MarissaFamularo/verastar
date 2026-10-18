@@ -39,6 +39,19 @@ export async function fetchBetaStats({ from, to }) {
   }
 }
 
+// Feedback messages (with sender) and "this badge is wrong" counts, admins only.
+// Resolves { ok: true, feedback } or { ok: false, reason }.
+export async function fetchBetaFeedback() {
+  if (!supabaseConfigured || !currentUser()) return { ok: false, reason: 'forbidden' }
+  try {
+    const { data, error } = await supabase.rpc('beta_admin_feedback')
+    if (error) return { ok: false, reason: error.code === '42501' ? 'forbidden' : 'error', message: error.message }
+    return { ok: true, feedback: data }
+  } catch (err) {
+    return { ok: false, reason: 'error', message: err?.message }
+  }
+}
+
 // --- dates ---------------------------------------------------------------------------------
 
 const pad = (n) => String(n).padStart(2, '0')

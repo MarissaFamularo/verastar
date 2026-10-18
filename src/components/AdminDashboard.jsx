@@ -1,11 +1,12 @@
 // components/AdminDashboard.jsx — aggregate beta metrics for allowlisted admins
 // (docs/BETA_ADMIN_DASHBOARD.md). Mounted in Settings only after beta_admin_check() said
 // yes; the data itself comes from beta_admin_stats(), which refuses anyone else, so this
-// screen shows nothing a non-admin could not already see. Counts only: no names, no emails,
-// no individual survey answers.
+// screen shows nothing a non-admin could not already see. Metrics are counts only: no names,
+// no emails, no individual survey answers. The Feedback section is the exception: it lists
+// what beta users wrote in "Send feedback", with their sign-in email, so it can be answered.
 
 import { useEffect, useRef, useState } from 'react'
-import { defaultRange, fetchBetaStats, metricSections, rangeFromInputs, surveyDistributions } from '../lib/betaAdmin.js'
+import { defaultRange, fetchBetaFeedback, fetchBetaStats, metricSections, rangeFromInputs, surveyDistributions } from '../lib/betaAdmin.js'
 
 const eyebrow = { margin: 0, fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }
 const inputStyle = { padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
@@ -14,6 +15,7 @@ const panel = { marginTop: 14, borderRadius: 10, border: '1px solid rgba(255,255
 export default function AdminDashboard({ active = true }) {
   const [{ fromDate, toDate }, setDates] = useState(() => defaultRange())
   const [state, setState] = useState({ phase: 'idle' })
+  const [feedback, setFeedback] = useState({ phase: 'idle' })
   const loadedOnce = useRef(false)
 
   async function load(f = fromDate, t = toDate) {
@@ -24,6 +26,7 @@ export default function AdminDashboard({ active = true }) {
       return
     }
     setState({ phase: 'loading' })
+    fetchBetaFeedback().then((r) => setFeedback(r.ok ? { phase: 'ready', data: r.feedback } : { phase: 'error' }))
     const result = await fetchBetaStats(range)
     if (result.ok) setState({ phase: 'ready', stats: result.stats, days: range.days })
     else setState({ phase: result.reason === 'forbidden' ? 'forbidden' : 'error', message: result.message })
@@ -80,6 +83,7 @@ export default function AdminDashboard({ active = true }) {
             {state.days} day{state.days === 1 ? '' : 's'} · computed {new Date(state.stats.generated_at).toLocaleString()}
           </p>
           <ReleaseOverview stats={state.stats} />
+          <FeedbackInbox feedback={feedback} />
           <details style={panel}><summary>Technical diagnostics and metric definitions</summary>
           <p>Diagnostics include test accounts. Usage events are client-reported; deleted or missing events cannot prove inactivity.</p>
           {sections.filter(s => s.title !== 'Signup survey').map((section) => (
@@ -171,5 +175,34 @@ export function ReleaseOverview({ stats }) {
       <p>Monitor and expected-work checks expire after 15 minutes. Signup and digest outcomes are last-observed evidence, not continuous capability tests. Expected work follows the configured local daily hour, active access, and unopened-digest gate; a single slot overdue by two hours is actionable. No weekly scheduler configuration exists in this release. It does not probe authentication email delivery, browser-only failures, or provider availability. An absent monitor cannot email about its own outage; the dashboard reports unknown/stale.</p>
       <p>Provider credit balance, grant consumption versus cash charge: unavailable. {s.released_unknown ?? 0} released attempts have no settled charge; this does not prove zero provider billing. Earliest spend record: {s.first_record || 'none'}.</p>
     </details>
+  </>
+}
+
+// What beta users wrote in "Send feedback", newest first, and how many "this badge is
+// wrong" reports came in. Messages from known test accounts are labelled, not hidden.
+export function FeedbackInbox({ feedback }) {
+  if (feedback.phase === 'error') {
+    return <section aria-label="Feedback" style={panel}><h3 style={{ margin: 0 }}>Feedback</h3><p style={{ fontSize: 13, color: 'var(--color-fg-muted)' }}>Feedback could not be loaded. Use Update to try again.</p></section>
+  }
+  if (feedback.phase !== 'ready') return null
+  const { messages = [], wrong_total: wrong = 0, wrong_7d: wrong7 = 0 } = feedback.data || {}
+  return <>
+    <h3 style={{ marginBottom: 0 }}>Feedback</h3>
+    <Cards rows={[
+      ['Feedback messages', messages.length, 'Sent from Send feedback, all time.'],
+      ['“This is wrong” reports', wrong, `${wrong7} in the last 7 days. Readers flagging a verified number as wrong.`],
+    ]} />
+    <section aria-label="Feedback" style={panel}>
+      {messages.length === 0
+        ? <p style={{ margin: 0, fontSize: 13, color: 'var(--color-fg-muted)' }}>No feedback yet.</p>
+        : messages.map((m, i) => (
+          <article key={`${m.at}-${i}`} style={{ padding: '12px 0', borderTop: i ? '1px solid rgba(255,255,255,.08)' : 0 }}>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-fg-muted)' }}>
+              {new Date(m.at).toLocaleString()} · {m.email ? <a href={`mailto:${m.email}`} style={{ color: 'var(--color-accent)' }}>{m.email}</a> : 'unknown sender'}{m.test ? ' · your test account' : ''}
+            </p>
+            <p style={{ margin: '6px 0 0', fontSize: 14, lineHeight: 1.55, whiteSpace: 'pre-wrap', color: 'var(--color-fg-soft)' }}>{m.text}</p>
+          </article>
+        ))}
+    </section>
   </>
 }

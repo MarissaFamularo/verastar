@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { incidentEmail, runMonitor, monitorAuthorized, runDeliveryTest } from '../../supabase/functions/beta-monitor/handler.js'
 import { observeSignup, observeDigest } from '../../supabase/functions/_shared/observeSignup.js'
 describe('deterministic beta monitoring', () => {
+  it('sends a feedback notice with no feedback text, sender or account', () => {
+    const mail = incidentEmail({ check: 'feedback', kind: 'feedback', observed_at: '2026-10-18T21:51:04Z', email: 'private@example.test', text: 'secret words' })
+    expect(mail.subject).toBe('Verastar: new beta feedback')
+    expect(JSON.stringify(mail)).not.toMatch(/private|secret/)
+    expect(() => incidentEmail({ check: 'feedback', kind: 'incident', observed_at: '2026-10-18T21:51:04Z' })).toThrow()
+  })
   it('redacts arbitrary payloads from all email fields', () => {
     const mail = incidentEmail({ check:'signup',kind:'incident',observed_at:'2026-10-15T22:30:00Z',email:'private@example.test',npi:'1234567893',error:'secret',payload:{paper:'sensitive'} })
     expect(JSON.stringify(mail)).not.toMatch(/private|1234567893|secret|sensitive/)

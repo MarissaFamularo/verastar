@@ -40,6 +40,13 @@ function paper(overrides = {}) {
 }
 
 describe('Library paper digest disclosure', () => {
+  it('makes the saved paper title open the paper, without opening details', () => {
+    const html = renderToStaticMarkup(React.createElement(PaperRow, { paper: paper({ pmid: '42513277', citation: {} }), ...handlers }))
+    expect(html).toContain('href="https://pubmed.ncbi.nlm.nih.gov/42513277/"')
+    expect(html).toContain('aria-expanded="false"')
+    const uploaded = renderToStaticMarkup(React.createElement(PaperRow, { paper: paper({ pmid: 'upload-1', citation: {} }), ...handlers }))
+    expect(uploaded).not.toContain('pubmed.ncbi.nlm.nih.gov/upload-1')
+  })
   it('replaces fragmented controls with one collapsed digest-details caret', () => {
     const html = renderToStaticMarkup(React.createElement(PaperRow, { paper: paper(), ...handlers }))
 
