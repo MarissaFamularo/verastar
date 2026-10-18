@@ -3,6 +3,11 @@
 import { supabase, supabaseConfigured, isSignedIn } from './supabase.js'
 import { refreshSponsorship, isSponsored, markSponsored } from './sponsor.js'
 
+// Where people without a US NPI (international clinicians, researchers) ask for an
+// invite code. Codes made for them have npi_required = false (sponsor_invites).
+export const BETA_CONTACT_EMAIL = 'statupfordocs@gmail.com'
+export const NO_NPI_MAILTO = `mailto:${BETA_CONTACT_EMAIL}?subject=${encodeURIComponent('Verastar beta invite (no US NPI)')}`
+
 export const INVITE_MESSAGES = {
   npi_in_use: 'This NPI already has beta access on another account. Sign in with that account, or contact the Verastar team for help.',
   email_required: 'Verify your email by signing in again, then retry.',

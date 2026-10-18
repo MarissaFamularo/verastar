@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { awaitWithin } from '../lib/deadline.js'
 import { canRedeem, redeemInviteCode, normalizeInviteCode, INVITE_MESSAGES } from '../lib/inviteCode.js'
 import NpiMatch from './NpiMatch.jsx'
+import NoNpiContact from './NoNpiContact.jsx'
 import { isSponsored } from '../lib/sponsor.js'
 
 export const INVITE_REDEEM_TIMEOUT_MS = 8000
@@ -171,6 +172,7 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
         </button>
       </div>
       {visibleNote && <p role={visibleOk ? 'status' : 'alert'} style={{ margin: '8px 0 0', fontSize: big ? 13 : 12, color: visibleOk ? 'var(--color-verified-soft)' : 'var(--color-domain-vascular)' }}>{visibleNote}</p>}
+      <NoNpiContact small={!big} />
     </form>
   )
 }

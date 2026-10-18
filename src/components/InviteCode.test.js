@@ -2,6 +2,7 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mountDom, deferred } from '../test-utils/dom.js'
 vi.mock('../lib/inviteCode.js', () => ({
+  NO_NPI_MAILTO: 'mailto:beta@example.test', BETA_CONTACT_EMAIL: 'beta@example.test',
   canRedeem: () => true, redeemInviteCode: vi.fn(), normalizeInviteCode: (s) => s.toUpperCase(),
   INVITE_MESSAGES: {
     invalid: 'That code is not recognized. Check it and try again.',
@@ -25,6 +26,11 @@ async function enterCode() {
   await dom.submit(dom.q('form'))
 }
 describe('beta code before NPI', () => {
+  it('offers people without a US NPI an email for a code', async () => {
+    await dom.render(React.createElement(InviteCode))
+    expect(dom.text()).toContain('Outside the US or no NPI?')
+    expect(dom.q('a[href="mailto:beta@example.test"]')).not.toBeNull()
+  })
   it('starts with code and keeps invalid codes out of the NPI form', async () => {
     redeemInviteCode.mockResolvedValue({ status: 'invalid' })
     await dom.render(React.createElement(InviteCode))

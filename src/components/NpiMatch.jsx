@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { awaitWithin } from '../lib/deadline.js'
 import { currentNpiMatch, matchNpi } from '../lib/npi.js'
+import NoNpiContact from './NoNpiContact.jsx'
 
 const NPI_MATCH_TIMEOUT_MS = 8000
 
@@ -79,5 +80,6 @@ export default function NpiMatch({ onContinue, onBack, preview = false, draft, o
         {onBack && <button type="button" onClick={onBack} style={{ marginLeft: 18, border: 0, background: 'transparent', color: 'var(--color-fg-dim)' }}>Back</button>}
       </div>
     </form>
+    {!match && <NoNpiContact />}
   </div>
 }

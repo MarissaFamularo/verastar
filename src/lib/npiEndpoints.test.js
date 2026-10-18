@@ -140,6 +140,18 @@ describe('NPI Edge boundaries', () => {
     })
     expect(await (await handlers.redeem(request({ code: 'BETA' }))).json()).toEqual({ status: 'exhausted' })
   })
+  it('redeems a code issued without the NPI requirement for an account with no match', async () => {
+    inviteResult.data.npi_required = false
+    expect(await (await handlers.redeem(request({ code: 'INTL' }))).json()).toEqual({ status: 'enrolled' })
+    expect(admin.rpc).toHaveBeenCalledWith('redeem_sponsor_invite', { p_code: 'INTL', p_user_id: 'u1' })
+  })
+  it('still refuses a used-up or revoked no-NPI code before redemption', async () => {
+    for (const [change, status] of [[{ uses: 10 }, 'exhausted'], [{ revoked_at: '2026-01-01' }, 'inactive']]) {
+      inviteResult = { data: { revoked_at: null, expires_at: null, uses: 0, max_uses: 10, npi_required: false, ...change } }
+      expect(await (await handlers.redeem(request({ code: 'INTL' }))).json()).toEqual({ status })
+    }
+    expect(admin.rpc).not.toHaveBeenCalledWith('redeem_sponsor_invite', expect.anything())
+  })
   it('redeems only with persisted server-owned receipt', async () => {
     user.app_metadata.npi_match = receipt
     expect((await handlers.redeem(request({ code: 'BETA' }))).status).toBe(200)
