@@ -3,7 +3,7 @@
 // block survives the window allocation. Synthetic fixtures only.
 import { describe, it, expect } from 'vitest'
 import { sanitizeRanking } from './triage.js'
-import { selectEvidenceWindow, EVIDENCE_WINDOW_VERSION, compactMethods } from './evidenceWindow.js'
+import { selectEvidenceWindow, EVIDENCE_WINDOW_VERSION } from './evidenceWindow.js'
 import { SNIPPET_CHARS } from './check.js'
 
 const base = { id: 'p1', score: 70, tier: 1, design_caution: '', relevance: 'Relevant.' }
@@ -62,7 +62,7 @@ describe('late primary endpoint definition survives the Methods allocation', () 
     expect(w.text).toContain(R2)
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
     const methods = w.parts.find((p) => p.kind === 'methods')
-    expect(methods.chars).toBeLessThanOrEqual(601)
+    expect(methods.chars).toBe('METHODS: '.length + long.replace(/\s+/g, ' ').trim().length)
     // design/population context still precedes the endpoint, in source order
     expect(w.text.indexOf('Adults with condition Z')).toBeLessThan(w.text.indexOf(ENDPOINT))
     expect(w.text.indexOf('METHODS')).toBeLessThan(w.text.indexOf('RESULTS'))
@@ -72,10 +72,10 @@ describe('late primary endpoint definition survives the Methods allocation', () 
     const w = selectEvidenceWindow({ tier: 'abstract_only', text: text(short) })
     expect(w.text).toContain(`METHODS: ${short}`)
   })
-  it('long methods without an endpoint definition are plainly truncated as before', () => {
+  it('long methods without an endpoint definition remain whole', () => {
     const w = selectEvidenceWindow({ tier: 'abstract_only', text: text(FILLER) })
     expect(w.text).not.toContain('The primary outcome')
-    expect(w.text).toMatch(/…/)
+    expect(w.text).not.toContain('…')
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
   })
   it('no introduction fallback: full text with no Results and no abstract is unavailable', () => {
@@ -89,10 +89,10 @@ describe('sentence boundaries preserve decimals in rescued definitions', () => {
     const opening = 'Adults were randomized. '
     const filler = 'A long description of recruitment and assessment procedures. '.repeat(14)
     const endpoint = 'The primary outcome was event A above 0.5 units or event B within follow-up.'
-    const text = compactMethods(opening + filler + endpoint, 400)
+    const text = selectEvidenceWindow({tier: 'abstract_only', text: 'METHODS: ' + opening + filler + endpoint}).text
     expect(text).toContain(endpoint)
     expect(text).toContain('Adults were randomized.')
-    expect(text.length).toBeLessThanOrEqual(400)
+    expect(text).toContain(opening + filler + endpoint)
   })
 })
 
@@ -104,10 +104,10 @@ describe('long unstructured body Results use labelled abstract findings', () => 
   it('does not fill the snippet with recruitment before the outcome paragraph', () => {
     const source = {tier:'full_text',abstractParts,sections:[{label:'Results',kind:'results',text:'Recruitment and procedure details. '.repeat(110) + 'The primary composite outcome did not differ.'}]}
     const w = selectEvidenceWindow(source)
-    expect(w.kind).toBe('abstract')
-    expect(w.text).toContain("[Evidence window: the paper's abstract]")
+    expect(w.kind).toBe('results')
+    expect(w.text).toContain('[Evidence window: complete abstract and complete Results sections of the full text]')
     expect(w.text).toContain(abstractParts[1].text)
-    expect(w.text).not.toContain('Recruitment and procedure details')
+    expect(w.text).toContain(source.sections[0].text)
     expect(w.text.length).toBeLessThanOrEqual(SNIPPET_CHARS)
   })
   it('keeps a short body Results section instead of switching needlessly', () => {

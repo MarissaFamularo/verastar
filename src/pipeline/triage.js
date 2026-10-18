@@ -14,7 +14,8 @@ import { PILOT_DIGEST_LIMIT } from './digestLimit.js'
 // model sneaks in.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
-import { checkFindings, SNIPPET_CHARS } from './check.js'
+import { checkFindings } from './check.js'
+import { assertEvidenceBatch, assertProseRequest, proseRequestBudget } from './evidenceWindow.js'
 import { repairNumberFree, allowedNumbers, allowedTimepoints, allowedCiLevels, numbersGrounded, CI_LEVEL_RE } from './numberFree.js'
 import { tagResult, describeTags, primaryScopeVerdict, headlinesNonPrimary } from './primaryResult.js'
 import { journalPreferenceText } from './journals.js'
@@ -219,6 +220,7 @@ export async function triage({
   // and a caller that already filtered the list all land here.
   if (!Array.isArray(candidates) || candidates.length === 0) return []
   if (candidates.length > PILOT_DIGEST_LIMIT) throw new Error('Pilot digests are limited to 20 papers; no ranking request was sent.')
+  assertEvidenceBatch(candidates.map(c => c.summary || ''))
   const stars = northStars.length ? northStars.join(', ') : '(none set)'
   const projs = projects.length ? projects.join(', ') : '(none set)'
   const content =
@@ -245,16 +247,26 @@ export async function triage({
         const steering = (Array.isArray(c.topicSteering) ? c.topicSteering : [])
           .map((row) => `${row.topic || 'Unnamed topic'} → ${(row.northStars || []).length ? row.northStars.join(', ') : '(unmapped)'}`)
           .join('; ')
-        return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\nSearch steering: ${steering || '(not available)'}\n${(c.summary || '').slice(0, SNIPPET_CHARS)}\n${primaryLine}Verified results:\n${facts}`
+        return `[${c.id}] ${c.title}\nDesign: ${c.design || 'unknown'}\nSearch steering: ${steering || '(not available)'}\n${c.summary || ''}\n${primaryLine}Verified results:\n${facts}`
       })
       .join('\n\n')
 
+  const outputTokens = maxTokens ?? triageMaxTokens(candidates.length)
+  if (!proseRequestBudget(buildSystem(rubric), content, TRIAGE_SCHEMA, outputTokens).fits && candidates.length > 1) {
+    const middle = Math.ceil(candidates.length / 2)
+    const rankings = []
+    for (const group of [candidates.slice(0, middle), candidates.slice(middle)]) {
+      rankings.push(...await triage({ northStars, projects, journalPreferences, rubric, candidates: group, model, maxTokens }))
+    }
+    return rankings
+  }
+  assertProseRequest(buildSystem(rubric), content, TRIAGE_SCHEMA, outputTokens)
   const result = await extractStructured({
     model,
     system: buildSystem(rubric),
     content,
     schema: TRIAGE_SCHEMA,
-    maxTokens: maxTokens ?? triageMaxTokens(candidates.length),
+    maxTokens: outputTokens,
     thinking: { type: 'disabled' }, // ranking/summary is not a reasoning task; keep output for JSON
   })
   // The guard, unconditionally — every ranking is sanitized against ITS paper's verified

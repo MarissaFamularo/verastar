@@ -71,7 +71,7 @@ describe('scheduled ranking reads the evidence window', () => {
     for (const c of candidates) {
       expect(c.summary).toContain(RESULT)
       expect(c.summary).not.toContain('0.50')
-      expect(c.summary).toMatch(/^\[Evidence window: Results section/)
+      expect(c.summary).toMatch(/^\[Evidence window: complete Results sections/)
     }
     // The persisted digest still carries the complete verification corpus.
     const saved = mem.get('digests/daily:latest')
@@ -101,12 +101,16 @@ describe('scheduled ranking reads the evidence window', () => {
     expect(candidates.every((c) => c.summary.includes(RESULT) && !c.summary.includes('0.50'))).toBe(true)
   })
 
-  it('an old saved full-text row resumed into ranking gets the explicit empty window', async () => {
+  it('an old saved full-text row resumes with its complete persisted corpus', async () => {
     // A record a previous build left mid-run: processed rows have no evidenceWindow.
     vi.mocked(runPaper).mockImplementation(async (paper) => ({ ...fullTextResult(paper), evidenceWindow: undefined }))
     await runDailyDigest({ budgetMs: 60_000 })
     const { candidates } = vi.mocked(triage).mock.calls[0][0]
-    expect(candidates.map((c) => c.summary)).toEqual(['', ''])
+    for (const c of candidates) {
+      expect(c.summary).toContain(INTRO)
+      expect(c.summary).toContain(RESULT)
+      expect(c.summary).toContain('Complete saved full-text source')
+    }
   })
 })
 

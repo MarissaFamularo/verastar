@@ -14,29 +14,11 @@
 // opt-out at the call sites.
 
 import { extractStructured, MODELS } from '../lib/anthropic.js'
-import { sectionKind } from './evidenceWindow.js'
-import { EVIDENCE_CHARS } from './evidenceContext.js'
+import { sectionKind, SECTION_WINDOW_CHARS, assertEvidenceBatch, assertProseRequest, proseRequestBudget } from './evidenceWindow.js'
 
-// The evidence window, shared with triage's writer prompt so the skeptic judges the
-// claim against EXACTLY the text the writer saw: more text could "support" a claim the
-// writer never had evidence for; less would manufacture refutes. WHICH text fills it is
-// chosen by pipeline/evidenceWindow.js (Results/abstract, never a full-text body prefix);
-// this is only the budget.
-//
-// Sized to hold a WHOLE structured abstract, because a window that stops short of the
-// results section makes both jobs impossible: the writer summarizes a paper it has only
-// seen the methods of, and the skeptic — correctly — refutes the summary for lack of
-// evidence. Measured on her 2026-07-29 digest, after sources.js stopped spending the
-// window on author affiliations: RESULTS at 874 and 1,350 chars, CONCLUSIONS at 1,516 and
-// 2,107, whole cleaned abstracts 1,883 and 2,363. 900 reached neither paper's results.
-// The cost of the larger window is a few hundred tokens per paper on two cheap models.
-//
-// 2026-10-11: callers now pass a results-aware evidence context (evidenceContext.js) —
-// the abstract plus verbatim windows around every extracted result's source quote — instead
-// of the first characters of the PMC body, which held only background and methods for
-// full-text papers. The window grew to fit it (EVIDENCE_CHARS); SNIPPET_CHARS stays as the
-// shared name for existing callers and is the same value.
-export const SNIPPET_CHARS = EVIDENCE_CHARS
+// The shared bound is checked, never sliced. Writer and checker receive identical
+// complete evidence; duplicate finding/caution snippets are sent only once.
+export const SNIPPET_CHARS = SECTION_WINDOW_CHARS
 
 export const CHECK_SCHEMA = {
   type: 'object',
@@ -81,7 +63,7 @@ export const NO_SNIPPET_REASON = 'Not checked: no source text was available to c
 function missingResults(item) {
   if (item.claimType === 'design-caution') return false
   if (item.hasResults === false) return true
-  const snippet = String(item.snippet || '').slice(0, SNIPPET_CHARS)
+  const snippet = String(item.snippet || '')
   if (!snippet.startsWith('[Evidence window:')) return false
   const body = snippet.slice(snippet.indexOf('\n') + 1)
   // Full-text subsection labels can contain a hierarchy separator.
@@ -93,6 +75,7 @@ function missingResults(item) {
 }
 
 export async function checkFindings({ items, model = MODELS.fast, maxTokens }) {
+  assertEvidenceBatch([...new Set((items || []).map(i => String(i.snippet || '')))])
   const out = new Map(
     (items || []).map((i) => [
       String(i.id),
@@ -113,7 +96,7 @@ export async function checkFindings({ items, model = MODELS.fast, maxTokens }) {
   const groups = []
   const bySnippet = new Map()
   for (const item of checkable) {
-    const snippet = String(item.snippet).slice(0, SNIPPET_CHARS)
+    const snippet = String(item.snippet)
     let group = bySnippet.get(snippet)
     if (!group) {
       group = { snippet, claims: [] }
@@ -132,7 +115,18 @@ export async function checkFindings({ items, model = MODELS.fast, maxTokens }) {
       }).join('\n')
     ).join('\n\n')
 
-  const result = await extractStructured({ model, system: SYSTEM, content, schema: CHECK_SCHEMA, maxTokens: maxTokens ?? Math.min(8192, Math.max(2048, checkable.length * 128)) })
+  const outputTokens = maxTokens ?? Math.min(8192, Math.max(2048, checkable.length * 128))
+  if (!proseRequestBudget(SYSTEM, content, CHECK_SCHEMA, outputTokens).fits && groups.length > 1) {
+    const middle = Math.ceil(groups.length / 2)
+    for (const groupSet of [groups.slice(0, middle), groups.slice(middle)]) {
+      const snippets = new Set(groupSet.map(group => group.snippet))
+      const checked = await checkFindings({ items: checkable.filter(item => snippets.has(String(item.snippet))), model, maxTokens })
+      for (const [id, verdict] of checked) out.set(id, verdict)
+    }
+    return out
+  }
+  assertProseRequest(SYSTEM, content, CHECK_SCHEMA, outputTokens)
+  const result = await extractStructured({ model, system: SYSTEM, content, schema: CHECK_SCHEMA, maxTokens: outputTokens })
 
   // Match each returned verdict to a claim id. Models echo ids with decoration ("[123]",
   // "CLAIM 123", "id: 123", quotes, stray spaces); normalizing that is bookkeeping, not

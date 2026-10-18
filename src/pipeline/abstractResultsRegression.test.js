@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { parseAbstractText, selectEvidenceWindow, evidenceWindowFor } from './evidenceWindow.js'
+import { parseAbstractText, selectEvidenceWindow, evidenceWindowFor, SECTION_WINDOW_CHARS } from './evidenceWindow.js'
 vi.mock('../lib/anthropic.js', () => ({ MODELS: { fast: 'x', triage: 'x' }, extractStructured: vi.fn() }))
 import { extractStructured } from '../lib/anthropic.js'
 import { checkFindings, NO_RESULTS_REASON } from './check.js'
@@ -20,7 +20,7 @@ for (const id of ['AS-04', 'AS-02', 'PAD-12', 'HF-13']) {
     const window = selectEvidenceWindow(source)
     expect(window.hasResults).toBe(true)
     expect(window.text).toContain(results.text.slice(0, 100))
-    expect(window.text.length).toBeLessThanOrEqual(2600)
+    expect(window.text.length).toBeLessThanOrEqual(SECTION_WINDOW_CHARS)
     expect(evidenceWindowFor({ source, sourceDoc: d.sourceDoc, evidenceWindow: { version: '2026-10-10.window-v3', text: 'BACKGROUND: stale' } }).text).toBe(window.text)
   })
 }
