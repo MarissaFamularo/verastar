@@ -18,4 +18,5 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: node scripts/check-netlify-headers.mjs
       - run: npm audit --audit-level=moderate
