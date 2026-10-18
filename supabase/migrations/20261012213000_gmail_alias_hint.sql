@@ -1,12 +1,12 @@
 -- Gmail inbox alias check for email-code sign-in.
 --
--- famularo.marissa@gmail.com and famularomarissa@gmail.com reach the same inbox
+-- jane.doe@gmail.com and janedoe@gmail.com reach the same inbox
 -- but create two auth users. This function tells the sign-in screen when a
 -- different existing account normalizes to the address being typed.
 --
 -- It returns only { match: boolean, hint?: text }. The hint is the first
 -- character of the stored address, an ellipsis, and the stored domain
--- (f…@gmail.com). It does not merge accounts and it does not return the address,
+-- (j…@gmail.com). It does not merge accounts and it does not return the address,
 -- the user id, or a list of users.
 --
 -- Not applied by the change that added this file. Apply it with the usual

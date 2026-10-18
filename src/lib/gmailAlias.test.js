@@ -18,34 +18,34 @@ const TICKET = '11111111-1111-4111-8111-111111111111'
 
 describe('gmail alias warning', () => {
   it('recognizes only gmail.com and googlemail.com', () => {
-    expect(isGmailFamily('Famularo.Marissa@Gmail.com')).toBe(true)
+    expect(isGmailFamily('Jane.Doe@Gmail.com')).toBe(true)
     expect(isGmailFamily('a+tag@googlemail.com')).toBe(true)
     expect(isGmailFamily('doctor@clinic.edu')).toBe(false)
-    expect(isGmailFamily('famularo@gmail.com.evil.test')).toBe(false)
+    expect(isGmailFamily('jane@gmail.com.evil.test')).toBe(false)
   })
 
   it('accepts a one-character hint and rejects a full address', () => {
-    expect(isMaskedGmailHint('f…@gmail.com')).toBe(true)
+    expect(isMaskedGmailHint('j…@gmail.com')).toBe(true)
     expect(isMaskedGmailHint('f…@googlemail.com')).toBe(true)
     expect(isMaskedGmailHint('fa…@gmail.com')).toBe(false)
-    expect(isMaskedGmailHint('famularomarissa@gmail.com')).toBe(false)
+    expect(isMaskedGmailHint('janedoe@gmail.com')).toBe(false)
     expect(isMaskedGmailHint('f...@gmail.com')).toBe(false)
     expect(isMaskedGmailHint('f…@clinic.edu')).toBe(false)
   })
 
   it('sends a different spelling to the existing account and stays quiet otherwise', () => {
-    const canonical = gmailAliasDecision({ match: true, hint: 'f…@gmail.com', ticket: TICKET })
+    const canonical = gmailAliasDecision({ match: true, hint: 'j…@gmail.com', ticket: TICKET })
     expect(canonical).toEqual({
       send: 'canonical',
-      note: 'Signing you in as f…@gmail.com (the account already on this inbox)',
+      note: 'Signing you in as j…@gmail.com (the account already on this inbox)',
       ticket: TICKET,
     })
-    expect(gmailCanonicalNote('f…@gmail.com')).toBe(canonical.note)
-    expect(gmailAliasDecision({ match: true, hint: 'f…@gmail.com', ticket: TICKET }, { force: true })).toEqual({ send: 'typed', note: '' })
-    expect(gmailAliasDecision({ match: true, hint: 'f…@gmail.com' })).toEqual({ send: 'blocked', note: '' })
-    expect(gmailAliasDecision({ match: true, hint: 'famularomarissa@gmail.com', ticket: TICKET })).toEqual({ send: 'typed', note: '' })
+    expect(gmailCanonicalNote('j…@gmail.com')).toBe(canonical.note)
+    expect(gmailAliasDecision({ match: true, hint: 'j…@gmail.com', ticket: TICKET }, { force: true })).toEqual({ send: 'typed', note: '' })
+    expect(gmailAliasDecision({ match: true, hint: 'j…@gmail.com' })).toEqual({ send: 'blocked', note: '' })
+    expect(gmailAliasDecision({ match: true, hint: 'janedoe@gmail.com', ticket: TICKET })).toEqual({ send: 'typed', note: '' })
     expect(gmailAliasDecision({ match: false })).toEqual({ send: 'typed', note: '' })
-    expect(gmailAliasDecision({ match: false, hint: 'f…@gmail.com', email: 'famularo.marissa@gmail.com' })).toEqual({ send: 'typed', note: '' })
+    expect(gmailAliasDecision({ match: false, hint: 'j…@gmail.com', email: 'jane.doe@gmail.com' })).toEqual({ send: 'typed', note: '' })
   })
 
   it('asks the server only for gmail addresses and drops an unsafe hint', async () => {
@@ -53,15 +53,15 @@ describe('gmail alias warning', () => {
     await expect(lookupGmailAlias('doctor@clinic.edu')).resolves.toEqual({ match: false })
     expect(supabase.rpc).not.toHaveBeenCalled()
 
-    supabase.rpc.mockResolvedValue({ data: { match: true, hint: 'f…@gmail.com' }, error: null })
-    await expect(lookupGmailAlias('famularo.marissa+notes@gmail.com')).resolves.toEqual({ match: true, hint: 'f…@gmail.com' })
-    expect(supabase.rpc).toHaveBeenCalledWith('gmail_alias_hint', { p_email: 'famularo.marissa+notes@gmail.com' })
+    supabase.rpc.mockResolvedValue({ data: { match: true, hint: 'j…@gmail.com' }, error: null })
+    await expect(lookupGmailAlias('jane.doe+notes@gmail.com')).resolves.toEqual({ match: true, hint: 'j…@gmail.com' })
+    expect(supabase.rpc).toHaveBeenCalledWith('gmail_alias_hint', { p_email: 'jane.doe+notes@gmail.com' })
 
-    supabase.rpc.mockResolvedValue({ data: { match: true, hint: 'famularomarissa@gmail.com', email: 'famularomarissa@gmail.com' }, error: null })
-    await expect(lookupGmailAlias('famularo.marissa@gmail.com')).resolves.toEqual({ match: false })
+    supabase.rpc.mockResolvedValue({ data: { match: true, hint: 'janedoe@gmail.com', email: 'janedoe@gmail.com' }, error: null })
+    await expect(lookupGmailAlias('jane.doe@gmail.com')).resolves.toEqual({ match: false })
 
     supabase.rpc.mockRejectedValue(new Error('function gmail_alias_hint does not exist'))
-    await expect(lookupGmailAlias('famularo.marissa@googlemail.com')).resolves.toEqual({ match: false })
+    await expect(lookupGmailAlias('jane.doe@googlemail.com')).resolves.toEqual({ match: false })
   })
 
   it('prepares a gmail spelling and drops any address on the response', async () => {
@@ -69,27 +69,27 @@ describe('gmail alias warning', () => {
     await expect(prepareGmailAlias('doctor@clinic.edu')).resolves.toEqual({ match: false })
 
     supabase.rpc.mockResolvedValue({
-      data: { match: true, hint: 'f…@gmail.com', ticket: TICKET, email: 'famularo.marissa@gmail.com' },
+      data: { match: true, hint: 'j…@gmail.com', ticket: TICKET, email: 'jane.doe@gmail.com' },
       error: null,
     })
-    await expect(prepareGmailAlias('famularo.marissa+notes@gmail.com')).resolves.toEqual({
+    await expect(prepareGmailAlias('jane.doe+notes@gmail.com')).resolves.toEqual({
       match: true,
-      hint: 'f…@gmail.com',
+      hint: 'j…@gmail.com',
       ticket: TICKET,
     })
-    expect(supabase.rpc).toHaveBeenCalledWith('gmail_alias_prepare', { p_email: 'famularo.marissa+notes@gmail.com' })
+    expect(supabase.rpc).toHaveBeenCalledWith('gmail_alias_prepare', { p_email: 'jane.doe+notes@gmail.com' })
 
     supabase.rpc.mockResolvedValue({ data: { match: false }, error: null })
-    await expect(prepareGmailAlias('famularomarissa@gmail.com')).resolves.toEqual({ match: false })
+    await expect(prepareGmailAlias('janedoe@gmail.com')).resolves.toEqual({ match: false })
 
     supabase.rpc.mockRejectedValue(new Error('function gmail_alias_prepare does not exist'))
-    await expect(prepareGmailAlias('famularo.marissa@gmail.com')).resolves.toEqual({ match: false })
+    await expect(prepareGmailAlias('jane.doe@gmail.com')).resolves.toEqual({ match: false })
   })
 
   it('treats a lookup that never returns as no match', async () => {
     vi.useFakeTimers()
     supabase.rpc.mockReturnValue(new Promise(() => {}))
-    const pending = lookupGmailAlias('famularo.marissa@gmail.com')
+    const pending = lookupGmailAlias('jane.doe@gmail.com')
     let settled = false
     const done = pending.then((result) => {
       settled = true

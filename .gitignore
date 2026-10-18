@@ -33,3 +33,6 @@ supabase/.temp/
 
 # /brag launch-video output (rendered ad, composition, bundled music)
 brag-output/
+
+# Local output of scripts/shell-scenarios (screenshots of synthetic runs)
+docs/screenshots/
