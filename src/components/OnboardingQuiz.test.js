@@ -32,6 +32,7 @@ vi.mock('../lib/store.js', () => ({
 }))
 vi.mock('../lib/npi.js', () => ({ currentNpiMatch: () => null }))
 vi.mock('../lib/inviteCode.js', () => ({
+  NO_NPI_MAILTO: 'mailto:beta@example.test', BETA_CONTACT_EMAIL: 'beta@example.test',
   canRedeem: () => true,
   redeemInviteCode: vi.fn(),
   normalizeInviteCode: (s) => String(s || '').toUpperCase(),

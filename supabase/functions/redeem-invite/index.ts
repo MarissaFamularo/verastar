@@ -68,7 +68,7 @@ async function handle(req: Request) {
     // current schema. The atomic RPC below remains the only consumer, and checks
     // these states again after NPI entry (a code may expire or fill in between).
     const { data: invite, error: inviteError } = await admin.from('sponsor_invites')
-      .select('revoked_at, expires_at, ends_at, uses, max_uses').eq('code', code).maybeSingle()
+      .select('revoked_at, expires_at, ends_at, uses, max_uses, npi_required').eq('code', code).maybeSingle()
     if (inviteError) return json(503, { status: 'error' })
     if (!invite) return json(200, { status: 'invalid' })
     // Match the RPC's precedence for existing accounts; no new enrollment occurs.
@@ -98,7 +98,9 @@ async function handle(req: Request) {
     // is an error in the browser console, and onboarding then continues into "You are
     // all set" after the NPI match — which reads as a failed redeem that the UI treated
     // as success. The body status is what the client branches on. This does not enroll.
-    return json(200, { status: 'npi_required' })
+    // A code issued for someone without a US NPI (npi_required = false) goes straight to
+    // the atomic RPC below; every other code still needs the match first.
+    if (invite.npi_required !== false) return json(200, { status: 'npi_required' })
   }
 
   const { data, error } = await admin.rpc('redeem_sponsor_invite', { p_code: code, p_user_id: user.id })

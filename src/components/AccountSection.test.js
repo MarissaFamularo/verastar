@@ -16,6 +16,7 @@ vi.mock('../lib/supabase.js', () => ({
 }))
 vi.mock('../lib/sponsor.js', () => ({ isSponsored: () => false, refreshSponsorship: vi.fn() }))
 vi.mock('../lib/inviteCode.js', () => ({
+  NO_NPI_MAILTO: 'mailto:beta@example.test', BETA_CONTACT_EMAIL: 'beta@example.test',
   canRedeem: () => true,
   redeemInviteCode: vi.fn(),
   normalizeInviteCode: (s) => String(s || '').toUpperCase(),

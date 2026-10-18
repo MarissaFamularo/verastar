@@ -25,6 +25,7 @@ vi.mock('../lib/anthropic.js', () => ({ hasApiKey: () => false, hasModelAccess: 
 vi.mock('../lib/store.js', () => ({ getProfile: vi.fn(async () => null), saveProfile: vi.fn(async () => {}) }))
 vi.mock('../lib/npi.js', () => ({ currentNpiMatch: () => ({ npi: '1' }) }))
 vi.mock('../lib/inviteCode.js', () => ({
+  NO_NPI_MAILTO: 'mailto:beta@example.test', BETA_CONTACT_EMAIL: 'beta@example.test',
   canRedeem: () => true,
   redeemInviteCode: vi.fn(),
   normalizeInviteCode: (s) => String(s || '').toUpperCase(),
