@@ -13,6 +13,8 @@ import { STATS } from '../lib/betaAdmin.fixture.js'
 import AdminDashboard, { ReleaseOverview } from './AdminDashboard.jsx'
 
 let dom
+// The dashboard also loads the feedback inbox; these tests count the stats request only.
+const statsCalls = () => mocks.rpc.mock.calls.filter(([name]) => name === 'beta_release_stats')
 beforeEach(async () => {
   vi.clearAllMocks()
   dom = await mountDom()
@@ -23,8 +25,8 @@ describe('AdminDashboard', () => {
   it('loads the default 30-day range once when shown, and renders every section', async () => {
     mocks.rpc.mockResolvedValue({ data: STATS, error: null })
     await dom.render(React.createElement(AdminDashboard, { active: true }))
-    expect(mocks.rpc).toHaveBeenCalledTimes(1)
-    const [name, args] = mocks.rpc.mock.calls[0]
+    expect(statsCalls()).toHaveLength(1)
+    const [name, args] = statsCalls()[0]
     expect(name).toBe('beta_release_stats')
     expect(Math.round((new Date(args.p_to) - new Date(args.p_from)) / 86_400_000)).toBe(30)
     for (const title of ['Beta users', 'Digest requests', 'Browser digest runs', 'Paper summaries', 'Digests opened', 'Verifier rejections', 'Survey answers']) {
@@ -41,7 +43,7 @@ describe('AdminDashboard', () => {
     await dom.render(React.createElement(AdminDashboard, { active: false }))
     expect(mocks.rpc).not.toHaveBeenCalled()
     await dom.render(React.createElement(AdminDashboard, { active: true }))
-    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    expect(statsCalls()).toHaveLength(1)
   })
 
   it('shows the server refusal for a non-admin', async () => {
@@ -64,7 +66,7 @@ describe('AdminDashboard', () => {
     await dom.type(dom.q('input[aria-label="To date"]'), '2026-10-10')
     await dom.submit(dom.q('form'))
     expect(dom.q('[role="alert"]').textContent).toContain('end date is before the start date')
-    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    expect(statsCalls()).toHaveLength(1)
   })
 
   it('keeps Update focusable while loading and ignores a second submit', async () => {
@@ -77,7 +79,7 @@ describe('AdminDashboard', () => {
     expect(button.disabled).toBe(false) // a disabled control drops focus out of the settings dialog
     expect(button.getAttribute('aria-busy')).toBe('true')
     await dom.submit(dom.q('form'))
-    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    expect(statsCalls()).toHaveLength(1)
     await dom.settle(() => pending.resolve({ data: STATS, error: null }))
     expect(dom.button('Update').getAttribute('aria-busy')).toBe('false')
   })
@@ -88,8 +90,8 @@ describe('AdminDashboard', () => {
     await dom.type(dom.q('input[aria-label="From date"]'), '2026-10-01')
     await dom.type(dom.q('input[aria-label="To date"]'), '2026-10-07')
     await dom.submit(dom.q('form'))
-    expect(mocks.rpc).toHaveBeenCalledTimes(2)
-    const args = mocks.rpc.mock.calls[1][1]
+    expect(statsCalls()).toHaveLength(2)
+    const args = statsCalls()[1][1]
     expect(Math.round((new Date(args.p_to) - new Date(args.p_from)) / 86_400_000)).toBe(7)
     expect(dom.text()).toContain('7 days')
   })
@@ -113,3 +115,14 @@ it('shows quiet schedule health separately from untested signup',async()=>{
  expect(dom.text()).toContain('Monitor active · schedule on track')
  expect(dom.text()).toContain('untested / no successful observation')
 })
+
+it('lists feedback with its sender and counts wrong-badge reports', async () => {
+    const feedback = { messages: [{ at: '2026-10-18T21:51:04Z', email: 'reader@example.test', text: 'Line one\nLine two', view: 'settings', test: false }], wrong_total: 3, wrong_7d: 1 }
+    mocks.rpc.mockImplementation(async (name) => name === 'beta_admin_feedback' ? { data: feedback, error: null } : { data: STATS, error: null })
+    await dom.render(React.createElement(AdminDashboard, { active: true }))
+    const inbox = dom.container.querySelector('section[aria-label="Feedback"]')
+    expect(inbox.textContent).toContain('Line one')
+    expect(inbox.querySelector('a[href="mailto:reader@example.test"]')).toBeTruthy()
+    expect(dom.text()).toContain('“This is wrong” reports')
+    expect(dom.text()).toContain('1 in the last 7 days')
+  })

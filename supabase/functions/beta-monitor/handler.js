@@ -1,5 +1,12 @@
 // No raw error text, account identifier, email, NPI, paper, or event payload enters mail.
 export function incidentEmail(event) {
+  // A new-feedback notice: only that feedback arrived and when. The text, sender and
+  // account stay behind the admin sign-in (Settings > Beta admin).
+  if (event?.check === 'feedback' && event?.kind === 'feedback') {
+    const at = typeof event.observed_at === 'string' ? new Date(event.observed_at) : null
+    if (!at || !Number.isFinite(at.getTime())) throw new Error('Invalid observation time')
+    return { subject: 'Verastar: new beta feedback', text: `New beta feedback arrived.\nTime: ${at.toISOString()}\nRead it in Settings > Beta admin: https://verastar.papertrellis.com/` }
+  }
   if (!['signup', 'digest', 'heartbeat', 'schedule'].includes(event?.check) || !['incident', 'recovery'].includes(event?.kind)) throw new Error('Invalid alert')
   const observed = typeof event.observed_at === 'string' ? new Date(event.observed_at) : null
   if (!observed || !Number.isFinite(observed.getTime())) throw new Error('Invalid observation time')

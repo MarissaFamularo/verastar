@@ -661,6 +661,7 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
   const [noteSaving, setNoteSaving] = useState(false)
   const dirty = note !== (paper.notes || '')
   const cite = [paper.citation?.author, paper.citation?.journal, paper.citation?.year].filter(Boolean).join(' · ')
+  const paperUrl = paper.citation?.url || (/^\d+$/.test(String(paper.pmid || '')) ? `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/` : null)
   const retracted = paperIndicatesRetraction(paper)
   const hasScore = paper.score != null && Number.isFinite(Number(paper.score))
   const extractionStatus = extractionVersionStatus(paper)
@@ -697,7 +698,12 @@ export function PaperRow({ paper, onRemoveTag, onSaveNote, onDelete, onToggleFav
 
   return (
     <div>
-      <p style={{ margin: 0, fontSize: 14.5, fontWeight: 500, color: 'var(--color-fg-soft)', lineHeight: 1.4 }}>{paper.title}</p>
+      <p style={{ margin: 0, fontSize: 14.5, fontWeight: 500, color: 'var(--color-fg-soft)', lineHeight: 1.4 }}>
+        {/* The title opens the paper, as it does in the digest. */}
+        {paperUrl
+          ? <a href={paperUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,.25)', textUnderlineOffset: 3 }}>{paper.title || `PMID ${paper.pmid}`} <span aria-hidden="true" style={{ color: 'var(--color-accent)', fontSize: 12 }}>↗</span></a>
+          : paper.title}
+      </p>
       {cite && <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-fg-muted)', fontFamily: 'var(--font-mono)' }}>{cite}</p>}
       {retracted && (
         <p role="alert" style={{ margin: '7px 0 0', borderLeft: '2px solid var(--color-domain-vascular)', paddingLeft: 9, fontSize: 12, fontWeight: 600, lineHeight: 1.45, color: 'var(--color-domain-vascular)' }}>
