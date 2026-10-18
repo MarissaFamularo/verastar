@@ -12,7 +12,7 @@
 -- (b) A hint is returned only when the typed address is a different spelling
 -- from the canonical inbox (dots and +tags removed). Typing the canonical
 -- address returns the same { match: false } as no account, so a probe of
--- famularomarissa@gmail.com does not reveal famularo.marissa@gmail.com.
+-- janedoe@gmail.com does not reveal jane.doe@gmail.com.
 -- The hint stays one character, an ellipsis, and the stored domain.
 -- The hourly caps drop from 8 per inbox and 20 per client address to 3 and 8.
 -- A canonical probe still consumes the inbox cap.

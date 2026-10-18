@@ -49,10 +49,10 @@ describe('settings account', () => {
     supabase.rpc.mockResolvedValue({ data: { match: false }, error: null })
     await dom.render(React.createElement(AccountSection))
     expect(dom.q('label[for="settings-account-email"]').textContent).toContain('Account email')
-    await dom.type(dom.q('#settings-account-email'), 'famularomarissa@gmail.com')
+    await dom.type(dom.q('#settings-account-email'), 'janedoe@gmail.com')
     await dom.submit(dom.q('form'))
-    expect(sendMagicLink).toHaveBeenCalledWith('famularomarissa@gmail.com')
-    expect(dom.text()).toContain('Code sent to famularomarissa@gmail.com')
+    expect(sendMagicLink).toHaveBeenCalledWith('janedoe@gmail.com')
+    expect(dom.text()).toContain('Code sent to janedoe@gmail.com')
     expect(dom.text()).not.toContain('Signing you in')
     expect(dom.text()).not.toContain('You already have an account')
   })
@@ -62,19 +62,19 @@ describe('settings account', () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon-key')
     supabase.rpc.mockResolvedValue({
-      data: { match: true, hint: 'f…@gmail.com', ticket: TICKET, email: 'famularo.marissa@gmail.com' },
+      data: { match: true, hint: 'j…@gmail.com', ticket: TICKET, email: 'jane.doe@gmail.com' },
       error: null,
     })
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
-      json: async () => ({ sent: true, verifyTicket: VERIFY, email: 'famularo.marissa@gmail.com' }),
+      json: async () => ({ sent: true, verifyTicket: VERIFY, email: 'jane.doe@gmail.com' }),
     })))
     await dom.render(React.createElement(AccountSection))
-    await dom.type(dom.q('#settings-account-email'), 'famularo.marissa+notes@gmail.com')
+    await dom.type(dom.q('#settings-account-email'), 'jane.doe+notes@gmail.com')
     await dom.submit(dom.q('form'))
     expect(sendMagicLink).not.toHaveBeenCalled()
-    expect(dom.text()).toContain('Signing you in as f…@gmail.com (the account already on this inbox)')
-    expect(dom.text()).not.toContain('famularo.marissa@gmail.com')
+    expect(dom.text()).toContain('Signing you in as j…@gmail.com (the account already on this inbox)')
+    expect(dom.text()).not.toContain('jane.doe@gmail.com')
     expect(dom.button('Create a separate account with this spelling instead')).toBeTruthy()
   })
 
@@ -82,7 +82,7 @@ describe('settings account', () => {
     redeemInviteCode.mockResolvedValueOnce({ status: 'invalid' })
       .mockResolvedValueOnce({ status: 'exhausted' })
       .mockResolvedValueOnce({ status: 'slow_down' })
-    await dom.render(React.createElement(AccountSection, { account: { email: 'f…@gmail.com' } }))
+    await dom.render(React.createElement(AccountSection, { account: { email: 'j…@gmail.com' } }))
     expect(dom.q('label[for="beta-invite-code"]').textContent).toContain('Join the beta')
     await dom.type(dom.q('#beta-invite-code'), 'nope')
     await dom.submit(dom.q('#beta-invite-code').closest('form'))

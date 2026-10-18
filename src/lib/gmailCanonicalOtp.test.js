@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { handleGmailCanonicalOtp, safeRedirect, MAX_VERIFY_FAILURES } from '../../supabase/functions/gmail-canonical-otp/handler.js'
 
-const STORED = 'famularo.marissa@gmail.com'
+const STORED = 'jane.doe@gmail.com'
 const TICKET = '11111111-1111-4111-8111-111111111111'
 const VERIFY = '22222222-2222-4222-8222-222222222222'
 
@@ -33,7 +33,7 @@ describe('gmail canonical otp', () => {
     const res = await handleGmailCanonicalOtp(request({
       action: 'send',
       ticket: TICKET,
-      email: 'famularo.marissa+notes@gmail.com',
+      email: 'jane.doe+notes@gmail.com',
       redirectTo: 'https://verastar.papertrellis.com/app',
     }), bound)
     const body = await res.json()

@@ -3,7 +3,7 @@ import { sendCanonicalGmailCode, verifyCanonicalGmailCode } from './gmailCanonic
 
 const TICKET = '11111111-1111-4111-8111-111111111111'
 const VERIFY = '22222222-2222-4222-8222-222222222222'
-const STORED = 'famularo.marissa@gmail.com'
+const STORED = 'jane.doe@gmail.com'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 

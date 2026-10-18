@@ -1,6 +1,6 @@
 # Beta NPI match
 
-Deployed and smoke-tested on 2026-10-12; see `NPI_RELEASE_2026-10-12.json` for exact versions, source hashes, and test limits. The following describes the release requirements. Requires deploying both `match-npi` and the updated `redeem-invite` Edge Functions together with the frontend. Release order: deploy `match-npi` first, then the frontend NPI flow, then updated `redeem-invite` in the same beta cutover; do not open beta admission until all three are live and verified. Deploying the redemption guard first temporarily blocks unmatched older clients. No schema migration is required. No paid model calls are involved.
+Deployed and smoke-tested on 2026-10-12. The following describes the release requirements. Requires deploying both `match-npi` and the updated `redeem-invite` Edge Functions together with the frontend. Release order: deploy `match-npi` first, then the frontend NPI flow, then updated `redeem-invite` in the same beta cutover; do not open beta admission until all three are live and verified. Deploying the redemption guard first temporarily blocks unmatched older clients. No schema migration is required. No paid model calls are involved.
 
 NPI is required only for beta access through an invitation. Enter a beta access code first; a valid, usable code then asks for first name, last name and NPI. Ordinary setup and BYOK do not require NPI. The success text is **NPI matched**. Preview explicitly says no check is performed; sample access remains available. Unconfigured local clones retain their local setup path.
 

@@ -79,14 +79,14 @@ def check(cond, label, detail=''):
     print('ok:', label)
 
 
-sql("insert into auth.users (email, created_at) values ('famularomarissa@gmail.com', now() - interval '2 days')")
+sql("insert into auth.users (email, created_at) values ('janedoe@gmail.com', now() - interval '2 days')")
 
-inbox = parallel(['famularo.marissa@gmail.com'] * 6)
+inbox = parallel(['jane.doe@gmail.com'] * 6)
 check(len(hints(inbox)) == 3, 'one inbox: exactly 3 of 6 overlapping lookups return a hint', '\n'.join(inbox))
 check(len(misses(inbox)) == 3, 'one inbox: the other 3 return match false', '\n'.join(inbox))
-check(all('f…@gmail.com' in row for row in hints(inbox)), 'one inbox: every hint is the one-character mask')
+check(all('j…@gmail.com' in row for row in hints(inbox)), 'one inbox: every hint is the one-character mask')
 check(all('hint' not in row for row in misses(inbox)), 'one inbox: a limited lookup carries no hint')
-check('famularomarissa@gmail.com' not in '\n'.join(inbox), 'one inbox: the stored address is not in the response')
+check('janedoe@gmail.com' not in '\n'.join(inbox), 'one inbox: the stored address is not in the response')
 
 sql('truncate private.gmail_alias_limits')
 stored = ','.join(f"('u{i:02d}@gmail.com', now() - interval '1 day')" for i in range(12))
