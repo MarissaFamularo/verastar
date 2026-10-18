@@ -344,11 +344,13 @@ const authedReq = (body) => new Request('https://example.test/', { method: 'POST
 describe('rate limits kept in the user-writable events table', () => {
   let handlers
   let events
+  let inviteAttempts
   beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     handlers = {}
     events = []
+    inviteAttempts = 0
     const user = { id: 'u1', app_metadata: {} }
     // A count that, like the network, answers after a delay, and an insert that lands later.
     const eventsTable = {
@@ -363,7 +365,12 @@ describe('rate limits kept in the user-writable events table', () => {
     const admin = {
       from: (table) => (table === 'events' ? eventsTable : { select: () => lookupFor(table) }),
       auth: { admin: { updateUserById: vi.fn(async () => ({ error: null })) } },
-      rpc: vi.fn(async (name) => (name === 'spending_contract_version' ? { data: '2026-10-09.spending-v2' } : { data: { status: 'enrolled' } })),
+      rpc: vi.fn(async (name) => {
+        if (name === 'spending_contract_version') return { data: '2026-10-09.spending-v2' }
+        // record_invite_attempt counts and inserts under one per-user lock, so it is atomic.
+        if (name === 'record_invite_attempt') return { data: inviteAttempts++ < 5 ? 'allow' : 'deny' }
+        return { data: { status: 'enrolled' } }
+      }),
     }
     mocks.createClient.mockImplementation((_url, key) => (key === 'service' ? admin : { auth: { getUser: async () => ({ data: { user } }) } }))
     mocks.lookupNpi.mockResolvedValue({ status: 'mismatch' })
@@ -381,10 +388,10 @@ describe('rate limits kept in the user-writable events table', () => {
     expect(mocks.lookupNpi).toHaveBeenCalledTimes(20)
   })
 
-  it('D-1b (high): 20 parallel redeem-invite guesses all pass a 5/hour limit and each learns the code state', async () => {
+  it('D-1b (fixed): 20 parallel redeem-invite guesses admit only 5 through the service-only ledger', async () => {
     const responses = await Promise.all(Array.from({ length: 20 }, () => handlers.redeem(authedReq({ code: 'GUESS' }))))
-    expect(responses.filter((r) => r.status === 429)).toHaveLength(0)
-    expect((await responses[0].json()).status).toBe('npi_required')
+    expect(responses.filter((r) => r.status === 429)).toHaveLength(15)
+    expect(events.filter((e) => e.type === 'invite_attempt')).toHaveLength(0)
   })
 
   it('D-1c (high): the counter is the caller\'s own events rows, which the RLS lets them delete', async () => {
