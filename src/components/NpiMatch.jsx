@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { awaitWithin } from '../lib/deadline.js'
 import { currentNpiMatch, matchNpi } from '../lib/npi.js'
+import { BETA_CONTACT_EMAIL } from '../lib/inviteCode.js'
 import NoNpiContact from './NoNpiContact.jsx'
 
 const NPI_MATCH_TIMEOUT_MS = 8000
@@ -61,6 +62,10 @@ export default function NpiMatch({ onContinue, onBack, preview = false, draft, o
   return <div style={{ maxWidth: 480 }}>
     <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 30, margin: 0 }}>Your NPI</h2>
     <p style={{ color: 'var(--color-fg-dim)', lineHeight: 1.6 }}>Enter your name as it appears in the NPI Registry to join the beta.</p>
+    <p style={{ color: 'var(--color-fg-faint)', fontSize: 13, lineHeight: 1.5 }}>
+      We check your NPI against the public CMS NPI Registry to confirm you’re an individual physician. Your NPI is never sent to the AI model and never shared or sold. To have it removed, email us at{' '}
+      <a href={`mailto:${BETA_CONTACT_EMAIL}`} style={{ color: 'var(--color-accent)' }}>{BETA_CONTACT_EMAIL}</a>.
+    </p>
     <form onSubmit={submit}>
       {[
         ['firstName', 'First name', 'given-name'], ['lastName', 'Last name', 'family-name'], ['npi', 'NPI number', 'off'],
