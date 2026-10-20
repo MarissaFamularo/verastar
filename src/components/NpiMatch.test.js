@@ -21,6 +21,12 @@ describe('NPI entry', () => {
     expect(dom.q('label[for="npi-npi"]').textContent).toContain('NPI number')
     expect(dom.q('#npi-firstName').id).toBe('npi-firstName')
   })
+  it('says what the NPI is used for and how to have it removed', async () => {
+    await dom.render(React.createElement(NpiMatch))
+    expect(dom.text()).toContain('public CMS NPI Registry')
+    expect(dom.text()).toContain('never sent to the AI model and never shared or sold')
+    expect(dom.q('a[href="mailto:statupfordocs@gmail.com"]').textContent).toBe('statupfordocs@gmail.com')
+  })
   it('shows matched only after success, continues with receipt, clears when fields change', async () => {
     const onContinue = vi.fn()
     matchNpi.mockResolvedValue(receipt)
