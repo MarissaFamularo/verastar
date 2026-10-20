@@ -149,8 +149,8 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
       <label htmlFor={inputId} style={{ display: 'block', margin: 0, fontSize: big ? 15 : 12.5, fontWeight: 600, color: big ? 'var(--color-fg)' : 'var(--color-fg-soft)' }}>Join the beta</label>
       <p id={`${inputId}-hint`} style={{ margin: big ? '4px 0 12px' : '3px 0 8px', fontSize: big ? 13.5 : 11.5, color: big ? 'var(--color-fg-dim)' : 'var(--color-fg-faint)', lineHeight: 1.5 }}>
         {big
-          ? 'Invitation code optional. Continue with your verified email and a matching individual physician NPI/name. No personal API key is needed.'
-          : 'Use an invitation code, or continue without one using your verified email and a matching individual physician NPI/name.'}
+          ? 'Physicians: tap Continue. You’ll enter your NPI on the next screen. Only fill in the box if someone gave you an invitation code. No personal API key is needed.'
+          : 'Physicians: tap Continue to enter your NPI on the next screen. Only fill in the box if someone gave you an invitation code.'}
       </p>
       <div className="flex" style={{ gap: big ? 10 : 8 }}>
         <input
@@ -159,7 +159,7 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
           value={activeCode}
           // Show the code the way it was issued, as it is typed, so what they see is what is sent.
           onChange={(e) => updateCode(normalizeInviteCode(e.target.value))}
-          placeholder="Beta access code (optional)"
+          placeholder="Invitation code, if you have one"
           autoComplete="off"
           autoCapitalize="characters"
           disabled={state === 'busy'}
@@ -168,7 +168,8 @@ export default function InviteCode({ onEnrolled, lead = false, preview = false, 
           style={{ padding: big ? '12px 15px' : '8px 10px', borderRadius: big ? 11 : 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: big ? 15 : 12.5, fontFamily: 'inherit', outline: 'none' }}
         />
         <button type="submit" disabled={state === 'busy'} aria-describedby={`${inputId}-hint`} className="cursor-pointer" style={{ padding: big ? '12px 20px' : '6px 10px', border: 0, borderRadius: big ? 11 : 8, background: 'var(--color-accent)', color: '#1c1206', fontSize: big ? 15 : 11.5, fontWeight: 600, fontFamily: 'inherit', opacity: state === 'busy' ? 0.5 : 1 }}>
-          {state === 'busy' ? 'Checking…' : 'Continue'}
+          {/* People typed their NPI into this box. An empty box leads to the NPI step, so say so. */}
+          {state === 'busy' ? 'Checking…' : activeCode.trim() ? 'Continue' : 'Continue to NPI'}
         </button>
       </div>
       {visibleNote && <p role={visibleOk ? 'status' : 'alert'} style={{ margin: '8px 0 0', fontSize: big ? 13 : 12, color: visibleOk ? 'var(--color-verified-soft)' : 'var(--color-domain-vascular)' }}>{visibleNote}</p>}

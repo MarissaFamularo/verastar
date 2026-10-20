@@ -31,6 +31,14 @@ describe('beta code before NPI', () => {
     expect(dom.text()).toContain('Outside the US or no NPI?')
     expect(dom.q('a[href="mailto:beta@example.test"]')).not.toBeNull()
   })
+  it('points an empty box at the NPI step so an NPI is not typed in as a code', async () => {
+    await dom.render(React.createElement(InviteCode))
+    const submit = () => dom.q('form button[type="submit"]').textContent
+    expect(submit()).toBe('Continue to NPI')
+    expect(dom.q('#beta-access-code').getAttribute('placeholder')).toBe('Invitation code, if you have one')
+    await dom.type(dom.q('#beta-access-code'), 'BETA')
+    expect(submit()).toBe('Continue')
+  })
   it('starts with code and keeps invalid codes out of the NPI form', async () => {
     redeemInviteCode.mockResolvedValue({ status: 'invalid' })
     await dom.render(React.createElement(InviteCode))

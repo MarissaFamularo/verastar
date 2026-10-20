@@ -528,7 +528,7 @@ describe('onboarding sign-in and review', () => {
     const continues = dom.buttons().filter((b) => b.textContent.includes('Continue'))
     expect(continues).toHaveLength(1)
     expect(continues[0].disabled).toBe(false)
-    expect(dom.text()).toContain('Invitation code optional')
+    expect(dom.text()).toContain('Physicians: tap Continue')
     expect(dom.text()).toContain('Continue above to join the beta')
     expect(dom.q('label[for="beta-access-code"]')).toBeTruthy()
   })
