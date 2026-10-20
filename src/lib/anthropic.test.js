@@ -26,6 +26,7 @@ import {
   denialReason,
   sponsoredRefusalMessage,
   CapReachedError,
+  stripPreflightHeaders,
 } from './anthropic.js'
 import { CAP_MESSAGE, PAUSE_MESSAGE, OVERRUN_MESSAGE, HELD_MESSAGE } from '../../supabase/functions/_shared/spending.js'
 
@@ -245,5 +246,24 @@ describe('sponsored 402 wording', () => {
     expect(err.reason).toBe('overrun_review')
     expect(err.message).toBe(OVERRUN_MESSAGE)
     expect(new CapReachedError().message).toBe(CAP_MESSAGE)
+  })
+})
+
+describe('stripPreflightHeaders', () => {
+  it('drops SDK telemetry and user-agent, keeps everything the proxy reads', () => {
+    const out = stripPreflightHeaders({
+      'User-Agent': 'Anthropic/JS 0.110.0',
+      'X-Stainless-Lang': 'js',
+      'x-stainless-retry-count': '0',
+      'content-type': 'application/json',
+      'anthropic-version': '2023-06-01',
+      'x-verastar-purpose': 'interview',
+    })
+    expect([...out.keys()].sort()).toEqual(['anthropic-version', 'content-type', 'x-verastar-purpose'])
+  })
+
+  it('accepts a Headers instance and a missing value', () => {
+    expect([...stripPreflightHeaders(new Headers({ 'user-agent': 'x', accept: 'application/json' })).keys()]).toEqual(['accept'])
+    expect([...stripPreflightHeaders(undefined).keys()]).toEqual([])
   })
 })

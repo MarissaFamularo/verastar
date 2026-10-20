@@ -20,9 +20,12 @@ import { accountActive, cachedResponse, parseCacheHeader } from './logic.js'
 import { checkPaidRequest, readBoundedText } from '../_shared/requestPolicy.js'
 import { guardedProviderCall, refusal } from '../_shared/spending.js'
 
+// user-agent: the SDK sets one, and WebKit (every iPhone browser) lists it in the preflight
+// where Chromium does not. Without it every sponsored call from an iPhone failed as
+// "Connection error." before reaching this function (2026-10-19 beta launch).
 export const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-api-key, anthropic-version, anthropic-beta, anthropic-dangerous-direct-browser-access, x-verastar-cache, x-verastar-purpose, x-verastar-request-id',
+  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-api-key, anthropic-version, anthropic-beta, anthropic-dangerous-direct-browser-access, x-verastar-cache, x-verastar-purpose, x-verastar-request-id, user-agent',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   // The browser SDK must see this header to suppress retries after ambiguous outcomes.
   'Access-Control-Expose-Headers': 'x-verastar-cache, x-verastar-denial, x-verastar-request-id, x-should-retry',

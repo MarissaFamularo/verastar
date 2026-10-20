@@ -3,7 +3,8 @@
 // that the proxy never writes the shared evidence cache.
 import { describe, it, expect } from 'vitest'
 import Anthropic from '@anthropic-ai/sdk'
-import { handleModelRequest } from '../../supabase/functions/model/handler.js'
+import { handleModelRequest, CORS } from '../../supabase/functions/model/handler.js'
+import { stripPreflightHeaders } from './anthropic.js'
 import { fakeLedger, fakeProvider } from './spendingFakes.js'
 
 const HASH = 'c'.repeat(64)
@@ -208,5 +209,52 @@ describe('browser SDK honors proxy retry refusals', () => {
     expect(h.provider.sent).toHaveLength(1)
     expect(h.ledger.rows.size).toBe(1)
     expect([...h.ledger.rows.values()][0].state).toBe('released')
+  })
+})
+
+// The browser blocks a cross-origin call whose preflight lists a header the proxy does not
+// allow, before anything reaches the proxy. WebKit lists user-agent; Chromium does not. On
+// 2026-10-19 that failed every sponsored call from an iPhone. These read the real SDK's
+// request headers so an SDK upgrade that adds one fails here, not on a phone.
+describe('CORS allow-list covers what the browser SDK sends', () => {
+  const SAFELISTED = new Set(['accept', 'accept-language', 'content-language'])
+  const allowed = new Set(CORS['Access-Control-Allow-Headers'].split(',').map((s) => s.trim().toLowerCase()))
+
+  async function sdkHeaders() {
+    let sent = null
+    const client = new Anthropic({
+      apiKey: 'sponsored', baseURL: 'https://fn.example/functions/v1/model', timeout: 150000, maxRetries: 0,
+      fetch: async (url, init) => { sent = new Headers(init.headers); return new Response(JSON.stringify(okResponse.body), { status: 200, headers: { 'content-type': 'application/json' } }) },
+    })
+    await client.messages.create(goodBody, { headers: { 'x-verastar-purpose': 'test', 'x-verastar-cache': HASH } })
+    return sent
+  }
+  const notAllowed = (headers) => [...headers.keys()].map((n) => n.toLowerCase()).filter((n) => !SAFELISTED.has(n) && !allowed.has(n))
+
+  it('the SDK really does send user-agent (the header WebKit preflights)', async () => {
+    expect((await sdkHeaders()).has('user-agent')).toBe(true)
+  })
+
+  it('allows every header a pre-fix client sends once x-stainless-* is stripped', async () => {
+    const headers = await sdkHeaders()
+    for (const name of [...headers.keys()]) if (name.toLowerCase().startsWith('x-stainless-')) headers.delete(name)
+    headers.set('x-verastar-request-id', 'r'.repeat(16))
+    headers.set('authorization', 'Bearer jwt')
+    headers.set('apikey', 'anon')
+    expect(notAllowed(headers)).toEqual([])
+  })
+
+  it('allows every header the current client sends', async () => {
+    const headers = stripPreflightHeaders(await sdkHeaders())
+    headers.set('x-verastar-request-id', 'r'.repeat(16))
+    headers.set('authorization', 'Bearer jwt')
+    headers.set('apikey', 'anon')
+    expect(headers.has('user-agent')).toBe(false)
+    expect(notAllowed(headers)).toEqual([])
+  })
+
+  it('answers the preflight with that list', async () => {
+    const res = await handleModelRequest(new Request('https://fn.example/functions/v1/model/v1/messages', { method: 'OPTIONS' }), harness().deps)
+    expect(res.headers.get('access-control-allow-headers')).toContain('user-agent')
   })
 })

@@ -259,6 +259,21 @@ export function getClient() {
   return _client
 }
 
+// Headers the SDK sets that the proxy has no use for. Any non-safelisted header has to be on
+// the proxy's CORS allow-list or the browser blocks the call before it leaves ("Connection
+// error."). X-Stainless-* is SDK telemetry. User-Agent is the SDK's own: Chromium leaves it
+// out of the preflight, but WebKit (every iPhone browser) lists it, which failed every
+// sponsored iPhone call at the 2026-10-19 beta launch. The proxy also allows it now, so
+// both sides would have to regress for this to come back. Pure; exported for tests.
+export function stripPreflightHeaders(init) {
+  const headers = new Headers(init || {})
+  for (const name of [...headers.keys()]) {
+    const lower = name.toLowerCase()
+    if (lower.startsWith('x-stainless-') || lower === 'user-agent') headers.delete(name)
+  }
+  return headers
+}
+
 function getSponsoredClient() {
   if (_sponsoredClient) return _sponsoredClient
   if (!supabaseConfigured) throw new Error('Sponsored access needs a configured backend.')
@@ -276,14 +291,7 @@ function getSponsoredClient() {
       const { data } = await supabase.auth.getSession()
       const token = data?.session?.access_token
       if (!token) throw new Error('Sign in again to continue.')
-      const headers = new Headers(init.headers || {})
-      // The SDK stamps X-Stainless-* telemetry headers on every request. The proxy's CORS
-      // preflight allows a fixed header list that does not include them, so the browser
-      // blocks the call before it leaves ("Connection error."). The proxy has no use for
-      // them; dropping them here keeps the allow-list tight instead of widening it.
-      for (const name of [...headers.keys()]) {
-        if (name.toLowerCase().startsWith('x-stainless-')) headers.delete(name)
-      }
+      const headers = stripPreflightHeaders(init.headers)
       // One id per HTTP attempt (an SDK retry is a new attempt): the proxy binds it to this
       // account and request body, so a replayed attempt is never dispatched twice.
       headers.set('x-verastar-request-id', globalThis.crypto.randomUUID())
