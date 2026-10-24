@@ -31,8 +31,8 @@
     "eslint-plugin-react-refresh": "0.4.26",
     "globals": "16.5.0",
     "tailwindcss": "4.3.2",
-    "vite": "7.3.6",
-    "vitest": "4.1.11"
+    "vite": "7.3.7",
+    "vitest": "4.1.12"
   },
   "engines": {
     "node": ">=22.12.0"

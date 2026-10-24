@@ -90,6 +90,9 @@ STARDUST 11.2 mmHg → verified-registry; an injected HR 0.94 → flagged.
 
 - `model`, `digest-run`, `redeem-invite`, `match-npi`, `gmail-canonical-otp`: who can call
   each, what a non-sponsored or anonymous caller gets, rate limits, CORS.
+- Email-code bot protection (docs/AUTH_BOT_PROTECTION.md): with CAPTCHA on, `/auth/v1/otp`
+  without a token returns `captcha_failed`; both send routes (typed address and
+  `gmail-canonical-otp`) succeed with one; iPhone Safari and the installed app can send.
 - `gmail_alias_hint` / `gmail_alias_prepare` are anon-callable SECURITY DEFINER: confirm
   they cannot enumerate accounts or exceed their private rate-limit tables.
 - Reservation lifecycle: settle, release only on a definitive non-charge, ambiguous holds,

@@ -8,9 +8,15 @@
 // code starts a new attempt: the previous check can still sign the user in if
 // it succeeds and no session exists yet, but its in-flight state cannot block
 // the replacement code.
+//
+// Every send carries a fresh CAPTCHA token when VITE_TURNSTILE_SITE_KEY is set
+// (lib/captcha.js). The token is fetched alongside the Gmail alias lookup and is
+// not on the 8s delivery clock: a person may need to answer a check first.
+// Supabase Auth, not this hook, decides whether a send without a token is allowed.
 
 import { useRef, useState } from 'react'
 import { awaitWithin } from './deadline.js'
+import { CAPTCHA_MESSAGE, getCaptchaToken, isCaptchaError } from './captcha.js'
 import { sendCanonicalGmailCode, verifyCanonicalGmailCode } from './gmailCanonical.js'
 import { gmailAliasDecision, prepareGmailAlias } from './gmailAlias.js'
 import { adoptEmailSession, sendMagicLink, supabase, verifyEmailCode } from './supabase.js'
@@ -238,14 +244,19 @@ export function useEmailCodeSignIn() {
     }
   }
 
-  async function deliver(op, decision) {
+  async function deliver(op, decision, captchaToken) {
     const canonical = decision.send === 'canonical'
+    const redirectTo = typeof window === 'undefined' ? '' : window.location?.origin || ''
+    // The token is only passed when CAPTCHA is configured, so an unconfigured build
+    // sends exactly what it sent before.
     const pendingSend = canonical
-      ? sendCanonicalGmailCode({ ticket: decision.ticket, redirectTo: typeof window === 'undefined' ? '' : window.location?.origin || '' })
-      : sendMagicLink(op.typed)
+      ? sendCanonicalGmailCode(captchaToken
+        ? { ticket: decision.ticket, redirectTo, captchaToken }
+        : { ticket: decision.ticket, redirectTo })
+      : captchaToken ? sendMagicLink(op.typed, captchaToken) : sendMagicLink(op.typed)
     const accept = (value) => {
       if (canonical && (!value?.ok || !value.verifyTicket)) {
-        failDelivery(op)
+        failDelivery(op, value?.captcha ? CAPTCHA_MESSAGE : undefined)
         return
       }
       acceptDelivery(op, canonical
@@ -255,7 +266,8 @@ export function useEmailCodeSignIn() {
     // Attach recovery before racing the timeout. The destination and sequence
     // checks apply equally to ordinary responses and late successes.
     const settled = Promise.resolve(pendingSend).then(accept, (err) => {
-      failDelivery(op, canonical ? undefined : err?.message || String(err))
+      if (isCaptchaError(err)) failDelivery(op, CAPTCHA_MESSAGE)
+      else failDelivery(op, canonical ? undefined : err?.message || String(err))
     })
     const result = await awaitWithin(settled, EMAIL_CODE_TIMEOUT_MS)
     if (result.timeout) failDelivery(op)
@@ -289,6 +301,11 @@ export function useEmailCodeSignIn() {
     setResending(op.resend)
     if (!op.destination.receipt) setSendState('sending')
     setSendError('')
+    // Settles to { token } or { error }; never rejects, so an abandoned send leaves
+    // no unhandled rejection behind.
+    const captcha = Promise.resolve()
+      .then(() => getCaptchaToken())
+      .then((token) => ({ token }), (error) => ({ error }))
     try {
       let decision = { send: 'typed' }
       if (op.destination.kind !== 'typed') {
@@ -307,7 +324,13 @@ export function useEmailCodeSignIn() {
         // address too; a later lookup cannot change the account beneath it.
         if (decision.send === 'typed') op.destination.kind = 'typed'
       }
-      await deliver(op, decision)
+      const proof = await captcha
+      if (!ownsDestination(op)) return
+      // A widget that fails (blocked script, Cloudflare error) does not stop the send:
+      // Supabase Auth is the gate. With CAPTCHA protection on it refuses the tokenless
+      // request (shown as CAPTCHA_MESSAGE below); with it off the code still goes out,
+      // so a bad site key or hostname can never lock physicians out on its own.
+      await deliver(op, decision, proof.error ? undefined : proof.token)
     } catch (err) {
       failDelivery(op, err?.message || EMAIL_CODE_MESSAGES.network)
     } finally {

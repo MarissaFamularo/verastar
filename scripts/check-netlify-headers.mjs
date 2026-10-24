@@ -48,6 +48,12 @@ if (scriptTokens.includes("'unsafe-inline'") || scriptTokens.includes("'unsafe-e
 if (!scriptTokens.includes("'wasm-unsafe-eval'")) fail('script-src must allow pdf.js WebAssembly compilation')
 if (!directive('style-src').includes("'unsafe-inline'")) fail('style-src must allow the inline styles React sets')
 if (!directive('worker-src').includes("'self'")) fail("worker-src must allow the same-origin pdf.js worker")
+// Turnstile (src/lib/captcha.js) loads one script and renders one iframe. Nothing
+// else may be framed.
+const turnstile = 'https://challenges.cloudflare.com'
+if (!scriptTokens.includes(turnstile)) fail('script-src must allow the Turnstile script')
+const frameTokens = directive('frame-src').split(/\s+/)
+if (frameTokens.join(' ') !== turnstile) fail('frame-src must allow only the Turnstile iframe')
 
 // Hosts the browser navigates to or only mentions. They are not fetch/script/style loads.
 const navigationOnly = new Set([

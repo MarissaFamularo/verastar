@@ -44,13 +44,18 @@ async function post(body) {
   return { ok: res.ok, body: out && typeof out === 'object' ? out : null }
 }
 
-export async function sendCanonicalGmailCode({ ticket, redirectTo } = {}) {
+// captchaToken is forwarded to the function, which hands it to Supabase Auth with
+// the send. It is left off the body when CAPTCHA is not configured.
+export async function sendCanonicalGmailCode({ ticket, redirectTo, captchaToken } = {}) {
   if (!isUuid(ticket)) return { ok: false }
-  const { ok, body } = await post({
+  const request = {
     action: 'send',
     ticket,
     redirectTo: safeRedirect(redirectTo),
-  })
+  }
+  if (typeof captchaToken === 'string' && captchaToken) request.captchaToken = captchaToken
+  const { ok, body } = await post(request)
+  if (body?.status === 'captcha') return { ok: false, captcha: true }
   if (!ok || !isUuid(body?.verifyTicket)) return { ok: false }
   return { ok: true, verifyTicket: body.verifyTicket }
 }
