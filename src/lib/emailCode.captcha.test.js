@@ -84,11 +84,19 @@ it('sends exactly the old request when CAPTCHA is not configured', async () => {
   expect(sendMagicLink).toHaveBeenCalledWith('doctor@clinic.edu')
 })
 
-it('a failed check sends nothing and says why', async () => {
+it('a failed widget leaves the decision to Auth: the code still sends while CAPTCHA is off', async () => {
   getCaptchaToken.mockRejectedValue(new CaptchaError('error'))
   await dom.settle(() => form.setEmail('doctor@clinic.edu'))
   await startSend()
-  expect(sendMagicLink).not.toHaveBeenCalled()
+  expect(sendMagicLink).toHaveBeenCalledWith('doctor@clinic.edu')
+  expect(form.sendState).toBe('sent')
+})
+
+it('a failed widget with CAPTCHA on shows the CAPTCHA message, not a generic error', async () => {
+  getCaptchaToken.mockRejectedValue(new CaptchaError('error'))
+  sendMagicLink.mockRejectedValue(Object.assign(new Error('captcha protection: request disallowed (no captcha response)'), { code: 'captcha_failed', status: 400 }))
+  await dom.settle(() => form.setEmail('doctor@clinic.edu'))
+  await startSend()
   expect(form.sendState).toBe('error')
   expect(form.sendError).toBe(CAPTCHA_MESSAGE)
   expect(form.sendBusy).toBe(false)

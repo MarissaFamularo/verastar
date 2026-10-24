@@ -12,6 +12,7 @@
 // Every send carries a fresh CAPTCHA token when VITE_TURNSTILE_SITE_KEY is set
 // (lib/captcha.js). The token is fetched alongside the Gmail alias lookup and is
 // not on the 8s delivery clock: a person may need to answer a check first.
+// Supabase Auth, not this hook, decides whether a send without a token is allowed.
 
 import { useRef, useState } from 'react'
 import { awaitWithin } from './deadline.js'
@@ -325,11 +326,11 @@ export function useEmailCodeSignIn() {
       }
       const proof = await captcha
       if (!ownsDestination(op)) return
-      if (proof.error) {
-        failDelivery(op, CAPTCHA_MESSAGE)
-        return
-      }
-      await deliver(op, decision, proof.token)
+      // A widget that fails (blocked script, Cloudflare error) does not stop the send:
+      // Supabase Auth is the gate. With CAPTCHA protection on it refuses the tokenless
+      // request (shown as CAPTCHA_MESSAGE below); with it off the code still goes out,
+      // so a bad site key or hostname can never lock physicians out on its own.
+      await deliver(op, decision, proof.error ? undefined : proof.token)
     } catch (err) {
       failDelivery(op, err?.message || EMAIL_CODE_MESSAGES.network)
     } finally {

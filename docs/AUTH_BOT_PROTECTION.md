@@ -34,7 +34,9 @@ fix below covers both endpoints, but only once **both** apps send a token.
   and not a popup.
 - `useEmailCodeSignIn` (`src/lib/emailCode.js`) fetches the token while the Gmail alias
   lookup runs. The token does not count against the 8 s delivery timeout; the check has
-  its own 45 s limit. A failed check sends nothing and shows a readable message.
+  its own 45 s limit. If the widget fails, the send goes out without a token and
+  Supabase Auth decides: refused (with a readable message) once CAPTCHA is on, sent
+  while it is off. A wrong key or hostname therefore cannot lock anyone out by itself.
 - Typed-address route: `sendMagicLink(email, token)` passes `options.captchaToken` to
   `signInWithOtp`. Supabase Auth verifies the token.
 - Gmail canonical route: the browser posts `captchaToken` to `gmail-canonical-otp`. The
