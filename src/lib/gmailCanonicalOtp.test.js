@@ -42,7 +42,7 @@ describe('gmail canonical otp', () => {
     expect(JSON.stringify(body)).not.toContain(STORED)
     expect(JSON.stringify(body)).not.toContain('notes')
     expect(bound.takeSend).toHaveBeenCalledWith(TICKET)
-    expect(bound.sendOtp).toHaveBeenCalledWith(STORED, 'https://verastar.papertrellis.com')
+    expect(bound.sendOtp).toHaveBeenCalledWith(STORED, 'https://verastar.papertrellis.com', '')
     expect(bound.keepVerify).toHaveBeenCalledWith(STORED)
   })
 

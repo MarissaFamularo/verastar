@@ -40,12 +40,13 @@ export function isSignedIn() {
   return _user !== null
 }
 
-export async function sendMagicLink(email) {
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin },
-  })
-  if (error) throw new Error(error.message)
+// captchaToken: a Turnstile token (lib/captcha.js). Supabase Auth verifies it when
+// CAPTCHA protection is on; it is left out entirely when CAPTCHA is not configured.
+export async function sendMagicLink(email, captchaToken) {
+  const options = { emailRedirectTo: window.location.origin }
+  if (captchaToken) options.captchaToken = captchaToken
+  const { error } = await supabase.auth.signInWithOtp({ email, options })
+  if (error) throw authError(error)
 }
 
 // The same email carries a one-time code alongside the link (template must include

@@ -3,10 +3,16 @@
 // Claims a Gmail alias ticket and sends the one-time code to the stored account.
 // Callers are signed out, so they send the anon key. The service role is used
 // only for the ticket functions, which anon cannot execute. shouldCreateUser
-// stays false: this path signs in an account that already exists.
+// stays false: this path signs in an account that already exists. The browser's
+// CAPTCHA token rides along to Auth, which verifies it (handler.js).
 
 import { createClient } from '@supabase/supabase-js'
 import { CORS, handleGmailCanonicalOtp } from './handler.js'
+
+function isCaptchaFailure(error: { code?: string, message?: string } | null): boolean {
+  if (!error) return false
+  return error.code === 'captcha_failed' || /captcha/i.test(error.message || '')
+}
 
 function jsonError() {
   return new Response(JSON.stringify({ status: 'error' }), {
@@ -44,11 +50,14 @@ Deno.serve(async (req) => {
       const { data, error } = await admin.rpc('gmail_alias_fail_verify', { p_ticket: ticket })
       return error || typeof data !== 'number' ? 0 : data
     },
-    sendOtp: async (email: string, redirectTo: string) => {
-      const options: { shouldCreateUser: boolean, emailRedirectTo?: string } = { shouldCreateUser: false }
+    sendOtp: async (email: string, redirectTo: string, captchaToken: string) => {
+      const options: { shouldCreateUser: boolean, emailRedirectTo?: string, captchaToken?: string } = { shouldCreateUser: false }
       if (redirectTo) options.emailRedirectTo = redirectTo
+      // Auth verifies the token (CAPTCHA protection is project-wide and applies to
+      // this anon client too). Do not verify it here first: tokens are single-use.
+      if (captchaToken) options.captchaToken = captchaToken
       const { error } = await anon.auth.signInWithOtp({ email, options })
-      return { ok: !error }
+      return { ok: !error, captcha: isCaptchaFailure(error) }
     },
     verifyOtp: async (email: string, code: string) => {
       const { data, error } = await anon.auth.verifyOtp({ email, token: code, type: 'email' })

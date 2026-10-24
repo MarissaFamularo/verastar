@@ -5,6 +5,10 @@
 // A verify ticket answers at most MAX_VERIFY_FAILURES wrong codes. Each refusal is
 // counted on the ticket (deps.failVerify, 20261014122000_gmail_otp_failures.sql);
 // the fifth deletes it, and every later check is refused before Auth is asked.
+//
+// A send carries the browser's CAPTCHA token through to Supabase Auth. With CAPTCHA
+// protection on, Auth refuses an OTP request from this function's anon client
+// without a valid token, the same as it refuses one from the browser.
 
 export const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +18,16 @@ export const CORS = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const MAX_VERIFY_FAILURES = 5
+// Turnstile tokens are at most 2048 characters; hCaptcha's are shorter.
+export const MAX_CAPTCHA_TOKEN = 4096
+
+// '' when absent; null when present but malformed (refused before the ticket is spent).
+export function captchaTokenFrom(payload) {
+  const value = payload?.captchaToken
+  if (value === undefined || value === null || value === '') return ''
+  if (typeof value !== 'string' || value.length > MAX_CAPTCHA_TOKEN || /\s/.test(value)) return null
+  return value
+}
 
 export function safeRedirect(value) {
   if (typeof value !== 'string' || value.length > 200) return ''
@@ -51,9 +65,14 @@ export async function handleGmailCanonicalOtp(req, deps) {
 async function sendTicket(payload, deps) {
   const ticket = typeof payload?.ticket === 'string' ? payload.ticket : ''
   if (!UUID.test(ticket)) return json(400, { status: 'error' })
+  // The token is checked by Supabase Auth inside sendOtp, which is the only check:
+  // a Turnstile token is single-use, so verifying it here first would spend it.
+  const captchaToken = captchaTokenFrom(payload)
+  if (captchaToken === null) return json(400, { status: 'captcha' })
   const email = await deps.takeSend(ticket)
   if (typeof email !== 'string' || !email.includes('@')) return json(400, { status: 'error' })
-  const sent = await deps.sendOtp(email, safeRedirect(payload?.redirectTo))
+  const sent = await deps.sendOtp(email, safeRedirect(payload?.redirectTo), captchaToken)
+  if (sent?.captcha) return json(400, { status: 'captcha' })
   if (!sent?.ok) return json(502, { status: 'error' })
   const verifyTicket = await deps.keepVerify(email)
   if (typeof verifyTicket !== 'string' || !UUID.test(verifyTicket)) return json(502, { status: 'error' })
