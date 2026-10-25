@@ -106,3 +106,32 @@ describe('makeResendSender', () => {
     expect(() => makeResendSender({ apiKey: 'k' })).toThrow(/from/)
   })
 })
+
+describe('opting out', () => {
+  const rec = { results: [{ paper: { id: 'p', pmid: '1', title: 'T' } }], triaged: {} }
+  it('with a link: footer names it, html links it, headers carry it, Settings is still named', () => {
+    const m = buildDigestEmail({ record: rec, unsubscribeUrl: 'https://fn.test/u?u=x&t=y' })
+    expect(m.text).toContain('Unsubscribe: https://fn.test/u?u=x&t=y')
+    expect(m.text).toContain('Or turn off "Email me the digest" under Settings')
+    expect(m.text).not.toContain('Run automatically')
+    expect(m.html).toContain('<a href="https://fn.test/u?u=x&amp;t=y">Unsubscribe</a>')
+    expect(m.headers).toEqual({ 'List-Unsubscribe': '<https://fn.test/u?u=x&t=y>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' })
+    const p = buildPauseEmail({ unsubscribeUrl: 'https://fn.test/u?u=x&t=y' })
+    expect(p.text).toContain('Unsubscribe: https://fn.test/u?u=x&t=y')
+    expect(p.headers['List-Unsubscribe']).toBe('<https://fn.test/u?u=x&t=y>')
+  })
+  it('without a link: the Settings switch is the way off and no headers are set', () => {
+    const m = buildDigestEmail({ record: rec })
+    expect(m.text).toContain('To stop these, turn off "Email me the digest" under Settings')
+    expect(m.text).not.toContain('Unsubscribe:')
+    expect(m.headers).toEqual({})
+  })
+  it('the sender forwards headers to Resend', async () => {
+    const calls = []
+    const send = makeResendSender({ apiKey: 'k', from: 'x@y.test', fetch: async (url, init) => { calls.push(init); return { ok: true, status: 200, json: async () => ({ id: 'e' }) } } })
+    await send({ to: 'a@b.test', subject: 's', text: 't', html: '', headers: { 'List-Unsubscribe': '<u>' } })
+    expect(JSON.parse(calls[0].body).headers).toEqual({ 'List-Unsubscribe': '<u>' })
+    await send({ to: 'a@b.test', subject: 's', text: 't', html: '' })
+    expect(JSON.parse(calls[1].body).headers).toBeUndefined()
+  })
+})

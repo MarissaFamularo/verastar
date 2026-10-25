@@ -18,18 +18,27 @@
 --                    scheduled run, which happens as soon as the reader opens the digest
 --                    (the app stamps openedAt) or presses "run now".
 --
--- Readers may select both through the existing own-row policy so Settings can say "paused".
--- The existing update-own policy also lets a reader reset them; that only resumes their own
--- digest, which "run now" already does. No function changes; rollback drops the columns.
+--   email_digest     the reader's email switch (Settings, or the signed unsubscribe link,
+--                    supabase/functions/digest-unsubscribe). digest-run sends nothing to an
+--                    account with it off. Default on: delivery is the point of the schedule,
+--                    and every email carries the one-click way off.
+--
+-- Readers may select all three through the existing own-row policy so Settings can show
+-- them, and update email_digest through the update-own policy (that is the Settings switch).
+-- A reader resetting the streak only resumes their own digest, which "run now" already
+-- does. No function changes; rollback drops the columns.
 begin;
 
 alter table public.digest_schedules
   add column if not exists unopened_streak integer not null default 0,
-  add column if not exists paused_at       timestamptz;
+  add column if not exists paused_at       timestamptz,
+  add column if not exists email_digest    boolean not null default true;
 
 comment on column public.digest_schedules.unopened_streak is
   'Consecutive finished digests with papers that were replaced unopened (digest-run stamps it at claim time).';
 comment on column public.digest_schedules.paused_at is
   'Set when unopened_streak reached the pause threshold; the scheduler starts no new run until the reader opens the digest.';
+comment on column public.digest_schedules.email_digest is
+  'Email each finished scheduled digest to the account address. Off by the Settings switch or the signed unsubscribe link; the in-app digest is unaffected.';
 
 commit;

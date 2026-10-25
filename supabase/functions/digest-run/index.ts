@@ -17,7 +17,9 @@
 //
 // Secrets: ANTHROPIC_API_KEY, DIGEST_CRON_SECRET; SUPABASE_* injected by the platform.
 // Optional: RESEND_API_KEY, DIGEST_EMAIL_FROM ("Name <digest@domain>"), DIGEST_EMAIL_REPLY_TO,
-// APP_URL (defaults to the public site).
+// DIGEST_UNSUBSCRIBE_SECRET (signs the footer link; shared with digest-unsubscribe), APP_URL
+// (defaults to the public site). Without the secret, emails carry no link and name the
+// Settings switch only.
 
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
@@ -28,6 +30,7 @@ import manifest from './app.bundle.manifest.js'
 import { handleDigestRun } from './handler.js'
 import { anthropicDispatch, anthropicTokenCounter, makeRpcLedger, resolveProviderUrl } from '../_shared/spending.js'
 import { makeResendSender, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
+import { unsubscribeUrl } from '../_shared/unsubscribe.js'
 import { SERVER_CLIENT_TIMEOUT_MS } from '../_shared/timeouts.js'
 
 // sources.js parses PMC and PubMed XML with the browser's DOMParser; linkedom provides the
@@ -64,10 +67,12 @@ Deno.serve((req) => {
   const resendKey = Deno.env.get('RESEND_API_KEY')
   const emailFrom = Deno.env.get('DIGEST_EMAIL_FROM')
   const replyTo = Deno.env.get('DIGEST_EMAIL_REPLY_TO') || null
+  const unsubscribeSecret = Deno.env.get('DIGEST_UNSUBSCRIBE_SECRET') || ''
   const email = resendKey && emailFrom ? {
     appUrl: Deno.env.get('APP_URL') || DEFAULT_APP_URL,
     replyTo,
     send: makeResendSender({ apiKey: resendKey, from: emailFrom, replyTo, fetch }),
+    unsubscribeUrl: unsubscribeSecret ? (userId: string) => unsubscribeUrl(`${supabaseUrl}/functions/v1`, userId, unsubscribeSecret) : null,
     getAddress: async (userId: string) => {
       const { data, error } = await admin.auth.admin.getUserById(userId)
       return error ? null : data?.user?.email ?? null

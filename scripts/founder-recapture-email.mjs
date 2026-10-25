@@ -14,7 +14,8 @@
 //
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... RESEND_API_KEY=... \
 //   DIGEST_EMAIL_FROM="Marissa at Verastar <digest@verastar.papertrellis.com>" \
-//   DIGEST_EMAIL_REPLY_TO="..." node scripts/founder-recapture-email.mjs [options]
+//   DIGEST_EMAIL_REPLY_TO="..." DIGEST_UNSUBSCRIBE_SECRET="..." \
+//   node scripts/founder-recapture-email.mjs [options]
 //
 //   --send                 actually send (default: dry run)
 //   --segment digest|setup|all   which readers (default all)
@@ -29,6 +30,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { buttonHtml, digestItems, formatItemsHtml, formatItemsText, makeResendSender, openLink, paragraphsHtml, subjectFromTitle, wrapHtml, DEFAULT_APP_URL } from '../supabase/functions/_shared/digestEmail.js'
+import { unsubscribeUrl } from '../supabase/functions/_shared/unsubscribe.js'
 
 const EVENT = 'founder_email_sent'
 const SEND_GAP_MS = 700 // Resend's free tier allows two requests a second.
@@ -47,75 +49,72 @@ const FRESH_HOURS = Number(arg('--fresh-hours', 36)) || 36
 const COHORT = String(arg('--cohort', 'beta-%'))
 const APP_URL = String(arg('--app-url', process.env.APP_URL || DEFAULT_APP_URL))
 const REPLY_TO = process.env.DIGEST_EMAIL_REPLY_TO || null
+const UNSUB_SECRET = process.env.DIGEST_UNSUBSCRIBE_SECRET || ''
 
 const need = (k) => { const v = process.env[k]; if (!v) { console.error(`Missing ${k}`); process.exit(2) } return v }
 const supabaseUrl = need('SUPABASE_URL')
 const serviceKey = need('SUPABASE_SERVICE_ROLE_KEY')
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
+const FUNCTIONS_BASE = `${supabaseUrl.replace(/\/+$/, '')}/functions/v1`
+if (!UNSUB_SECRET) { console.error('Missing DIGEST_UNSUBSCRIBE_SECRET: every email must carry a working unsubscribe link.'); process.exit(2) }
 
 // --- copy ---------------------------------------------------------------------------------
-// Marissa's voice: short paragraphs, first person, no superlatives, scoped claims.
+// Marissa's words (2026-10-25), typos fixed, placeholders filled. Edit here, then dry-run.
 
-function founderDigestEmail({ name, record }) {
+function stopLine(unsub) {
+  return unsub
+    ? 'If you want to stop it, click the unsubscribe link at the bottom of this email, or turn off "Email me the digest" under Settings in Verastar.'
+    : 'If you want to stop it, turn off "Email me the digest" under Settings in Verastar.'
+}
+
+function founderDigestEmail({ record, unsub }) {
   const items = digestItems(record)
   if (!items.length) return null
   const link = openLink(APP_URL, 'founder-email')
-  const hi = name ? `Hi ${name},` : 'Hi,'
   const body = [
-    hi,
+    'Hi, doctor,',
     '',
-    'Marissa here. I built the digest engine for Verastar and forgot to build the mailbox.',
+    'Marissa here. I built the digest engine for Verastar and I really didn’t want to add any noise to your already busy life. If you opened the app, the next morning’s digest was already built for you. But, if you didn’t, the engine stopped and waited... quietly. Nothing reached you. I didn’t realize that this required users to remember to check Verastar, which is a big ask for busy physicians.',
     '',
-    'If you opened the app, the next morning’s digest was built for you. If you didn’t, the engine stopped and waited... quietly. Nothing reached you. That is on me, and it changed this week.',
-    '',
-    'From now on your digest lands here each morning. Here is today’s:',
+    `From now on your digest will land in your email each morning. ${stopLine(unsub)} If this is helpful, please reply and let me know. If something else would be better, let me know. Here is today’s digest:`,
   ].join('\n')
-  const close = [
-    `Open in Verastar: ${link}`,
-    '',
-    'If it stops earning your attention, reply and tell me why. That reply is worth more to me than the open.',
-    '',
-    'Marissa',
-    '',
-    'To stop these, open Verastar, go to Settings, and turn off "Run automatically".',
-  ].join('\n')
-  const text = `${body}\n\n${formatItemsText(items)}\n\n${close}`
+  const footer = [`Open in Verastar: ${link}`, '', ...(unsub ? [`Unsubscribe: ${unsub}`] : []), 'Or turn off "Email me the digest" under Settings in Verastar.'].join('\n')
+  const text = `${body}\n\n${formatItemsText(items)}\n\n${footer}`
   const html = wrapHtml(`
     ${paragraphsHtml(body)}
     ${formatItemsHtml(items)}
     ${buttonHtml(link, 'Open in Verastar')}
-    ${paragraphsHtml(close.split('\n\n').slice(1, 3).join('\n\n'))}
-    <p style="color:#666;font-size:12px;">To stop these, open Verastar, go to Settings, and turn off "Run automatically".</p>`)
-  return { subject: subjectFromTitle(items[0].title), text, html }
+    <p style="color:#666;font-size:12px;">${unsub ? `<a href="${esc(unsub)}">Unsubscribe</a><br>` : ''}Or turn off "Email me the digest" under Settings in Verastar.</p>`)
+  return { subject: subjectFromTitle(items[0].title), text, html, headers: headersFor(unsub) }
 }
 
-function founderSetupEmail({ name, step }) {
+function founderSetupEmail({ name, step, unsub }) {
   const link = openLink(APP_URL, 'founder-email')
-  const hi = name ? `Hi ${name},` : 'Hi,'
+  const hi = name ? `Hi ${name},` : 'Hi, doctor,'
   const left = step === 'north-stars'
     ? 'set your north stars, the concepts you want the literature filtered by'
     : 'turn on the morning run under Settings'
-  const text = [
+  const paragraphs = [
     hi,
-    '',
     'Marissa here. You signed up for the Verastar beta, got partway through setup, and stopped. Fair. It asks for real setup before it gives anything back.',
-    '',
     `One step is left: ${left}. Two minutes.`,
-    '',
     'After that, a digest lands in this inbox each morning, built for those north stars. Each claim in it says whether it was checked against the source text.',
-    '',
     `Finish setup: ${link}`,
-    '',
     'Reply if any part of the setup was confusing. I read every one of these.',
-    '',
     'Marissa',
-  ].join('\n')
+  ]
+  const footer = [...(unsub ? [`Unsubscribe: ${unsub}`] : []), 'Or turn off "Email me the digest" under Settings in Verastar.'].join('\n')
+  const text = `${paragraphs.join('\n\n')}\n\n${footer}`
   const html = wrapHtml(`
-    ${paragraphsHtml(text.split('\n\n').slice(0, 3).join('\n\n'))}
+    ${paragraphsHtml(paragraphs.slice(0, 4).join('\n\n'))}
     ${buttonHtml(link, 'Finish setup')}
-    ${paragraphsHtml(text.split('\n\n').slice(4).join('\n\n'))}`)
-  return { subject: 'One step left on your Verastar digest', text, html }
+    ${paragraphsHtml(paragraphs.slice(5).join('\n\n'))}
+    <p style="color:#666;font-size:12px;">${unsub ? `<a href="${esc(unsub)}">Unsubscribe</a><br>` : ''}Or turn off "Email me the digest" under Settings in Verastar.</p>`)
+  return { subject: 'One step left on your Verastar digest', text, html, headers: headersFor(unsub) }
 }
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const headersFor = (unsub) => (unsub ? { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {})
 
 // --- data ---------------------------------------------------------------------------------
 
@@ -142,7 +141,7 @@ async function main() {
   const ids = accounts.map((a) => a.user_id)
   if (!ids.length) { console.log('No accounts match.'); return }
   const [schedules, kv, sent, emails] = await Promise.all([
-    must(admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, paused_at, unopened_streak').in('user_id', ids), 'digest_schedules'),
+    must(admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, paused_at, unopened_streak, email_digest').in('user_id', ids), 'digest_schedules'),
     must(admin.from('kv').select('user_id, collection, key, value').in('user_id', ids).in('collection', ['profile', 'digests']).in('key', ['me', 'daily:latest']), 'kv'),
     must(admin.from('events').select('user_id, ts, payload').eq('type', EVENT).in('user_id', ids), 'events'),
     loadEmails(ids),
@@ -165,12 +164,14 @@ async function main() {
     const hasPapers = Array.isArray(rec?.results) && rec.results.length > 0
     const ranAt = rec?.ranAt ?? rec?.savedAt ?? null
     const fresh = hasPapers && ranAt && Date.parse(ranAt) >= freshSince && rec?.server?.phase !== 'reading' && rec?.server?.phase !== 'rank'
+    const unsub = await unsubscribeUrl(FUNCTIONS_BASE, a.user_id, UNSUB_SECRET)
     let segment, message, note = ''
     if (!email) { segment = 'skip'; note = 'no address' }
     else if (already.has(a.user_id)) { segment = 'skip'; note = `already sent ${String(already.get(a.user_id).ts).slice(0, 10)}` }
-    else if (!onboarded) { segment = 'setup'; message = founderSetupEmail({ name, step: 'north-stars' }) }
-    else if (!s?.enabled) { segment = 'setup'; message = founderSetupEmail({ name, step: 'schedule' }) }
-    else if (fresh) { segment = 'digest'; message = founderDigestEmail({ name, record: rec }) }
+    else if (s && s.email_digest === false) { segment = 'skip'; note = 'opted out of email' }
+    else if (!onboarded) { segment = 'setup'; message = founderSetupEmail({ name, step: 'north-stars', unsub }) }
+    else if (!s?.enabled) { segment = 'setup'; message = founderSetupEmail({ name, step: 'schedule', unsub }) }
+    else if (fresh) { segment = 'digest'; message = founderDigestEmail({ name, record: rec, unsub }) }
     else { segment = 'skip'; note = hasPapers ? `digest is stale (${String(ranAt).slice(0, 10)}); let the morning run replace it first` : 'no digest with papers yet' }
     if (segment !== 'skip' && SEGMENT !== 'all' && SEGMENT !== segment) { segment = 'skip'; note = `not in --segment ${SEGMENT}` }
     if (ONLY && ONLY !== a.user_id && ONLY !== email) { segment = 'skip'; note = 'not --only' }
@@ -199,7 +200,7 @@ async function main() {
     if (p.segment === 'skip') continue
     if (n >= LIMIT) { console.log(`limit ${LIMIT} reached`); break }
     try {
-      const out = await send({ to: p.email, subject: p.message.subject, text: p.message.text, html: p.message.html })
+      const out = await send({ to: p.email, subject: p.message.subject, text: p.message.text, html: p.message.html, headers: p.message.headers })
       const { error } = await admin.from('events').insert({ user_id: p.user_id, type: EVENT, payload: { segment: p.segment, subject: p.message.subject, provider_id: out.id } })
       if (error) console.error(`  sent to ${p.email} but the event was NOT recorded (${error.message}); record it by hand before re-running`)
       console.log(`sent   ${p.user_id.slice(0, 8)}  ${p.email}  ${out.id || ''}`)

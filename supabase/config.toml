@@ -51,3 +51,11 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/beta-monitor/index.ts"
+
+[functions.digest-unsubscribe]
+enabled = true
+# Opened signed out from the email footer; mail clients POST to it (RFC 8058). The signed
+# token in the link is the credential (docs/DIGEST_DELIVERY.md § Opting out).
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/digest-unsubscribe/index.ts"

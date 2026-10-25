@@ -36,8 +36,9 @@ import { observeDigest } from '../_shared/observeSignup.js'
 //
 // Delivery: a finished scheduled run with papers is emailed to the account's address when
 // the runtime provides a sender (deps.email; index.ts builds one from RESEND_API_KEY). The
-// email carries what the stored digest already holds (../_shared/digestEmail.js). Sending is
-// best effort after the run is recorded: a failure is an event, never a failed run.
+// email carries what the stored digest already holds (../_shared/digestEmail.js) and a
+// signed one-click unsubscribe link. An account with email_digest off gets nothing. Sending
+// is best effort after the run is recorded: a failure is an event, never a failed run.
 //
 // Callable two ways: from cron with x-cron-secret, or by a signed-in user ("run mine now"),
 // which ignores the hour and the pause but keeps the claim and the spending checks.
@@ -148,7 +149,7 @@ function hourText(h) {
   return `${twelve}:00 ${n < 12 ? 'am' : 'pm'}`
 }
 const DEFAULT_TIMEZONE = 'America/New_York'
-const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest'
 
 async function readName(admin, userId) {
   try {
@@ -165,17 +166,22 @@ async function recordEvent(admin, userId, type, payload) {
 }
 
 // Deliver one email through deps.email and record the outcome as an event. Never throws.
-async function deliver(admin, email, userId, { build, sentType, failedType, payload = {} }) {
+// An account that turned the email off (Settings, or the unsubscribe link) gets nothing,
+// silently: that is its choice, not a failure.
+async function deliver(admin, email, row, { build, sentType, failedType, payload = {} }) {
   if (!email?.send) return
+  if (row.email_digest === false) return
+  const userId = row.user_id
   try {
     const to = await email.getAddress(userId)
     if (!to) {
       await recordEvent(admin, userId, failedType, { ...payload, error: 'no address' })
       return
     }
-    const message = await build({ name: await readName(admin, userId), to })
+    const unsubscribeUrl = email.unsubscribeUrl ? await email.unsubscribeUrl(userId) : null
+    const message = await build({ name: await readName(admin, userId), to, unsubscribeUrl })
     if (!message) return
-    const out = await email.send({ to, subject: message.subject, text: message.text, html: message.html })
+    const out = await email.send({ to, subject: message.subject, text: message.text, html: message.html, headers: message.headers || null })
     await recordEvent(admin, userId, sentType, { ...payload, provider_id: out?.id ?? null })
   } catch (err) {
     await recordEvent(admin, userId, failedType, { ...payload, error: String(err?.message || err).slice(0, 200) })
@@ -188,8 +194,8 @@ async function pauseAccount(admin, email, row, streak, now) {
   if (row.paused_at) return
   await admin.from('digest_schedules').update({ paused_at: now.toISOString(), updated_at: now.toISOString() }).eq('user_id', row.user_id).is('claim_token', null).is('paused_at', null).then(() => {}, () => {})
   await recordEvent(admin, row.user_id, 'digest_paused', { streak })
-  await deliver(admin, email, row.user_id, {
-    build: ({ name }) => buildPauseEmail({ appUrl: email.appUrl || DEFAULT_APP_URL, name, streak, replyTo: email.replyTo || null }),
+  await deliver(admin, email, row, {
+    build: ({ name, unsubscribeUrl }) => buildPauseEmail({ appUrl: email.appUrl || DEFAULT_APP_URL, name, streak, replyTo: email.replyTo || null, unsubscribeUrl }),
     sentType: 'digest_pause_emailed',
     failedType: 'digest_pause_email_failed',
     payload: { streak },
@@ -319,7 +325,7 @@ export async function handleDigestRun(req, deps) {
     // finished between the first read and the claim.
     let fresh
     try {
-      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, unopened_streak, paused_at').eq('user_id', row.user_id).maybeSingle()
+      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, unopened_streak, paused_at, email_digest').eq('user_id', row.user_id).maybeSingle()
       if (error || !again) throw new Error('schedule unavailable')
       fresh = { row: again, record: await readLatest(admin, row.user_id) }
     } catch {
@@ -390,11 +396,11 @@ export async function handleDigestRun(req, deps) {
   // reader is in the app. A run that lost its claim may not own what is stored, so it sends
   // nothing. The email is built from the stored record, the same thing the app will show.
   if (deps.email && !manual && !claimLost && result.phase === 'done' && (result.papers ?? 0) > 0) {
-    await deliver(admin, deps.email, userId, {
-      build: async ({ name }) => {
+    await deliver(admin, deps.email, picked.row, {
+      build: async ({ name, unsubscribeUrl }) => {
         const record = await readLatest(admin, userId)
         return buildDigestEmail({
-          record, name,
+          record, name, unsubscribeUrl,
           appUrl: deps.email.appUrl || DEFAULT_APP_URL,
           replyTo: deps.email.replyTo || null,
           hourLabel: hourText(picked.row.hour_local),

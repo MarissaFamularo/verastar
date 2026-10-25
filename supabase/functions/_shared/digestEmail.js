@@ -69,15 +69,39 @@ function openLink(appUrl, src) {
   return `${base}/?src=${encodeURIComponent(src)}`
 }
 
-const FOOTER_TEXT = (appUrl, { replyTo, hourLabel, timezone }) => [
+// How to stop the email, in every footer: the one-click link when the runtime signs one,
+// and the Settings switch either way. The in-app digest is not affected by either.
+export function stopLines(unsubscribeUrl) {
+  return [
+    unsubscribeUrl ? `Unsubscribe: ${unsubscribeUrl}` : '',
+    `${unsubscribeUrl ? 'Or turn' : 'To stop these, turn'} off "Email me the digest" under Settings in Verastar. The digest itself keeps running in the app.`,
+  ].filter(Boolean)
+}
+
+// RFC 8058 headers so Gmail and Apple Mail show their own unsubscribe button.
+export function unsubscribeHeaders(unsubscribeUrl) {
+  if (!unsubscribeUrl) return {}
+  return { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+}
+
+const FOOTER_TEXT = (appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl }) => [
   `You get this because your Verastar morning digest is switched on${hourLabel ? ` for ${hourLabel}${timezone ? ` ${timezone}` : ''}` : ''}.`,
-  'To stop it, open Verastar, go to Settings, and turn off "Run automatically".',
+  ...stopLines(unsubscribeUrl),
   replyTo ? 'Reply to this email and it reaches Marissa directly.' : '',
 ].filter(Boolean).join('\n')
 
+function footerHtml(appUrl, opts) {
+  const lines = FOOTER_TEXT(appUrl, opts).split('\n').map((l) => {
+    if (opts.unsubscribeUrl && l.startsWith('Unsubscribe: ')) return `<a href="${esc(opts.unsubscribeUrl)}">Unsubscribe</a>`
+    return esc(l)
+  })
+  return `<p style="color:#666;font-size:12px;line-height:1.5;">${lines.join('<br>')}</p>`
+}
+
 // The morning digest. `record` is the stored daily digest (kv digests/daily:latest).
-// Returns null when there is nothing to send (no items).
-export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, name = '', replyTo = null, hourLabel = '', timezone = '', intro = null } = {}) {
+// Returns null when there is nothing to send (no items). The result carries `headers` for
+// the sender (unsubscribe headers when a link was given).
+export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, name = '', replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null } = {}) {
   const items = digestItems(record)
   if (!items.length) return null
   const days = Number(record?.searchContext?.days) || null
@@ -98,7 +122,7 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, name = '', 
     '',
     `Open in Verastar: ${link}`,
     '',
-    FOOTER_TEXT(appUrl, { replyTo, hourLabel, timezone }),
+    FOOTER_TEXT(appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl }),
   ].filter((l) => l !== null).join('\n')
 
   const html = wrapHtml(`
@@ -107,9 +131,9 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, name = '', 
     <p style="margin:0 0 18px 0;">${esc(count)}</p>
     ${formatItemsHtml(items)}
     ${buttonHtml(link, 'Open in Verastar')}
-    <p style="color:#666;font-size:12px;line-height:1.5;">${esc(FOOTER_TEXT(appUrl, { replyTo, hourLabel, timezone })).replace(/\n/g, '<br>')}</p>`)
+    ${footerHtml(appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl })}`)
 
-  return { subject: subjectFromTitle(items[0].title), text, html, items }
+  return { subject: subjectFromTitle(items[0].title), text, html, items, headers: unsubscribeHeaders(unsubscribeUrl) }
 }
 
 // The numbered paper list, plain text. Shared with the founder mailing script.
@@ -160,28 +184,31 @@ export function paragraphsHtml(text) {
 export { esc as escapeHtml, openLink }
 
 // Sent once when the scheduler pauses an account.
-export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, name = '', streak = 7, replyTo = null } = {}) {
+export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, name = '', streak = 7, replyTo = null, unsubscribeUrl = null } = {}) {
   const who = clean(name)
   const link = openLink(appUrl, 'pause-email')
   const n = Number(streak) || 7
-  const lines = [
+  const head = [
     who ? `Hi ${who},` : 'Hi,',
     '',
     `Your Verastar digest ran ${n} mornings in a row without being opened, so it has stopped running.`,
     'Nothing is deleted. Open Verastar once and the next digest is built the following morning, at your usual hour.',
     '',
     `Open Verastar: ${link}`,
-    '',
+  ]
+  const tail = [
     'If you would rather it stayed off, turn off "Run automatically" under Settings and no more of these will come.',
+    ...stopLines(unsubscribeUrl),
     replyTo ? 'If it stopped earning your attention, reply and say why. That is the most useful thing you can send.' : '',
-  ].filter((l) => l !== '' || true)
-  const text = lines.filter((l, i) => !(l === '' && lines[i - 1] === '')).join('\n').replace(/\n+$/, '')
+  ].filter(Boolean)
+  const text = [...head, '', ...tail].join('\n')
+  const tailHtml = tail.map((l) => (unsubscribeUrl && l.startsWith('Unsubscribe: ') ? `<a href="${esc(unsubscribeUrl)}">Unsubscribe</a>` : esc(l))).join('<br>')
   const html = wrapHtml(`
-    <p>${esc(lines[0])}</p>
-    <p>${esc(lines[2])}<br>${esc(lines[3])}</p>
+    <p>${esc(head[0])}</p>
+    <p>${esc(head[2])}<br>${esc(head[3])}</p>
     ${buttonHtml(link, 'Open Verastar')}
-    <p style="color:#666;font-size:12px;">${esc(lines[7])}${replyTo ? `<br>${esc(lines[8])}` : ''}</p>`)
-  return { subject: 'Your Verastar digest is paused', text, html }
+    <p style="color:#666;font-size:12px;">${tailHtml}</p>`)
+  return { subject: 'Your Verastar digest is paused', text, html, headers: unsubscribeHeaders(unsubscribeUrl) }
 }
 
 // A sender over Resend's HTTP API. Resolves { id } or throws with the provider's message.
@@ -189,10 +216,11 @@ export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, name = '', streak = 
 export function makeResendSender({ apiKey, from, replyTo = null, fetch = globalThis.fetch, url = RESEND_URL } = {}) {
   if (!apiKey) throw new Error('makeResendSender: apiKey is required')
   if (!from) throw new Error('makeResendSender: from is required')
-  return async function send({ to, subject, text, html }) {
+  return async function send({ to, subject, text, html, headers = null }) {
     if (!to) throw new Error('send: to is required')
     const body = { from, to: [to], subject, text, html }
     if (replyTo) body.reply_to = replyTo
+    if (headers && Object.keys(headers).length) body.headers = headers
     const res = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },

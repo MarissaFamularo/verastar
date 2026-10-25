@@ -26,16 +26,17 @@ export async function getDigestSchedule() {
   if (!canSchedule()) return null
   const { data, error } = await supabase
     .from('digest_schedules')
-    .select('enabled, hour_local, timezone, last_run_at, last_result, unopened_streak, paused_at')
+    .select('enabled, hour_local, timezone, last_run_at, last_result, unopened_streak, paused_at, email_digest')
     .eq('user_id', currentUser().id)
     .maybeSingle()
   if (error) throw new Error(error.message)
   return data
 }
 
-export async function setDigestSchedule({ enabled = true, hour = DEFAULT_HOUR, timezone = browserTimezone() } = {}) {
+// `emailDigest` is the reader's email switch; the in-app digest is unaffected by it.
+export async function setDigestSchedule({ enabled = true, hour = DEFAULT_HOUR, timezone = browserTimezone(), emailDigest = true } = {}) {
   if (!canSchedule()) return null
-  const row = { user_id: currentUser().id, enabled: !!enabled, hour_local: Math.max(0, Math.min(23, Math.round(Number(hour)))), timezone }
+  const row = { user_id: currentUser().id, enabled: !!enabled, hour_local: Math.max(0, Math.min(23, Math.round(Number(hour)))), timezone, email_digest: !!emailDigest }
   const { error } = await supabase.from('digest_schedules').upsert(row, { onConflict: 'user_id' })
   if (error) throw new Error(error.message)
   return row

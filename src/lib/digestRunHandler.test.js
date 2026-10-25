@@ -26,7 +26,7 @@ afterAll(() => installServerScope(null))
 // --- an in-memory database with the claim/fence semantics of the migration --------------
 function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
   const t = {
-    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0, unopened_streak: 0, paused_at: null })),
+    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0, unopened_streak: 0, paused_at: null, email_digest: true })),
     sponsored_accounts: users.map((u) => ({ user_id: u, active: true, ends_at: null })),
     kv: users.map((u) => ({ user_id: u, collection: 'profile', key: 'me', value: { onboarded: true, name: u } })),
     evidence_cache_trusted: [],
@@ -732,5 +732,42 @@ describe('delivery', () => {
     await handleDigestRun(cron(), h)
     expect(sent).toHaveLength(0)
     expect(events(db, 'digest_email_failed')).toEqual([expect.objectContaining({ payload: { papers: 1, error: 'no address' } })])
+  })
+})
+
+describe('opting out', () => {
+  it('an account with the email off is not emailed and nothing is recorded', async () => {
+    const db = memoryDb({ users: ['A'] })
+    row(db).email_digest = false
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(2) }).deps
+    h.email = email
+    expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(true)
+    expect(sent).toHaveLength(0)
+    expect(db.t.events.filter((e) => /digest_email/.test(e.type))).toHaveLength(0)
+  })
+  it('the pause notice honours the email switch too', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+    row(db).email_digest = false
+    const { email, sent } = fakeEmail()
+    const h = deps(db).deps
+    h.email = email
+    expect(await (await handleDigestRun(cron(), h)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(row(db).paused_at).toBeTruthy()
+    expect(events(db, 'digest_paused')).toHaveLength(1)
+    expect(sent).toHaveLength(0)
+  })
+  it('every email carries the signed unsubscribe link and the one-click headers', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail()
+    email.unsubscribeUrl = async (userId) => `https://fn.test/functions/v1/digest-unsubscribe?u=${userId}&t=abc`
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(sent).toHaveLength(1)
+    expect(sent[0].text).toContain('Unsubscribe: https://fn.test/functions/v1/digest-unsubscribe?u=A&t=abc')
+    expect(sent[0].html).toContain('href="https://fn.test/functions/v1/digest-unsubscribe?u=A&amp;t=abc"')
+    expect(sent[0].headers).toEqual({ 'List-Unsubscribe': '<https://fn.test/functions/v1/digest-unsubscribe?u=A&t=abc>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' })
   })
 })

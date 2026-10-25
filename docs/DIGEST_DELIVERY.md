@@ -81,8 +81,8 @@ the stored digest back and sends it (`../_shared/digestEmail.js`):
   verdict is `supported`, otherwise **"Not checked against the source text; read the
   abstract."**; the relevance line; the PubMed link; the open-access link when one exists.
   A finding the number guard withheld is omitted.
-- Footer: why the reader gets it (their hour and timezone), how to stop it (Settings,
-  "Run automatically"), and a reply line when a reply-to address is configured.
+- Footer: why the reader gets it (their hour and timezone), the signed unsubscribe link,
+  the Settings switch, and a reply line when a reply-to address is configured.
 
 Nothing is generated at send time. No model call, no new numbers, no new citations: the
 email shows exactly what the app would show. Manual runs are not emailed (the reader is in
@@ -96,6 +96,26 @@ The runtime (`digest-run/index.ts`) builds the sender only when `RESEND_API_KEY`
 `DIGEST_EMAIL_FROM` are both set. Without them the scheduler behaves exactly as before,
 minus the freeze.
 
+### Opting out
+
+Three ways, all leaving the in-app digest running:
+
+- **Settings.** "Email me the digest" next to "Run automatically", stored as
+  `digest_schedules.email_digest` (default on). The handler sends nothing, and records
+  nothing, for an account with it off; that includes the pause notice.
+- **The footer link.** `digest-unsubscribe?u=<account id>&t=<HMAC-SHA256 of the id under
+  DIGEST_UNSUBSCRIBE_SECRET>`, signed by `digest-run` (`_shared/unsubscribe.js`) and
+  honoured by the `digest-unsubscribe` function with no sign-in: one click turns
+  `email_digest` off (creating an all-off row when the account has none), records
+  `digest_email_unsubscribed`, and shows a plain confirmation page. A wrong token is a
+  400 page and changes nothing. The founder mailing uses the same link.
+- **The mail client's own button.** Every email carries `List-Unsubscribe` and
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058) pointing at the same
+  link; Gmail and Apple Mail POST to it.
+
+Without `DIGEST_UNSUBSCRIBE_SECRET` the emails carry no link or headers and name the
+Settings switch only; the founder script refuses to run without it.
+
 ### Settings
 
 The morning-digest block says digests are emailed and explains the pause; a paused row
@@ -105,6 +125,8 @@ shows "Paused since" with how to resume. `digestRefusalMessage` knows the new re
 
 - `supabase/migrations/20261025120000_digest_unopened_pause.sql`
 - `supabase/functions/_shared/digestEmail.js`, `src/lib/digestEmail.test.js`
+- `supabase/functions/_shared/unsubscribe.js`, `supabase/functions/digest-unsubscribe/`
+  (`handler.js`, `index.ts`), `src/lib/digestUnsubscribe.test.js`, `supabase/config.toml`
 - `supabase/functions/digest-run/handler.js`, `index.ts`; tests appended to
   `src/lib/digestRunHandler.test.js`
 - `src/lib/digestSchedule.js`, `src/components/DigestSchedule.jsx`
@@ -127,10 +149,13 @@ Order matters only in that the handler reads two columns the migration adds.
 3. **Secrets** on the project's Edge Functions:
    `RESEND_API_KEY`, `DIGEST_EMAIL_FROM` (for example
    `Marissa at Verastar <digest@verastar.papertrellis.com>`),
-   `DIGEST_EMAIL_REPLY_TO` (a mailbox Marissa reads), and optionally `APP_URL`.
+   `DIGEST_EMAIL_REPLY_TO` (a mailbox Marissa reads), `DIGEST_UNSUBSCRIBE_SECRET` (a long
+   random string, `openssl rand -hex 32`), and optionally `APP_URL`.
 4. **Apply the migration** (one transaction, additive, no function changes).
-5. **Deploy** `digest-run` from the released commit, as in
-   `SPONSORED_ACCESS_DEPLOY.md` § 4b.
+5. **Deploy** `digest-run` and `digest-unsubscribe` from the released commit, as in
+   `SPONSORED_ACCESS_DEPLOY.md` § 4b. Open an unsubscribe link with a wrong token and
+   confirm the 400 page; then test a real one on the founder account and turn the email
+   back on in Settings.
 6. **Smoke test** with the founder account: turn the schedule on, open the current digest,
    wait for the next tick after the hour, or press "run now" (which is not emailed, by
    design) and then check `events` for `digest_emailed` after the next scheduled run.
@@ -150,22 +175,24 @@ email once:
 ```bash
 SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... RESEND_API_KEY=... \
 DIGEST_EMAIL_FROM="Marissa at Verastar <digest@verastar.papertrellis.com>" \
-DIGEST_EMAIL_REPLY_TO="..." \
+DIGEST_EMAIL_REPLY_TO="..." DIGEST_UNSUBSCRIBE_SECRET="..." \
 node scripts/founder-recapture-email.mjs                      # dry run: who gets what, first email of each kind
 node scripts/founder-recapture-email.mjs --only you@example.com --send   # one test send
 node scripts/founder-recapture-email.mjs --send
 ```
 
-Segments: **digest** (onboarded, schedule on, a digest with papers from the last 36 hours)
-gets the founder note with today's items; **setup** (not onboarded, or schedule off) gets
-the one step that is left; anyone else is listed with the reason and skipped. Every send
+The copy is in the script, in Marissa's words; edit it there and dry-run again. Segments:
+**digest** (onboarded, schedule on, a digest with papers from the last 36 hours) gets the
+founder note with today's items; **setup** (not onboarded, or schedule off) gets the one
+step that is left; an account that opted out of email, and anyone else, is listed with the
+reason and skipped. Every send
 is recorded as a `founder_email_sent` event and never repeated. Send Tuesday to Thursday,
 in the morning.
 
 ## Measuring
 
 Email opens and clicks are in the Resend dashboard. In the project: `digest_emailed`
-per account-day, `app_opened` after an email (the link carries `?src=digest-email`;
+per account-day, `digest_email_unsubscribed`, `app_opened` after an email (the link carries `?src=digest-email`;
 `app_opened` does not yet record the source), `digest_opened`, and day-7 return by
 enrollment cohort. The beta dashboard RPC does not count the new events; adding
 `digest_emailed` to it is a separate change.
@@ -178,4 +205,3 @@ enrollment cohort. The beta dashboard RPC does not count the new events; adding
   digest, not days one to three. The earlier ones are in their inbox.
 - One email per account per day at most (the `ranToday` gate), but a day with an error
   after `done` cannot happen, and a `done` with zero papers sends nothing.
-- `List-Unsubscribe` headers are not set; the footer names the Settings switch.
