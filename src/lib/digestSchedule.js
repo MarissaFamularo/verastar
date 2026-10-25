@@ -26,7 +26,7 @@ export async function getDigestSchedule() {
   if (!canSchedule()) return null
   const { data, error } = await supabase
     .from('digest_schedules')
-    .select('enabled, hour_local, timezone, last_run_at, last_result')
+    .select('enabled, hour_local, timezone, last_run_at, last_result, unopened_streak, paused_at')
     .eq('user_id', currentUser().id)
     .maybeSingle()
   if (error) throw new Error(error.message)
@@ -50,6 +50,7 @@ export function digestRefusalMessage(reason) {
   if (reason === 'not yet') return 'It is before your scheduled hour, so the automatic run has not started.'
   if (reason === 'already ran today') return 'A digest already finished for today.'
   if (reason === 'last digest unopened') return 'The last digest is still unopened, so a new automatic run is waiting.'
+  if (reason === 'paused: digests unopened') return 'Automatic runs are paused because the last seven digests were not opened. Open the Digest tab, or run now, and they resume.'
   if (reason === 'attempt cap reached') return 'The server has already tried this digest several times today. It will try again tomorrow morning.'
   // The scheduler's preflight names the same denial reasons as the proxy; same sentences.
   if (typeof reason === 'string' && reason.startsWith('spending stopped:')) {

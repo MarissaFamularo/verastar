@@ -60,7 +60,7 @@ export default function DigestSchedule() {
     <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
       <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>Morning digest, ready when you wake up</p>
       <p style={{ margin: '3px 0 8px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.5 }}>
-        Verastar can run your digest for you each morning. It waits until you have opened the last one, so nothing piles up unread; if that one is still unopened at your hour, the new one starts soon after you open it.
+        Verastar runs your digest each morning and emails it to the address on this account. After seven mornings in a row unopened, it pauses; opening a digest, or running one here, starts it again.
       </p>
       <div className="flex flex-wrap items-center" style={{ gap: 10 }}>
         <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
@@ -79,6 +79,7 @@ export default function DigestSchedule() {
         </button>
       </div>
       {row?.last_run_at && <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>Last run {new Date(row.last_run_at).toLocaleString()}.</p>}
+      {row?.paused_at && on && <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>Paused since {new Date(row.paused_at).toLocaleDateString()}: the last seven digests were not opened. Open the Digest tab, or run now, and it resumes.</p>}
       {runNote && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-verified-soft)' }}>{runNote}</p>}
       {error && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-domain-vascular)' }}>{error}</p>}
     </div>
