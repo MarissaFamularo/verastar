@@ -11,15 +11,17 @@
 //     a module global, so overlapping requests in one isolate cannot exchange them.
 //   - the model client's fetch is the guarded reserve/settle boundary
 //     (../_shared/spending.js), the same contract as the browser proxy.
-//   - a finished scheduled digest is emailed through Resend when RESEND_API_KEY and
-//     DIGEST_EMAIL_FROM are set (docs/DIGEST_DELIVERY.md); without them nothing is sent
-//     and the scheduler behaves as before.
+//   - a finished scheduled digest is emailed through Resend's HTTP API with the project's
+//     existing Resend credentials (SMTP_PASSWORD when SMTP_HOST is Resend, SMTP_FROM), or
+//     with RESEND_API_KEY / DIGEST_EMAIL_FROM when those are set (docs/DIGEST_DELIVERY.md);
+//     with neither, nothing is sent and the scheduler behaves as before.
 //
 // Secrets: ANTHROPIC_API_KEY, DIGEST_CRON_SECRET; SUPABASE_* injected by the platform.
-// Optional: RESEND_API_KEY, DIGEST_EMAIL_FROM ("Name <digest@domain>"), DIGEST_EMAIL_REPLY_TO,
-// DIGEST_UNSUBSCRIBE_SECRET (signs the footer link; shared with digest-unsubscribe), APP_URL
-// (defaults to the public site). Without the secret, emails carry no link and name the
-// Settings switch only.
+// Email: SMTP_HOST, SMTP_PASSWORD, SMTP_FROM (already set for beta-monitor), or
+// RESEND_API_KEY and DIGEST_EMAIL_FROM ("Name <digest@domain>") to override. Optional:
+// DIGEST_EMAIL_REPLY_TO, DIGEST_UNSUBSCRIBE_SECRET (signs the footer link; shared with
+// digest-unsubscribe; without it emails carry no link and name the Settings switch only),
+// APP_URL (defaults to the public site).
 
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
@@ -64,8 +66,12 @@ Deno.serve((req) => {
   if (!provider.ok) return fail(provider.error || 'provider override refused')
 
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
-  const resendKey = Deno.env.get('RESEND_API_KEY')
-  const emailFrom = Deno.env.get('DIGEST_EMAIL_FROM')
+  // Resend is already the project's SMTP service (beta-monitor, Auth codes): its SMTP
+  // password is a Resend API key, so the digest reuses it over the HTTP API unless a
+  // dedicated key is set. The From defaults to the same verified sender.
+  const smtpIsResend = /resend\.com$/i.test(Deno.env.get('SMTP_HOST') || '')
+  const resendKey = Deno.env.get('RESEND_API_KEY') || (smtpIsResend ? Deno.env.get('SMTP_PASSWORD') || Deno.env.get('SMTP_Password') : undefined)
+  const emailFrom = Deno.env.get('DIGEST_EMAIL_FROM') || (smtpIsResend ? Deno.env.get('SMTP_FROM') : undefined)
   const replyTo = Deno.env.get('DIGEST_EMAIL_REPLY_TO') || null
   const unsubscribeSecret = Deno.env.get('DIGEST_UNSUBSCRIBE_SECRET') || ''
   const email = resendKey && emailFrom ? {

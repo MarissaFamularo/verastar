@@ -125,9 +125,12 @@ Outcomes are events on the account: `digest_emailed` (`papers`, `provider_id`),
 `digest_email_failed` (`error`), `digest_paused` (`streak`), `digest_pause_emailed`,
 `digest_pause_email_failed`. A send failure never fails the run.
 
-The runtime (`digest-run/index.ts`) builds the sender only when `RESEND_API_KEY` and
-`DIGEST_EMAIL_FROM` are both set. Without them the scheduler behaves exactly as before,
-minus the freeze.
+Resend is already the project's mail service: Supabase Auth sends sign-in codes through
+its SMTP relay and `beta-monitor` sends alerts through the same relay with the `SMTP_*`
+function secrets. A Resend SMTP password is a Resend API key, so `digest-run/index.ts`
+reuses it over the HTTP API: when `SMTP_HOST` is Resend, the key is `SMTP_PASSWORD` and the
+sender is `SMTP_FROM`; `RESEND_API_KEY` and `DIGEST_EMAIL_FROM` override either. With no
+credentials at all the scheduler behaves exactly as before, minus the freeze.
 
 ### Opting out
 
@@ -178,15 +181,15 @@ Order matters only in that the handler reads two columns the migration adds.
 
 1. `npm test`, `npm run lint`, and `supabase/tests/run_spending_tests.sh` against a local
    server, from the commit being released.
-2. **Resend.** Create an account, add the sending domain (`verastar.papertrellis.com` or a
-   subdomain such as `mail.verastar.papertrellis.com`), and add the DNS records it asks for
-   (SPF, DKIM, and the return-path CNAME) at the DNS host for `papertrellis.com`. Wait for
-   Resend to show the domain verified. Create an API key with send permission only.
-3. **Secrets** on the project's Edge Functions:
-   `RESEND_API_KEY`, `DIGEST_EMAIL_FROM` (for example
-   `Marissa at Verastar <digest@verastar.papertrellis.com>`),
-   `DIGEST_EMAIL_REPLY_TO` (a mailbox Marissa reads), `DIGEST_UNSUBSCRIBE_SECRET` (a long
-   random string, `openssl rand -hex 32`), and optionally `APP_URL`.
+2. **Resend is already set up.** The domain is verified and the credentials are the
+   `SMTP_*` function secrets. Nothing to create. Check the Resend plan's daily and monthly
+   limits against the cohort: the free tier allows 100 emails a day and 3,000 a month, and
+   40 digests a day plus sign-in codes and alerts fits, but a cohort of 100 does not.
+3. **Secrets** on the project's Edge Functions: `DIGEST_UNSUBSCRIBE_SECRET` (a long random
+   string, `openssl rand -hex 32`) is the one new secret. Optional: `DIGEST_EMAIL_FROM` to
+   send as `Marissa at Verastar <same address SMTP_FROM uses>` instead of the SMTP_FROM
+   display name; `DIGEST_EMAIL_REPLY_TO` (a mailbox Marissa reads; replies are the
+   interviews); `APP_URL`. `RESEND_API_KEY` only if a separate key is wanted.
 4. **Apply the two migrations** in file order (each one transaction; the first is
    additive, the second redefines the monitor's due model and re-activates monitoring).
 5. **Deploy** `digest-run` and `digest-unsubscribe` from the released commit, as in
@@ -209,8 +212,9 @@ Order matters only in that the handler reads two columns the migration adds.
    "schedule: overdue" on the first morning for the accounts at the back of the queue, and
    none after that. Spreading hours, or a faster tick, is a separate change.
 
-Rollback: unset `RESEND_API_KEY` to stop email without redeploying; redeploy the previous
-`digest-run` to restore the freeze rule. The columns may stay.
+Rollback: set `DIGEST_EMAIL_FROM` to an empty value is not enough (the fallback is
+`SMTP_FROM`); turn every account's `email_digest` off in SQL, or redeploy the previous
+`digest-run`, which also restores the freeze rule. The columns may stay.
 
 ## Scheduler capacity (decide before release)
 
@@ -246,9 +250,10 @@ After step 7 has produced fresh digests (the morning after release), send the fo
 email once:
 
 ```bash
-SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... RESEND_API_KEY=... \
-DIGEST_EMAIL_FROM="Marissa at Verastar <digest@verastar.papertrellis.com>" \
-DIGEST_EMAIL_REPLY_TO="..." DIGEST_UNSUBSCRIBE_SECRET="..." \
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DIGEST_UNSUBSCRIBE_SECRET=... \
+RESEND_API_KEY=<the SMTP_PASSWORD secret> \
+DIGEST_EMAIL_FROM="Marissa at Verastar <the address SMTP_FROM uses>" \
+DIGEST_EMAIL_REPLY_TO="..." \
 node scripts/founder-recapture-email.mjs                      # dry run: who gets what, first email of each kind
 node scripts/founder-recapture-email.mjs --only you@example.com --send   # one test send
 node scripts/founder-recapture-email.mjs --send

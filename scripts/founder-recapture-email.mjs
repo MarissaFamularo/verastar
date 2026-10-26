@@ -12,10 +12,10 @@
 // recorded as an events row (founder_email_sent) and a reader who already has one is skipped,
 // so a second run cannot double-send.
 //
-//   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... RESEND_API_KEY=... \
-//   DIGEST_EMAIL_FROM="Marissa at Verastar <digest@verastar.papertrellis.com>" \
-//   DIGEST_EMAIL_REPLY_TO="..." DIGEST_UNSUBSCRIBE_SECRET="..." \
-//   node scripts/founder-recapture-email.mjs [options]
+//   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DIGEST_UNSUBSCRIBE_SECRET=... \
+//   RESEND_API_KEY=<the project's SMTP_PASSWORD secret, or a new Resend key> \
+//   DIGEST_EMAIL_FROM="Marissa at Verastar <the address SMTP_FROM already uses>" \
+//   DIGEST_EMAIL_REPLY_TO="..." node scripts/founder-recapture-email.mjs [options]
 //
 //   --send                 actually send (default: dry run)
 //   --segment digest|setup|all   which readers (default all)
@@ -193,8 +193,11 @@ async function main() {
     return
   }
 
-  const from = need('DIGEST_EMAIL_FROM')
-  const send = makeResendSender({ apiKey: need('RESEND_API_KEY'), from, replyTo: REPLY_TO })
+  // The project's Resend credentials are its SMTP secrets (SMTP_PASSWORD is a Resend API
+  // key); RESEND_API_KEY / DIGEST_EMAIL_FROM override them.
+  const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASSWORD || need('RESEND_API_KEY')
+  const from = process.env.DIGEST_EMAIL_FROM || process.env.SMTP_FROM || need('DIGEST_EMAIL_FROM')
+  const send = makeResendSender({ apiKey, from, replyTo: REPLY_TO })
   let n = 0
   for (const p of plan) {
     if (p.segment === 'skip') continue
