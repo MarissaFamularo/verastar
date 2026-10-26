@@ -48,7 +48,7 @@ export function digestRefusalMessage(reason) {
   if (reason === "today's digest already exists") return 'Today\u2019s digest is already here. The next run is tomorrow morning.'
   if (reason === 'already running') return 'Your digest is already being prepared. It will be on the Digest tab in a few minutes.'
   if (reason === 'nothing due') return 'No digest schedule is turned on for this account, so the server did not start a run.'
-  if (reason === 'not yet') return 'It is before your scheduled hour, so the automatic run has not started.'
+  if (reason === 'not yet') return 'It is more than an hour before your digest hour, so the automatic build has not started.'
   if (reason === 'already ran today') return 'A digest already finished for today.'
   if (reason === 'last digest unopened') return 'The last digest is still unopened, so a new automatic run is waiting.'
   if (reason === 'past catch-up window') return 'It is more than twelve hours past your digest hour, so today’s automatic run is skipped. The next one is tomorrow morning; "Run now" starts one today.'

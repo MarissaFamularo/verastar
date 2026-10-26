@@ -69,6 +69,14 @@ describe('digest scheduler gate', () => {
     expect(digestGate({ ...base, hour: 4 })).toEqual({ run: false, reason: 'not yet' })
   })
 
+  it('may start a build in the lead hour before her hour, never earlier, and delivery time stays hers', () => {
+    expect(digestGate({ ...base, hour: 4, leadHours: 1 })).toEqual({ run: true })
+    expect(digestGate({ ...base, hour: 3, leadHours: 1 })).toEqual({ run: false, reason: 'not yet' })
+    expect(digestGate({ hour: 0, hourLocal: 0, leadHours: 1 })).toEqual({ run: true })
+    expect(digestGate({ hour: 23, hourLocal: 0, leadHours: 1 })).toEqual({ run: false, reason: 'past catch-up window' })
+    expect(digestGate({ ...base, hour: 17, leadHours: 1 })).toEqual({ run: false, reason: 'past catch-up window' })
+  })
+
   it('skips the day once more than twelve hours past her hour; "run now" and a run in flight do not (2026-10-25)', () => {
     expect(digestGate({ ...base, hour: 16 })).toEqual({ run: true })
     expect(digestGate({ ...base, hour: 17 })).toEqual({ run: false, reason: 'past catch-up window' })

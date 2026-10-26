@@ -34,11 +34,16 @@ import { observeDigest } from '../_shared/observeSignup.js'
 // scheduler stops starting runs (paused_at), tells the reader once by email, and resumes on
 // the first tick after the digest is opened, because that resets the streak to 0.
 //
-// Delivery: a finished scheduled run with papers is emailed to the account's address when
-// the runtime provides a sender (deps.email; index.ts builds one from RESEND_API_KEY). The
-// email carries what the stored digest already holds (../_shared/digestEmail.js) and a
-// signed one-click unsubscribe link. An account with email_digest off gets nothing. Sending
-// is best effort after the run is recorded: a failure is an event, never a failed run.
+// Delivery: the reader's hour is when the email lands, not when work starts. A scheduled
+// build may start BUILD_LEAD_HOURS before her hour (the gate's leadHours), and every cron
+// tick first delivers any digest that finished today for an account whose hour has passed
+// and whose day is not yet delivered (digest_schedules.delivered_day, compare-and-set so two
+// ticks cannot both send). A build that finishes after the hour is delivered on the tick
+// that finishes it. The runtime provides the sender (deps.email; index.ts builds one from
+// RESEND_API_KEY); the email carries what the stored digest already holds
+// (../_shared/digestEmail.js) and a signed one-click unsubscribe link. An account with
+// email_digest off has its day marked delivered and gets nothing. Sending is best effort:
+// a failure is an event, never a failed run, and the day is not retried.
 //
 // Callable two ways: from cron with x-cron-secret, or by a signed-in user ("run mine now"),
 // which ignores the hour and the pause but keeps the claim and the spending checks.
@@ -75,6 +80,10 @@ export const ATTEMPTS_PER_DAY = 12
 // the account. Seven: a reader who has not looked all week is told once and left alone.
 export const PAUSE_AFTER_UNOPENED = 7
 export const PAUSED_REASON = 'paused: digests unopened'
+// A scheduled build may start this many hours before the reader's hour, so the morning
+// queue is absorbed before anyone's delivery time. The monitor expects the digest by the
+// hour itself (private.beta_expected_digest_due).
+export const BUILD_LEAD_HOURS = 1
 
 // Pure: the account's unopened streak once the scheduler replaces `record` (the stored
 // daily digest, or null). A manual run means the reader is present: 0. An unfinished
@@ -136,7 +145,52 @@ function gateFor({ row, record, now, manual, mayRun }) {
   const hasPapers = Array.isArray(record?.results) && record.results.length > 0
   const ranAt = record?.ranAt ?? record?.savedAt
   const savedToday = hasPapers && ranAt && localClock(new Date(ranAt), row.timezone).day === day
-  return digestGate({ manual, hour, hourLocal: row.hour_local, ranToday, midFlight: !!midFlight, savedToday: !!savedToday, mayRun })
+  return digestGate({ manual, hour, hourLocal: row.hour_local, leadHours: BUILD_LEAD_HOURS, ranToday, midFlight: !!midFlight, savedToday: !!savedToday, mayRun })
+}
+
+// Today's finished digest, if the stored record is one: finished, with papers, run today
+// in the account's local day.
+function finishedToday(record, timezone, day) {
+  if (!record || record.kind !== 'daily') return false
+  if (!Array.isArray(record.results) || !record.results.length) return false
+  if (record.runBy === 'scheduler' && record.server?.phase && record.server.phase !== 'done') return false
+  const ranAt = record.ranAt ?? record.savedAt
+  return !!ranAt && localClock(new Date(ranAt), timezone).day === day
+}
+
+// Email every account in `rows` whose hour has passed, whose last finished run was today,
+// and whose day is not yet delivered. The day is claimed first with a compare-and-set on
+// delivered_day, so overlapping ticks cannot both send and a failed send is not retried.
+// An empty digest, or an account that turned the email off, claims the day and sends nothing.
+async function deliverDue(admin, email, rows, now) {
+  if (!email?.send) return
+  for (const row of rows || []) {
+    const { hour, day } = localClock(now, row.timezone)
+    if (row.delivered_day === day) continue
+    if (hour < Number(row.hour_local)) continue
+    if (!row.last_run_at || localClock(new Date(row.last_run_at), row.timezone).day !== day) continue
+    let record
+    try { record = await readLatest(admin, row.user_id) } catch { continue }
+    const ready = finishedToday(record, row.timezone, day)
+    let claim = admin.from('digest_schedules').update({ delivered_day: day, updated_at: now.toISOString() }).eq('user_id', row.user_id)
+    claim = row.delivered_day == null ? claim.is('delivered_day', null) : claim.eq('delivered_day', row.delivered_day)
+    const { data: won, error } = await claim.select('user_id')
+    if (error || !won?.length) continue
+    row.delivered_day = day
+    if (!ready || row.email_digest === false) continue
+    await deliver(admin, email, row, {
+      build: ({ name, unsubscribeUrl }) => buildDigestEmail({
+        record, name, unsubscribeUrl,
+        appUrl: email.appUrl || DEFAULT_APP_URL,
+        replyTo: email.replyTo || null,
+        hourLabel: hourText(row.hour_local),
+        timezone: row.timezone || '',
+      }),
+      sentType: 'digest_emailed',
+      failedType: 'digest_email_failed',
+      payload: { papers: record.results.length },
+    })
+  }
 }
 
 const DEFAULT_HOUR_LOCAL = 6
@@ -149,7 +203,7 @@ function hourText(h) {
   return `${twelve}:00 ${n < 12 ? 'am' : 'pm'}`
 }
 const DEFAULT_TIMEZONE = 'America/New_York'
-const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day'
 
 async function readName(admin, userId) {
   try {
@@ -282,6 +336,8 @@ export async function handleDigestRun(req, deps) {
     }
   }
   rows = manual ? rows || [] : orderByAttempt(rows)
+  // Deliveries first: they are cheap, and a digest built early must not wait behind a build.
+  if (!manual) await deliverDue(admin, deps.email, rows, now)
   const ids = rows.map((r) => r.user_id)
   if (!ids.length) return json(200, { ran: false, reason: 'nothing due' })
   const { data: accounts, error: accountsError } = await admin.from('sponsored_accounts').select('user_id, active, ends_at').in('user_id', ids)
@@ -325,7 +381,7 @@ export async function handleDigestRun(req, deps) {
     // finished between the first read and the claim.
     let fresh
     try {
-      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, unopened_streak, paused_at, email_digest').eq('user_id', row.user_id).maybeSingle()
+      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, unopened_streak, paused_at, email_digest, delivered_day').eq('user_id', row.user_id).maybeSingle()
       if (error || !again) throw new Error('schedule unavailable')
       fresh = { row: again, record: await readLatest(admin, row.user_id) }
     } catch {
@@ -392,25 +448,9 @@ export async function handleDigestRun(req, deps) {
 
   await observeDigest(admin, { finished, failed: result.phase === 'error' || result.phase === 'held' || claimLost })
 
-  // Deliver a finished scheduled digest with papers. A manual run is not emailed: the
-  // reader is in the app. A run that lost its claim may not own what is stored, so it sends
-  // nothing. The email is built from the stored record, the same thing the app will show.
-  if (deps.email && !manual && !claimLost && result.phase === 'done' && (result.papers ?? 0) > 0) {
-    await deliver(admin, deps.email, picked.row, {
-      build: async ({ name, unsubscribeUrl }) => {
-        const record = await readLatest(admin, userId)
-        return buildDigestEmail({
-          record, name, unsubscribeUrl,
-          appUrl: deps.email.appUrl || DEFAULT_APP_URL,
-          replyTo: deps.email.replyTo || null,
-          hourLabel: hourText(picked.row.hour_local),
-          timezone: picked.row.timezone || '',
-        })
-      },
-      sentType: 'digest_emailed',
-      failedType: 'digest_email_failed',
-      payload: { papers: result.papers ?? 0 },
-    })
-  }
+  // A build that finished at or after the reader's hour is delivered now rather than on the
+  // next tick. One that finished early waits for the hour. A run that lost its claim may
+  // not own what is stored, so it delivers nothing.
+  if (finished && !claimLost) await deliverDue(admin, deps.email, [{ ...picked.row, last_run_at: now.toISOString() }], now)
   return json(200, { ran: true, user_id: userId, ...result, claimLost, spend, log })
 }

@@ -92,10 +92,22 @@ enabled schedule (`monitor_started_at = now()`) because the expectation changed 
 **Cost bound.** An account can now spend up to seven digest-days without a single open,
 about $1.60 at the observed average, inside the $3.00 daily and $25 monthly caps.
 
-### Email on every finished scheduled digest
+### Built early, delivered at the hour
 
-After a cron run finishes `done` with papers and still owns its claim, the handler reads
-the stored digest back and sends it (`../_shared/digestEmail.js`):
+The reader's hour is when the email lands. A scheduled build may start up to
+`BUILD_LEAD_HOURS` (1) before it, which absorbs the morning queue, and every cron tick
+first delivers any digest that finished today for an account whose hour has passed and
+whose day is not yet delivered. `digest_schedules.delivered_day` records the local day
+handled; it is claimed with a compare-and-set before anything is sent, so overlapping
+ticks cannot both send and a failed send is not retried that day. A build that finishes
+after the hour (a long queue, an outage) is delivered on the tick that finishes it: late
+beats missing. A "run now" digest is delivered at the hour like any other, since it is
+the day's digest. An empty digest, or an account with the email off, claims the day and
+sends nothing. The in-app digest appears as soon as it is built.
+
+### What the email holds
+
+The handler reads the stored digest back and sends it (`../_shared/digestEmail.js`):
 
 - Subject: the top paper's title.
 - Body: up to five items in digest order; title, authors, journal, year; the triage
@@ -107,8 +119,7 @@ the stored digest back and sends it (`../_shared/digestEmail.js`):
   the Settings switch, and a reply line when a reply-to address is configured.
 
 Nothing is generated at send time. No model call, no new numbers, no new citations: the
-email shows exactly what the app would show. Manual runs are not emailed (the reader is in
-the app). A run that lost its claim sends nothing.
+email shows exactly what the app would show. A run that lost its claim delivers nothing.
 
 Outcomes are events on the account: `digest_emailed` (`papers`, `provider_id`),
 `digest_email_failed` (`error`), `digest_paused` (`streak`), `digest_pause_emailed`,
@@ -211,8 +222,11 @@ finished between 06:10 and 09:51 Eastern. After the release every account runs e
 morning, so the queue is real, the Central and Mountain readers get their "morning"
 digest in the afternoon, and the monitor's two-hour grace is exceeded daily.
 
-The fix is a schedule change on the pg_cron job, not code: ticks every minute give five
-times the throughput (about 80 minutes for 40 accounts) and the claim and spending
+With the one-hour build lead the queue is invisible to readers until it exceeds the lead:
+about six accounts per shared hour at the five-minute tick, about thirty at the per-minute
+tick. The fix is a schedule change on the pg_cron job, not code: ticks every minute give
+five times the throughput (about 80 minutes for 40 accounts, so the lead covers most of
+it) and the claim and spending
 contracts already cover overlapping ticks on different accounts (the handler tests
 interleave two). As the operator, in the SQL editor:
 
@@ -261,5 +275,7 @@ enrollment cohort. The beta dashboard RPC does not count the new events; adding
   timing only until the client logs it.
 - Replacing an unopened digest means a reader who returns on day four sees day four's
   digest, not days one to three. The earlier ones are in their inbox.
-- One email per account per day at most (the `ranToday` gate), but a day with an error
-  after `done` cannot happen, and a `done` with zero papers sends nothing.
+- One email per account per local day (`delivered_day`). An hour-0 reader's build starts
+  at 0, not the day before, so their email lands when the build finishes.
+- Delivery lands within one cron tick of the hour: with the five-minute tick, up to five
+  minutes late; with the per-minute tick, within a minute.

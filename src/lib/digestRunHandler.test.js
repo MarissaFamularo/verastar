@@ -17,6 +17,9 @@ import { fakeProvider } from './spendingFakes.js'
 import { makeRpcLedger } from '../../supabase/functions/_shared/spending.js'
 
 const HASH = 'e'.repeat(64)
+// A timezone in which the wall clock reads LOCAL_HOUR right now. Etc/GMT+N is UTC-N.
+const LOCAL_HOUR = 11
+const TZ = (() => { const d = new Date().getUTCHours() - LOCAL_HOUR; return d === 0 ? 'Etc/GMT' : d > 0 ? `Etc/GMT+${d}` : `Etc/GMT-${-d}` })()
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const als = new AsyncLocalStorage()
 
@@ -26,7 +29,9 @@ afterAll(() => installServerScope(null))
 // --- an in-memory database with the claim/fence semantics of the migration --------------
 function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
   const t = {
-    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: new Date().getUTCHours(), timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0, unopened_streak: 0, paused_at: null, email_digest: true })),
+    // Every schedule's local hour is 11 right now (a fixed-offset zone chosen for the real
+    // clock), so the gate's hour, lead and catch-up checks are deterministic.
+    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: LOCAL_HOUR, timezone: TZ, claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0, unopened_streak: 0, paused_at: null, email_digest: true, delivered_day: null })),
     sponsored_accounts: users.map((u) => ({ user_id: u, active: true, ends_at: null })),
     kv: users.map((u) => ({ user_id: u, collection: 'profile', key: 'me', value: { onboarded: true, name: u } })),
     evidence_cache_trusted: [],
@@ -119,7 +124,7 @@ function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
       insert: (row) => { t[table].push(row); return Promise.resolve({ error: null }) },
       upsert: (row) => { t[table].push(row); return Promise.resolve({ error: null }) },
       then: (res, rej) => {
-        if (op === 'update') { for (const r of rows()) Object.assign(r, payload); return Promise.resolve({ error: null }).then(res, rej) }
+        if (op === 'update') { const hit = rows(); for (const r of hit) Object.assign(r, payload); return Promise.resolve({ data: hit.map((r) => ({ user_id: r.user_id })), error: null }).then(res, rej) }
         return sleep(1).then(() => ({ data: rows(), error: null })).then(res, rej)
       },
     }
@@ -681,7 +686,7 @@ describe('unopened digests', () => {
 })
 
 describe('delivery', () => {
-  it('a finished scheduled digest with papers is emailed from the stored record and recorded', async () => {
+  it('a digest finished at or after the hour is emailed on that tick, from the stored record, once', async () => {
     const db = memoryDb({ users: ['A'] })
     const { email, sent } = fakeEmail()
     const h = deps(db, { run: doneRun(2) }).deps
@@ -693,28 +698,59 @@ describe('delivery', () => {
     expect(sent[0].text).toContain('Finding one.')
     expect(sent[0].text).toContain('Checked against the source text.')
     expect(sent[0].text).toContain('https://app.test/?src=digest-email')
-    expect(sent[0].text).toMatch(/for \d{1,2}:00 (am|pm) UTC/)
+    expect(sent[0].text).toContain(`for 11:00 am ${TZ}`)
     expect(sent[0].html).toContain('Paper 1 for A')
     expect(events(db, 'digest_emailed')).toEqual([expect.objectContaining({ user_id: 'A', payload: { papers: 2, provider_id: 'em_1' } })])
+    expect(row(db).delivered_day).toBeTruthy()
+    // Later ticks: nothing to build (ran today), nothing to send (day delivered).
+    expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(false)
+    expect(sent).toHaveLength(1)
   })
-  it('a manual run is not emailed', async () => {
+  it('a digest built in the hour before is held and emailed at the hour', async () => {
     const db = memoryDb({ users: ['A'] })
+    row(db).hour_local = LOCAL_HOUR + 1
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ ran: true, phase: 'done' })
+    expect(sent).toHaveLength(0)
+    expect(row(db).delivered_day).toBeNull()
+    // The clock reaches her hour (the row's hour now equals the local hour).
+    row(db).hour_local = LOCAL_HOUR
+    expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(false)
+    expect(sent).toHaveLength(1)
+    expect(events(db, 'digest_emailed')).toHaveLength(1)
+    expect(row(db).delivered_day).toBeTruthy()
+  })
+  it('two hours before the hour nothing is built yet', async () => {
+    const db = memoryDb({ users: ['A'] })
+    row(db).hour_local = LOCAL_HOUR + 2
+    const out = await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()
+    expect(out).toEqual({ ran: false, reason: 'not yet' })
+  })
+  it('a "run now" digest is delivered at the hour like any other', async () => {
+    const db = memoryDb({ users: ['A'] })
+    row(db).hour_local = LOCAL_HOUR + 1
     const { email, sent } = fakeEmail()
     const h = deps(db, { user: { id: 'A' }, run: doneRun(2) }).deps
     h.email = email
     expect((await (await handleDigestRun(manual(), h)).json()).ran).toBe(true)
     expect(sent).toHaveLength(0)
-    expect(events(db, 'digest_emailed')).toHaveLength(0)
+    row(db).hour_local = LOCAL_HOUR
+    await handleDigestRun(cron(), h)
+    expect(sent).toHaveLength(1)
   })
-  it('an empty digest is not emailed', async () => {
+  it('an empty digest sends nothing and the day is marked handled', async () => {
     const db = memoryDb({ users: ['A'] })
     const { email, sent } = fakeEmail()
     const h = deps(db, { run: doneRun(0) }).deps
     h.email = email
     expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(true)
     expect(sent).toHaveLength(0)
+    expect(row(db).delivered_day).toBeTruthy()
+    expect(db.t.events.filter((e) => /digest_email/.test(e.type))).toHaveLength(0)
   })
-  it('a send failure is an event, and the run is still a success', async () => {
+  it('a send failure is an event, the day is not retried, and the run is still a success', async () => {
     const db = memoryDb({ users: ['A'] })
     const { email } = fakeEmail({ fail: true })
     const h = deps(db, { run: doneRun(1) }).deps
@@ -723,6 +759,8 @@ describe('delivery', () => {
     expect(out).toMatchObject({ ran: true, phase: 'done', claimLost: false })
     expect(events(db, 'digest_email_failed')).toEqual([expect.objectContaining({ payload: { papers: 1, error: 'Resend 500: down' } })])
     expect(row(db).last_run_at).toBeTruthy()
+    await handleDigestRun(cron(), h)
+    expect(events(db, 'digest_email_failed')).toHaveLength(1)
   })
   it('an account without an address is recorded, not retried', async () => {
     const db = memoryDb({ users: ['A'] })
@@ -733,10 +771,28 @@ describe('delivery', () => {
     expect(sent).toHaveLength(0)
     expect(events(db, 'digest_email_failed')).toEqual([expect.objectContaining({ payload: { papers: 1, error: 'no address' } })])
   })
+  it('a day already claimed by another tick is not sent again', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    // Another tick claimed the day between this tick's read and its compare-and-set.
+    const orig = db.admin.from
+    let armed = false
+    db.admin.from = (table) => {
+      const chain = orig(table)
+      if (table === 'kv' && !armed) { armed = true; row(db).delivered_day = new Date().toISOString().slice(0, 10) }
+      return chain
+    }
+    const out = await (await handleDigestRun(cron(), h)).json()
+    expect(out.ran).toBe(true)
+    expect(sent).toHaveLength(0)
+    db.admin.from = orig
+  })
 })
 
 describe('opting out', () => {
-  it('an account with the email off is not emailed and nothing is recorded', async () => {
+  it('an account with the email off is not emailed, nothing is recorded, and the day is marked handled', async () => {
     const db = memoryDb({ users: ['A'] })
     row(db).email_digest = false
     const { email, sent } = fakeEmail()
@@ -745,6 +801,7 @@ describe('opting out', () => {
     expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(true)
     expect(sent).toHaveLength(0)
     expect(db.t.events.filter((e) => /digest_email/.test(e.type))).toHaveLength(0)
+    expect(row(db).delivered_day).toBeTruthy()
   })
   it('the pause notice honours the email switch too', async () => {
     const db = memoryDb({ users: ['A'] })

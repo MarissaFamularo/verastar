@@ -310,7 +310,8 @@ select pg_temp.ok(public.digest_claim_finish(:A, (select tok from t_claim2), tru
 select pg_temp.ok((select claim_token is null and claimed_at is null and last_run_at is not null and last_result = 'done: 3 papers' from public.digest_schedules where user_id = :A), 'finish clears claim and records the run');
 
 -- ---------------------------------------------------------------- attempt stamps (20261014121000_digest_attempts.sql)
-select pg_temp.ok((select last_attempt_at is not null and attempts_today = 1 and attempt_day = (now() at time zone 'UTC')::date from public.digest_schedules where user_id = :A), 'a finished run stamps last_attempt_at and counts one attempt today');
+-- attempt_day is the account's local day (digest_local_day), not the UTC date: the two differ for a few hours around midnight UTC.
+select pg_temp.ok((select last_attempt_at is not null and attempts_today = 1 and attempt_day = public.digest_local_day(timezone) from public.digest_schedules where user_id = :A), 'a finished run stamps last_attempt_at and counts one attempt today');
 create temp table t_attempt as select public.digest_claim(:A, 240) as tok;
 select pg_temp.ok(public.digest_claim_finish(:A, (select tok from t_attempt), false, 'error: boom'), 'an unfinished (error) run still finishes');
 select pg_temp.ok((select attempts_today = 2 and last_result = 'error: boom' and claim_token is null from public.digest_schedules where user_id = :A), 'an error counts as an attempt and records its result');
