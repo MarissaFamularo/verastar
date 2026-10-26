@@ -109,3 +109,20 @@ the frontend. It replaces `beta_release_stats` with the same admin/range checks,
 adds aggregate counts and earliest-retained coverage, and recognizes clicks as adoption
 activity. No new table, changed RLS policy, backfill, or production application is
 part of this change. Before migration, the new rows safely display Not available.
+
+### Digest email (2026-10-26)
+
+`20261026151000_beta_email_engagement_metrics.sql` (proposed, not applied). Every link in
+the digest and pause emails goes through the signed `digest-click` function, which records
+`digest_link_clicked` (docs/DIGEST_DELIVERY.md § Engagement). Since the digest is read by
+email, a click is meaningful use: it counts toward "Used in last 72 hours", "Returned
+users" and week-1 retention exactly like an in-app digest open.
+
+The RPC gains an `email` block, with the same enrolled-beta population and test
+exclusions as `shares`: `clicks` and `clickers` (digest_link_clicked in range),
+`unsubscribes` (distinct accounts with `digest_email_unsubscribed` in range), `resumes`
+(the pause email's button, `digest_resume_clicked`), and `email_off_now` (enrolled
+accounts with `email_digest` off, not range-dependent). The overview shows an "Email
+unsubscribes" card; the detailed view has a "Digest email" section. Limits: there is no
+open pixel, so reading without clicking is invisible, and mail gateways that pre-follow
+links for scanning are recorded as clicks.

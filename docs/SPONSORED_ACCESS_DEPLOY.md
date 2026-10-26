@@ -89,7 +89,8 @@ from Supabase Vault as `verastar_digest_cron_secret` (step 4b); the two values m
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the
 platform. Optional, for emailing the morning digest (docs/DIGEST_DELIVERY.md):
 `RESEND_API_KEY`, `DIGEST_EMAIL_FROM`, `DIGEST_EMAIL_REPLY_TO`, `DIGEST_UNSUBSCRIBE_SECRET`
-(shared with `digest-unsubscribe`), `APP_URL`; with the first two unset, `digest-run`
+(shared with `digest-unsubscribe`, `digest-click` and `digest-resume`, which are deployed
+the same way, `verify_jwt = false`), `APP_URL`; with the first two unset, `digest-run`
 sends nothing.
 
 ## 4. Deploy the function

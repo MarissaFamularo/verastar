@@ -10,6 +10,7 @@ export const STATS = {
   browser: { runs: 3, users: 2, generated: 2, empty: 1, with_errors: 1, append_runs: 1, summaries: 3 },
   requesters: 2,
   opened: { events: 3, users: 2 },
+  email: { clicks: 14, clickers: 5, unsubscribes: 1, resumes: 1, email_off_now: 2 },
   papers: { extractions: 3, unique_pmids: 2 },
   verifier: { available: false },
   survey: { completed: 1, skipped: 1, completed_all_time: 4, reason: { stay_current: 1 }, read_frequency: { weekly: 1 }, weekly_time: { '1_3h': 1 }, confidence: { 4: 1 } },
@@ -20,5 +21,7 @@ export const STATS = {
     digest_opened: null,
     evidence_cache_trusted: '2026-10-01T00:00:00+00:00',
     beta_survey_responses: '2026-10-10T00:00:00+00:00',
+    digest_link_clicked: '2026-09-20T00:00:00+00:00',
+    digest_email_unsubscribed: null,
   },
 }

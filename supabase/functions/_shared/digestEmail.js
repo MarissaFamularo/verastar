@@ -115,19 +115,59 @@ function footerHtml(appUrl, opts) {
   return `<p style="color:#666;font-size:12px;line-height:1.5;">${lines.join('<br>')}</p>`
 }
 
+// --- click tracking -------------------------------------------------------------------
+// Every link an email carries is described as { kind, paperId, to } (kinds in
+// ./digestClick.js). The runtime signs each one through digest-click; the builders take a
+// sync `track(link)` that returns the href to print. Signing is async and the builders are
+// not, so the caller signs the list first (prepareTracker) and hands the lookup in. The
+// default prints the destination itself, which is what tests and the founder script use.
+export const untracked = (link) => link.to
+const linkKey = (l) => `${l.kind}|${l.paperId || ''}|${l.to}`
+
+// The links buildDigestEmail will print for `record`, in order.
+export function digestLinks(record, appUrl = DEFAULT_APP_URL) {
+  const out = []
+  for (const it of digestItems(record)) out.push(...itemLinks(it))
+  out.push({ kind: 'open', paperId: '', to: openLink(appUrl, 'digest-email') })
+  return out
+}
+
+// The links buildPauseEmail will print (the resume button is its own signed link).
+export function pauseLinks(appUrl = DEFAULT_APP_URL) {
+  return [{ kind: 'pause-open', paperId: '', to: openLink(appUrl, 'pause-email') }]
+}
+
+function itemLinks(it) {
+  const out = []
+  if (it.url) out.push({ kind: 'paper', paperId: it.id, to: it.url })
+  if (it.oaUrl && it.oaUrl !== it.url) out.push({ kind: 'fulltext', paperId: it.id, to: it.oaUrl })
+  return out
+}
+
+// Sign every link with `sign(link) -> Promise<url>` and return the sync lookup. A link
+// that fails to sign is printed untracked: the email still goes, only the click is lost.
+export async function prepareTracker(links, sign) {
+  const signed = new Map()
+  for (const l of links || []) {
+    if (signed.has(linkKey(l))) continue
+    try { signed.set(linkKey(l), await sign(l)) } catch { /* printed untracked */ }
+  }
+  return (l) => signed.get(linkKey(l)) || l.to
+}
+
 // The morning digest. `record` is the stored daily digest (kv digests/daily:latest).
 // Returns null when there is nothing to send (no items). The result carries `headers` for
 // the sender (unsubscribe headers when a link was given).
-export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null } = {}) {
+export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null, track = untracked } = {}) {
   const items = digestItems(record)
   if (!items.length) return null
   const days = Number(record?.searchContext?.days) || null
   const greeting = GREETING
   const count = `${items.length} paper${items.length === 1 ? '' : 's'}${days ? ` from the last ${days} day${days === 1 ? '' : 's'}` : ''}, picked for your north stars.`
-  const link = openLink(appUrl, 'digest-email')
+  const link = track({ kind: 'open', paperId: '', to: openLink(appUrl, 'digest-email') })
   const lead = intro ? clean(intro) : null
 
-  const textItems = formatItemsText(items)
+  const textItems = formatItemsText(items, track)
 
   const text = [
     greeting,
@@ -146,39 +186,53 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = n
     <p style="margin:0 0 8px 0;">${esc(greeting)}</p>
     ${lead ? `<p style="margin:0 0 8px 0;">${esc(lead)}</p>` : ''}
     <p style="margin:0 0 18px 0;">${esc(count)}</p>
-    ${formatItemsHtml(items)}
+    ${formatItemsHtml(items, track)}
     ${buttonHtml(link, 'Open in Verastar')}
     ${footerHtml(appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl })}`)
 
   return { subject: subjectFromTitle(items[0].title), text, html, items, headers: unsubscribeHeaders(unsubscribeUrl) }
 }
 
-// The numbered paper list, plain text. Shared with the founder mailing script.
-export function formatItemsText(items) {
-  return items.map((it, i) => [
-    `${i + 1}. ${it.title}`,
-    meta(it) ? `   ${meta(it)}` : '',
-    it.finding ? `   ${it.finding}` : '',
-    it.finding ? `   ${checkedNote(it)}` : '',
-    it.relevance ? `   Why it is here: ${it.relevance}` : '',
-    it.url ? `   ${it.url}` : '',
-    it.oaUrl && it.oaUrl !== it.url ? `   Full text: ${it.oaUrl}` : '',
-  ].filter(Boolean).join('\n')).join('\n\n')
+// The numbered paper list, plain text. Shared with the founder mailing script. `track`
+// maps each link to the href to print (see prepareTracker).
+export function formatItemsText(items, track = untracked) {
+  return items.map((it, i) => {
+    const [paper, full] = linksOf(it, track)
+    return [
+      `${i + 1}. ${it.title}`,
+      meta(it) ? `   ${meta(it)}` : '',
+      it.finding ? `   ${it.finding}` : '',
+      it.finding ? `   ${checkedNote(it)}` : '',
+      it.relevance ? `   Why it is here: ${it.relevance}` : '',
+      paper ? `   ${paper}` : '',
+      full ? `   Full text: ${full}` : '',
+    ].filter(Boolean).join('\n')
+  }).join('\n\n')
+}
+
+// [paper href, full-text href] for one item, either '' when absent.
+function linksOf(it, track) {
+  const paper = it.url ? track({ kind: 'paper', paperId: it.id, to: it.url }) : ''
+  const full = it.oaUrl && it.oaUrl !== it.url ? track({ kind: 'fulltext', paperId: it.id, to: it.oaUrl }) : ''
+  return [paper, full]
 }
 
 // The same list as HTML, escaped.
-export function formatItemsHtml(items) {
-  const li = items.map((it, i) => `
+export function formatItemsHtml(items, track = untracked) {
+  const li = items.map((it, i) => {
+    const [paper, full] = linksOf(it, track)
+    return `
       <li style="margin:0 0 18px 0;">
         <div style="font-weight:600;">${i + 1}. ${esc(it.title)}</div>
         ${meta(it) ? `<div style="color:#666;font-size:13px;">${esc(meta(it))}</div>` : ''}
         ${it.finding ? `<div style="margin-top:6px;">${esc(it.finding)}</div><div style="color:#666;font-size:12px;">${esc(checkedNote(it))}</div>` : ''}
         ${it.relevance ? `<div style="margin-top:6px;color:#444;font-size:13px;">Why it is here: ${esc(it.relevance)}</div>` : ''}
         <div style="margin-top:6px;font-size:13px;">
-          ${it.url ? `<a href="${esc(it.url)}">PubMed</a>` : ''}
-          ${it.oaUrl && it.oaUrl !== it.url ? ` &middot; <a href="${esc(it.oaUrl)}">Full text</a>` : ''}
+          ${paper ? `<a href="${esc(paper)}">PubMed</a>` : ''}
+          ${full ? ` &middot; <a href="${esc(full)}">Full text</a>` : ''}
         </div>
-      </li>`).join('')
+      </li>`
+  }).join('')
   return `<ol style="padding-left:0;list-style:none;margin:0;">${li}\n    </ol>`
 }
 
@@ -200,29 +254,40 @@ export function paragraphsHtml(text) {
 
 export { esc as escapeHtml, openLink }
 
-// Sent once when the scheduler pauses an account.
-export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, streak = 7, replyTo = null, unsubscribeUrl = null } = {}) {
-  const link = openLink(appUrl, 'pause-email')
+export const RESUME_LABEL = 'No, don’t pause me. I like these digests!'
+
+// Sent once when the scheduler pauses an account. Built around one button: `resumeUrl`
+// (digest-resume, signed) clears the pause. Without a signed button (no secret on the
+// server) the email falls back to opening the app, which also resumes.
+export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, streak = 7, replyTo = null, unsubscribeUrl = null, resumeUrl = null, track = untracked } = {}) {
+  const link = track({ kind: 'pause-open', paperId: '', to: openLink(appUrl, 'pause-email') })
   const n = Number(streak) || 7
-  const head = [
-    GREETING,
-    '',
-    `Your Verastar digest ran ${n} mornings in a row without being opened, so it has stopped running.`,
-    'Nothing is deleted. Open Verastar once and the next digest is built the following morning, at your usual hour.',
-    '',
-    `Open Verastar: ${link}`,
-  ]
+  const span = n === 7 ? 'a week' : `${n} mornings`
+  const lead = `We haven’t seen a click on your Verastar digest in ${span}, so we’ve paused it.`
+  const ask = resumeUrl ? 'If you still want it, press the button and it starts again tomorrow morning:' : 'If you still want it, open Verastar and it starts again the next morning:'
+  const rest = 'If you do nothing, it stays paused: no digests are built or emailed. Nothing is deleted, and opening Verastar or pressing "Run now" under Settings starts it again whenever you like.'
   const tail = [
-    'If you would rather it stayed off, turn off "Run automatically" under Settings and no more of these will come.',
     ...stopLines(unsubscribeUrl),
     replyTo ? 'If it stopped earning your attention, reply and say why. That is the most useful thing you can send.' : '',
   ].filter(Boolean)
-  const text = [...head, '', ...tail].join('\n')
+  const text = [
+    GREETING,
+    '',
+    lead,
+    ask,
+    resumeUrl ? `${RESUME_LABEL} ${resumeUrl}` : `Open Verastar: ${link}`,
+    '',
+    rest,
+    resumeUrl ? `Open Verastar: ${link}` : null,
+    '',
+    ...tail,
+  ].filter((l) => l !== null).join('\n')
   const tailHtml = tail.map((l) => (unsubscribeUrl && l.startsWith('Unsubscribe: ') ? `<a href="${esc(unsubscribeUrl)}">Unsubscribe</a>` : esc(l))).join('<br>')
   const html = wrapHtml(`
-    <p>${esc(head[0])}</p>
-    <p>${esc(head[2])}<br>${esc(head[3])}</p>
-    ${buttonHtml(link, 'Open Verastar')}
+    <p>${esc(GREETING)}</p>
+    <p>${esc(lead)}<br>${esc(ask)}</p>
+    ${resumeUrl ? buttonHtml(resumeUrl, RESUME_LABEL) : buttonHtml(link, 'Open Verastar')}
+    <p>${esc(rest)}${resumeUrl ? ` <a href="${esc(link)}">Open Verastar</a>` : ''}</p>
     <p style="color:#666;font-size:12px;">${tailHtml}</p>`)
   return { subject: 'Your Verastar digest is paused', text, html, headers: unsubscribeHeaders(unsubscribeUrl) }
 }

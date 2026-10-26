@@ -131,6 +131,9 @@ export function metricSections(stats) {
   const sv = stats.survey || {}
   const shares = stats.shares || {}
   const shareAvailability = availability(stats, 'paper_share_clicked')
+  const mail = stats.email || {}
+  const clickAvailability = availability(stats, 'digest_link_clicked')
+  const unsubAvailability = availability(stats, 'digest_email_unsubscribed')
   const acc = availability(stats, 'sponsored_accounts')
   const sch = availability(stats, 'digest_scheduled_run')
   const br = availability(stats, 'digest_run')
@@ -191,10 +194,21 @@ export function metricSections(stats) {
     },
     {
       title: 'Digests opened',
-      caveat: 'Verastar does not record delivery (no email or push). "Opened" is the user opening the digest screen with results present, recorded by the browser.',
+      caveat: '"Opened" is the user opening the digest screen with results present, recorded by the browser. Reading the emailed digest is not an open; clicks in the email are counted under Digest email.',
       rows: [
         row('Digest opens', o.events, 'Times a digest with results was opened for the first time after it was produced.', op),
         row('Unique users who opened a digest', o.users, 'Distinct accounts behind those opens.', op),
+      ],
+    },
+    {
+      title: 'Digest email',
+      caveat: 'Every link in the digest and pause emails goes through a signed click-through link that records the click. Reading an email without clicking leaves no record (no open pixel), and a mail system that follows links to scan them can record a click nobody made. Enrolled beta users only, test accounts and periods excluded.',
+      rows: [
+        row('Email link clicks', mail.clicks, 'Clicks on any link in a digest or pause email in the range, including repeated clicks by the same account.', clickAvailability),
+        row('Unique users who clicked', mail.clickers, 'Distinct accounts behind those clicks. A click counts as meaningful use and keeps the digest from pausing.', clickAvailability),
+        row('Unsubscribes', mail.unsubscribes, 'Distinct accounts that used the unsubscribe link (or their mail app’s unsubscribe button) in the range. The in-app digest keeps running for them.', unsubAvailability),
+        row('Email off now', mail.email_off_now, 'Enrolled accounts whose digest email is switched off right now, by the link or in Settings (not range-dependent).', always),
+        row('Resumed from the pause email', mail.resumes, 'Distinct accounts that pressed “No, don’t pause me” in the pause email in the range.', always, 'Recorded only since the button shipped; zero before then means not measured.'),
       ],
     },
     {

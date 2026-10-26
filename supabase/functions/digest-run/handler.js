@@ -29,10 +29,14 @@ import { observeDigest } from '../_shared/observeSignup.js'
 // Unopened digests (20261025120000_digest_unopened_pause.sql): a finished digest nobody
 // opened used to block every later scheduled run for the account. Now it is replaced each
 // morning and counted: digest_schedules.unopened_streak is stamped when a run claims the
-// account (0 when the previous digest was opened or the reader pressed "run now", +1 when it
-// sat unopened, unchanged after an empty day or mid-flight). At PAUSE_AFTER_UNOPENED the
-// scheduler stops starting runs (paused_at), tells the reader once by email, and resumes on
-// the first tick after the digest is opened, because that resets the streak to 0.
+// account (0 when the reader engaged with the previous digest or pressed "run now", +1 when
+// they did not, unchanged after an empty day or mid-flight). Engaged means opened in the app
+// (openedAt) or, since the digest is emailed, any sign of the reader after it was built:
+// a click on a link in an email (digest-click), the pause email's resume button
+// (digest-resume), or a Settings save; all three stamp digest_schedules.engaged_at
+// (20261026150000_digest_engagement.sql). At PAUSE_AFTER_UNOPENED the scheduler stops
+// starting runs (paused_at), tells the reader once by email, and resumes on the first tick
+// after any of those, because that resets the streak to 0.
 //
 // Delivery: the reader's hour is when the email lands, not when work starts. A scheduled
 // build may start BUILD_LEAD_HOURS before her hour (the gate's leadHours), and every cron
@@ -63,7 +67,7 @@ import { observeDigest } from '../_shared/observeSignup.js'
 import { accountActive, localClock, digestGate, requestedTimezone } from '../model/logic.js'
 import { makeGuardedFetch } from '../_shared/spending.js'
 import { CLAIM_STALE_SECONDS } from '../_shared/timeouts.js'
-import { buildDigestEmail, buildPauseEmail, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
+import { buildDigestEmail, buildPauseEmail, digestLinks, pauseLinks, prepareTracker, untracked, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
 
 // Reading budget per tick. The edge runtime's wall clock is 150 s (free) / 400 s (paid);
 // reading stops here so persistence and the handoff still fit.
@@ -85,19 +89,31 @@ export const PAUSED_REASON = 'paused: digests unopened'
 // hour itself (private.beta_expected_digest_due).
 export const BUILD_LEAD_HOURS = 1
 
+// Pure: was the reader present for `record`? Opened in the app (openedAt), or engaged
+// (a click in an email, the pause email's resume button, a Settings save: engagedAt, from
+// digest_schedules.engaged_at) at or after the digest was built. A record with no build
+// time counts any engagement: wrongly pausing a reader is the worse mistake.
+export function readerEngaged(record, engagedAt) {
+  if (record?.openedAt) return true
+  const engaged = engagedAt ? new Date(engagedAt).getTime() : NaN
+  if (!Number.isFinite(engaged)) return false
+  const built = new Date(record?.ranAt ?? record?.savedAt ?? NaN).getTime()
+  return !Number.isFinite(built) || engaged >= built
+}
+
 // Pure: the account's unopened streak once the scheduler replaces `record` (the stored
 // daily digest, or null). A manual run means the reader is present: 0. An unfinished
 // scheduler record is a run being resumed, and a record without papers is an empty day:
-// both leave the streak alone. A finished digest with papers counts: opened resets to 0,
-// unopened adds one.
-export function nextUnopenedStreak(record, current, { manual = false } = {}) {
+// both leave the streak alone. A finished digest with papers counts: engaged with
+// (readerEngaged) resets to 0, otherwise it adds one.
+export function nextUnopenedStreak(record, current, { manual = false, engagedAt = null } = {}) {
   const cur = Math.max(0, Number(current) || 0)
   if (manual) return 0
   if (!record || record.kind !== 'daily') return cur
   if (record.runBy === 'scheduler' && record.server?.phase && record.server.phase !== 'done') return cur
   const hasPapers = Array.isArray(record.results) && record.results.length > 0
   if (!hasPapers) return cur
-  return record.openedAt ? 0 : cur + 1
+  return readerEngaged(record, engagedAt) ? 0 : cur + 1
 }
 
 const HELD_NOTE = 'A paid step ended without a confirmed outcome; the run is held for operator review.'
@@ -179,8 +195,9 @@ async function deliverDue(admin, email, rows, now) {
     row.delivered_day = day
     if (!ready || row.email_digest === false) continue
     await deliver(admin, email, row, {
-      build: ({ unsubscribeUrl }) => buildDigestEmail({
+      build: async ({ unsubscribeUrl }) => buildDigestEmail({
         record, unsubscribeUrl,
+        track: await trackerFor(email, row.user_id, digestLinks(record, email.appUrl || DEFAULT_APP_URL)),
         appUrl: email.appUrl || DEFAULT_APP_URL,
         replyTo: email.replyTo || null,
         hourLabel: hourText(row.hour_local),
@@ -203,7 +220,7 @@ function hourText(h) {
   return `${twelve}:00 ${n < 12 ? 'am' : 'pm'}`
 }
 const DEFAULT_TIMEZONE = 'America/New_York'
-const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at'
 
 async function recordEvent(admin, userId, type, payload) {
   await admin.from('events').insert({ user_id: userId, type, payload }).then(() => {}, () => {})
@@ -232,6 +249,13 @@ async function deliver(admin, email, row, { build, sentType, failedType, payload
   }
 }
 
+// The href lookup for one email's links: each signed through digest-click when the runtime
+// can (email.clickUrl), printed as-is otherwise.
+async function trackerFor(email, userId, links) {
+  if (!email?.clickUrl) return untracked
+  return prepareTracker(links, (link) => email.clickUrl(userId, link))
+}
+
 // The account reached the pause threshold: stamp paused_at once (the row is idle, so the
 // write is fenced on "no claim"), record it, and tell the reader once.
 async function pauseAccount(admin, email, row, streak, now) {
@@ -239,7 +263,13 @@ async function pauseAccount(admin, email, row, streak, now) {
   await admin.from('digest_schedules').update({ paused_at: now.toISOString(), updated_at: now.toISOString() }).eq('user_id', row.user_id).is('claim_token', null).is('paused_at', null).then(() => {}, () => {})
   await recordEvent(admin, row.user_id, 'digest_paused', { streak })
   await deliver(admin, email, row, {
-    build: ({ unsubscribeUrl }) => buildPauseEmail({ appUrl: email.appUrl || DEFAULT_APP_URL, streak, replyTo: email.replyTo || null, unsubscribeUrl }),
+    build: async ({ unsubscribeUrl }) => {
+      const appUrl = email.appUrl || DEFAULT_APP_URL
+      let resumeUrl = null
+      try { resumeUrl = email.resumeUrl ? await email.resumeUrl(row.user_id) : null } catch { resumeUrl = null }
+      const track = await trackerFor(email, row.user_id, pauseLinks(appUrl))
+      return buildPauseEmail({ appUrl, streak, replyTo: email.replyTo || null, unsubscribeUrl, resumeUrl, track })
+    },
     sentType: 'digest_pause_emailed',
     failedType: 'digest_pause_email_failed',
     payload: { streak },
@@ -345,7 +375,7 @@ export async function handleDigestRun(req, deps) {
     // An unopened digest no longer blocks the next one; it is counted, and the count pauses
     // the account at the threshold. Opening the digest resets the count, so the next tick
     // after that resumes without any other action.
-    const streak = nextUnopenedStreak(record, row.unopened_streak, { manual })
+    const streak = nextUnopenedStreak(record, row.unopened_streak, { manual, engagedAt: row.engaged_at })
     if (!manual && streak >= PAUSE_AFTER_UNOPENED) {
       reason = PAUSED_REASON
       await pauseAccount(admin, deps.email, row, streak, now)
@@ -371,7 +401,7 @@ export async function handleDigestRun(req, deps) {
     // finished between the first read and the claim.
     let fresh
     try {
-      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, unopened_streak, paused_at, email_digest, delivered_day').eq('user_id', row.user_id).maybeSingle()
+      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, unopened_streak, paused_at, email_digest, delivered_day, engaged_at').eq('user_id', row.user_id).maybeSingle()
       if (error || !again) throw new Error('schedule unavailable')
       fresh = { row: again, record: await readLatest(admin, row.user_id) }
     } catch {
@@ -389,7 +419,7 @@ export async function handleDigestRun(req, deps) {
     // This run replaces fresh.record: stamp what the streak becomes, fenced on the claim.
     // A paused account only gets here after the reader opened the digest or pressed "run
     // now", so the stamp also clears the pause.
-    const stamped = nextUnopenedStreak(fresh.record, fresh.row.unopened_streak, { manual })
+    const stamped = nextUnopenedStreak(fresh.record, fresh.row.unopened_streak, { manual, engagedAt: fresh.row.engaged_at })
     if (stamped !== (Number(fresh.row.unopened_streak) || 0) || fresh.row.paused_at) {
       await admin.from('digest_schedules').update({ unopened_streak: stamped, paused_at: null, updated_at: now.toISOString() }).eq('user_id', row.user_id).eq('claim_token', token).then(() => {}, () => {})
     }

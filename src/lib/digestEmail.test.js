@@ -1,6 +1,6 @@
 // The digest email builders and the Resend sender (supabase/functions/_shared/digestEmail.js).
 import { describe, it, expect } from 'vitest'
-import { buildDigestEmail, buildPauseEmail, digestItems, digestSender, makeResendSender, subjectFromTitle, DEFAULT_APP_URL } from '../../supabase/functions/_shared/digestEmail.js'
+import { buildDigestEmail, buildPauseEmail, digestItems, digestLinks, digestSender, makeResendSender, pauseLinks, prepareTracker, subjectFromTitle, DEFAULT_APP_URL, RESUME_LABEL } from '../../supabase/functions/_shared/digestEmail.js'
 
 const paper = (i, extra = {}) => ({ paper: { id: `p${i}`, pmid: `p${i}`, title: `Paper ${i} title.`, author: 'Li X et al.', journal: 'J Vasc Surg', year: '2026', ...extra }, citation: { url: `https://pubmed.ncbi.nlm.nih.gov/p${i}/` } })
 const record = (over = {}) => ({
@@ -75,14 +75,77 @@ describe('buildDigestEmail', () => {
 })
 
 describe('buildPauseEmail', () => {
-  it('says how many went unopened and how to resume', () => {
-    const m = buildPauseEmail({ streak: 7, replyTo: 'm@example.com' })
+  const RESUME = 'https://fn.test/functions/v1/digest-resume?u=A&t=abc'
+  it('is built around the resume button: no click in a week, the button, doing nothing leaves it paused', () => {
+    const m = buildPauseEmail({ streak: 7, replyTo: 'm@example.com', resumeUrl: RESUME })
     expect(m.subject).toBe('Your Verastar digest is paused')
     expect(m.text.startsWith('Hello, doctor,')).toBe(true)
-    expect(m.text).toContain('7 mornings in a row')
+    expect(m.text).toContain('We haven’t seen a click on your Verastar digest in a week')
+    expect(m.text).toContain(`${RESUME_LABEL} ${RESUME}`)
+    expect(m.text).toContain('If you do nothing, it stays paused')
+    expect(m.text).toContain('"Run now"')
     expect(m.text).toContain(`${DEFAULT_APP_URL}/?src=pause-email`)
     expect(m.text).toContain('reply and say why')
+    expect(m.html).toContain(`href="${RESUME.replace('&', '&amp;')}"`)
+    expect(m.html).toContain('No, don’t pause me. I like these digests!')
+    // The button comes before the "do nothing" line.
+    expect(m.html.indexOf(RESUME_LABEL)).toBeLessThan(m.html.indexOf('If you do nothing'))
     expect(buildPauseEmail({}).text).not.toContain('reply and say why')
+  })
+  it('names a different streak plainly', () => {
+    expect(buildPauseEmail({ streak: 10, resumeUrl: RESUME }).text).toContain('in 10 mornings')
+  })
+  it('without a signed button, opening the app is the way back', () => {
+    const m = buildPauseEmail({})
+    expect(m.text).not.toContain(RESUME_LABEL)
+    expect(m.text).toContain(`Open Verastar: ${DEFAULT_APP_URL}/?src=pause-email`)
+    expect(m.html).toContain('>Open Verastar</a>')
+  })
+  it('tracks its app link', () => {
+    const m = buildPauseEmail({ resumeUrl: RESUME, track: (l) => `https://t.test/${l.kind}` })
+    expect(m.text).toContain('Open Verastar: https://t.test/pause-open')
+    expect(m.text).not.toContain('?src=pause-email')
+  })
+})
+
+describe('click tracking', () => {
+  const track = (l) => `https://t.test/${l.kind}/${l.paperId || '-'}`
+  it('every link in the digest email goes through the tracker, text and html', () => {
+    const m = buildDigestEmail({ record: record({ results: [paper(0), { ...paper(1), oa: { url: 'https://pmc.test/p1' } }] }), track })
+    for (const href of ['https://t.test/paper/p0', 'https://t.test/paper/p1', 'https://t.test/fulltext/p1', 'https://t.test/open/-']) {
+      expect(m.text).toContain(href)
+      expect(m.html).toContain(`href="${href}"`)
+    }
+    expect(m.text).not.toContain('https://pubmed.ncbi.nlm.nih.gov/')
+    expect(m.html).not.toContain('?src=digest-email')
+  })
+  it('digestLinks lists exactly what the builder prints', () => {
+    const rec = record({ results: [paper(0), { ...paper(1), oa: { url: 'https://pmc.test/p1' } }] })
+    const printed = []
+    buildDigestEmail({ record: rec, appUrl: 'https://app.test', track: (l) => { printed.push(l); return l.to } })
+    const listed = digestLinks(rec, 'https://app.test')
+    const key = (l) => `${l.kind}|${l.paperId}|${l.to}`
+    expect(new Set(printed.map(key))).toEqual(new Set(listed.map(key)))
+    expect(listed).toContainEqual({ kind: 'paper', paperId: 'p0', to: 'https://pubmed.ncbi.nlm.nih.gov/p0/' })
+    expect(listed).toContainEqual({ kind: 'fulltext', paperId: 'p1', to: 'https://pmc.test/p1' })
+    expect(listed).toContainEqual({ kind: 'open', paperId: '', to: 'https://app.test/?src=digest-email' })
+    expect(pauseLinks('https://app.test')).toEqual([{ kind: 'pause-open', paperId: '', to: 'https://app.test/?src=pause-email' }])
+  })
+  it('prepareTracker signs each link once and prints a link that failed to sign untracked', async () => {
+    const calls = []
+    const t = await prepareTracker([
+      { kind: 'paper', paperId: 'a', to: 'https://x.test/a' },
+      { kind: 'paper', paperId: 'a', to: 'https://x.test/a' },
+      { kind: 'paper', paperId: 'b', to: 'https://x.test/b' },
+    ], async (l) => { calls.push(l.paperId); if (l.paperId === 'b') throw new Error('nope'); return `signed:${l.paperId}` })
+    expect(calls).toEqual(['a', 'b'])
+    expect(t({ kind: 'paper', paperId: 'a', to: 'https://x.test/a' })).toBe('signed:a')
+    expect(t({ kind: 'paper', paperId: 'b', to: 'https://x.test/b' })).toBe('https://x.test/b')
+    expect(t({ kind: 'open', paperId: '', to: 'https://x.test/never' })).toBe('https://x.test/never')
+  })
+  it('untracked builders print the destinations (the founder script path)', () => {
+    const m = buildDigestEmail({ record: record() })
+    expect(m.html).toContain('href="https://pubmed.ncbi.nlm.nih.gov/p0/"')
   })
 })
 

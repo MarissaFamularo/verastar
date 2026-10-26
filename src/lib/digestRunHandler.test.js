@@ -629,6 +629,114 @@ describe('nextUnopenedStreak', () => {
   it('a manual run means the reader is present', () => {
     expect(nextUnopenedStreak(finished(null), 6, { manual: true })).toBe(0)
   })
+  it('engagement after the digest was built (an email click, a Settings save) resets it; before does not', () => {
+    const built = { ...finished(null), ranAt: '2026-10-25T10:00:00Z' }
+    expect(nextUnopenedStreak(built, 6, { engagedAt: '2026-10-25T11:30:00Z' })).toBe(0)
+    expect(nextUnopenedStreak(built, 6, { engagedAt: '2026-10-25T10:00:00Z' })).toBe(0)
+    expect(nextUnopenedStreak(built, 6, { engagedAt: '2026-10-24T11:30:00Z' })).toBe(7)
+    expect(nextUnopenedStreak(built, 6, { engagedAt: null })).toBe(7)
+    expect(nextUnopenedStreak(built, 6, { engagedAt: 'junk' })).toBe(7)
+    // savedAt stands in for ranAt; a record with neither counts any engagement.
+    expect(nextUnopenedStreak({ ...finished(null), savedAt: '2026-10-25T10:00:00Z' }, 2, { engagedAt: '2026-10-24T00:00:00Z' })).toBe(3)
+    expect(nextUnopenedStreak(finished(null), 2, { engagedAt: '2020-01-01T00:00:00Z' })).toBe(0)
+    // Engagement never touches an empty day or a run being resumed.
+    expect(nextUnopenedStreak({ ...finished(null, 0), ranAt: '2026-10-25T10:00:00Z' }, 3, { engagedAt: '2026-10-25T11:00:00Z' })).toBe(3)
+  })
+  it('readerEngaged: opened in the app is enough on its own', () => {
+    expect(readerEngaged({ openedAt: '2026-10-25T00:00:00Z', ranAt: '2026-10-26T00:00:00Z' }, null)).toBe(true)
+    expect(readerEngaged({ ranAt: '2026-10-26T00:00:00Z' }, '2026-10-25T00:00:00Z')).toBe(false)
+  })
+})
+
+// --- engagement outside the app: email clicks, the resume button, Settings --------------
+import { readerEngaged } from '../../supabase/functions/digest-run/handler.js'
+import { handleClick } from '../../supabase/functions/digest-click/handler.js'
+import { handleResume } from '../../supabase/functions/digest-resume/handler.js'
+import { clickUrl as signedClickUrl } from '../../supabase/functions/_shared/digestClick.js'
+import { resumeUrl as signedResumeUrl } from '../../supabase/functions/_shared/unsubscribe.js'
+
+describe('engagement outside the app', () => {
+  const SECRET = 'a-long-enough-test-secret-value'
+  const UID = '41fd38b0-c67e-4ce1-a647-3612fbc6010e'
+  const FN = 'https://fn.test/functions/v1'
+  it('a reader who only clicks links in the email is never counted as unopened', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+    row(db).engaged_at = new Date(Date.parse(YESTERDAY) + 3600 * 1000).toISOString()
+    const out = await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()
+    expect(out).toMatchObject({ ran: true, phase: 'done' })
+    expect(row(db)).toMatchObject({ unopened_streak: 0, paused_at: null })
+  })
+  it('a click from before the digest was built does not count for it', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: 2 })
+    row(db).engaged_at = new Date(Date.parse(YESTERDAY) - 3600 * 1000).toISOString()
+    await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)
+    expect(row(db).unopened_streak).toBe(3)
+  })
+  it('a click on a tracked link resumes a paused account on the next tick', async () => {
+    const db = memoryDb({ users: [UID] })
+    seedDigest(db, UID, { streak: PAUSE_AFTER_UNOPENED, pausedAt: YESTERDAY })
+    expect(await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+    const link = await signedClickUrl(FN, { userId: UID, kind: 'paper', paperId: 'old0', to: 'https://pubmed.ncbi.nlm.nih.gov/1/' }, SECRET)
+    const res = await handleClick(new Request(link), { admin: db.admin, secret: SECRET })
+    expect(res.status).toBe(302)
+    expect(res.headers.get('Location')).toBe('https://pubmed.ncbi.nlm.nih.gov/1/')
+    expect(events(db, 'digest_link_clicked')).toEqual([expect.objectContaining({ user_id: UID, payload: { paper_id: 'old0', kind: 'paper' } })])
+    expect(row(db, UID).engaged_at).toBeTruthy()
+    const out = await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()
+    expect(out).toMatchObject({ ran: true, phase: 'done' })
+    expect(row(db, UID)).toMatchObject({ unopened_streak: 0, paused_at: null })
+  })
+  it('the pause email’s button resumes: pause cleared, streak 0, event logged, next tick runs', async () => {
+    const db = memoryDb({ users: [UID] })
+    seedDigest(db, UID, { streak: PAUSE_AFTER_UNOPENED, pausedAt: YESTERDAY })
+    const res = await handleResume(new Request(await signedResumeUrl(FN, UID, SECRET)), { admin: db.admin, secret: SECRET })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('Your digest is back on')
+    expect(row(db, UID)).toMatchObject({ unopened_streak: 0, paused_at: null })
+    expect(events(db, 'digest_resume_clicked')).toHaveLength(1)
+    expect(await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()).toMatchObject({ ran: true, phase: 'done' })
+    expect(row(db, UID).unopened_streak).toBe(0)
+  })
+  it('doing nothing leaves a paused account paused', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED, pausedAt: YESTERDAY })
+    for (let i = 0; i < 3; i++) expect(await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(row(db).paused_at).toBe(YESTERDAY)
+  })
+  it('emails carry tracked links and the pause email carries the signed resume button', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail()
+    email.clickUrl = async (userId, l) => `${FN}/digest-click?u=${userId}&k=${l.kind}&p=${l.paperId}`
+    email.resumeUrl = async (userId) => `${FN}/digest-resume?u=${userId}&t=r`
+    const h = deps(db, { run: doneRun(2) }).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(sent[0].text).toContain(`${FN}/digest-click?u=A&k=paper&p=p0`)
+    expect(sent[0].text).toContain(`${FN}/digest-click?u=A&k=open&p=`)
+    expect(sent[0].text).not.toContain('https://pubmed.ncbi.nlm.nih.gov/')
+
+    const db2 = memoryDb({ users: ['A'] })
+    seedDigest(db2, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+    const h2 = deps(db2).deps
+    h2.email = email
+    await handleDigestRun(cron(), h2)
+    const pause = sent[1]
+    expect(pause.subject).toBe('Your Verastar digest is paused')
+    expect(pause.text).toContain(`I like these digests! ${FN}/digest-resume?u=A&t=r`)
+    expect(pause.text).toContain(`${FN}/digest-click?u=A&k=pause-open&p=`)
+  })
+  it('a link that fails to sign is sent untracked; the email still goes', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail()
+    email.clickUrl = async () => { throw new Error('no secret') }
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(sent).toHaveLength(1)
+    expect(sent[0].text).toContain('https://pubmed.ncbi.nlm.nih.gov/p0/')
+  })
 })
 
 describe('unopened digests', () => {
@@ -654,7 +762,7 @@ describe('unopened digests', () => {
     expect(row(db).unopened_streak).toBe(PAUSE_AFTER_UNOPENED - 1)
     expect(events(db, 'digest_paused')).toEqual([expect.objectContaining({ user_id: 'A', payload: { streak: PAUSE_AFTER_UNOPENED } })])
     expect(sent).toEqual([expect.objectContaining({ to: 'a@example.test', subject: 'Your Verastar digest is paused' })])
-    expect(sent[0].text).toContain(`${PAUSE_AFTER_UNOPENED} mornings in a row`)
+    expect(sent[0].text).toContain('haven’t seen a click on your Verastar digest in a week')
     expect(events(db, 'digest_pause_emailed')).toHaveLength(1)
     // Later ticks stay quiet.
     const second = await (await handleDigestRun(cron(), h)).json()
