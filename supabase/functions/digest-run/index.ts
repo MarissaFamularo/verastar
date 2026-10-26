@@ -19,8 +19,10 @@
 // Secrets: ANTHROPIC_API_KEY, DIGEST_CRON_SECRET; SUPABASE_* injected by the platform.
 // Email: SMTP_HOST, SMTP_PASSWORD, SMTP_FROM (already set for beta-monitor), or
 // RESEND_API_KEY and DIGEST_EMAIL_FROM ("Name <digest@domain>") to override. Optional:
-// DIGEST_EMAIL_REPLY_TO, DIGEST_UNSUBSCRIBE_SECRET (signs the footer link; shared with
-// digest-unsubscribe; without it emails carry no link and name the Settings switch only),
+// DIGEST_EMAIL_REPLY_TO, DIGEST_UNSUBSCRIBE_SECRET (signs the footer link, the tracked
+// links and the pause email's resume button; shared with digest-unsubscribe, digest-click
+// and digest-resume; without it emails carry plain links, no unsubscribe link, and a pause
+// email whose only way back is opening the app),
 // APP_URL (defaults to the public site).
 
 import { createClient } from '@supabase/supabase-js'
@@ -32,7 +34,8 @@ import manifest from './app.bundle.manifest.js'
 import { handleDigestRun } from './handler.js'
 import { anthropicDispatch, anthropicTokenCounter, makeRpcLedger, resolveProviderUrl } from '../_shared/spending.js'
 import { makeResendSender, digestSender, DEFAULT_APP_URL, DIGEST_REPLY_TO } from '../_shared/digestEmail.js'
-import { unsubscribeUrl } from '../_shared/unsubscribe.js'
+import { unsubscribeUrl, resumeUrl } from '../_shared/unsubscribe.js'
+import { clickUrl } from '../_shared/digestClick.js'
 import { SERVER_CLIENT_TIMEOUT_MS } from '../_shared/timeouts.js'
 
 // sources.js parses PMC and PubMed XML with the browser's DOMParser; linkedom provides the
@@ -79,6 +82,10 @@ Deno.serve((req) => {
     replyTo,
     send: makeResendSender({ apiKey: resendKey, from: emailFrom, replyTo, fetch }),
     unsubscribeUrl: unsubscribeSecret ? (userId: string) => unsubscribeUrl(`${supabaseUrl}/functions/v1`, userId, unsubscribeSecret) : null,
+    // Every link in the emails goes through digest-click, and the pause email's button to
+    // digest-resume; both are signed with the same secret under their own prefixes.
+    clickUrl: unsubscribeSecret ? (userId: string, link: { kind: string, paperId?: string, to: string }) => clickUrl(`${supabaseUrl}/functions/v1`, { userId, ...link }, unsubscribeSecret) : null,
+    resumeUrl: unsubscribeSecret ? (userId: string) => resumeUrl(`${supabaseUrl}/functions/v1`, userId, unsubscribeSecret) : null,
     getAddress: async (userId: string) => {
       const { data, error } = await admin.auth.admin.getUserById(userId)
       return error ? null : data?.user?.email ?? null

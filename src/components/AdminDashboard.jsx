@@ -157,8 +157,9 @@ export function ReleaseOverview({ stats }) {
     </section>
     <Cards rows={[
       ['Real beta signups', a.signups, 'Enrolled accounts; known test enrollments excluded.'],
-      ['Used in last 72 hours', a.active72, a.complete72 ? 'Unique people opening a digest or interacting with papers.' : 'Observed people; the 72-hour recording window is not complete yet.'],
-      ['Returned users', a.returned, 'Meaningful use on two or more UTC dates, in retained history.'],
+      ['Used in last 72 hours', a.active72, a.complete72 ? 'Unique people opening a digest, clicking a link in a digest email, or interacting with papers.' : 'Observed people; the 72-hour recording window is not complete yet.'],
+      ['Returned users', a.returned, 'Meaningful use, in the app or by clicking a link in a digest email, on two or more UTC dates, in retained history.'],
+      ['Email unsubscribes', stats.email?.unsubscribes, `In the selected range, by the link in the email. ${stats.email?.email_off_now ?? 'Unknown'} enrolled accounts have the email off now (link or Settings).`],
       ['Week 1 retention', a.eligible ? `${Math.round(100 * a.retained / a.eligible)}%` : 'Not ready', a.eligible ? `${a.retained} / ${a.eligible} eligible people returned during days 7–13.` : 'Insufficient history: no fully observed 14-day enrollment cohorts.'],
     ]} />
     <h3 style={{ marginBottom: 0 }}>API dollar usage</h3>
@@ -169,7 +170,7 @@ export function ReleaseOverview({ stats }) {
       ['Unresolved liability', money(s.outstanding), 'Reservations only. Not added to recorded usage.'],
     ]} />
     <details style={panel}><summary>Coverage and definitions</summary>
-      <p>Adoption excludes automatic generation, app launches, permission checks, and known test enrollments. Multiple actions count once per person; returned users need two UTC dates. Events are observational and may be incomplete.</p>
+      <p>Adoption excludes automatic generation, app launches, permission checks, and known test enrollments. Meaningful use includes a click on any link in a digest or pause email (recorded by the click-through link), since the digest is read by email too. Multiple actions count once per person; returned users need two UTC dates. Events are observational and may be incomplete.</p>
       <p>Week 1 retention: all real enrollments after observation began, at least 14 days old; numerator is people with meaningful use in days 7–13 after enrollment. Non-users stay in the denominator. Observation began {a.coverage_since ? new Date(a.coverage_since).toLocaleString() : 'at an unknown time'}. Active access now: {a.access_now ?? 'unknown'} (permission only).</p>
       <p>Average is this month's total sponsor API usage divided by completed scheduled digest-days plus completed non-append browser digests for sponsored accounts. This is an operational blended cost, not exact per-job attribution; it includes other sponsor-paid features, failures, retries, and test work. Completion telemetry can be incomplete. BYOK costs are device-local and excluded. Recorded usage is estimated from token prices or operator reconciliation, not a provider invoice.</p>
       <p>Monitor and expected-work checks expire after 15 minutes. Signup and digest outcomes are last-observed evidence, not continuous capability tests. Expected work follows the configured local daily hour, active access, and unopened-digest gate; a single slot overdue by two hours is actionable. No weekly scheduler configuration exists in this release. It does not probe authentication email delivery, browser-only failures, or provider availability. An absent monitor cannot email about its own outage; the dashboard reports unknown/stale.</p>

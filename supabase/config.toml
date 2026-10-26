@@ -59,3 +59,19 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/digest-unsubscribe/index.ts"
+
+[functions.digest-click]
+enabled = true
+# Opened signed out from links in the digest and pause emails. The signed token in the
+# link is the credential and also signs the destination (docs/DIGEST_DELIVERY.md § Engagement).
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/digest-click/index.ts"
+
+[functions.digest-resume]
+enabled = true
+# The pause email's "No, don't pause me" button, clicked signed out. The signed token in
+# the link is the credential (docs/DIGEST_DELIVERY.md § Pause).
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/digest-resume/index.ts"

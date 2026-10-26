@@ -49,8 +49,8 @@ considers an account (`nextUnopenedStreak`, pure, tested):
 
 | Previous digest | Streak |
 |---|---|
-| finished, with papers, opened | 0 |
-| finished, with papers, unopened | +1 |
+| finished, with papers, opened or engaged with (see Engagement) | 0 |
+| finished, with papers, no sign of the reader since it was built | +1 |
 | empty (no papers) | unchanged |
 | scheduler run still mid-flight | unchanged |
 | none, or not a daily record | unchanged |
@@ -62,7 +62,64 @@ sent. Otherwise the unopened digest is replaced like any other, and the new stre
 stamped at claim time (fenced on the claim token), which also clears `paused_at`.
 
 Resuming needs no new action: the app stamps `openedAt` when a digest is shown, the next
-tick computes streak 0, and the run proceeds at the usual hour. "Run now" resumes too.
+tick computes streak 0, and the run proceeds at the usual hour. "Run now" resumes too, and
+so does any of the engagement signals below, including the pause email's button.
+
+### Engagement: email readers are not "unopened" (2026-10-26)
+
+Counting only in-app opens was wrong once the digest was emailed: a reader who reads the
+email every morning and never visits the site looked abandoned and would have been paused
+after seven days, with an "unopened" notice that was not true (first possible pause about
+2026-11-03). Engagement is now any of:
+
+| Signal | Where it is recorded |
+|---|---|
+| Opening the digest in the app | `openedAt` on the stored record (unchanged) |
+| A click on any link in a digest or pause email | `digest-click` stamps `digest_schedules.engaged_at`, records `digest_link_clicked` |
+| The pause email's "No, don't pause me" button | `digest-resume` stamps `engaged_at`, clears the pause, records `digest_resume_clicked` |
+| A Settings save (any change to the schedule block) | trigger stamps `engaged_at` |
+| "Run now" | manual run, streak 0 (unchanged) |
+
+`nextUnopenedStreak(record, current, { manual, engagedAt })` resets to 0 when the record
+was opened or `engaged_at` is at or after the record's build time (`ranAt`, else
+`savedAt`). An earlier engagement does not count for a later digest. A record with no
+build time counts any engagement: a wrong pause is the worse mistake.
+
+**`engaged_at`** (`20261026150000_digest_engagement.sql`) is readable by the reader and
+never writable by them. A `before insert or update` trigger stamps it from the database
+clock when the writer is the row's own signed-in reader (`auth.uid() = user_id`), which is
+exactly the Settings upsert. Service-role writes (digest-run, the unsubscribe link) have no
+`auth.uid()` and do not count; `digest-click` and `digest-resume` set it explicitly.
+
+**The click-through link** (`_shared/digestClick.js`, `supabase/functions/digest-click/`).
+Every link in the digest email (PubMed, full text, "Open in Verastar") and the pause
+email's app link is rewritten to
+
+    digest-click?u=<account>&k=<paper|fulltext|open|pause-open>&p=<paper id>&to=<destination>&t=<HMAC>
+
+The HMAC (SHA-256, `DIGEST_UNSUBSCRIBE_SECRET`, prefix `digest-click:`) covers the account,
+kind, paper id and destination together, so the function cannot be used as an open
+redirect and nobody without the secret can mark another account engaged. A valid GET
+records `digest_link_clicked` with `{ paper_id, kind }`, stamps `engaged_at`, and answers
+302 to the signed destination with `Referrer-Policy: no-referrer`. Recording is best effort:
+a database failure still redirects. HEAD redirects without recording. A bad token is a 400
+page with a link to the app and no redirect. A link that fails to sign at send time is
+printed untracked, and the email still goes.
+
+**The resume button** (`digest-resume`, helpers in `_shared/unsubscribe.js`). Same
+construction as the unsubscribe link with its own `digest-resume:` prefix, so neither
+token works as the other. GET or POST with a valid token clears `paused_at`, sets
+`unopened_streak` to 0, stamps `engaged_at`, records `digest_resume_clicked`, and shows
+"Thanks. Your digest is back on". A schedule the reader switched off in Settings stays off,
+and the page says so. HEAD changes nothing.
+
+### The pause email
+
+Rewritten around the resume button: "We haven't seen a click on your Verastar digest in a
+week, so we've paused it", then the button **No, don't pause me. I like these digests!**,
+then that doing nothing leaves it paused (no digests built or emailed, nothing deleted), and
+that opening Verastar or pressing "Run now" also starts it again. Without the secret
+there is no signed button and the email falls back to an "Open Verastar" button.
 
 `schedulerMayRun` is unchanged (it is in the app bundle); the handler now passes
 `mayRun: true`, so the gate's `last digest unopened` reason is no longer produced.
@@ -114,7 +171,8 @@ The handler reads the stored digest back and sends it (`../_shared/digestEmail.j
   finding, labelled **"Checked against the source text."** only when the triage check
   verdict is `supported`, otherwise **"Not checked against the source text; read the
   abstract."**; the relevance line; the PubMed link; the open-access link when one exists.
-  A finding the number guard withheld is omitted.
+  A finding the number guard withheld is omitted. Every link goes through `digest-click`
+  (see Engagement).
 - Footer: why the reader gets it (their hour and timezone), the signed unsubscribe link,
   the Settings switch, and a reply line when a reply-to address is configured.
 
@@ -123,7 +181,8 @@ email shows exactly what the app would show. A run that lost its claim delivers 
 
 Outcomes are events on the account: `digest_emailed` (`papers`, `provider_id`),
 `digest_email_failed` (`error`), `digest_paused` (`streak`), `digest_pause_emailed`,
-`digest_pause_email_failed`. A send failure never fails the run.
+`digest_pause_email_failed`, `digest_link_clicked` (`paper_id`, `kind`),
+`digest_resume_clicked` (`via`). A send failure never fails the run.
 
 Resend is already the project's mail service: Supabase Auth sends sign-in codes through
 its SMTP relay and `beta-monitor` sends alerts through the same relay with the `SMTP_*`
@@ -150,12 +209,15 @@ Three ways, all leaving the in-app digest running:
   link; Gmail and Apple Mail POST to it.
 
 Without `DIGEST_UNSUBSCRIBE_SECRET` the emails carry no link or headers and name the
-Settings switch only; the founder script refuses to run without it.
+Settings switch only, links are not tracked, and the pause email has no resume button;
+the founder script refuses to run without it.
 
 ### Settings
 
-The morning-digest block says digests are emailed and explains the pause; a paused row
-shows "Paused since" with how to resume. `digestRefusalMessage` knows the new reason.
+The morning-digest block says digests are emailed and explains the pause in terms of any
+sign of the reader (a digest opened, a link clicked in the email, a change on that page);
+a paused row shows "Paused since" with how to resume. `digestRefusalMessage` knows the new
+reason. Saving the block counts as engagement.
 
 ## Files
 
@@ -171,6 +233,11 @@ shows "Paused since" with how to resume. `digestRefusalMessage` knows the new re
 - `src/lib/digestSchedule.js`, `src/components/DigestSchedule.jsx`
 - `scripts/founder-recapture-email.mjs`
 - `supabase/tests/run_spending_tests.sh` (applies the new migration before the SQL tests)
+- Engagement (2026-10-26): `supabase/migrations/20261026150000_digest_engagement.sql`,
+  `20261026151000_beta_email_engagement_metrics.sql`, `supabase/tests/email_engagement.sql`
+  (via `run_beta_admin_tests.sh`); `_shared/digestClick.js`, `supabase/functions/digest-click/`,
+  `supabase/functions/digest-resume/`, `src/lib/digestClick.test.js`; dashboard in
+  `src/lib/betaAdmin.js` and `src/components/AdminDashboard.jsx`
 
 The function bundle is unchanged: no file under `src/` that the bundle manifest names was
 edited, so `npm run bundle:functions` is not needed for this release.
@@ -213,6 +280,29 @@ Order matters only in that the handler reads two columns the migration adds.
 Rollback: set `DIGEST_EMAIL_FROM` to an empty value is not enough (the fallback is
 `SMTP_FROM`); turn every account's `email_digest` off in SQL, or redeploy the previous
 `digest-run`, which also restores the freeze rule. The columns may stay.
+
+## Release: engagement (2026-10-26)
+
+Not deployed. Do this before 2026-11-03, the first morning a reader who has only read the
+email could be paused under the old rule. No new secrets: both new functions use
+`DIGEST_UNSUBSCRIBE_SECRET`, already set. The function bundle is unchanged.
+
+1. `npm test` and `supabase/tests/run_beta_admin_tests.sh` against a local server.
+2. **Apply** `20261026150000_digest_engagement.sql`, then
+   `20261026151000_beta_email_engagement_metrics.sql` (each one transaction, additive; the
+   second redefines `beta_release_stats`).
+3. **Deploy** `digest-click` and `digest-resume` (both `verify_jwt = false`, in
+   `supabase/config.toml`), then `digest-run`. In that order: digest-run selects
+   `engaged_at` and starts printing links to the two new functions.
+4. **Smoke test** on the founder account: open a tracked link from the next digest email
+   and check `events` for `digest_link_clicked` and `digest_schedules.engaged_at`; edit a
+   tracked link's `to=` and confirm the 400 page; open a resume link
+   (`resumeUrl` in `_shared/unsubscribe.js`) and confirm the page and
+   `digest_resume_clicked`.
+
+Rollback: redeploy the previous `digest-run` (emails go back to plain links; the old streak
+rule returns). The two functions can stay; the column and trigger are harmless; re-apply
+`20261015233845_share_click_metrics.sql` to restore the dashboard RPC.
 
 ## Scheduler capacity (decide before release)
 
@@ -268,10 +358,19 @@ in the morning.
 Email opens and clicks are in the Resend dashboard. In the project: `digest_emailed`
 per account-day, `digest_email_unsubscribed`, `app_opened` after an email (the link carries `?src=digest-email`;
 `app_opened` does not yet record the source), `digest_opened`, and day-7 return by
-enrollment cohort. The beta dashboard RPC does not count the new events; adding
-`digest_emailed` to it is a separate change.
+enrollment cohort. The beta dashboard counts `digest_link_clicked` as meaningful use
+(72-hour use, returned users, week-1 retention) and shows clicks, unsubscribes, resumes,
+and accounts with the email off now (`20261026151000_beta_email_engagement_metrics.sql`).
+`digest_emailed` itself is still not on the dashboard.
 
 ## Known limits
+
+- A click is the only email signal. Reading an email without clicking leaves no trace (no
+  open pixel, by choice), so a reader who reads every morning and never clicks is still
+  paused after a week; the pause email asks them to press one button.
+- Hospital mail gateways that follow links to scan them (URL defence) use GET and are
+  recorded as clicks. That errs toward keeping a digest running, never toward a wrong
+  pause; the dashboard caveat says so. HEAD probes are not recorded.
 
 - `app_opened` does not record `?src=`, so attribution of an open to an email is by
   timing only until the client logs it.

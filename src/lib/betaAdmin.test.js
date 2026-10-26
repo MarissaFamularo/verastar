@@ -75,8 +75,18 @@ describe('metricSections', () => {
   it('distinguishes registration from activity in its wording', () => {
     const users = metricSections(STATS).find((s) => s.title === 'Beta users')
     expect(users.caveat).toMatch(/Registering says nothing about activity/)
-    expect(metricSections(STATS).find((s) => s.title === 'Digests opened').caveat).toMatch(/does not record delivery/)
+    expect(metricSections(STATS).find((s) => s.title === 'Digests opened').caveat).toMatch(/Reading the emailed digest is not an open/)
     expect(metricSections(STATS).find((s) => s.title === 'Signup survey').caveat).toMatch(/can identify an individual/)
+  })
+  it('shows digest email clicks and unsubscribes, and says what a click can and cannot prove', () => {
+    expect(find('Email link clicks')).toMatchObject({ value: '14 as recorded', available: true })
+    expect(find('Unique users who clicked').definition).toMatch(/meaningful use/)
+    expect(find('Unsubscribes')).toMatchObject({ value: 'Not available', available: false })
+    expect(find('Email off now')).toMatchObject({ value: '2 as recorded', available: true })
+    expect(find('Resumed from the pause email').value).toBe('1 as recorded')
+    const caveat = metricSections(STATS).find((s) => s.title === 'Digest email').caveat
+    expect(caveat).toMatch(/no open pixel/)
+    expect(caveat).toMatch(/scan them/)
   })
   it('is empty without stats', () => {
     expect(metricSections(null)).toEqual([])

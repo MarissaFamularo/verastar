@@ -38,12 +38,15 @@ for f in supabase/tests/spending_fixture.sql \
          supabase/migrations/20261015233845_share_click_metrics.sql \
          supabase/migrations/20261025120000_digest_unopened_pause.sql \
          supabase/migrations/20261025121000_beta_monitor_due_pause.sql \
-         supabase/migrations/20261026110000_digest_schedules_email_column_grants.sql; do
+         supabase/migrations/20261026110000_digest_schedules_email_column_grants.sql \
+         supabase/migrations/20261026150000_digest_engagement.sql \
+         supabase/migrations/20261026151000_beta_email_engagement_metrics.sql; do
   "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { echo "migration failed: $f" >&2; "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f"; exit 1; }
 done
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/beta_admin_dashboard.sql 2>&1 | grep -E "^psql.*(ERROR|FAIL)|ok:" || true
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/beta_admin_dashboard.sql >/dev/null 2>&1
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/beta_release.sql
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/share_click_metrics.sql
+"$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/email_engagement.sql
 echo "beta admin dashboard and release SQL tests passed"
 [ -n "${KEEP_DB:-}" ] || "$BIN/dropdb" "$DB"
