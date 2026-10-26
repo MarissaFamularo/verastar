@@ -64,8 +64,30 @@ stamped at claim time (fenced on the claim token), which also clears `paused_at`
 Resuming needs no new action: the app stamps `openedAt` when a digest is shown, the next
 tick computes streak 0, and the run proceeds at the usual hour. "Run now" resumes too.
 
-`digestGate` and `schedulerMayRun` are unchanged; the handler now passes `mayRun: true`.
-The gate's `last digest unopened` reason is no longer produced by the scheduler.
+`schedulerMayRun` is unchanged (it is in the app bundle); the handler now passes
+`mayRun: true`, so the gate's `last digest unopened` reason is no longer produced.
+
+### A late morning waits for the next morning
+
+`digestGate` gains one rule: a scheduled run may start at or after the reader's hour and
+up to `CATCH_UP_HOURS` (12) after it, not later. A scheduler that missed a 6 am run still
+makes it up at noon; it does not email "Good morning" at 11 pm. "Run now" and a run already
+in flight ignore the window. This also shapes the release: the 39 accounts the old rule
+froze run at their next morning hour, not in a burst the evening the function deploys.
+
+### The monitor follows the new rule
+
+`private.beta_expected_digest_due` (`20261025121000_beta_monitor_due_pause.sql`) encoded
+the freeze: an account on an unopened digest was not expected to run, and opening it
+"activated" the account. After the release that model would have been silent about the
+unopened accounts and loud for the whole first morning (each catch-up run looked days
+overdue until it finished; that is also the "schedule: failed" seen at 2026-10-25 23:05Z
+during one catch-up run). The new model expects a run or attempt on every local day at
+the reader's hour, unless `paused_at` is set; a run in flight counts as an attempt; a
+missed earlier slot keeps the account overdue so a dead scheduler cannot read as
+recovered for two hours each morning; activation after the hour is due at activation
+within the catch-up window and at the next slot after it. The migration re-activates every
+enabled schedule (`monitor_started_at = now()`) because the expectation changed then.
 
 **Cost bound.** An account can now spend up to seven digest-days without a single open,
 about $1.60 at the observed average, inside the $3.00 daily and $25 monthly caps.
@@ -124,6 +146,9 @@ shows "Paused since" with how to resume. `digestRefusalMessage` knows the new re
 ## Files
 
 - `supabase/migrations/20261025120000_digest_unopened_pause.sql`
+- `supabase/migrations/20261025121000_beta_monitor_due_pause.sql`; tests in
+  `supabase/tests/beta_release.sql` via `run_beta_admin_tests.sh`
+- `supabase/functions/model/logic.js` (`CATCH_UP_HOURS`), `src/lib/sponsorLogic.test.js`
 - `supabase/functions/_shared/digestEmail.js`, `src/lib/digestEmail.test.js`
 - `supabase/functions/_shared/unsubscribe.js`, `supabase/functions/digest-unsubscribe/`
   (`handler.js`, `index.ts`), `src/lib/digestUnsubscribe.test.js`, `supabase/config.toml`
@@ -151,9 +176,14 @@ Order matters only in that the handler reads two columns the migration adds.
    `Marissa at Verastar <digest@verastar.papertrellis.com>`),
    `DIGEST_EMAIL_REPLY_TO` (a mailbox Marissa reads), `DIGEST_UNSUBSCRIBE_SECRET` (a long
    random string, `openssl rand -hex 32`), and optionally `APP_URL`.
-4. **Apply the migration** (one transaction, additive, no function changes).
+4. **Apply the two migrations** in file order (each one transaction; the first is
+   additive, the second redefines the monitor's due model and re-activates monitoring).
 5. **Deploy** `digest-run` and `digest-unsubscribe` from the released commit, as in
-   `SPONSORED_ACCESS_DEPLOY.md` § 4b. Open an unsubscribe link with a wrong token and
+   `SPONSORED_ACCESS_DEPLOY.md` § 4b. Do 4 and 5 back to back: the new handler selects
+   the new columns and fails closed (no runs) until the migration is in, and the old
+   handler would not run the unfrozen accounts the new monitor expects.
+   Deploying in the US evening is fine: accounts more than twelve hours past their hour
+   wait for the morning; the few whose morning is close (Asia, Australia) run on time. Open an unsubscribe link with a wrong token and
    confirm the 400 page; then test a real one on the founder account and turn the email
    back on in Settings.
 6. **Smoke test** with the founder account: turn the schedule on, open the current digest,
@@ -161,11 +191,39 @@ Order matters only in that the handler reads two columns the migration adds.
    design) and then check `events` for `digest_emailed` after the next scheduled run.
    Confirm the email renders in Gmail on a phone.
 7. **Unfreeze happens by itself.** Every account that was frozen on an unopened digest has
-   `unopened_streak = 0`; on the first tick after its hour, the streak becomes 1 and a fresh
-   digest is built and emailed.
+   `unopened_streak = 0`; on the first tick after its next hour, the streak becomes 1 and a
+   fresh digest is built and emailed. The scheduler runs one account per five-minute tick,
+   so 40 accounts with the same hour finish over roughly three to four hours; the monitor
+   allows two hours past the hour before calling an account overdue, so expect a transient
+   "schedule: overdue" on the first morning for the accounts at the back of the queue, and
+   none after that. Spreading hours, or a faster tick, is a separate change.
 
 Rollback: unset `RESEND_API_KEY` to stop email without redeploying; redeploy the previous
 `digest-run` to restore the freeze rule. The columns may stay.
+
+## Scheduler capacity (decide before release)
+
+The scheduler serves one account per cron tick, and the tick is every five minutes. A
+digest takes two ticks (rank, then done), so the cohort as it stands (17 accounts at
+6 am Eastern, 10 at 6 am Central, and so on) takes about six hours to get through once
+nothing is frozen. The freeze hid this: on 2026-10-21 the 24 runs that did happen
+finished between 06:10 and 09:51 Eastern. After the release every account runs every
+morning, so the queue is real, the Central and Mountain readers get their "morning"
+digest in the afternoon, and the monitor's two-hour grace is exceeded daily.
+
+The fix is a schedule change on the pg_cron job, not code: ticks every minute give five
+times the throughput (about 80 minutes for 40 accounts) and the claim and spending
+contracts already cover overlapping ticks on different accounts (the handler tests
+interleave two). As the operator, in the SQL editor:
+
+```sql
+select cron.alter_job((select jobid from cron.job where jobname = 'verastar-digest-run'), schedule := '* * * * *');
+```
+
+Every two minutes (`*/2 * * * *`) is the conservative choice if provider rate limits are a
+concern; it roughly halves the queue. Either way, watch the first morning's
+`digest_scheduled_run` timestamps and the Anthropic rate-limit headers in the function
+logs.
 
 ## Recapture
 

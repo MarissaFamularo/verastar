@@ -26,7 +26,7 @@ afterAll(() => installServerScope(null))
 // --- an in-memory database with the claim/fence semantics of the migration --------------
 function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
   const t = {
-    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0, unopened_streak: 0, paused_at: null, email_digest: true })),
+    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: new Date().getUTCHours(), timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0, unopened_streak: 0, paused_at: null, email_digest: true })),
     sponsored_accounts: users.map((u) => ({ user_id: u, active: true, ends_at: null })),
     kv: users.map((u) => ({ user_id: u, collection: 'profile', key: 'me', value: { onboarded: true, name: u } })),
     evidence_cache_trusted: [],
@@ -693,7 +693,7 @@ describe('delivery', () => {
     expect(sent[0].text).toContain('Finding one.')
     expect(sent[0].text).toContain('Checked against the source text.')
     expect(sent[0].text).toContain('https://app.test/?src=digest-email')
-    expect(sent[0].text).toContain('for 12:00 am UTC')
+    expect(sent[0].text).toMatch(/for \d{1,2}:00 (am|pm) UTC/)
     expect(sent[0].html).toContain('Paper 1 for A')
     expect(events(db, 'digest_emailed')).toEqual([expect.objectContaining({ user_id: 'A', payload: { papers: 2, provider_id: 'em_1' } })])
   })

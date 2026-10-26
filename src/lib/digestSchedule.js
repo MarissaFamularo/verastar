@@ -51,6 +51,7 @@ export function digestRefusalMessage(reason) {
   if (reason === 'not yet') return 'It is before your scheduled hour, so the automatic run has not started.'
   if (reason === 'already ran today') return 'A digest already finished for today.'
   if (reason === 'last digest unopened') return 'The last digest is still unopened, so a new automatic run is waiting.'
+  if (reason === 'past catch-up window') return 'It is more than twelve hours past your digest hour, so today’s automatic run is skipped. The next one is tomorrow morning; "Run now" starts one today.'
   if (reason === 'paused: digests unopened') return 'Automatic runs are paused because the last seven digests were not opened. Open the Digest tab, or run now, and they resume.'
   if (reason === 'attempt cap reached') return 'The server has already tried this digest several times today. It will try again tomorrow morning.'
   // The scheduler's preflight names the same denial reasons as the proxy; same sentences.

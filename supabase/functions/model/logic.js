@@ -55,12 +55,19 @@ export function digestGate({ manual = false, hour, hourLocal, ranToday = false, 
   if (manual) return { run: true }
   if (midFlight) return { run: true }
   if (ranToday) return { run: false, reason: 'already ran today' }
-  // At or after her hour, not only during it: a morning skipped because the last digest
-  // sat unopened catches up on the first tick after she opens it (2026-09-28).
+  // At or after her hour, not only during it, so a morning the scheduler missed is made up
+  // later the same day. But a "morning" digest that would arrive in the evening waits for
+  // the next morning instead (2026-10-25): past CATCH_UP_HOURS after her hour the day is
+  // skipped. "Run now" ignores this.
   if (hour < Number(hourLocal)) return { run: false, reason: 'not yet' }
+  if (hour >= Number(hourLocal) + CATCH_UP_HOURS) return { run: false, reason: 'past catch-up window' }
   if (!mayRun) return { run: false, reason: 'last digest unopened' }
   return { run: true }
 }
+
+// How many hours after her hour a scheduled run may still start. The monitor's due model
+// (private.beta_expected_digest_due) carries the same number.
+export const CATCH_UP_HOURS = 12
 
 // The cache header the client sends on an extraction call:
 //   x-verastar-cache: <pmid>|<extraction_version>|<sha256 hex>|<source_tier>
