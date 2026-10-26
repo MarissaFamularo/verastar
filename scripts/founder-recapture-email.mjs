@@ -31,7 +31,7 @@
 // the operator is the one person meant to see them; do not paste the output anywhere.
 
 import { createClient } from '@supabase/supabase-js'
-import { buttonHtml, digestItems, digestSender, formatItemsHtml, formatItemsText, makeResendSender, openLink, paragraphsHtml, subjectFromTitle, wrapHtml, DEFAULT_APP_URL, DIGEST_REPLY_TO } from '../supabase/functions/_shared/digestEmail.js'
+import { buttonHtml, digestItems, digestSender, formatItemsHtml, formatItemsText, makeResendSender, openLink, paragraphsHtml, subjectFromTitle, wrapHtml, DEFAULT_APP_URL, DIGEST_REPLY_TO, GREETING } from '../supabase/functions/_shared/digestEmail.js'
 import { unsubscribeUrl } from '../supabase/functions/_shared/unsubscribe.js'
 
 const EVENT = 'founder_email_sent'
@@ -74,7 +74,7 @@ function founderDigestEmail({ record, unsub }) {
   if (!items.length) return null
   const link = openLink(APP_URL, 'founder-email')
   const body = [
-    'Hi, doctor,',
+    GREETING,
     '',
     'Marissa here. I built the digest engine for Verastar and I really didn’t want to add any noise to your already busy life. If you opened the app, the next morning’s digest was already built for you. But, if you didn’t, the engine stopped and waited... quietly. Nothing reached you. I didn’t realize that this required users to remember to check Verastar, which is a big ask for busy physicians.',
     '',
@@ -90,9 +90,9 @@ function founderDigestEmail({ record, unsub }) {
   return { subject: subjectFromTitle(items[0].title), text, html, headers: headersFor(unsub) }
 }
 
-function founderSetupEmail({ name, step, unsub }) {
+function founderSetupEmail({ step, unsub }) {
   const link = openLink(APP_URL, 'founder-email')
-  const hi = name ? `Hi ${name},` : 'Hi, doctor,'
+  const hi = GREETING
   const left = step === 'north-stars'
     ? 'set your north stars, the concepts you want the literature filtered by'
     : 'turn on the morning run under Settings'
@@ -160,7 +160,6 @@ async function main() {
   for (const a of accounts) {
     const email = emails.get(a.user_id) || null
     const me = profile.get(a.user_id) || {}
-    const name = typeof me.name === 'string' ? me.name.trim().split(/\s+/)[0] : ''
     const onboarded = me.onboarded === true && Array.isArray(me.northStars) && me.northStars.length > 0
     const s = sched.get(a.user_id)
     const rec = latest.get(a.user_id)
@@ -172,14 +171,14 @@ async function main() {
     if (!email) { segment = 'skip'; note = 'no address' }
     else if (already.has(a.user_id)) { segment = 'skip'; note = `already sent ${String(already.get(a.user_id).ts).slice(0, 10)}` }
     else if (s && s.email_digest === false) { segment = 'skip'; note = 'opted out of email' }
-    else if (!onboarded) { segment = 'setup'; message = founderSetupEmail({ name, step: 'north-stars', unsub }) }
-    else if (!s?.enabled) { segment = 'setup'; message = founderSetupEmail({ name, step: 'schedule', unsub }) }
+    else if (!onboarded) { segment = 'setup'; message = founderSetupEmail({ step: 'north-stars', unsub }) }
+    else if (!s?.enabled) { segment = 'setup'; message = founderSetupEmail({ step: 'schedule', unsub }) }
     else if (fresh) { segment = 'digest'; message = founderDigestEmail({ name, record: rec, unsub }) }
     else { segment = 'skip'; note = hasPapers ? `digest is stale (${String(ranAt).slice(0, 10)}); let the morning run replace it first` : 'no digest with papers yet' }
     if (segment !== 'skip' && SEGMENT !== 'all' && SEGMENT !== segment) { segment = 'skip'; note = `not in --segment ${SEGMENT}` }
     if (ONLY && ONLY !== a.user_id && ONLY !== email) { segment = 'skip'; note = 'not --only' }
     if (segment !== 'skip' && !message) { segment = 'skip'; note = 'nothing to send' }
-    plan.push({ user_id: a.user_id, cohort: a.cohort, email, name, segment, note, message })
+    plan.push({ user_id: a.user_id, cohort: a.cohort, email, segment, note, message })
   }
 
   const counts = plan.reduce((m, p) => ({ ...m, [p.segment]: (m[p.segment] || 0) + 1 }), {})

@@ -13,6 +13,9 @@ export const DEFAULT_APP_URL = 'https://verastar.papertrellis.com'
 // replies go to the mailbox she reads (decided 2026-10-26).
 export const DIGEST_FROM_NAME = 'Marissa at Verastar'
 export const DIGEST_REPLY_TO = 'statupfordocs@gmail.com'
+// Every email opens the same way: profile names are free text ("Dr. Kim", "Anna", blank), so
+// no greeting is built from them (2026-10-26).
+export const GREETING = 'Hello, doctor,'
 
 // "Marissa at Verastar <addr>" from whatever SMTP_FROM holds: "Name <addr>" or a bare
 // address. Anything else comes back unchanged, so a malformed value fails at Resend, not
@@ -115,12 +118,11 @@ function footerHtml(appUrl, opts) {
 // The morning digest. `record` is the stored daily digest (kv digests/daily:latest).
 // Returns null when there is nothing to send (no items). The result carries `headers` for
 // the sender (unsubscribe headers when a link was given).
-export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, name = '', replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null } = {}) {
+export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null } = {}) {
   const items = digestItems(record)
   if (!items.length) return null
   const days = Number(record?.searchContext?.days) || null
-  const who = clean(name)
-  const greeting = who ? `Good morning, ${who}.` : 'Good morning.'
+  const greeting = GREETING
   const count = `${items.length} paper${items.length === 1 ? '' : 's'}${days ? ` from the last ${days} day${days === 1 ? '' : 's'}` : ''}, picked for your north stars.`
   const link = openLink(appUrl, 'digest-email')
   const lead = intro ? clean(intro) : null
@@ -129,6 +131,7 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, name = '', 
 
   const text = [
     greeting,
+    '',
     lead,
     count,
     '',
@@ -198,12 +201,11 @@ export function paragraphsHtml(text) {
 export { esc as escapeHtml, openLink }
 
 // Sent once when the scheduler pauses an account.
-export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, name = '', streak = 7, replyTo = null, unsubscribeUrl = null } = {}) {
-  const who = clean(name)
+export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, streak = 7, replyTo = null, unsubscribeUrl = null } = {}) {
   const link = openLink(appUrl, 'pause-email')
   const n = Number(streak) || 7
   const head = [
-    who ? `Hi ${who},` : 'Hi,',
+    GREETING,
     '',
     `Your Verastar digest ran ${n} mornings in a row without being opened, so it has stopped running.`,
     'Nothing is deleted. Open Verastar once and the next digest is built the following morning, at your usual hour.',

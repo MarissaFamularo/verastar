@@ -179,8 +179,8 @@ async function deliverDue(admin, email, rows, now) {
     row.delivered_day = day
     if (!ready || row.email_digest === false) continue
     await deliver(admin, email, row, {
-      build: ({ name, unsubscribeUrl }) => buildDigestEmail({
-        record, name, unsubscribeUrl,
+      build: ({ unsubscribeUrl }) => buildDigestEmail({
+        record, unsubscribeUrl,
         appUrl: email.appUrl || DEFAULT_APP_URL,
         replyTo: email.replyTo || null,
         hourLabel: hourText(row.hour_local),
@@ -205,16 +205,6 @@ function hourText(h) {
 const DEFAULT_TIMEZONE = 'America/New_York'
 const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day'
 
-async function readName(admin, userId) {
-  try {
-    const { data } = await admin.from('kv').select('value').eq('user_id', userId).eq('collection', 'profile').eq('key', 'me').maybeSingle()
-    const name = data?.value?.name
-    return typeof name === 'string' ? name.trim() : ''
-  } catch {
-    return ''
-  }
-}
-
 async function recordEvent(admin, userId, type, payload) {
   await admin.from('events').insert({ user_id: userId, type, payload }).then(() => {}, () => {})
 }
@@ -233,7 +223,7 @@ async function deliver(admin, email, row, { build, sentType, failedType, payload
       return
     }
     const unsubscribeUrl = email.unsubscribeUrl ? await email.unsubscribeUrl(userId) : null
-    const message = await build({ name: await readName(admin, userId), to, unsubscribeUrl })
+    const message = await build({ to, unsubscribeUrl })
     if (!message) return
     const out = await email.send({ to, subject: message.subject, text: message.text, html: message.html, headers: message.headers || null })
     await recordEvent(admin, userId, sentType, { ...payload, provider_id: out?.id ?? null })
@@ -249,7 +239,7 @@ async function pauseAccount(admin, email, row, streak, now) {
   await admin.from('digest_schedules').update({ paused_at: now.toISOString(), updated_at: now.toISOString() }).eq('user_id', row.user_id).is('claim_token', null).is('paused_at', null).then(() => {}, () => {})
   await recordEvent(admin, row.user_id, 'digest_paused', { streak })
   await deliver(admin, email, row, {
-    build: ({ name, unsubscribeUrl }) => buildPauseEmail({ appUrl: email.appUrl || DEFAULT_APP_URL, name, streak, replyTo: email.replyTo || null, unsubscribeUrl }),
+    build: ({ unsubscribeUrl }) => buildPauseEmail({ appUrl: email.appUrl || DEFAULT_APP_URL, streak, replyTo: email.replyTo || null, unsubscribeUrl }),
     sentType: 'digest_pause_emailed',
     failedType: 'digest_pause_email_failed',
     payload: { streak },

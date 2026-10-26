@@ -49,9 +49,9 @@ describe('buildDigestEmail', () => {
     expect(buildDigestEmail({ record: { results: [] } })).toBeNull()
   })
   it('subject is the top paper; text and html carry the same items, labels and link', () => {
-    const m = buildDigestEmail({ record: record(), name: 'Marissa', replyTo: 'm@example.com', hourLabel: '6:00 am', timezone: 'America/New_York' })
+    const m = buildDigestEmail({ record: record(), replyTo: 'm@example.com', hourLabel: '6:00 am', timezone: 'America/New_York' })
     expect(m.subject).toBe('Paper 0 title')
-    expect(m.text).toContain('Good morning, Marissa.')
+    expect(m.text.startsWith('Hello, doctor,\n\n')).toBe(true)
     expect(m.text).toContain('3 papers from the last 3 days')
     expect(m.text).toContain('1. Paper 0 title.')
     expect(m.text).toContain('Amputation-free survival was 71% at one year.')
@@ -76,9 +76,9 @@ describe('buildDigestEmail', () => {
 
 describe('buildPauseEmail', () => {
   it('says how many went unopened and how to resume', () => {
-    const m = buildPauseEmail({ name: 'Sam', streak: 7, replyTo: 'm@example.com' })
+    const m = buildPauseEmail({ streak: 7, replyTo: 'm@example.com' })
     expect(m.subject).toBe('Your Verastar digest is paused')
-    expect(m.text).toContain('Hi Sam,')
+    expect(m.text.startsWith('Hello, doctor,')).toBe(true)
     expect(m.text).toContain('7 mornings in a row')
     expect(m.text).toContain(`${DEFAULT_APP_URL}/?src=pause-email`)
     expect(m.text).toContain('reply and say why')
