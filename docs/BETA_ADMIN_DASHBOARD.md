@@ -80,7 +80,9 @@ with an "oldest retained record" note. Verifier reasons are unavailable regardle
 - **Admin authorization did not exist.** The allowlist table is new; until you insert your user id
   nobody can open the dashboard. Decide whether a SQL-managed allowlist is acceptable for the beta.
 - **Verifier reasons** cannot be reported without adding instrumentation to the pipeline (excluded).
-- **Delivered digests** are not recorded; only opens are.
+- **Delivered digests** were not recorded when this dashboard was built. Since the delivery
+  change (docs/DIGEST_DELIVERY.md) each emailed digest is a `digest_emailed` event; the RPC
+  does not count it yet.
 - **Survey only on the onboarding connect step.** A code redeemed later from Settings does not offer it.
 - **Small cells.** With few users a per-option count of 1 identifies that user's answer to the admin.
   The survey copy and the dashboard both say so; answers are account-linked, not anonymous.

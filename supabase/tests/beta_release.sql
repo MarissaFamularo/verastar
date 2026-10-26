@@ -115,10 +115,23 @@ select pg_temp.ok((select due_at='2026-10-16T06:00Z'::timestamptz from private.b
 update public.digest_schedules set last_run_at=null,monitor_started_at='2026-10-15T10:00Z';
 update public.digest_schedules set updated_at='2026-10-15T20:00Z';
 select pg_temp.ok((select due_at='2026-10-15T10:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T11:00Z')),'new schedule after hour is due immediately');
+-- Pause rule (20261025121000): an unopened digest no longer suspends expectation, opening
+-- one no longer activates anything, and a missed earlier slot keeps the account overdue.
 update public.digest_schedules set last_run_at='2026-10-01T10:00Z',monitor_started_at='2026-09-01T00:00Z';
-insert into public.kv(user_id,collection,key,value) values('c0000000-0000-0000-0000-000000000007','digests','daily:latest','{"kind":"daily","results":[{}],"openedAt":"2026-10-15T01:00Z","ranAt":"2026-10-01T10:00Z"}');
-select pg_temp.ok((select due_at='2026-10-15T06:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T03:00Z')),'opening before hour waits until configured hour');
+insert into public.kv(user_id,collection,key,value) values('c0000000-0000-0000-0000-000000000007','digests','daily:latest','{"kind":"daily","results":[{}],"openedAt":null,"ranAt":"2026-10-01T10:00Z"}');
+select pg_temp.ok((select due_at='2026-10-13T06:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T03:00Z')),'an unopened digest is still expected, and a missed earlier slot keeps it overdue');
+update public.kv set value=value||'{"openedAt":"2026-10-15T01:00Z"}' where user_id='c0000000-0000-0000-0000-000000000007' and collection='digests' and key='daily:latest';
+select pg_temp.ok((select due_at='2026-10-13T06:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T03:00Z')),'opening a digest does not move the expectation');
 delete from public.kv where user_id='c0000000-0000-0000-0000-000000000007' and collection='digests' and key='daily:latest';
+update public.digest_schedules set last_attempt_at='2026-10-15T06:03Z';
+select pg_temp.ok((select due_at='2026-10-16T06:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T09:00Z')),'a run attempted today (in flight) is not overdue');
+update public.digest_schedules set last_attempt_at=null,last_run_at='2026-10-13T06:05Z',monitor_started_at='2026-10-15T20:00Z';
+select pg_temp.ok((select due_at='2026-10-16T06:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T21:00Z')),'activation past the catch-up window waits for the next morning');
+update public.digest_schedules set monitor_started_at='2026-10-15T10:00Z';
+select pg_temp.ok((select due_at='2026-10-15T10:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T21:00Z')),'activation within the catch-up window is due at activation');
+update public.digest_schedules set paused_at='2026-10-15T00:00Z';
+select pg_temp.ok(not exists(select 1 from private.beta_expected_digest_due('2026-10-15T21:00Z')),'a paused account is not expected');
+update public.digest_schedules set paused_at=null,monitor_started_at='2026-09-01T00:00Z';
 -- Quiet outcomes do not expire; fresh schedule/heartbeat checks are independent.
 update public.digest_schedules set last_run_at=now(),updated_at=now(),hour_local=extract(hour from now())::int,timezone='UTC';
 select public.beta_monitor_tick();
@@ -137,10 +150,14 @@ select pg_temp.ok((select count(*)=1 from private.beta_alert_outbox where check_
 update public.digest_schedules set last_run_at=now()-interval '7 days';
 insert into public.kv(user_id,collection,key,value) values('c0000000-0000-0000-0000-000000000007','digests','daily:latest','{"kind":"daily","results":[{}],"runBy":"scheduler","server":{"phase":"done"}}');
 select public.beta_monitor_tick();
-select pg_temp.ok((select state='ok' from private.beta_incidents where check_name='schedule'),'unopened digest intentionally waits even after a week');
+select pg_temp.ok((select state='failed' from private.beta_incidents where check_name='schedule'),'an unopened digest a week old is overdue, not intentionally waiting (pause rule)');
 update public.kv set value=value||jsonb_build_object('openedAt',now()) where collection='digests' and key='daily:latest' and user_id='c0000000-0000-0000-0000-000000000007';
 select public.beta_monitor_tick();
-select pg_temp.ok((select state='ok' from private.beta_incidents where check_name='schedule'),'newly opened old digest gets a fresh grace period');
+select pg_temp.ok((select state='failed' from private.beta_incidents where check_name='schedule'),'opening it grants no grace period');
+update public.digest_schedules set paused_at=now();
+select public.beta_monitor_tick();
+select pg_temp.ok((select state='ok' from private.beta_incidents where check_name='schedule'),'a paused account is not expected work');
+update public.digest_schedules set paused_at=null,last_run_at=now();
 update public.digest_schedules set timezone='Invalid/Zone';
 select public.beta_monitor_tick();
 select pg_temp.ok((select state='unknown' from private.beta_incidents where check_name='schedule'),'unreadable schedule cannot falsely pass');

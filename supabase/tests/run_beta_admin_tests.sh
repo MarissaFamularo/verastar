@@ -35,7 +35,9 @@ for f in supabase/tests/spending_fixture.sql \
          supabase/migrations/20261015183000_beta_expected_work.sql \
          supabase/migrations/20261015223424_beta_alert_observed_time.sql \
   supabase/migrations/20261015223808_beta_alert_dispatch_test.sql \
-         supabase/migrations/20261015233845_share_click_metrics.sql; do
+         supabase/migrations/20261015233845_share_click_metrics.sql \
+         supabase/migrations/20261025120000_digest_unopened_pause.sql \
+         supabase/migrations/20261025121000_beta_monitor_due_pause.sql; do
   "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { echo "migration failed: $f" >&2; "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f"; exit 1; }
 done
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/beta_admin_dashboard.sql 2>&1 | grep -E "^psql.*(ERROR|FAIL)|ok:" || true

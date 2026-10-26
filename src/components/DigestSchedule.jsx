@@ -29,8 +29,9 @@ export default function DigestSchedule() {
         enabled: patch.enabled ?? row?.enabled ?? true,
         hour: patch.hour ?? row?.hour_local ?? DEFAULT_HOUR,
         timezone: browserTimezone(),
+        emailDigest: patch.emailDigest ?? row?.email_digest ?? true,
       })
-      setRow((cur) => ({ ...(cur || {}), enabled: next.enabled, hour_local: next.hour_local, timezone: next.timezone }))
+      setRow((cur) => ({ ...(cur || {}), enabled: next.enabled, hour_local: next.hour_local, timezone: next.timezone, email_digest: next.email_digest }))
       setState('idle')
     } catch (err) {
       setError(err.message)
@@ -60,12 +61,16 @@ export default function DigestSchedule() {
     <div style={{ marginTop: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'var(--surface-1)', padding: '10px 13px' }}>
       <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg-soft)' }}>Morning digest, ready when you wake up</p>
       <p style={{ margin: '3px 0 8px', fontSize: 11.5, color: 'var(--color-fg-faint)', lineHeight: 1.5 }}>
-        Verastar can run your digest for you each morning. It waits until you have opened the last one, so nothing piles up unread; if that one is still unopened at your hour, the new one starts soon after you open it.
+        Verastar builds your digest in the hour before the time you choose and, if you like, emails it to the address on this account at that time. After seven mornings in a row unopened, it pauses; opening a digest, or running one here, starts it again.
       </p>
       <div className="flex flex-wrap items-center" style={{ gap: 10 }}>
         <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
           <input type="checkbox" checked={on} disabled={state !== 'idle'} onChange={(e) => save({ enabled: e.target.checked })} />
           Run automatically
+        </label>
+        <label className="flex items-center cursor-pointer" style={{ gap: 6, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
+          <input type="checkbox" checked={on && (row?.email_digest ?? true)} disabled={state !== 'idle' || !on} onChange={(e) => save({ emailDigest: e.target.checked })} />
+          Email me the digest
         </label>
         <label className="flex items-center" style={{ gap: 6, fontSize: 12.5, color: 'var(--color-fg-soft)' }}>
           at
@@ -79,6 +84,7 @@ export default function DigestSchedule() {
         </button>
       </div>
       {row?.last_run_at && <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>Last run {new Date(row.last_run_at).toLocaleString()}.</p>}
+      {row?.paused_at && on && <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--color-fg-faint)' }}>Paused since {new Date(row.paused_at).toLocaleDateString()}: the last seven digests were not opened. Open the Digest tab, or run now, and it resumes.</p>}
       {runNote && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-verified-soft)' }}>{runNote}</p>}
       {error && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-domain-vascular)' }}>{error}</p>}
     </div>

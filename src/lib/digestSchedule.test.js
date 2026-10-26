@@ -52,7 +52,7 @@ describe('run now without a saved schedule', () => {
   it('creates the default enabled schedule, then asks the server to run', async () => {
     const out = await runScheduledDigestNow()
     expect(out).toMatchObject({ ran: true, phase: 'reading' })
-    expect(flags.upserts).toEqual([{ user_id: 'user-1', enabled: true, hour_local: 6, timezone: browserTimezone() }])
+    expect(flags.upserts).toEqual([{ user_id: 'user-1', enabled: true, hour_local: 6, timezone: browserTimezone(), email_digest: true }])
     const [url, init] = fetch.mock.calls[0]
     expect(url).toBe('https://example.supabase.co/functions/v1/digest-run')
     expect(JSON.parse(init.body)).toEqual({ timezone: browserTimezone() })

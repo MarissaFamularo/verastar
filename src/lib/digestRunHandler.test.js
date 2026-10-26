@@ -17,6 +17,9 @@ import { fakeProvider } from './spendingFakes.js'
 import { makeRpcLedger } from '../../supabase/functions/_shared/spending.js'
 
 const HASH = 'e'.repeat(64)
+// A timezone in which the wall clock reads LOCAL_HOUR right now. Etc/GMT+N is UTC-N.
+const LOCAL_HOUR = 11
+const TZ = (() => { const d = new Date().getUTCHours() - LOCAL_HOUR; return d === 0 ? 'Etc/GMT' : d > 0 ? `Etc/GMT+${d}` : `Etc/GMT-${-d}` })()
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const als = new AsyncLocalStorage()
 
@@ -26,7 +29,9 @@ afterAll(() => installServerScope(null))
 // --- an in-memory database with the claim/fence semantics of the migration --------------
 function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
   const t = {
-    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: 0, timezone: 'UTC', claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0 })),
+    // Every schedule's local hour is 11 right now (a fixed-offset zone chosen for the real
+    // clock), so the gate's hour, lead and catch-up checks are deterministic.
+    digest_schedules: users.map((u) => ({ user_id: u, enabled: true, hour_local: LOCAL_HOUR, timezone: TZ, claimed_at: null, claim_token: null, last_run_at: null, last_result: null, last_attempt_at: null, attempt_day: null, attempts_today: 0, unopened_streak: 0, paused_at: null, email_digest: true, delivered_day: null })),
     sponsored_accounts: users.map((u) => ({ user_id: u, active: true, ends_at: null })),
     kv: users.map((u) => ({ user_id: u, collection: 'profile', key: 'me', value: { onboarded: true, name: u } })),
     evidence_cache_trusted: [],
@@ -119,7 +124,7 @@ function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
       insert: (row) => { t[table].push(row); return Promise.resolve({ error: null }) },
       upsert: (row) => { t[table].push(row); return Promise.resolve({ error: null }) },
       then: (res, rej) => {
-        if (op === 'update') { for (const r of rows()) Object.assign(r, payload); return Promise.resolve({ error: null }).then(res, rej) }
+        if (op === 'update') { const hit = rows(); for (const r of hit) Object.assign(r, payload); return Promise.resolve({ data: hit.map((r) => ({ user_id: r.user_id })), error: null }).then(res, rej) }
         return sleep(1).then(() => ({ data: rows(), error: null })).then(res, rej)
       },
     }
@@ -577,5 +582,249 @@ describe('the fenced store', () => {
     const s = fencedStore(makeSupabaseStore({ client: db.admin, userId: 'A' }), { admin: db.admin, userId: 'A', token: 'x' })
     await expect(s.put('papers', '1', {})).rejects.toThrow(/never writes library papers/)
     await expect(s.clear('digests')).rejects.toThrow()
+  })
+})
+
+// --- unopened digests: counted and paused, never a silent freeze --------------------------
+import { nextUnopenedStreak, PAUSE_AFTER_UNOPENED, PAUSED_REASON } from '../../supabase/functions/digest-run/handler.js'
+
+const YESTERDAY = new Date(Date.now() - 36 * 3600 * 1000).toISOString()
+function seedDigest(db, u, { opened = false, papers = 2, phase = 'done', runBy = 'scheduler', streak = 0, pausedAt = null } = {}) {
+  db.t.kv.push({ user_id: u, collection: 'digests', key: 'daily:latest', value: { kind: 'daily', runBy, server: { phase }, ranAt: YESTERDAY, savedAt: YESTERDAY, openedAt: opened ? YESTERDAY : null, results: Array.from({ length: papers }, (_, i) => ({ paper: { id: `old${i}`, title: `Old ${i}` } })), triaged: {} } })
+  Object.assign(db.t.digest_schedules.find((r) => r.user_id === u), { last_run_at: YESTERDAY, unopened_streak: streak, paused_at: pausedAt })
+}
+// A run that stores a finished digest with `papers` results, like the real runner does.
+const doneRun = (papers) => async () => {
+  const profile = await getProfile()
+  const results = Array.from({ length: papers }, (_, i) => ({ paper: { id: `p${i}`, pmid: `p${i}`, title: `Paper ${i} for ${profile.name}`, author: 'A et al.', journal: 'J', year: '2026' }, citation: { url: `https://pubmed.ncbi.nlm.nih.gov/p${i}/` } }))
+  await store.put('digests', 'daily:latest', { kind: 'daily', runBy: 'scheduler', server: { phase: 'done' }, ranAt: new Date().toISOString(), openedAt: null, results, triaged: { p0: { finding: 'Finding one.', check: { verdict: 'supported' }, relevance: 'Your first north star.' } }, searchContext: { days: 3 } })
+  return { phase: 'done', papers, read: papers }
+}
+function fakeEmail({ address = 'a@example.test', fail = false } = {}) {
+  const sent = []
+  return {
+    sent,
+    email: {
+      appUrl: 'https://app.test',
+      replyTo: 'marissa@example.test',
+      getAddress: async () => address,
+      send: async (m) => { if (fail) throw new Error('Resend 500: down'); sent.push(m); return { id: `em_${sent.length}` } },
+    },
+  }
+}
+const row = (db, u = 'A') => db.t.digest_schedules.find((r) => r.user_id === u)
+const events = (db, type) => db.t.events.filter((e) => e.type === type)
+
+describe('nextUnopenedStreak', () => {
+  const finished = (openedAt, papers = 1) => ({ kind: 'daily', runBy: 'scheduler', server: { phase: 'done' }, openedAt, results: Array.from({ length: papers }, () => ({})) })
+  it('counts an unopened finished digest, resets on an opened one, ignores empty days and resumes', () => {
+    expect(nextUnopenedStreak(finished(null), 2)).toBe(3)
+    expect(nextUnopenedStreak(finished('2026-10-24T00:00:00Z'), 6)).toBe(0)
+    expect(nextUnopenedStreak(finished(null, 0), 3)).toBe(3)
+    expect(nextUnopenedStreak({ kind: 'daily', runBy: 'scheduler', server: { phase: 'reading' }, openedAt: null, results: [{}] }, 3)).toBe(3)
+    expect(nextUnopenedStreak(null, 4)).toBe(4)
+    expect(nextUnopenedStreak({ kind: 'weekend' }, 4)).toBe(4)
+    expect(nextUnopenedStreak(finished(null), 'junk')).toBe(1)
+  })
+  it('a manual run means the reader is present', () => {
+    expect(nextUnopenedStreak(finished(null), 6, { manual: true })).toBe(0)
+  })
+})
+
+describe('unopened digests', () => {
+  it('an unopened digest is replaced the next morning and counted, not frozen', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: 2 })
+    const out = await (await handleDigestRun(cron(), deps(db, { run: doneRun(2) }).deps)).json()
+    expect(out).toMatchObject({ ran: true, user_id: 'A', phase: 'done' })
+    expect(row(db)).toMatchObject({ unopened_streak: 3, paused_at: null, claim_token: null })
+    expect(db.t.kv.find((r) => r.key === 'daily:latest').value.results[0].paper.title).toBe('Paper 0 for A')
+  })
+  it('pauses at the threshold: no run, paused_at stamped once, one event, one email', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+    const { email, sent } = fakeEmail()
+    let runs = 0
+    const h = deps(db, { run: async () => { runs++; return { phase: 'done', papers: 0, read: 0 } } }).deps
+    h.email = email
+    const first = await (await handleDigestRun(cron(), h)).json()
+    expect(first).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(runs).toBe(0)
+    expect(row(db).paused_at).toBeTruthy()
+    expect(row(db).unopened_streak).toBe(PAUSE_AFTER_UNOPENED - 1)
+    expect(events(db, 'digest_paused')).toEqual([expect.objectContaining({ user_id: 'A', payload: { streak: PAUSE_AFTER_UNOPENED } })])
+    expect(sent).toEqual([expect.objectContaining({ to: 'a@example.test', subject: 'Your Verastar digest is paused' })])
+    expect(sent[0].text).toContain(`${PAUSE_AFTER_UNOPENED} mornings in a row`)
+    expect(events(db, 'digest_pause_emailed')).toHaveLength(1)
+    // Later ticks stay quiet.
+    const second = await (await handleDigestRun(cron(), h)).json()
+    expect(second).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(sent).toHaveLength(1)
+    expect(events(db, 'digest_paused')).toHaveLength(1)
+  })
+  it('opening the digest resumes a paused account on the next tick and clears the pause', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1, pausedAt: YESTERDAY, opened: true })
+    const out = await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()
+    expect(out).toMatchObject({ ran: true, phase: 'done' })
+    expect(row(db)).toMatchObject({ unopened_streak: 0, paused_at: null })
+  })
+  it('"run now" resumes a paused account and resets the count', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED, pausedAt: YESTERDAY })
+    const out = await (await handleDigestRun(manual(), deps(db, { user: { id: 'A' }, run: doneRun(1) }).deps)).json()
+    expect(out).toMatchObject({ ran: true, phase: 'done' })
+    expect(row(db)).toMatchObject({ unopened_streak: 0, paused_at: null })
+  })
+  it('an empty day neither counts nor resets', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: 3, papers: 0 })
+    const out = await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()
+    expect(out).toMatchObject({ ran: true })
+    expect(row(db).unopened_streak).toBe(3)
+  })
+})
+
+describe('delivery', () => {
+  it('a digest finished at or after the hour is emailed on that tick, from the stored record, once', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(2) }).deps
+    h.email = email
+    const out = await (await handleDigestRun(cron(), h)).json()
+    expect(out).toMatchObject({ ran: true, phase: 'done', papers: 2 })
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({ to: 'a@example.test', subject: 'Paper 0 for A' })
+    expect(sent[0].text).toContain('Finding one.')
+    expect(sent[0].text).toContain('Checked against the source text.')
+    expect(sent[0].text).toContain('https://app.test/?src=digest-email')
+    expect(sent[0].text).toContain(`for 11:00 am ${TZ}`)
+    expect(sent[0].html).toContain('Paper 1 for A')
+    expect(events(db, 'digest_emailed')).toEqual([expect.objectContaining({ user_id: 'A', payload: { papers: 2, provider_id: 'em_1' } })])
+    expect(row(db).delivered_day).toBeTruthy()
+    // Later ticks: nothing to build (ran today), nothing to send (day delivered).
+    expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(false)
+    expect(sent).toHaveLength(1)
+  })
+  it('a digest built in the hour before is held and emailed at the hour', async () => {
+    const db = memoryDb({ users: ['A'] })
+    row(db).hour_local = LOCAL_HOUR + 1
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ ran: true, phase: 'done' })
+    expect(sent).toHaveLength(0)
+    expect(row(db).delivered_day).toBeNull()
+    // The clock reaches her hour (the row's hour now equals the local hour).
+    row(db).hour_local = LOCAL_HOUR
+    expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(false)
+    expect(sent).toHaveLength(1)
+    expect(events(db, 'digest_emailed')).toHaveLength(1)
+    expect(row(db).delivered_day).toBeTruthy()
+  })
+  it('two hours before the hour nothing is built yet', async () => {
+    const db = memoryDb({ users: ['A'] })
+    row(db).hour_local = LOCAL_HOUR + 2
+    const out = await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()
+    expect(out).toEqual({ ran: false, reason: 'not yet' })
+  })
+  it('a "run now" digest is delivered at the hour like any other', async () => {
+    const db = memoryDb({ users: ['A'] })
+    row(db).hour_local = LOCAL_HOUR + 1
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { user: { id: 'A' }, run: doneRun(2) }).deps
+    h.email = email
+    expect((await (await handleDigestRun(manual(), h)).json()).ran).toBe(true)
+    expect(sent).toHaveLength(0)
+    row(db).hour_local = LOCAL_HOUR
+    await handleDigestRun(cron(), h)
+    expect(sent).toHaveLength(1)
+  })
+  it('an empty digest sends nothing and the day is marked handled', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(0) }).deps
+    h.email = email
+    expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(true)
+    expect(sent).toHaveLength(0)
+    expect(row(db).delivered_day).toBeTruthy()
+    expect(db.t.events.filter((e) => /digest_email/.test(e.type))).toHaveLength(0)
+  })
+  it('a send failure is an event, the day is not retried, and the run is still a success', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email } = fakeEmail({ fail: true })
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    const out = await (await handleDigestRun(cron(), h)).json()
+    expect(out).toMatchObject({ ran: true, phase: 'done', claimLost: false })
+    expect(events(db, 'digest_email_failed')).toEqual([expect.objectContaining({ payload: { papers: 1, error: 'Resend 500: down' } })])
+    expect(row(db).last_run_at).toBeTruthy()
+    await handleDigestRun(cron(), h)
+    expect(events(db, 'digest_email_failed')).toHaveLength(1)
+  })
+  it('an account without an address is recorded, not retried', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail({ address: null })
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(sent).toHaveLength(0)
+    expect(events(db, 'digest_email_failed')).toEqual([expect.objectContaining({ payload: { papers: 1, error: 'no address' } })])
+  })
+  it('a day already claimed by another tick is not sent again', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    // Another tick claimed the day between this tick's read and its compare-and-set.
+    const orig = db.admin.from
+    let armed = false
+    db.admin.from = (table) => {
+      const chain = orig(table)
+      if (table === 'kv' && !armed) { armed = true; row(db).delivered_day = new Date().toISOString().slice(0, 10) }
+      return chain
+    }
+    const out = await (await handleDigestRun(cron(), h)).json()
+    expect(out.ran).toBe(true)
+    expect(sent).toHaveLength(0)
+    db.admin.from = orig
+  })
+})
+
+describe('opting out', () => {
+  it('an account with the email off is not emailed, nothing is recorded, and the day is marked handled', async () => {
+    const db = memoryDb({ users: ['A'] })
+    row(db).email_digest = false
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(2) }).deps
+    h.email = email
+    expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(true)
+    expect(sent).toHaveLength(0)
+    expect(db.t.events.filter((e) => /digest_email/.test(e.type))).toHaveLength(0)
+    expect(row(db).delivered_day).toBeTruthy()
+  })
+  it('the pause notice honours the email switch too', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+    row(db).email_digest = false
+    const { email, sent } = fakeEmail()
+    const h = deps(db).deps
+    h.email = email
+    expect(await (await handleDigestRun(cron(), h)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(row(db).paused_at).toBeTruthy()
+    expect(events(db, 'digest_paused')).toHaveLength(1)
+    expect(sent).toHaveLength(0)
+  })
+  it('every email carries the signed unsubscribe link and the one-click headers', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail()
+    email.unsubscribeUrl = async (userId) => `https://fn.test/functions/v1/digest-unsubscribe?u=${userId}&t=abc`
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(sent).toHaveLength(1)
+    expect(sent[0].text).toContain('Unsubscribe: https://fn.test/functions/v1/digest-unsubscribe?u=A&t=abc')
+    expect(sent[0].html).toContain('href="https://fn.test/functions/v1/digest-unsubscribe?u=A&amp;t=abc"')
+    expect(sent[0].headers).toEqual({ 'List-Unsubscribe': '<https://fn.test/functions/v1/digest-unsubscribe?u=A&t=abc>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' })
   })
 })

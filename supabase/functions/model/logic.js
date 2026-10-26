@@ -47,7 +47,10 @@ export function localClock(now, timezone) {
 //   midFlight    a scheduler run is partway through and should be continued
 //   savedToday   a digest with papers already exists from today
 //   mayRun       schedulerMayRun(record): the last digest was opened, or there is none
-export function digestGate({ manual = false, hour, hourLocal, ranToday = false, claimedFresh = false, midFlight = false, savedToday = false, mayRun = true } = {}) {
+//   leadHours    how many hours before her hour a scheduled build may start (the digest is
+//                delivered at her hour; building early absorbs the queue). Clamped at
+//                midnight: an hour-0 reader's build starts at 0.
+export function digestGate({ manual = false, hour, hourLocal, leadHours = 0, ranToday = false, claimedFresh = false, midFlight = false, savedToday = false, mayRun = true } = {}) {
   // A manual press respects the claim too: two runners on one record would each persist
   // over the other.
   if (claimedFresh) return { run: false, reason: 'already running' }
@@ -55,12 +58,19 @@ export function digestGate({ manual = false, hour, hourLocal, ranToday = false, 
   if (manual) return { run: true }
   if (midFlight) return { run: true }
   if (ranToday) return { run: false, reason: 'already ran today' }
-  // At or after her hour, not only during it: a morning skipped because the last digest
-  // sat unopened catches up on the first tick after she opens it (2026-09-28).
-  if (hour < Number(hourLocal)) return { run: false, reason: 'not yet' }
+  // At or after her hour, not only during it, so a morning the scheduler missed is made up
+  // later the same day. But a "morning" digest that would arrive in the evening waits for
+  // the next morning instead (2026-10-25): past CATCH_UP_HOURS after her hour the day is
+  // skipped. "Run now" ignores this.
+  if (hour < Math.max(0, Number(hourLocal) - (Number(leadHours) || 0))) return { run: false, reason: 'not yet' }
+  if (hour >= Number(hourLocal) + CATCH_UP_HOURS) return { run: false, reason: 'past catch-up window' }
   if (!mayRun) return { run: false, reason: 'last digest unopened' }
   return { run: true }
 }
+
+// How many hours after her hour a scheduled run may still start. The monitor's due model
+// (private.beta_expected_digest_due) carries the same number.
+export const CATCH_UP_HOURS = 12
 
 // The cache header the client sends on an extraction call:
 //   x-verastar-cache: <pmid>|<extraction_version>|<sha256 hex>|<source_tier>
