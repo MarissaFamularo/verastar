@@ -13,9 +13,11 @@
 // so a second run cannot double-send.
 //
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DIGEST_UNSUBSCRIBE_SECRET=... \
-//   RESEND_API_KEY=<the project's SMTP_PASSWORD secret, or a new Resend key> \
-//   DIGEST_EMAIL_FROM="Marissa at Verastar <the address SMTP_FROM already uses>" \
-//   DIGEST_EMAIL_REPLY_TO="..." node scripts/founder-recapture-email.mjs [options]
+//   RESEND_API_KEY=<the project's SMTP_PASSWORD secret> SMTP_FROM=<the SMTP_FROM secret> \
+//   node scripts/founder-recapture-email.mjs [options]
+//
+// Sends as "Marissa at Verastar" from the SMTP_FROM address with replies to the mailbox in
+// digestEmail.js; DIGEST_EMAIL_FROM and DIGEST_EMAIL_REPLY_TO override.
 //
 //   --send                 actually send (default: dry run)
 //   --segment digest|setup|all   which readers (default all)
@@ -29,7 +31,7 @@
 // the operator is the one person meant to see them; do not paste the output anywhere.
 
 import { createClient } from '@supabase/supabase-js'
-import { buttonHtml, digestItems, formatItemsHtml, formatItemsText, makeResendSender, openLink, paragraphsHtml, subjectFromTitle, wrapHtml, DEFAULT_APP_URL } from '../supabase/functions/_shared/digestEmail.js'
+import { buttonHtml, digestItems, digestSender, formatItemsHtml, formatItemsText, makeResendSender, openLink, paragraphsHtml, subjectFromTitle, wrapHtml, DEFAULT_APP_URL, DIGEST_REPLY_TO } from '../supabase/functions/_shared/digestEmail.js'
 import { unsubscribeUrl } from '../supabase/functions/_shared/unsubscribe.js'
 
 const EVENT = 'founder_email_sent'
@@ -48,7 +50,7 @@ const LIMIT = Number(arg('--limit', Infinity)) || Infinity
 const FRESH_HOURS = Number(arg('--fresh-hours', 36)) || 36
 const COHORT = String(arg('--cohort', 'beta-%'))
 const APP_URL = String(arg('--app-url', process.env.APP_URL || DEFAULT_APP_URL))
-const REPLY_TO = process.env.DIGEST_EMAIL_REPLY_TO || null
+const REPLY_TO = process.env.DIGEST_EMAIL_REPLY_TO || DIGEST_REPLY_TO
 const UNSUB_SECRET = process.env.DIGEST_UNSUBSCRIBE_SECRET || ''
 
 const need = (k) => { const v = process.env[k]; if (!v) { console.error(`Missing ${k}`); process.exit(2) } return v }
@@ -196,7 +198,7 @@ async function main() {
   // The project's Resend credentials are its SMTP secrets (SMTP_PASSWORD is a Resend API
   // key); RESEND_API_KEY / DIGEST_EMAIL_FROM override them.
   const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASSWORD || need('RESEND_API_KEY')
-  const from = process.env.DIGEST_EMAIL_FROM || process.env.SMTP_FROM || need('DIGEST_EMAIL_FROM')
+  const from = process.env.DIGEST_EMAIL_FROM || digestSender(process.env.SMTP_FROM) || need('DIGEST_EMAIL_FROM')
   const send = makeResendSender({ apiKey, from, replyTo: REPLY_TO })
   let n = 0
   for (const p of plan) {

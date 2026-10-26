@@ -181,15 +181,13 @@ Order matters only in that the handler reads two columns the migration adds.
 
 1. `npm test`, `npm run lint`, and `supabase/tests/run_spending_tests.sh` against a local
    server, from the commit being released.
-2. **Resend is already set up.** The domain is verified and the credentials are the
-   `SMTP_*` function secrets. Nothing to create. Check the Resend plan's daily and monthly
-   limits against the cohort: the free tier allows 100 emails a day and 3,000 a month, and
-   40 digests a day plus sign-in codes and alerts fits, but a cohort of 100 does not.
+2. **Resend is already set up.** The domain is verified, the account is on the Pro plan,
+   and the credentials are the `SMTP_*` function secrets. Nothing to create. Digests go
+   out as "Marissa at Verastar" from the SMTP_FROM address, with replies to
+   statupfordocs@gmail.com (both in `_shared/digestEmail.js`).
 3. **Secrets** on the project's Edge Functions: `DIGEST_UNSUBSCRIBE_SECRET` (a long random
-   string, `openssl rand -hex 32`) is the one new secret. Optional: `DIGEST_EMAIL_FROM` to
-   send as `Marissa at Verastar <same address SMTP_FROM uses>` instead of the SMTP_FROM
-   display name; `DIGEST_EMAIL_REPLY_TO` (a mailbox Marissa reads; replies are the
-   interviews); `APP_URL`. `RESEND_API_KEY` only if a separate key is wanted.
+   string, `openssl rand -hex 32`) is the one new secret. Overrides, none needed:
+   `DIGEST_EMAIL_FROM`, `DIGEST_EMAIL_REPLY_TO`, `RESEND_API_KEY`, `APP_URL`.
 4. **Apply the two migrations** in file order (each one transaction; the first is
    additive, the second redefines the monitor's due model and re-activates monitoring).
 5. **Deploy** `digest-run` and `digest-unsubscribe` from the released commit, as in
@@ -251,9 +249,7 @@ email once:
 
 ```bash
 SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DIGEST_UNSUBSCRIBE_SECRET=... \
-RESEND_API_KEY=<the SMTP_PASSWORD secret> \
-DIGEST_EMAIL_FROM="Marissa at Verastar <the address SMTP_FROM uses>" \
-DIGEST_EMAIL_REPLY_TO="..." \
+RESEND_API_KEY=<the SMTP_PASSWORD secret> SMTP_FROM=<the SMTP_FROM secret> \
 node scripts/founder-recapture-email.mjs                      # dry run: who gets what, first email of each kind
 node scripts/founder-recapture-email.mjs --only you@example.com --send   # one test send
 node scripts/founder-recapture-email.mjs --send

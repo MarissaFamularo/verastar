@@ -1,6 +1,6 @@
 // The digest email builders and the Resend sender (supabase/functions/_shared/digestEmail.js).
 import { describe, it, expect } from 'vitest'
-import { buildDigestEmail, buildPauseEmail, digestItems, makeResendSender, subjectFromTitle, DEFAULT_APP_URL } from '../../supabase/functions/_shared/digestEmail.js'
+import { buildDigestEmail, buildPauseEmail, digestItems, digestSender, makeResendSender, subjectFromTitle, DEFAULT_APP_URL } from '../../supabase/functions/_shared/digestEmail.js'
 
 const paper = (i, extra = {}) => ({ paper: { id: `p${i}`, pmid: `p${i}`, title: `Paper ${i} title.`, author: 'Li X et al.', journal: 'J Vasc Surg', year: '2026', ...extra }, citation: { url: `https://pubmed.ncbi.nlm.nih.gov/p${i}/` } })
 const record = (over = {}) => ({
@@ -133,5 +133,15 @@ describe('opting out', () => {
     expect(JSON.parse(calls[0].body).headers).toEqual({ 'List-Unsubscribe': '<u>' })
     await send({ to: 'a@b.test', subject: 's', text: 't', html: '' })
     expect(JSON.parse(calls[1].body).headers).toBeUndefined()
+  })
+})
+
+describe('digestSender', () => {
+  it('puts Marissa on the project sender, keeps the address, leaves junk alone', () => {
+    expect(digestSender('Verastar <no-reply@mail.verastar.papertrellis.com>')).toBe('Marissa at Verastar <no-reply@mail.verastar.papertrellis.com>')
+    expect(digestSender('no-reply@mail.verastar.papertrellis.com')).toBe('Marissa at Verastar <no-reply@mail.verastar.papertrellis.com>')
+    expect(digestSender('')).toBeUndefined()
+    expect(digestSender(undefined)).toBeUndefined()
+    expect(digestSender('not an address')).toBe('not an address')
   })
 })

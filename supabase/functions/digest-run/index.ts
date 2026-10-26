@@ -31,7 +31,7 @@ import * as app from './app.bundle.js'
 import manifest from './app.bundle.manifest.js'
 import { handleDigestRun } from './handler.js'
 import { anthropicDispatch, anthropicTokenCounter, makeRpcLedger, resolveProviderUrl } from '../_shared/spending.js'
-import { makeResendSender, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
+import { makeResendSender, digestSender, DEFAULT_APP_URL, DIGEST_REPLY_TO } from '../_shared/digestEmail.js'
 import { unsubscribeUrl } from '../_shared/unsubscribe.js'
 import { SERVER_CLIENT_TIMEOUT_MS } from '../_shared/timeouts.js'
 
@@ -71,8 +71,8 @@ Deno.serve((req) => {
   // dedicated key is set. The From defaults to the same verified sender.
   const smtpIsResend = /resend\.com$/i.test(Deno.env.get('SMTP_HOST') || '')
   const resendKey = Deno.env.get('RESEND_API_KEY') || (smtpIsResend ? Deno.env.get('SMTP_PASSWORD') || Deno.env.get('SMTP_Password') : undefined)
-  const emailFrom = Deno.env.get('DIGEST_EMAIL_FROM') || (smtpIsResend ? Deno.env.get('SMTP_FROM') : undefined)
-  const replyTo = Deno.env.get('DIGEST_EMAIL_REPLY_TO') || null
+  const emailFrom = Deno.env.get('DIGEST_EMAIL_FROM') || (smtpIsResend ? digestSender(Deno.env.get('SMTP_FROM')) : undefined)
+  const replyTo = Deno.env.get('DIGEST_EMAIL_REPLY_TO') || DIGEST_REPLY_TO
   const unsubscribeSecret = Deno.env.get('DIGEST_UNSUBSCRIBE_SECRET') || ''
   const email = resendKey && emailFrom ? {
     appUrl: Deno.env.get('APP_URL') || DEFAULT_APP_URL,

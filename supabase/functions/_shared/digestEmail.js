@@ -9,6 +9,20 @@
 // number, quote or citation is produced here; nothing is summarized by a model at send time.
 
 export const DEFAULT_APP_URL = 'https://verastar.papertrellis.com'
+// The digest arrives from Marissa, at the address the project already sends from, and
+// replies go to the mailbox she reads (decided 2026-10-26).
+export const DIGEST_FROM_NAME = 'Marissa at Verastar'
+export const DIGEST_REPLY_TO = 'statupfordocs@gmail.com'
+
+// "Marissa at Verastar <addr>" from whatever SMTP_FROM holds: "Name <addr>" or a bare
+// address. Anything else comes back unchanged, so a malformed value fails at Resend, not
+// here.
+export function digestSender(smtpFrom) {
+  const raw = String(smtpFrom ?? '').trim()
+  if (!raw) return undefined
+  const m = raw.match(/<([^<>\s]+@[^<>\s]+)>\s*$/) || raw.match(/^([^<>\s]+@[^<>\s]+)$/)
+  return m ? `${DIGEST_FROM_NAME} <${m[1]}>` : raw
+}
 export const MAX_ITEMS = 5
 export const RESEND_URL = 'https://api.resend.com/emails'
 
