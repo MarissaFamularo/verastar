@@ -29,7 +29,8 @@ for f in supabase/tests/spending_fixture.sql \
          supabase/migrations/20261014121000_digest_attempts.sql \
          supabase/migrations/20261014123000_evidence_cache_column_grants.sql \
          supabase/migrations/20261018120000_invite_attempt_ledger.sql \
-         supabase/migrations/20261025120000_digest_unopened_pause.sql; do
+         supabase/migrations/20261025120000_digest_unopened_pause.sql \
+         supabase/migrations/20261026110000_digest_schedules_email_column_grants.sql; do
   "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { echo "migration failed: $f" >&2; "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f"; exit 1; }
 done
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/spending_contract.sql 2>&1 | grep -E "^psql.*(ERROR|FAIL)|PASS" || true
