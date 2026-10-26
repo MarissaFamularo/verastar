@@ -132,11 +132,27 @@ select pg_temp.ok((select due_at='2026-10-15T10:00Z'::timestamptz from private.b
 update public.digest_schedules set paused_at='2026-10-15T00:00Z';
 select pg_temp.ok(not exists(select 1 from private.beta_expected_digest_due('2026-10-15T21:00Z')),'a paused account is not expected');
 update public.digest_schedules set paused_at=null,monitor_started_at='2026-09-01T00:00Z';
+-- Lead window (20261026160000): the scheduler may start tomorrow's build up to
+-- BUILD_LEAD_HOURS (1) before the hour, overwriting the single last_run_at/last_attempt_at
+-- with next-day stamps. Such a build satisfies the slot it precedes; it must not erase the
+-- evidence for yesterday's slot and read as two days overdue until the hour passes.
+update public.digest_schedules set last_run_at='2026-10-16T05:02Z',last_attempt_at='2026-10-16T05:02Z';
+select pg_temp.ok((select due_at='2026-10-16T06:00Z'::timestamptz and due_at>'2026-10-16T05:10Z'::timestamptz from private.beta_expected_digest_due('2026-10-16T05:10Z')),'a build started 58 minutes before the next hour is not overdue');
+update public.digest_schedules set last_run_at='2026-10-14T06:02Z',last_attempt_at='2026-10-14T06:02Z';
+select pg_temp.ok((select due_at='2026-10-15T06:00Z'::timestamptz and due_at<'2026-10-16T05:10Z'::timestamptz from private.beta_expected_digest_due('2026-10-16T05:10Z')),'a build two days back is overdue');
+-- Production row (Australia/Melbourne, hour 6): the 2026-10-27 build started 05:02 local.
+update public.digest_schedules set timezone='Australia/Melbourne',monitor_started_at='2026-10-26T01:52:31Z',last_run_at='2026-10-26T18:02:31Z',last_attempt_at='2026-10-26T18:02:31Z';
+select pg_temp.ok((select due_at='2026-10-26T19:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-26T18:05Z')),'a lead-window build in a +11 zone is due at the next slot, not at activation');
+update public.digest_schedules set timezone='UTC',last_attempt_at=null,monitor_started_at='2026-09-01T00:00Z';
 -- Quiet outcomes do not expire; fresh schedule/heartbeat checks are independent.
 update public.digest_schedules set last_run_at=now(),updated_at=now(),hour_local=extract(hour from now())::int,timezone='UTC';
 select public.beta_monitor_tick();
 select pg_temp.ok((select state='ok' from private.beta_incidents where check_name='schedule'),'quiet daily schedule is on track');
 select pg_temp.ok((select min(due_at)>now() from private.beta_expected_digest_due(now())),'future local due slot is not overdue');
+update public.digest_schedules set hour_local=extract(hour from now()+interval '58 minutes')::int,last_attempt_at=now();
+select public.beta_monitor_tick();
+select pg_temp.ok((select state='ok' from private.beta_incidents where check_name='schedule'),'a build started in the lead window before the hour opens no incident');
+update public.digest_schedules set last_attempt_at=null;
 update public.sponsored_accounts set created_at=now()-interval '10 days' where user_id='c0000000-0000-0000-0000-000000000007';
 update public.digest_schedules set last_run_at=now()-interval '3 days',monitor_started_at=now()-interval '4 days';
 select public.beta_monitor_tick();

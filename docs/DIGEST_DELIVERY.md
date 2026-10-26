@@ -146,6 +146,21 @@ recovered for two hours each morning; activation after the hour is due at activa
 within the catch-up window and at the next slot after it. The migration re-activates every
 enabled schedule (`monitor_started_at = now()`) because the expectation changed then.
 
+**Lead window.** `20261026160000_beta_monitor_due_lead_window.sql` adds one rule: a run
+or attempt at or after `slot - BUILD_LEAD_HOURS` (1 hour) satisfies that slot, for the
+current and the previous slot alike. `digest_schedules` keeps a single `last_run_at` /
+`last_attempt_at`, and a build that starts tomorrow's digest in the lead window overwrites
+both with next-day stamps; judged by calendar day alone the monitor then held no evidence
+that yesterday's slot ran, fell to the "missed earlier slot" branch, and opened an
+incident at once (that branch has no three-sample requirement), recovering when the hour
+arrived. That was the 2026-10-25 23:05Z blip and, on 2026-10-26, the Melbourne account
+(hour 6): build started 18:02Z (05:02 local), incident at 18:05Z, recovery at 19:00Z. The
+monitor exists to detect a dead scheduler; a build that started in the lead window proves
+it alive, and the single-column schema cannot distinguish "ran yesterday and started
+today early" from "skipped yesterday and started today early". Paused accounts, invalid
+time zones, and the 12-hour activation branch are unchanged, and the migration does not
+re-activate anything because the expectation only widens.
+
 **Cost bound.** An account can now spend up to seven digest-days without a single open,
 about $1.60 at the observed average, inside the $3.00 daily and $25 monthly caps.
 
@@ -222,7 +237,8 @@ reason. Saving the block counts as engagement.
 ## Files
 
 - `supabase/migrations/20261025120000_digest_unopened_pause.sql`
-- `supabase/migrations/20261025121000_beta_monitor_due_pause.sql`; tests in
+- `supabase/migrations/20261025121000_beta_monitor_due_pause.sql` and
+  `supabase/migrations/20261026160000_beta_monitor_due_lead_window.sql`; tests in
   `supabase/tests/beta_release.sql` via `run_beta_admin_tests.sh`
 - `supabase/functions/model/logic.js` (`CATCH_UP_HOURS`), `src/lib/sponsorLogic.test.js`
 - `supabase/functions/_shared/digestEmail.js`, `src/lib/digestEmail.test.js`
