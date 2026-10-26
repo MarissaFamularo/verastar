@@ -228,14 +228,15 @@ tick. The fix is a schedule change on the pg_cron job, not code: ticks every min
 five times the throughput (about 80 minutes for 40 accounts, so the lead covers most of
 it) and the claim and spending
 contracts already cover overlapping ticks on different accounts (the handler tests
-interleave two). As the operator, in the SQL editor:
+interleave two). **Done 2026-10-26 00:30Z, on the live project**, with:
 
 ```sql
 select cron.alter_job((select jobid from cron.job where jobname = 'verastar-digest-run'), schedule := '* * * * *');
 ```
 
-Every two minutes (`*/2 * * * *`) is the conservative choice if provider rate limits are a
-concern; it roughly halves the queue. Either way, watch the first morning's
+The monitor and alert-dispatch jobs stay at five minutes. To revert, run the same
+statement with `'*/5 * * * *'`. `SPONSORED_ACCESS_DEPLOY.md` § 4b still shows the
+original five-minute schedule for a fresh project. Watch the first morning's
 `digest_scheduled_run` timestamps and the Anthropic rate-limit headers in the function
 logs.
 
