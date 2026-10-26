@@ -96,13 +96,14 @@ function founderSetupEmail({ name, step, unsub }) {
   const left = step === 'north-stars'
     ? 'set your north stars, the concepts you want the literature filtered by'
     : 'turn on the morning run under Settings'
+  // Marissa's words (2026-10-26).
   const paragraphs = [
     hi,
-    'Marissa here. You signed up for the Verastar beta, got partway through setup, and stopped. Fair. It asks for real setup before it gives anything back.',
+    'Marissa here. You signed up for the Verastar beta, got partway through setup, and stopped. Totally fair. Asking for a complex set up before showing you the value is rough. I get it. But it\u2019s worth it! Honest!',
     `One step is left: ${left}. Two minutes.`,
-    'After that, a digest lands in this inbox each morning, built for those north stars. Each claim in it says whether it was checked against the source text.',
+    'After that, a digest lands in this inbox each morning, built for those north stars.',
     `Finish setup: ${link}`,
-    'Reply if any part of the setup was confusing. I read every one of these.',
+    'Reply if any part of the setup was confusing. I read every one of these. I appreciate your time.',
     'Marissa',
   ]
   const footer = [...(unsub ? [`Unsubscribe: ${unsub}`] : []), 'Or turn off "Email me the digest" under Settings in Verastar.'].join('\n')
