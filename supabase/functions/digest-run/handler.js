@@ -87,6 +87,7 @@ export const PAUSED_REASON = 'paused: digests unopened'
 // A scheduled build may start this many hours before the reader's hour, so the morning
 // queue is absorbed before anyone's delivery time. The monitor expects the digest by the
 // hour itself (private.beta_expected_digest_due).
+// The monitor's due model (private.beta_expected_digest_due) carries the same number.
 export const BUILD_LEAD_HOURS = 1
 
 // Pure: was the reader present for `record`? Opened in the app (openedAt), or engaged

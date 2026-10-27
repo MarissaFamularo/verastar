@@ -132,6 +132,17 @@ select pg_temp.ok((select due_at='2026-10-15T10:00Z'::timestamptz from private.b
 update public.digest_schedules set paused_at='2026-10-15T00:00Z';
 select pg_temp.ok(not exists(select 1 from private.beta_expected_digest_due('2026-10-15T21:00Z')),'a paused account is not expected');
 update public.digest_schedules set paused_at=null,monitor_started_at='2026-09-01T00:00Z';
+-- Build lead (20261026233000): the scheduler builds in the hour before the reader's hour.
+update public.digest_schedules set last_run_at='2026-10-15T05:02Z',last_attempt_at='2026-10-15T05:02Z';
+select pg_temp.ok((select due_at='2026-10-16T06:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T05:10Z')),'a build in the lead hour satisfies that morning, not a missed yesterday');
+update public.digest_schedules set last_run_at='2026-10-14T05:05Z',last_attempt_at='2026-10-14T05:05Z';
+select pg_temp.ok((select due_at='2026-10-15T06:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T05:20Z')),'an open build window not yet served is due at the hour, not overdue');
+update public.digest_schedules set last_run_at='2026-10-13T05:05Z',last_attempt_at='2026-10-13T05:05Z';
+select pg_temp.ok((select due_at='2026-10-14T06:00Z'::timestamptz from private.beta_expected_digest_due('2026-10-15T05:20Z')),'a missed yesterday stays overdue through the lead hour');
+-- The 2026-10-26 23:35Z false alarm: India readers, 06:00 local, built at 05:02 local.
+update public.digest_schedules set timezone='Asia/Calcutta',last_run_at='2026-10-26T23:32Z',last_attempt_at='2026-10-26T23:32Z',monitor_started_at='2026-10-26T01:52Z';
+select pg_temp.ok((select due_at='2026-10-28T00:30Z'::timestamptz from private.beta_expected_digest_due('2026-10-26T23:37Z')),'half-hour-offset reader built in the lead hour is on track');
+update public.digest_schedules set timezone='UTC',hour_local=6,last_run_at=null,last_attempt_at=null,monitor_started_at='2026-09-01T00:00Z';
 -- Quiet outcomes do not expire; fresh schedule/heartbeat checks are independent.
 update public.digest_schedules set last_run_at=now(),updated_at=now(),hour_local=extract(hour from now())::int,timezone='UTC';
 select public.beta_monitor_tick();
