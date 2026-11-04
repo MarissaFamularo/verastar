@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import Anthropic from '@anthropic-ai/sdk'
-import { handleDigestRun, fencedStore, orderByAttempt, attemptsToday, ATTEMPTS_PER_DAY } from '../../supabase/functions/digest-run/handler.js'
+import { handleDigestRun, fencedStore, orderByAttempt, attemptsToday, ATTEMPTS_PER_DAY, PAUSE_EMAIL_WINDOW_DAYS } from '../../supabase/functions/digest-run/handler.js'
 import { checkPaidRequest, requestFingerprint } from '../../supabase/functions/_shared/requestPolicy.js'
 import { installServerScope, serverRunUnresolved } from './serverScope.js'
 import { store, getProfile } from './store.js'
@@ -117,6 +117,9 @@ function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
       eq: (k, v) => { filters.push((r) => r[k] === v); return chain },
       in: (k, vs) => { filters.push((r) => vs.includes(r[k])); return chain },
       is: (k, v) => { filters.push((r) => (r[k] ?? null) === v); return chain },
+      // Rows inserted here carry no ts; the real column defaults to now().
+      gte: (k, v) => { filters.push((r) => (r[k] ?? new Date().toISOString()) >= v); return chain },
+      limit: () => chain,
       order: () => chain,
       range: async () => ({ data: rows().map((r) => ({ value: r.value, key: r.key })), error: null }),
       maybeSingle: async () => { await sleep(1); return { data: rows()[0] ?? null, error: null } },
@@ -788,6 +791,69 @@ describe('unopened digests', () => {
     expect(sent).toHaveLength(1)
     // The dead worker, if it ever wakes, has lost the account.
     expect((await db.admin.rpc('scheduler_kv_write', { p_user_id: 'A', p_token: 'tok-dead', p_collection: 'digests', p_key: 'x', p_value: {}, p_delete: false })).data).toBe(false)
+  })
+  describe('pause email hard cap', () => {
+    const DAY = 86400 * 1000
+    const pauseHandler = (db) => {
+      const { email, sent } = fakeEmail()
+      const h = deps(db, { run: async () => ({ phase: 'done', papers: 0, read: 0 }) }).deps
+      h.email = email
+      return { h, sent }
+    }
+    it('a pause re-stamped every tick still sends one email; the rest are recorded as capped', async () => {
+      const db = memoryDb({ users: ['A'] })
+      seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+      const { h, sent } = pauseHandler(db)
+      for (let i = 0; i < 5; i++) {
+        await handleDigestRun(cron(), h)
+        row(db).paused_at = null // whatever un-pauses the row, the email must not repeat
+      }
+      expect(events(db, 'digest_paused')).toHaveLength(5)
+      expect(sent).toHaveLength(1)
+      expect(events(db, 'digest_pause_emailed')).toHaveLength(1)
+      expect(events(db, 'digest_pause_email_capped')).toHaveLength(4)
+    })
+    it('a pause email inside the window blocks the next one', async () => {
+      const db = memoryDb({ users: ['A'] })
+      seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+      db.t.events.push({ user_id: 'A', type: 'digest_pause_emailed', payload: {}, ts: new Date(Date.now() - (PAUSE_EMAIL_WINDOW_DAYS - 1) * DAY).toISOString() })
+      const { h, sent } = pauseHandler(db)
+      await handleDigestRun(cron(), h)
+      expect(row(db).paused_at).toBeTruthy()
+      expect(sent).toHaveLength(0)
+      expect(events(db, 'digest_pause_email_capped')).toHaveLength(1)
+    })
+    it('a pause email older than the window does not block a new pause email', async () => {
+      const db = memoryDb({ users: ['A'] })
+      seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+      db.t.events.push({ user_id: 'A', type: 'digest_pause_emailed', payload: {}, ts: new Date(Date.now() - (PAUSE_EMAIL_WINDOW_DAYS + 1) * DAY).toISOString() })
+      const { h, sent } = pauseHandler(db)
+      await handleDigestRun(cron(), h)
+      expect(sent).toHaveLength(1)
+    })
+    it("another reader's pause email does not block this one", async () => {
+      const db = memoryDb({ users: ['A'] })
+      seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+      db.t.events.push({ user_id: 'B', type: 'digest_pause_emailed', payload: {}, ts: new Date().toISOString() })
+      const { h, sent } = pauseHandler(db)
+      await handleDigestRun(cron(), h)
+      expect(sent).toHaveLength(1)
+    })
+    it('fails closed: if the events log cannot be read, the account pauses but no email goes', async () => {
+      const db = memoryDb({ users: ['A'] })
+      seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+      const from = db.admin.from
+      db.admin.from = (table) => {
+        const chain = from(table)
+        if (table !== 'events') return chain
+        chain.gte = () => ({ limit: async () => ({ data: null, error: new Error('events unavailable') }) })
+        return chain
+      }
+      const { h, sent } = pauseHandler(db)
+      expect(await (await handleDigestRun(cron(), h)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+      expect(row(db).paused_at).toBeTruthy()
+      expect(sent).toHaveLength(0)
+    })
   })
   it('a pause that loses the row to a new claim records and emails nothing', async () => {
     const db = memoryDb({ users: ['A'] })
