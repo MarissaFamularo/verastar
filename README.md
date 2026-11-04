@@ -2,7 +2,7 @@
 
 **A verifiable evidence digest for clinicians.**
 
-**▶ Demo:** https://youtu.be/RmT7JjTTqeM · **Live:** https://verastar.netlify.app
+**▶ Demo:** https://youtu.be/RmT7JjTTqeM · **Live:** https://verastar.papertrellis.com
 
 *Vera* (truth) + *star* (your north stars): verified evidence, aimed at the concepts
 you steer by.
@@ -121,7 +121,7 @@ the device-local disk-folder handle.
 ## Status
 
 Built during **Built with Claude: Life Sciences** (July 7–13, 2026) and live at
-**[verastar.netlify.app](https://verastar.netlify.app)** — bring your own Anthropic key
+**[verastar.papertrellis.com](https://verastar.papertrellis.com)** — bring your own Anthropic key
 to run it. Design + planning docs:
 
 - [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) — scope, build order, never-cut list, demo script.
