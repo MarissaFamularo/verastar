@@ -770,6 +770,46 @@ describe('unopened digests', () => {
     expect(sent).toHaveLength(1)
     expect(events(db, 'digest_paused')).toHaveLength(1)
   })
+  it('a dead claim cannot block the pause: cleared, paused once, one event, one email (2026-10-31 incident)', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+    // A run took the account three days ago and died without finishing.
+    Object.assign(row(db), { claimed_at: new Date(Date.now() - 3 * 86400 * 1000).toISOString(), claim_token: 'tok-dead' })
+    const { email, sent } = fakeEmail()
+    let runs = 0
+    const h = deps(db, { run: async () => { runs++; return { phase: 'done', papers: 0, read: 0 } } }).deps
+    h.email = email
+    for (let i = 0; i < 5; i++) expect(await (await handleDigestRun(cron(), h)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(runs).toBe(0)
+    expect(row(db)).toMatchObject({ claim_token: null, claimed_at: null })
+    expect(row(db).paused_at).toBeTruthy()
+    expect(events(db, 'digest_paused')).toHaveLength(1)
+    expect(events(db, 'digest_pause_emailed')).toHaveLength(1)
+    expect(sent).toHaveLength(1)
+    // The dead worker, if it ever wakes, has lost the account.
+    expect((await db.admin.rpc('scheduler_kv_write', { p_user_id: 'A', p_token: 'tok-dead', p_collection: 'digests', p_key: 'x', p_value: {}, p_delete: false })).data).toBe(false)
+  })
+  it('a pause that loses the row to a new claim records and emails nothing', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+    Object.assign(row(db), { claimed_at: new Date(Date.now() - 3 * 86400 * 1000).toISOString(), claim_token: 'tok-dead' })
+    // Another tick takes the account between this tick's read and its pause write.
+    const from = db.admin.from
+    db.admin.from = (table) => {
+      const chain = from(table)
+      const update = chain.update
+      // A new object: the handler's copy of the row (a real read) keeps the token it saw.
+      chain.update = (p) => { if (p.paused_at) db.t.digest_schedules[0] = { ...row(db), claim_token: 'tok-new', claimed_at: new Date().toISOString() }; return update(p) }
+      return chain
+    }
+    const { email, sent } = fakeEmail()
+    const h = deps(db).deps
+    h.email = email
+    expect(await (await handleDigestRun(cron(), h)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(row(db)).toMatchObject({ claim_token: 'tok-new', paused_at: null })
+    expect(events(db, 'digest_paused')).toHaveLength(0)
+    expect(sent).toHaveLength(0)
+  })
   it('opening the digest resumes a paused account on the next tick and clears the pause', async () => {
     const db = memoryDb({ users: ['A'] })
     seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1, pausedAt: YESTERDAY, opened: true })

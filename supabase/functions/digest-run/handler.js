@@ -221,7 +221,7 @@ function hourText(h) {
   return `${twelve}:00 ${n < 12 ? 'am' : 'pm'}`
 }
 const DEFAULT_TIMEZONE = 'America/New_York'
-const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, claim_token, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at'
 
 async function recordEvent(admin, userId, type, payload) {
   await admin.from('events').insert({ user_id: userId, type, payload }).then(() => {}, () => {})
@@ -257,11 +257,19 @@ async function trackerFor(email, userId, links) {
   return prepareTracker(links, (link) => email.clickUrl(userId, link))
 }
 
-// The account reached the pause threshold: stamp paused_at once (the row is idle, so the
-// write is fenced on "no claim"), record it, and tell the reader once.
+// The account reached the pause threshold: stamp paused_at once, record it, and tell the
+// reader once. The tick loop only gets here when no live claim holds the row, so the claim
+// it read is either empty or left by a dead run. The write is a compare-and-set on that
+// claim and clears it: a run that took the account since then keeps it, and a dead claim
+// can no longer block the pause. Only the tick whose write landed records and emails;
+// before 2026-11-03 a dead claim made every tick re-send the pause email (one reader got
+// 959 of them).
 async function pauseAccount(admin, email, row, streak, now) {
   if (row.paused_at) return
-  await admin.from('digest_schedules').update({ paused_at: now.toISOString(), updated_at: now.toISOString() }).eq('user_id', row.user_id).is('claim_token', null).is('paused_at', null).then(() => {}, () => {})
+  let q = admin.from('digest_schedules').update({ paused_at: now.toISOString(), claimed_at: null, claim_token: null, updated_at: now.toISOString() }).eq('user_id', row.user_id).is('paused_at', null)
+  q = row.claim_token == null ? q.is('claim_token', null) : q.eq('claim_token', row.claim_token)
+  const { data: won, error } = await q.select('user_id').then((r) => r, () => ({ data: null, error: true }))
+  if (error || !won?.length) return
   await recordEvent(admin, row.user_id, 'digest_paused', { streak })
   await deliver(admin, email, row, {
     build: async ({ unsubscribeUrl }) => {
