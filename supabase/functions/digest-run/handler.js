@@ -257,6 +257,22 @@ async function trackerFor(email, userId, links) {
   return prepareTracker(links, (link) => email.clickUrl(userId, link))
 }
 
+// Hard cap on pause emails, independent of the pause write above: at most one per reader per
+// PAUSE_EMAIL_WINDOW_DAYS, read from the events log. A real second pause cannot come sooner,
+// because the streak needs that many unopened mornings to trip again. Fails closed: if the
+// log cannot be read, no email goes (one missed pause email beats a flood).
+export const PAUSE_EMAIL_WINDOW_DAYS = 7
+async function pauseEmailedRecently(admin, userId, now) {
+  const since = new Date(now.getTime() - PAUSE_EMAIL_WINDOW_DAYS * 86400 * 1000).toISOString()
+  try {
+    const { data, error } = await admin.from('events').select('ts').eq('user_id', userId).eq('type', 'digest_pause_emailed').gte('ts', since).limit(1)
+    if (error) return true
+    return (data?.length ?? 0) > 0
+  } catch {
+    return true
+  }
+}
+
 // The account reached the pause threshold: stamp paused_at once, record it, and tell the
 // reader once. The tick loop only gets here when no live claim holds the row, so the claim
 // it read is either empty or left by a dead run. The write is a compare-and-set on that
@@ -271,6 +287,10 @@ async function pauseAccount(admin, email, row, streak, now) {
   const { data: won, error } = await q.select('user_id').then((r) => r, () => ({ data: null, error: true }))
   if (error || !won?.length) return
   await recordEvent(admin, row.user_id, 'digest_paused', { streak })
+  if (await pauseEmailedRecently(admin, row.user_id, now)) {
+    await recordEvent(admin, row.user_id, 'digest_pause_email_capped', { streak })
+    return
+  }
   await deliver(admin, email, row, {
     build: async ({ unsubscribeUrl }) => {
       const appUrl = email.appUrl || DEFAULT_APP_URL
