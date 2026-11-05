@@ -61,9 +61,10 @@ import { guardedPubmedSearch } from '../_shared/pubmedCircuit.js'
 // digest_schedules.last_attempt_at, and a cron tick considers accounts in the order
 // coalesce(last_attempt_at, 'epoch') ascending, so the account tried most recently waits
 // behind everyone else and a never-tried account goes first. A cron tick also skips an
-// account that has already finished ATTEMPTS_PER_DAY runs this local day, so one account
-// whose run errors every tick cannot occupy the scheduler all morning. A manual run is
-// neither reordered (it names one account) nor capped.
+// account that has already finished ATTEMPTS_PER_DAY runs this local day. A saved,
+// current-day reading/ranking handoff can use a bounded completion allowance; a failed
+// continuation cannot keep retrying past the normal cap. A manual run is neither
+// reordered (it names one account) nor capped.
 
 import { accountActive, localClock, digestGate, requestedTimezone } from '../model/logic.js'
 import { makeGuardedFetch } from '../_shared/spending.js'
@@ -77,13 +78,14 @@ export const BUDGET_MS = 75_000
 // every admitted paid attempt (spend_reserve with the claim token) renews it, and an
 // admitted attempt cannot outlive the provider timeout, which is shorter (timeouts.js).
 export { CLAIM_STALE_SECONDS }
-// Work runs (done, empty, error, held, capped...) one account may make per local day.
-// Upstream deferrals and circuit waits preserve this allowance.
-// A normal digest needs several resumable ticks; this cap still bounds paid/error work.
-// Finished runs one account may make per local day
-// before cron leaves it alone until its next day. A normal digest finishes in two or three
-// ticks; a long one with a fallback read in five or six. A manual run is not counted here.
+// New work and error retries are capped here. Discovery deferrals/waits do not count.
 export const ATTEMPTS_PER_DAY = 12
+// A valid saved handoff may finish beyond the normal cap: at most 20 remaining
+// paper reads plus two ranking passes (the runner's pilot limit and single fallback).
+// Every tick still counts; the absolute ceiling is 34. Tests tie this allowance to
+// PILOT_DIGEST_LIMIT, and all claim, spending and delivery guards still apply.
+const MAX_FINISHING_PAPERS = 20
+export const FINISHING_ATTEMPTS = MAX_FINISHING_PAPERS + 2
 // Consecutive finished digests with papers that went unopened before the scheduler pauses
 // the account. Seven: a reader who has not looked all week is told once and left alone.
 export const PAUSE_AFTER_UNOPENED = 7
@@ -225,7 +227,7 @@ function hourText(h) {
   return `${twelve}:00 ${n < 12 ? 'am' : 'pm'}`
 }
 const DEFAULT_TIMEZONE = 'America/New_York'
-const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, claim_token, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, claim_token, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result'
 
 async function recordEvent(admin, userId, type, payload) {
   await admin.from('events').insert({ user_id: userId, type, payload }).then(() => {}, () => {})
@@ -317,6 +319,33 @@ export function attemptsToday(row, now) {
   return String(row.attempt_day).slice(0, 10) === today ? Number(row.attempts_today) || 0 : 0
 }
 
+// Only continue work already admitted and saved today. The last server-written
+// result must be a successful handoff in the same phase: error/held/capped/waiting
+// results do not earn more retries. A hard ceiling also bounds non-progressing ticks.
+export function mayFinishAtAttemptCap(row, record, now) {
+  if (attemptsToday(row, now) >= ATTEMPTS_PER_DAY + FINISHING_ATTEMPTS) return false
+  const phase = record?.server?.phase
+  if (record?.kind !== 'daily' || record.runBy !== 'scheduler' || !['reading', 'rank'].includes(phase)) return false
+  if (!row?.last_result?.startsWith(`${phase}:`) || record.server.held || record.server.capped || record.server.finishedAt) return false
+  const day = localClock(now, row.timezone).day
+  const sameDay = (value) => {
+    const ms = Date.parse(value)
+    return Number.isFinite(ms) && ms <= now.getTime() && localClock(new Date(ms), row.timezone).day === day
+  }
+  if (!sameDay(record.ranAt) || !sameDay(record.server.startedAt) || !sameDay(row.last_attempt_at)) return false
+  if (Date.parse(row.last_attempt_at) < Date.parse(record.server.startedAt)) return false
+  if (sameDay(row.last_run_at) || row.delivered_day === day) return false
+  const selected = record.selectedIds
+  const processed = record.processedResults
+  if (!Array.isArray(selected) || !selected.length || selected.length > MAX_FINISHING_PAPERS || !Array.isArray(processed) || processed.length > MAX_FINISHING_PAPERS || !Array.isArray(record.candidates)) return false
+  const ids = selected.map((id) => String(id ?? ''))
+  const done = processed.map((r) => String(r?.paper?.id ?? ''))
+  const candidates = new Set(record.candidates.map((p) => String(p?.id ?? '')))
+  if (new Set(ids).size !== ids.length || ids.some((id) => !id || !candidates.has(id))) return false
+  if (new Set(done).size !== done.length || done.some((id) => !id || !ids.includes(id))) return false
+  return phase !== 'rank' || ids.every((id) => done.includes(id))
+}
+
 // Cron's queue: least recently attempted first, never attempted before everyone. Stable, so
 // ties keep the database order. Pure; exported for tests.
 export function orderByAttempt(rows) {
@@ -403,9 +432,11 @@ export async function handleDigestRun(req, deps) {
     if (!accountActive(accountById.get(row.user_id), now)) continue
     if (row.claimed_at && now.getTime() - new Date(row.claimed_at).getTime() < CLAIM_STALE_SECONDS * 1000) { reason = 'already running'; continue }
     if (!manual && row.next_attempt_at && new Date(row.next_attempt_at) > now) { reason = 'retry pending'; continue }
-    if (!manual && attemptsToday(row, now) >= ATTEMPTS_PER_DAY) { reason = 'attempt cap reached'; continue }
+    // Failed/new work remains a cheap skip; only a reported handoff needs its record read.
+    if (!manual && attemptsToday(row, now) >= ATTEMPTS_PER_DAY && !/^(reading|rank):/.test(row.last_result || '')) { reason = 'attempt cap reached'; continue }
     let record
     try { record = await readLatest(admin, row.user_id) } catch { reason = 'storage unavailable'; continue }
+    if (!manual && attemptsToday(row, now) >= ATTEMPTS_PER_DAY && !mayFinishAtAttemptCap(row, record, now)) { reason = 'attempt cap reached'; continue }
     // An unopened digest no longer blocks the next one; it is counted, and the count pauses
     // the account at the threshold. Opening the digest resets the count, so the next tick
     // after that resumes without any other action.
@@ -435,7 +466,7 @@ export async function handleDigestRun(req, deps) {
     // finished between the first read and the claim.
     let fresh
     try {
-      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at').eq('user_id', row.user_id).maybeSingle()
+      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result').eq('user_id', row.user_id).maybeSingle()
       if (error || !again) throw new Error('schedule unavailable')
       fresh = { row: again, record: await readLatest(admin, row.user_id) }
     } catch {
@@ -446,6 +477,7 @@ export async function handleDigestRun(req, deps) {
     }
     const regate = gateFor({ row: fresh.row, record: fresh.record, now, manual, mayRun: true })
     if (!manual && fresh.row.next_attempt_at && new Date(fresh.row.next_attempt_at) > now) { regate.run = false; regate.reason = 'retry pending' }
+    if (!manual && attemptsToday(fresh.row, now) >= ATTEMPTS_PER_DAY && !mayFinishAtAttemptCap(fresh.row, fresh.record, now)) { regate.run = false; regate.reason = 'attempt cap reached' }
     if (!regate.run) {
       await admin.rpc('digest_claim_release', { p_user_id: row.user_id, p_token: token }).then(() => {}, () => {})
       reason = regate.reason

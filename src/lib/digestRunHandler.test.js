@@ -6,13 +6,14 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import Anthropic from '@anthropic-ai/sdk'
-import { handleDigestRun, fencedStore, orderByAttempt, attemptsToday, ATTEMPTS_PER_DAY, PAUSE_EMAIL_WINDOW_DAYS } from '../../supabase/functions/digest-run/handler.js'
+import { handleDigestRun, fencedStore, orderByAttempt, attemptsToday, ATTEMPTS_PER_DAY, FINISHING_ATTEMPTS, mayFinishAtAttemptCap, PAUSE_EMAIL_WINDOW_DAYS } from '../../supabase/functions/digest-run/handler.js'
 import { checkPaidRequest, requestFingerprint } from '../../supabase/functions/_shared/requestPolicy.js'
 import { currentServerScope, installServerScope, serverRunUnresolved } from './serverScope.js'
 import { store, getProfile } from './store.js'
 import { getClient, MODELS, accessMode } from './anthropic.js'
 import { storeCachedExtraction } from '../pipeline/evidenceCache.js'
 import { makeSupabaseStore } from './storeSupabase.js'
+import { PILOT_DIGEST_LIMIT } from '../pipeline/digestLimit.js'
 import { fakeProvider } from './spendingFakes.js'
 import { makeRpcLedger } from '../../supabase/functions/_shared/spending.js'
 
@@ -1109,4 +1110,171 @@ it('resumes after PubMed returns and delivers exactly once across later ticks', 
   expect(sent).toHaveLength(1)
   expect(row(db).attempts_today).toBe(1)
   expect(events(db, 'digest_emailed')).toHaveLength(1)
+})
+
+
+// Production shape: paid reading succeeded on tick 12 after eleven earlier errors,
+// persisted a rank handoff, but the next tick was rejected before loading that record.
+function seedCappedHandoff(db, { phase = 'rank', attempts = ATTEMPTS_PER_DAY, count = 3 } = {}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const at = new Date(Date.now() - 1000).toISOString()
+  const candidates = Array.from({ length: count }, (_, i) => ({ id: `p${i}`, pmid: `p${i}`, title: `Paper ${i}` }))
+  const processedResults = candidates.map((paper) => ({ paper }))
+  const record = { kind: 'daily', runBy: 'scheduler', ranAt: at, server: { phase, startedAt: at }, candidates, selectedIds: candidates.map((p) => p.id), processedResults, results: processedResults, triaged: {}, searchContext: { counts: [{}], failed: [], days: 3 } }
+  db.t.kv.push({ user_id: 'A', collection: 'digests', key: 'daily:latest', value: record })
+  Object.assign(row(db), { attempt_day: today, attempts_today: attempts, last_attempt_at: at, last_result: `${phase}: ${count} papers, read ${count}; will resume.` })
+  return record
+}
+
+describe('bounded completion after the daily attempt cap', () => {
+  it('keeps the completion ceiling aligned with the pilot paper limit and two rank passes', () => {
+    expect(FINISHING_ATTEMPTS).toBe(PILOT_DIGEST_LIMIT + 2)
+  })
+  it.each([3, 6])('completes an already-read %i-paper digest and emails it once without searching again', async (count) => {
+    const db = memoryDb({ users: ['A'] })
+    seedCappedHandoff(db, { count })
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: async () => {
+      await getClient().messages.create({ model: MODELS.fast, max_tokens: 16, messages: [{ role: 'user', content: 'rank saved papers' }] })
+      return { ...await doneRun(count)(), searchComplete: true, recoveryEvidence: true }
+    } })
+    h.deps.email = email
+    expect(await (await handleDigestRun(cron(), h.deps)).json()).toMatchObject({ phase: 'done', claimLost: false, papers: count })
+    expect(row(db).attempts_today).toBe(ATTEMPTS_PER_DAY + 1)
+    for (let i = 0; i < 3; i++) expect((await (await handleDigestRun(cron(), h.deps)).json()).ran).toBe(false)
+    expect(sent).toHaveLength(1)
+    expect(events(db, 'digest_emailed')).toHaveLength(1)
+    expect(h.provider.sent).toHaveLength(1)
+    expect(db.rpcCalls).not.toContain('pubmed_search_claim')
+  })
+  it('still admits a valid handoff on attempt 11, then finishes it on attempt 13', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedCappedHandoff(db, { attempts: ATTEMPTS_PER_DAY - 1, phase: 'reading' })
+    const h = deps(db, { run: async () => {
+      const record = await store.get('digests', 'daily:latest')
+      if (record.server.phase === 'reading') {
+        await store.put('digests', 'daily:latest', { ...record, server: { ...record.server, phase: 'rank' } })
+        return { phase: 'rank', papers: 3, read: 3 }
+      }
+      return doneRun(3)()
+    } }).deps
+    expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ phase: 'rank' })
+    expect(row(db).attempts_today).toBe(12)
+    expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ phase: 'done' })
+    expect(row(db).attempts_today).toBe(13)
+  })
+  it('stops after one failed continuation instead of retrying ranking indefinitely', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedCappedHandoff(db)
+    let runs = 0
+    const h = deps(db, { run: async () => { runs++; throw new Error('definitive ranking failure') } }).deps
+    expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ phase: 'error' })
+    for (let i = 0; i < 3; i++) expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ ran: false, reason: 'attempt cap reached' })
+    expect(runs).toBe(1)
+    expect(row(db).attempts_today).toBe(13)
+  })
+  it('retains the spending hold before any continuation dispatch', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedCappedHandoff(db)
+    const original = db.admin.rpc
+    db.admin.rpc = (name, args) => name === 'spend_status' ? Promise.resolve({ data: { allowed: false, reason: 'unresolved_liability' } }) : original(name, args)
+    const h = deps(db, { run: async () => { throw new Error('must not run') } })
+    expect(await (await handleDigestRun(cron(), h.deps)).json()).toMatchObject({ ran: false, reason: 'spending stopped: unresolved_liability' })
+    expect(row(db).attempts_today).toBe(12)
+    expect(h.provider.sent).toHaveLength(0)
+  })
+  it('allows saved fallback reading then ranking within the completion allowance', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const record = seedCappedHandoff(db, { phase: 'reading' })
+    record.server.fallbackDone = true
+    record.processedResults.pop()
+    const h = deps(db, { run: async () => {
+      const saved = await store.get('digests', 'daily:latest')
+      if (saved.server.phase === 'reading') {
+        saved.processedResults = saved.candidates.map((paper) => ({ paper }))
+        await store.put('digests', 'daily:latest', { ...saved, server: { ...saved.server, phase: 'rank' } })
+        return { phase: 'rank', papers: 3, read: 1 }
+      }
+      return doneRun(3)()
+    } }).deps
+    expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ phase: 'rank' })
+    expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ phase: 'done' })
+    expect(row(db).attempts_today).toBe(14)
+  })
+  it('enforces an absolute ceiling even for a runner repeatedly reporting the same phase', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedCappedHandoff(db)
+    let calls = 0
+    const h = deps(db, { run: async () => { calls++; return { phase: 'rank', papers: 3 } } }).deps
+    for (let i = 0; i < FINISHING_ATTEMPTS; i++) expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(true)
+    for (let i = 0; i < 3; i++) expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ ran: false, reason: 'attempt cap reached' })
+    expect(calls).toBe(FINISHING_ATTEMPTS)
+    expect(row(db).attempts_today).toBe(ATTEMPTS_PER_DAY + FINISHING_ATTEMPTS)
+  })
+  it('checks the cap and handoff again after claiming so a stale queue read cannot admit work', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedCappedHandoff(db)
+    const original = db.admin.rpc
+    db.admin.rpc = async (name, args) => {
+      const result = await original(name, args)
+      if (name === 'digest_claim') row(db).attempts_today = ATTEMPTS_PER_DAY + FINISHING_ATTEMPTS
+      return result
+    }
+    expect(await (await handleDigestRun(cron(), deps(db, { run: async () => { throw new Error('must not run') } }).deps)).json()).toMatchObject({ ran: false, reason: 'attempt cap reached' })
+    expect(db.rpcCalls).toContain('digest_claim_release')
+    expect(db.rpcCalls).not.toContain('digest_claim_finish')
+    expect(row(db).claim_token).toBeNull()
+  })
+  it('overlapping ticks cannot both spend the last continuation slot', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedCappedHandoff(db, { attempts: ATTEMPTS_PER_DAY + FINISHING_ATTEMPTS - 1 })
+    let calls = 0
+    const h = deps(db, { run: async () => { calls++; await sleep(15); return { phase: 'rank', papers: 3 } } }).deps
+    const results = await Promise.all([handleDigestRun(cron(), h), handleDigestRun(cron(), h)])
+    expect((await Promise.all(results.map((r) => r.json()))).filter((r) => r.ran)).toHaveLength(1)
+    expect(calls).toBe(1)
+    expect(row(db).attempts_today).toBe(ATTEMPTS_PER_DAY + FINISHING_ATTEMPTS)
+  })
+  it.each([
+    ['old record', (r) => { r.ranAt = YESTERDAY }],
+    ['old start', (r) => { r.server.startedAt = YESTERDAY }],
+    ['missing timestamp', (r) => { delete r.ranAt }],
+    ['future record', (r) => { r.ranAt = new Date(Date.now() + 3600000).toISOString() }],
+    ['new search', (r) => { r.server.phase = 'search' }],
+    ['finished record', (r) => { r.server.phase = 'done' }],
+    ['held record', (r) => { r.server.held = { reason: 'unresolved_liability' } }],
+    ['spending capped', (r) => { r.server.capped = true }],
+    ['user run', (r) => { r.runBy = 'user' }],
+    ['missing selected IDs', (r) => { delete r.selectedIds }],
+    ['unknown selected ID', (r) => { r.selectedIds.push('unknown') }],
+    ['unread rank selection', (r) => { r.processedResults.pop() }],
+    ['duplicate processed ID', (r) => { r.processedResults.push(r.processedResults[0]) }],
+    ['oversized record', (r) => { r.selectedIds = Array.from({ length: 21 }, (_, i) => `p${i}`) }],
+  ])('does not bypass the cap for %s', async (_label, change) => {
+    const db = memoryDb({ users: ['A'] })
+    change(seedCappedHandoff(db))
+    expect(await (await handleDigestRun(cron(), deps(db, { run: async () => { throw new Error('must not run') } }).deps)).json()).toMatchObject({ ran: false, reason: 'attempt cap reached' })
+    expect(row(db).attempts_today).toBe(12)
+    expect(db.rpcCalls).not.toContain('digest_claim')
+  })
+  it.each(['error:', 'held:', 'capped:', 'waiting:', 'done:'])('requires a successful handoff instead of %s', (last_result) => {
+    const db = memoryDb({ users: ['A'] })
+    const record = seedCappedHandoff(db)
+    row(db).last_result = last_result
+    expect(mayFinishAtAttemptCap(row(db), record, new Date())).toBe(false)
+  })
+  it('uses the account local day and refuses an already-delivered day', () => {
+    const db = memoryDb({ users: ['A'] })
+    const record = seedCappedHandoff(db)
+    const at = '2026-11-05T00:30:00Z'
+    Object.assign(row(db), { timezone: 'America/New_York', attempt_day: '2026-11-04', last_attempt_at: at })
+    record.ranAt = at; record.server.startedAt = at
+    const now = new Date('2026-11-05T01:00:00Z')
+    expect(mayFinishAtAttemptCap(row(db), record, now)).toBe(true)
+    row(db).delivered_day = '2026-11-04'
+    expect(mayFinishAtAttemptCap(row(db), record, now)).toBe(false)
+    row(db).delivered_day = null
+    row(db).last_run_at = at
+    expect(mayFinishAtAttemptCap(row(db), record, now)).toBe(false)
+  })
 })
