@@ -250,7 +250,7 @@ Order matters only in that the handler reads two columns the migration adds.
    server, from the commit being released.
 2. **Resend is already set up.** The domain is verified, the account is on the Pro plan,
    and the credentials are the `SMTP_*` function secrets. Nothing to create. Digests go
-   out as "Marissa at Verastar" from the SMTP_FROM address, with replies to
+   out as "Verastar" from the SMTP_FROM address, with replies to
    statupfordocs@gmail.com (both in `_shared/digestEmail.js`).
 3. **Secrets** on the project's Edge Functions: `DIGEST_UNSUBSCRIBE_SECRET` (a long random
    string, `openssl rand -hex 32`) is the one new secret. Overrides, none needed:

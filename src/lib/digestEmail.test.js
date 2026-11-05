@@ -200,9 +200,10 @@ describe('opting out', () => {
 })
 
 describe('digestSender', () => {
-  it('puts Marissa on the project sender, keeps the address, leaves junk alone', () => {
-    expect(digestSender('Verastar <no-reply@mail.verastar.papertrellis.com>')).toBe('Marissa at Verastar <no-reply@mail.verastar.papertrellis.com>')
-    expect(digestSender('no-reply@mail.verastar.papertrellis.com')).toBe('Marissa at Verastar <no-reply@mail.verastar.papertrellis.com>')
+  it('uses Verastar on the project sender, keeps the address, leaves junk alone', () => {
+    expect(digestSender('Verastar <no-reply@mail.verastar.papertrellis.com>')).toBe('Verastar <no-reply@mail.verastar.papertrellis.com>')
+    expect(digestSender('no-reply@mail.verastar.papertrellis.com')).toBe('Verastar <no-reply@mail.verastar.papertrellis.com>')
+    expect(digestSender('Marissa at Verastar <no-reply@mail.verastar.papertrellis.com>')).toBe('Verastar <no-reply@mail.verastar.papertrellis.com>')
     expect(digestSender('')).toBeUndefined()
     expect(digestSender(undefined)).toBeUndefined()
     expect(digestSender('not an address')).toBe('not an address')

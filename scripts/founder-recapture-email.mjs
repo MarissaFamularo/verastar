@@ -16,7 +16,7 @@
 //   RESEND_API_KEY=<the project's SMTP_PASSWORD secret> SMTP_FROM=<the SMTP_FROM secret> \
 //   node scripts/founder-recapture-email.mjs [options]
 //
-// Sends as "Marissa at Verastar" from the SMTP_FROM address with replies to the mailbox in
+// Sends as "Verastar" from the SMTP_FROM address with replies to the mailbox in
 // digestEmail.js; DIGEST_EMAIL_FROM and DIGEST_EMAIL_REPLY_TO override.
 //
 //   --send                 actually send (default: dry run)
