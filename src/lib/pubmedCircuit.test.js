@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { createClient } from '@supabase/supabase-js'
 import { guardedPubmedSearch } from '../../supabase/functions/_shared/pubmedCircuit.js'
 import { observeDigest } from '../../supabase/functions/_shared/observeSignup.js'
 
@@ -52,4 +53,17 @@ describe('shared PubMed circuit boundary', () => {
     await observeDigest(db, { userId: 'A', phase: 'done', searchComplete: true, recoveryEvidence: true, failed: true })
     expect(db.rpc).toHaveBeenLastCalledWith('beta_digest_observe', { p_user_id: 'A', p_outcome: 'failed' })
   })
+})
+
+it('accepts the real Supabase RPC thenable, which has no catch method', async () => {
+  const fetch = vi.fn(async (url) => Response.json(String(url).endsWith('/pubmed_search_claim') ? 'lease-token' : true))
+  const admin = createClient('https://test.supabase.co', 'test-key', {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { fetch },
+  })
+  expect(admin.rpc('pubmed_search_claim').catch).toBeUndefined()
+  const result = { failed: [], counts: [{}], candidates: [] }
+  await expect(guardedPubmedSearch(admin)(async () => result)).resolves.toBe(result)
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(fetch.mock.calls[1][0]).toContain('pubmed_search_finish')
 })

@@ -3,7 +3,7 @@
 const waiting = () => Object.assign(new Error('PubMed search is waiting for its next retry.'), { code: 'PUBMED_WAITING' })
 export function guardedPubmedSearch(admin) {
   return async (work) => {
-    const { data: token, error } = await admin.rpc('pubmed_search_claim').catch(() => ({ error: true }))
+    const { data: token, error } = await Promise.resolve(admin.rpc('pubmed_search_claim')).catch(() => ({ error: true }))
     if (error) throw waiting() // fail closed: no upstream traffic when admission is unknown
     if (!token) throw waiting()
     let outcome = 'cancelled'
@@ -21,7 +21,7 @@ export function guardedPubmedSearch(admin) {
       }
       failure = err
     }
-    const { data, error: finishError } = await admin.rpc('pubmed_search_finish', { p_token: token, p_outcome: outcome, p_retry_after_seconds: retryAfter }).catch(() => ({ error: true }))
+    const { data, error: finishError } = await Promise.resolve(admin.rpc('pubmed_search_finish', { p_token: token, p_outcome: outcome, p_retry_after_seconds: retryAfter })).catch(() => ({ error: true }))
     if (finishError || data !== true) throw waiting() // stale owners cannot publish success
     if (failure) throw failure
     return result
