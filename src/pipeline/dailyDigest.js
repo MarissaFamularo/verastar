@@ -39,7 +39,7 @@ import { isRelationshipValidated } from '../lib/evidenceVersion.js'
 import { fmtNum } from '../lib/format.js'
 import { findPrimary, verificationCorpus } from './primaryResult.js'
 import { isCapReached } from '../lib/anthropic.js'
-import { serverRunUnresolved } from '../lib/serverScope.js'
+import { currentServerScope, serverRunUnresolved } from '../lib/serverScope.js'
 
 // Returned (and stored on the record as server.held) when a paid attempt of this run was
 // dispatched and ended without a confirmed cost. The run stops where it is: the step is not
@@ -122,13 +122,15 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
   if (state.server.phase === 'search') {
     const searchDays = days ?? profileSearchDays(profile)
     const [ledger, saved] = await Promise.all([store.get('seen', SEEN_KEY), store.all('papers')])
-    const search = await searchCandidates({
+    const searchWork = () => searchCandidates({
+      strict: true,
       topics: profileTopics(profile),
       northStars: profile?.northStars ?? [],
       perTopic: profileTopicCap(profile),
       days: searchDays,
       skipIds: skipSet(seenIds(ledger), saved || []),
     })
+    const search = await (currentServerScope()?.runSearch ? currentServerScope().runSearch(searchWork) : searchWork())
     const allTopicsSearched = search.failed.length === 0
     log(`search: ${search.candidates.length} candidates, ${search.failed.length} failed topics`)
     // Nothing found BECAUSE searches failed is not an empty day. Persist nothing (the last
@@ -140,7 +142,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
     if (!search.candidates.length) {
       if (allTopicsSearched) await saveSuccessfulScan({ windowDays: search.days }).catch(() => {})
       await persist({ searchContext: { counts: search.counts, failed: search.failed, days: search.days }, server: { ...state.server, phase: 'done', finishedAt: new Date(now()).toISOString(), empty: true } })
-      return { phase: 'empty', papers: 0, read: 0, note: 'Nothing new in the window.' }
+      return { phase: 'empty', searchComplete: allTopicsSearched, papers: 0, read: 0, note: 'Nothing new in the window.' }
     }
 
     const projects = await digestProjects(profile)
@@ -174,7 +176,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
     })
     if (!chosenIds.size) {
       // Nothing cleared the bar; nothing is stamped seen (SpineCheck does the same).
-      return { phase: 'empty', papers: 0, read: 0, note: 'Nothing cleared the bar.' }
+      return { phase: 'empty', searchComplete: allTopicsSearched, papers: 0, read: 0, note: 'Nothing cleared the bar.' }
     }
   }
 
@@ -292,7 +294,7 @@ export async function runDailyDigest({ budgetMs = 100_000, now = () => Date.now(
       }
     }
     log(`done: ${visible.length} papers in the digest`)
-    return { phase: 'done', papers: visible.length, read, note: '' }
+    return { phase: 'done', papers: visible.length, read, note: '', searchComplete: state.searchContext?.failed?.length === 0, recoveryEvidence: visible.length > 0 && visible.every((r) => !r.error && !r.retracted) && state.searchContext?.failed?.length === 0 }
   }
 
   return { phase: state.server.phase, papers: state.results.length, read, note: '' }

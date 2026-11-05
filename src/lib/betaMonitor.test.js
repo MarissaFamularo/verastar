@@ -35,8 +35,8 @@ describe('deterministic beta monitoring', () => {
   })
   it('observes only terminal digest evidence and tolerates unavailable instrumentation', async () => {
     const rpc=vi.fn().mockRejectedValue(new Error('down'))
-    await observeDigest({rpc},{finished:false,failed:false}); expect(rpc).not.toHaveBeenCalled()
-    await observeDigest({rpc},{finished:true,failed:false}); expect(rpc).toHaveBeenCalledWith('beta_monitor_record',{p_check:'digest',p_ok:true,p_code:'ok'})
+    await observeDigest({rpc},{userId:'A',phase:'reading',failed:false}); expect(rpc).not.toHaveBeenCalled()
+    await observeDigest({rpc},{userId:'A',phase:'done',searchComplete:true,recoveryEvidence:true,failed:false}); expect(rpc).toHaveBeenCalledWith('beta_digest_observe',{p_user_id:'A',p_outcome:'done'})
     await expect(observeSignup({rpc},503)).resolves.toBeUndefined()
   })
 })

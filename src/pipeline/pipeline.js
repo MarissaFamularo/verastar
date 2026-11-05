@@ -131,6 +131,7 @@ export async function searchCandidates({
   days,
   paceMs,
   skipIds,
+  strict = false,
 } = {}) {
   const plan = profileTopics({ topics, northStars })
   // Resolve stored mappings against the live north-star list before any candidate reaches
@@ -149,9 +150,10 @@ export async function searchCandidates({
     try {
       // Compiled [tiab] phrases, not the raw OR string. Untagged text is what let PubMed
       // split concepts and explode MeSH into other specialties.
-      const pmids = await searchPubmed(compilePubmedQuery(topic.query), { retmax, days: windowDays })
+      const pmids = await searchPubmed(compilePubmedQuery(topic.query), { retmax, days: windowDays, strict })
       searched.push({ label: topic.label, query: topic.query, pmids, retmax })
     } catch (err) {
+      if (strict) throw err
       console.warn(`PubMed search failed for topic "${topic.label}":`, err.message)
       searched.push({ label: topic.label, error: err.message })
     }
@@ -170,8 +172,10 @@ export async function searchCandidates({
   // Titles and abstracts are the relevance gate. A missing abstract is not evidence against
   // a specific term: the paper stays and scoring decides. A broad title-only word can still
   // be rejected from the title alone.
-  const cites = union.length ? await fetchCitations(union) : []
-  const abstracts = union.length ? await fetchAbstractsByPmid(union).catch(() => ({})) : {}
+  if (strict && union.length && gap > 0) await sleep(gap)
+  const cites = union.length ? await fetchCitations(union, { strict }) : []
+  if (strict && union.length && gap > 0) await sleep(gap)
+  const abstracts = union.length ? await fetchAbstractsByPmid(union, { strict }).catch((err) => { if (strict) throw err; return {} }) : {}
   const citeById = new Map(cites.map((cite) => [String(cite.pmid), cite]))
 
   const results = searched.map((row) => {

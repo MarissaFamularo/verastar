@@ -62,6 +62,30 @@ async function getText(url) {
   })
 }
 
+export function pubmedUnavailable(retryAfterSeconds = 0) {
+  return Object.assign(new Error('PubMed is temporarily unavailable; the digest will retry later.'), {
+    code: 'PUBMED_UNAVAILABLE', retryAfterSeconds,
+  })
+}
+
+// Scheduled discovery makes one bounded request. Persistent backoff belongs to the
+// database circuit, not to loops in each account. Never put URLs/API keys in errors.
+export async function pubmedRequest(url, format = 'json') {
+  let res
+  try { res = await fetch(url, { signal: AbortSignal.timeout(10_000) }) }
+  catch { throw pubmedUnavailable() }
+  if (!res.ok) {
+    if (res.status === 429 || res.status >= 500 || res.status === 408) {
+      const header = res.headers.get('retry-after')
+      const seconds = /^\d+$/.test(header || '') ? Number(header) : (Date.parse(header) - Date.now()) / 1000
+      throw pubmedUnavailable(Number.isFinite(seconds) ? Math.max(0, seconds) : 0)
+    }
+    throw new Error(`PubMed request rejected (HTTP ${res.status}).`)
+  }
+  try { return await (format === 'json' ? res.json() : res.text()) }
+  catch { throw pubmedUnavailable() }
+}
+
 async function getJson(url) {
   return withRetry(async () => {
     const res = await fetch(url)
@@ -97,10 +121,11 @@ const paceBatch = () => new Promise((resolve) => setTimeout(resolve, searchPaceM
 // Search PubMed, return an array of PMIDs (strings). `days` restricts to records that
 // entered PubMed in that window (see DEFAULT_DATETYPE), sorted newest-first. `datetype` is
 // an explicit option so a caller that genuinely wants publication dates has to say so.
-export async function searchPubmed(term, { retmax = 20, days, datetype = DEFAULT_DATETYPE } = {}) {
+export async function searchPubmed(term, { retmax = 20, days, datetype = DEFAULT_DATETYPE, strict = false } = {}) {
   let url = `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&sort=date&retmax=${retmax}&term=${encodeURIComponent(term)}`
   if (days) url += `&reldate=${days}&datetype=${encodeURIComponent(datetype)}`
-  const data = await getJson(withKey(url))
+  const data = await (strict ? pubmedRequest(withKey(url)) : getJson(withKey(url)))
+  if (strict && (data?.error || data?.esearchresult?.ERROR || !Array.isArray(data?.esearchresult?.idlist) || data.esearchresult.idlist.some((id) => !/^\d+$/.test(String(id))))) throw pubmedUnavailable()
   return data?.esearchresult?.idlist ?? []
 }
 
@@ -176,7 +201,7 @@ export async function fetchAbstracts(pmids) {
 // reliably machine-separable. Selection needs to put the right abstract beside each title,
 // so it uses the XML representation and returns a PMID -> abstract object. A metadata-only
 // selection is still useful during an NCBI hiccup, hence the intentionally quiet fallback.
-export async function fetchAbstractsByPmid(pmids) {
+export async function fetchAbstractsByPmid(pmids, { strict = false } = {}) {
   const ids = [...new Set((Array.isArray(pmids) ? pmids : [pmids]).filter(Boolean).map(String))]
   if (!ids.length) return {}
   const out = {}
@@ -185,9 +210,10 @@ export async function fetchAbstractsByPmid(pmids) {
     if (i > 0) await paceBatch()
     try {
       const url = withKey(`${EUTILS}/efetch.fcgi?db=pubmed&id=${batches[i].join(',')}&retmode=xml`)
-      const xml = await getText(url)
+      const xml = await (strict ? pubmedRequest(url, 'text') : getText(url))
       const doc = new DOMParser().parseFromString(xml, 'text/xml')
-      for (const article of doc.querySelectorAll('PubmedArticle')) {
+      if (strict && (!doc.querySelector('PubmedArticleSet') || doc.querySelector('ERROR, parsererror'))) throw pubmedUnavailable()
+      for (const article of doc.querySelectorAll('PubmedArticle, PubmedBookArticle')) {
         const pmid = nodeText(article.querySelector('PMID'))
         if (!pmid) continue
         const sections = Array.from(article.querySelectorAll('Abstract AbstractText'))
@@ -199,7 +225,9 @@ export async function fetchAbstractsByPmid(pmids) {
           .filter(Boolean)
         out[pmid] = sections.join('\n')
       }
-    } catch {
+      if (strict && batches[i].some((id) => !(id in out))) throw pubmedUnavailable()
+    } catch (err) {
+      if (strict) throw err
       // One bad batch degrades to metadata-only scoring for those ids; other batches still
       // carry abstracts and the entire scan never fails because of an NCBI hiccup.
     }
@@ -253,8 +281,8 @@ export async function fetchCitation(pmid) {
 // Batched citation metadata for many PMIDs in ONE esummary call — the cheap fuel for the
 // selection funnel (title · journal · year · publication types) before any LLM extraction.
 // Returns [{ pmid, title, journal, year, author, pubtypes, url }] in the requested order,
-// skipping ids PubMed couldn't resolve. Never throws past an empty array.
-export async function fetchCitations(pmids) {
+// skipping ids PubMed couldn't resolve by default. Scheduled strict mode fails closed.
+export async function fetchCitations(pmids, { strict = false } = {}) {
   const ids = (Array.isArray(pmids) ? pmids : [pmids]).map(String)
   if (!ids.length) return []
   const byId = new Map()
@@ -262,13 +290,16 @@ export async function fetchCitations(pmids) {
   for (let i = 0; i < batches.length; i++) {
     if (i > 0) await paceBatch()
     try {
-      const data = await getJson(
-        withKey(`${EUTILS}/esummary.fcgi?db=pubmed&id=${batches[i].join(',')}&retmode=json`),
-      )
+      const url = withKey(`${EUTILS}/esummary.fcgi?db=pubmed&id=${batches[i].join(',')}&retmode=json`)
+      const data = await (strict ? pubmedRequest(url) : getJson(url))
+      if (strict && (!data?.result || data.error)) throw pubmedUnavailable()
       const result = data?.result || {}
       for (const pmid of batches[i]) {
         const rec = result[pmid]
-        if (!rec || rec.error || !rec.title) continue
+        if (!rec || rec.error || !rec.title) {
+          if (strict) throw pubmedUnavailable()
+          continue
+        }
         const authors = rec.authors || []
         const first = authors[0]?.name || ''
         const author = authors.length > 1 ? `${first} et al.` : first
@@ -284,7 +315,8 @@ export async function fetchCitations(pmids) {
           retracted: hasRetractedPublicationType(pubtypes),
         })
       }
-    } catch {
+    } catch (err) {
+      if (strict) throw err
       // Keep successful batches; unresolved ids simply do not enter paid scoring.
     }
   }
