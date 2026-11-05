@@ -1,4 +1,5 @@
 import { observeDigest } from '../_shared/observeSignup.js'
+import { guardedPubmedSearch } from '../_shared/pubmedCircuit.js'
 // supabase/functions/digest-run/handler.js — the scheduled morning digest, minus the runtime.
 //
 // index.ts binds this to Deno.serve, Supabase, Anthropic and AsyncLocalStorage; vitest binds
@@ -76,7 +77,10 @@ export const BUDGET_MS = 75_000
 // every admitted paid attempt (spend_reserve with the claim token) renews it, and an
 // admitted attempt cannot outlive the provider timeout, which is shorter (timeouts.js).
 export { CLAIM_STALE_SECONDS }
-// Finished runs (done, empty, error, held, capped...) one account may make per local day
+// Work runs (done, empty, error, held, capped...) one account may make per local day.
+// Upstream deferrals and circuit waits preserve this allowance.
+// A normal digest needs several resumable ticks; this cap still bounds paid/error work.
+// Finished runs one account may make per local day
 // before cron leaves it alone until its next day. A normal digest finishes in two or three
 // ticks; a long one with a fallback read in five or six. A manual run is not counted here.
 export const ATTEMPTS_PER_DAY = 12
@@ -221,7 +225,7 @@ function hourText(h) {
   return `${twelve}:00 ${n < 12 ? 'am' : 'pm'}`
 }
 const DEFAULT_TIMEZONE = 'America/New_York'
-const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, claim_token, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, claim_token, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at'
 
 async function recordEvent(admin, userId, type, payload) {
   await admin.from('events').insert({ user_id: userId, type, payload }).then(() => {}, () => {})
@@ -398,6 +402,7 @@ export async function handleDigestRun(req, deps) {
   for (const row of rows) {
     if (!accountActive(accountById.get(row.user_id), now)) continue
     if (row.claimed_at && now.getTime() - new Date(row.claimed_at).getTime() < CLAIM_STALE_SECONDS * 1000) { reason = 'already running'; continue }
+    if (!manual && row.next_attempt_at && new Date(row.next_attempt_at) > now) { reason = 'retry pending'; continue }
     if (!manual && attemptsToday(row, now) >= ATTEMPTS_PER_DAY) { reason = 'attempt cap reached'; continue }
     let record
     try { record = await readLatest(admin, row.user_id) } catch { reason = 'storage unavailable'; continue }
@@ -430,7 +435,7 @@ export async function handleDigestRun(req, deps) {
     // finished between the first read and the claim.
     let fresh
     try {
-      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, unopened_streak, paused_at, email_digest, delivered_day, engaged_at').eq('user_id', row.user_id).maybeSingle()
+      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at').eq('user_id', row.user_id).maybeSingle()
       if (error || !again) throw new Error('schedule unavailable')
       fresh = { row: again, record: await readLatest(admin, row.user_id) }
     } catch {
@@ -440,6 +445,7 @@ export async function handleDigestRun(req, deps) {
       continue
     }
     const regate = gateFor({ row: fresh.row, record: fresh.record, now, manual, mayRun: true })
+    if (!manual && fresh.row.next_attempt_at && new Date(fresh.row.next_attempt_at) > now) { regate.run = false; regate.reason = 'retry pending' }
     if (!regate.run) {
       await admin.rpc('digest_claim_release', { p_user_id: row.user_id, p_token: token }).then(() => {}, () => {})
       reason = regate.reason
@@ -469,6 +475,7 @@ export async function handleDigestRun(req, deps) {
   const scope = {
     userId,
     run,
+    runSearch: guardedPubmedSearch(admin),
     store: fencedStore(app.makeSupabaseStore({ client: admin, userId }), { admin, userId, token: picked.token }),
     client: deps.makeClient(guarded.fetch),
     cache: { client: admin, userId, provenance: deps.provenance || null },
@@ -479,7 +486,7 @@ export async function handleDigestRun(req, deps) {
   try {
     result = await deps.runInScope(scope, () => app.runDailyDigest({ budgetMs: BUDGET_MS, days, log: (line) => log.push(line) }))
   } catch (err) {
-    result = { phase: 'error', note: err?.message || String(err) }
+    result = { phase: err?.code === 'PUBMED_UNAVAILABLE' ? 'deferred' : err?.code === 'PUBMED_WAITING' ? 'waiting' : 'error', note: err?.message || String(err) }
   }
   // An unresolved attempt always reports as held unless the digest genuinely finished: a run that
   // threw after it (a failed save, an unexpected error) is still stopped by the database, and
@@ -488,14 +495,20 @@ export async function handleDigestRun(req, deps) {
     result = { ...result, phase: 'held', note: `${HELD_NOTE}${result.note ? ` (${result.note})` : ''}` }
   }
 
+  // Rotate fairness even when admission is blocked: other accounts may have saved
+  // reading/ranking work that can progress without a new discovery scan.
+  if (result.phase === 'waiting') {
+    const released = await admin.rpc('digest_claim_defer', { p_user_id: userId, p_token: picked.token, p_result: 'waiting: PubMed retry pending' })
+    return json(released.error ? 503 : 200, { ran: false, reason: 'PubMed retry pending', claimLost: released.error != null || released.data !== true })
+  }
   const finished = result.phase === 'done' || result.phase === 'empty'
   const summary = `${result.phase}: ${result.papers ?? 0} papers, read ${result.read ?? 0}${result.note ? `; ${result.note}` : ''}`
-  const { data: stillOwner, error: finishError } = await admin.rpc('digest_claim_finish', { p_user_id: userId, p_token: picked.token, p_finished: finished, p_result: summary })
+  const { data: stillOwner, error: finishError } = await admin.rpc(result.phase === 'deferred' ? 'digest_claim_defer' : 'digest_claim_finish', { p_user_id: userId, p_token: picked.token, ...(result.phase === 'deferred' ? {} : { p_finished: finished }), p_result: summary })
   const claimLost = !!finishError || stillOwner !== true || guarded.state.halted === 'claim_lost'
   const spend = { attempts: guarded.state.attempts, dispatched: guarded.state.dispatched, halted: guarded.state.halted, unresolved: run.unresolved, outcomes }
   await admin.from('events').insert({ user_id: userId, type: 'digest_scheduled_run', payload: { phase: result.phase, papers: result.papers ?? 0, read: result.read ?? 0, manual, claimLost, spend } }).then(() => {}, () => {})
 
-  await observeDigest(admin, { finished, failed: result.phase === 'error' || result.phase === 'held' || claimLost })
+  await observeDigest(admin, { userId, phase: result.phase, searchComplete: result.searchComplete === true, recoveryEvidence: result.recoveryEvidence === true, failed: (result.phase === 'done' && result.papers > 0 && result.recoveryEvidence !== true) || result.phase === 'error' || result.phase === 'held' || result.phase === 'deferred' || claimLost })
 
   // A build that finished at or after the reader's hour is delivered now rather than on the
   // next tick. One that finished early waits for the hour. A run that lost its claim may

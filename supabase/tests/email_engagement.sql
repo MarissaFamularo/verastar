@@ -3,6 +3,7 @@
 -- 20261026151000_beta_email_engagement_metrics.sql (email clicks are use; unsubscribes shown).
 begin;
 create function pg_temp.ok(v boolean,label text) returns void language plpgsql as $$begin if not coalesce(v,false) then raise exception 'FAIL: %',label; end if; raise notice 'ok: %',label; end$$;
+grant execute on function pg_temp.ok(boolean,text) to authenticated;
 insert into auth.users(id) select ('e0000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid from generate_series(1,6)i;
 insert into private.beta_admins(user_id) values('e0000000-0000-0000-0000-000000000001');
 

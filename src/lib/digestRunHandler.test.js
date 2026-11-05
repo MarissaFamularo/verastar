@@ -8,7 +8,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import Anthropic from '@anthropic-ai/sdk'
 import { handleDigestRun, fencedStore, orderByAttempt, attemptsToday, ATTEMPTS_PER_DAY, PAUSE_EMAIL_WINDOW_DAYS } from '../../supabase/functions/digest-run/handler.js'
 import { checkPaidRequest, requestFingerprint } from '../../supabase/functions/_shared/requestPolicy.js'
-import { installServerScope, serverRunUnresolved } from './serverScope.js'
+import { currentServerScope, installServerScope, serverRunUnresolved } from './serverScope.js'
 import { store, getProfile } from './store.js'
 import { getClient, MODELS, accessMode } from './anthropic.js'
 import { storeCachedExtraction } from '../pipeline/evidenceCache.js'
@@ -40,7 +40,17 @@ function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
   }
   let tokens = 0
   const rpcCalls = []
+  let pubmedBlocked = false
   const rpcs = {
+    pubmed_search_claim: () => pubmedBlocked ? null : 'pubmed-token',
+    pubmed_search_finish: ({ p_outcome }) => { pubmedBlocked = p_outcome === 'unavailable'; return true },
+    beta_digest_observe: () => null,
+    digest_claim_defer: ({ p_user_id, p_token, p_result }) => {
+      const row = t.digest_schedules.find((r) => r.user_id === p_user_id && r.claim_token === p_token)
+      if (!row) return false
+      Object.assign(row, { claim_token: null, claimed_at: null, last_result: p_result, last_attempt_at: new Date().toISOString() })
+      return true
+    },
     spend_status: () => ({ allowed: true, reason: null }),
     // spend_reserve's claim contract: a scheduler attempt must present the current token,
     // and admission renews the lease (same transaction in SQL).
@@ -1041,4 +1051,62 @@ describe('opting out', () => {
     expect(sent[0].html).toContain('href="https://fn.test/functions/v1/digest-unsubscribe?u=A&amp;t=abc"')
     expect(sent[0].headers).toEqual({ 'List-Unsubscribe': '<https://fn.test/functions/v1/digest-unsubscribe?u=A&t=abc>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' })
   })
+})
+
+
+describe('outage scheduling', () => {
+  it('defers an upstream failure without spending attempts or retiring the digest; later ticks send no requests', async () => {
+    const db = memoryDb({ users: ['A'] })
+    let searches = 0
+    const run = async () => currentServerScope().runSearch(async () => {
+      searches++
+      throw Object.assign(new Error('PubMed unavailable'), { code: 'PUBMED_UNAVAILABLE' })
+    })
+    const { deps: d, provider } = deps(db, { run })
+    const first = await (await handleDigestRun(cron(), d)).json()
+    expect(first).toMatchObject({ phase: 'deferred', claimLost: false })
+    expect(db.t.digest_schedules[0]).toMatchObject({ attempts_today: 0, last_run_at: null, delivered_day: null, claim_token: null })
+    for (let i = 0; i < 15; i++) {
+      expect(await (await handleDigestRun(cron(), d)).json()).toMatchObject({ ran: false, reason: 'PubMed retry pending' })
+    }
+    expect(searches).toBe(1)
+    expect(db.t.events).toHaveLength(1)
+    expect(provider.sent).toHaveLength(0)
+    expect(db.t.digest_schedules[0].attempts_today).toBe(0)
+  })
+  it('skips an ordinary failure during cooldown and continues to another account', async () => {
+    const db = memoryDb()
+    db.t.digest_schedules[0].next_attempt_at = new Date(Date.now() + 900000).toISOString()
+    const { deps: d } = deps(db, { run: async () => ({ phase: 'reading' }) })
+    expect(await (await handleDigestRun(cron(), d)).json()).toMatchObject({ user_id: 'B' })
+  })
+})
+
+it('resumes after PubMed returns and delivers exactly once across later ticks', async () => {
+  const db = memoryDb({ users: ['A'] })
+  const { email, sent } = fakeEmail()
+  let healthy = false, requests = 0
+  const run = async () => {
+    await currentServerScope().runSearch(async () => {
+      requests++
+      if (!healthy) throw Object.assign(new Error('outage'), { code: 'PUBMED_UNAVAILABLE' })
+      return { failed: [], counts: [{}] }
+    })
+    return { ...await doneRun(1)(), searchComplete: true, recoveryEvidence: true }
+  }
+  const h = deps(db, { run }).deps
+  h.email = email
+  await handleDigestRun(cron(), h)
+  expect(sent).toHaveLength(0)
+  expect(row(db).attempts_today).toBe(0)
+  // Advance the fake circuit to its next admitted probe (SQL tests exercise the clock).
+  await db.admin.rpc('pubmed_search_finish', { p_outcome: 'ok' })
+  healthy = true
+  expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ phase: 'done' })
+  await handleDigestRun(cron(), h)
+  await handleDigestRun(cron(), h)
+  expect(requests).toBe(2)
+  expect(sent).toHaveLength(1)
+  expect(row(db).attempts_today).toBe(1)
+  expect(events(db, 'digest_emailed')).toHaveLength(1)
 })

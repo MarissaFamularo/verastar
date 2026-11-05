@@ -41,7 +41,8 @@ for f in supabase/tests/spending_fixture.sql \
          supabase/migrations/20261026110000_digest_schedules_email_column_grants.sql \
          supabase/migrations/20261026150000_digest_engagement.sql \
          supabase/migrations/20261026151000_beta_email_engagement_metrics.sql \
-         supabase/migrations/20261026233000_beta_monitor_build_lead.sql; do
+         supabase/migrations/20261026233000_beta_monitor_build_lead.sql \
+         supabase/migrations/20261105103716_pubmed_outage_resilience.sql; do
   "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { echo "migration failed: $f" >&2; "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f"; exit 1; }
 done
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/beta_admin_dashboard.sql 2>&1 | grep -E "^psql.*(ERROR|FAIL)|ok:" || true
@@ -49,5 +50,6 @@ done
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/beta_release.sql
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/share_click_metrics.sql
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/email_engagement.sql
+"$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/pubmed_outage.sql
 echo "beta admin dashboard and release SQL tests passed"
 [ -n "${KEEP_DB:-}" ] || "$BIN/dropdb" "$DB"

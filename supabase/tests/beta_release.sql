@@ -178,9 +178,10 @@ update private.beta_incidents set last_checked_at=now()-interval '16 minutes' wh
 select pg_temp.ok(exists(select 1 from jsonb_array_elements(public.beta_release_stats(now()-interval '30 days',now())->'health'->'checks') c where c->>'name'='heartbeat' and c->>'state'='stale'),'absent heartbeat is stale despite quiet healthy schedule');
 
 -- Claim exposes the queued observation timestamp, not the older incident opening.
+-- Use signup here; digest recovery now also requires cohort evidence (pubmed_outage.sql).
 update private.beta_alert_config set enabled=true;
 update private.beta_alert_outbox set attempts=1;
-insert into private.beta_alert_outbox(check_name,incident_at,kind,created_at) values('digest',now()-interval '1 day','recovery',now()-interval '1 minute');
+insert into private.beta_alert_outbox(check_name,incident_at,kind,created_at) values('signup',now()-interval '1 day','recovery',now()-interval '1 minute');
 select pg_temp.ok((public.beta_alert_claim()->>'observed_at')::timestamptz=now()-interval '1 minute','recovery claim uses recovery observation time');
 select pg_temp.ok(public.beta_alert_claim() is null,'claim remains at most once');
 select pg_temp.ok(public.beta_alert_test_claim() is not null,'test claimed once');
