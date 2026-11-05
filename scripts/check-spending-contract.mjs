@@ -137,7 +137,8 @@ export async function runChecks() {
   check(!/last_attempt_at|attempts_today|attempt_day/.test(attemptsCode.slice(attemptsCode.indexOf('function public.digest_claim_release'), attemptsCode.indexOf('do $$'))), 'digest_claim_release stamps nothing')
   check(!/grant (select|update)[^;]*(last_attempt_at|attempts_today|attempt_day)[^;]*to authenticated/.test(attemptsCode), 'the attempt columns are server-owned (no client grant)')
   const handlerNow = read(`${FN}/digest-run/handler.js`)
-  check(/export const ATTEMPTS_PER_DAY = \d+/.test(handlerNow) && /attemptsToday\(row, now\) >= ATTEMPTS_PER_DAY/.test(handlerNow) && /!manual && attemptsToday/.test(handlerNow), 'cron skips an account at the per-day attempt cap (manual runs are not capped)')
+  check(/export const ATTEMPTS_PER_DAY = \d+/.test(handlerNow) && /attemptsToday\(row, now\) >= ATTEMPTS_PER_DAY/.test(handlerNow) && /!manual && attemptsToday/.test(handlerNow), 'cron caps new work and error retries (manual runs are not capped)')
+  check((handlerNow.match(/!mayFinishAtAttemptCap\(/g) || []).length === 2 && /attemptsToday\(fresh.row, now\) >= ATTEMPTS_PER_DAY/.test(handlerNow) && /ATTEMPTS_PER_DAY \+ FINISHING_ATTEMPTS/.test(handlerNow), 'saved continuations have a finite allowance checked again under the account claim')
   check(/rows = manual \? rows \|\| \[\] : orderByAttempt\(rows\)/.test(handlerNow) && /\.order\('last_attempt_at', \{ ascending: true, nullsFirst: true \}\)/.test(handlerNow), 'cron considers accounts least-recently-attempted first (never attempted first of all)')
   check(!/p_finished: false, p_result: null/.test(handlerNow) && (handlerNow.match(/rpc\('digest_claim_release'/g) || []).length === 2, 'a claim taken but not run is released through digest_claim_release, not finished')
 

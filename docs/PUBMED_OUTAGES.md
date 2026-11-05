@@ -27,7 +27,8 @@ run could clear the shared digest incident.
   digest and scan checkpoint remain intact during failed discovery. The selected
   search lookback remains the user's setting; this is not a historical backfill.
 - Other errors retain the 12-attempt cap but now wait 15/30/60 minutes between
-  automatic attempts. Manual runs still respect PubMed's shared outage gate.
+  automatic attempts. The proposed [completion allowance](DIGEST_ATTEMPT_CAP.md)
+  lets a valid saved handoff finish within a separate finite bound. Manual runs still respect PubMed's shared outage gate.
   Existing spending holds, claim fences, and delivery-day compare-and-set remain.
   An uncertain email send is still not retried automatically.
 

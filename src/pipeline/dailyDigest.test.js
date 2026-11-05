@@ -200,6 +200,24 @@ describe('runDailyDigest', () => {
     expect(mem.get('digests/daily:last-successful-scan')).toBeUndefined()
   })
 
+  it.each([3, 6])('finishes saved ranking for %i read papers without searching or reading again', async (count) => {
+    vi.mocked(triage).mockClear()
+    const searches = vi.mocked(searchCandidates).mock.calls.length
+    const papers = Array.from({ length: count }, (_, i) => ({ id: String(101 + i), pmid: String(101 + i), title: `Paper ${i}`, topics: ['CLTI'] }))
+    const processed = papers.map((paper) => ({ paper, rows: [], sourceDoc: { text: 'Results were similar.' }, source: { tier: 'abstract_only' }, design: 'RCT' }))
+    mem.set('digests/daily:latest', {
+      kind: 'daily', runBy: 'scheduler', ranAt: new Date().toISOString(), server: { phase: 'rank' },
+      candidates: papers, selectedIds: papers.map((p) => p.id), results: processed, processedResults: processed,
+      triaged: {}, searchContext: { counts: [{ label: 'CLTI', count }], failed: [], days: 3 },
+    })
+    const out = await runDailyDigest()
+    expect(out).toMatchObject({ phase: 'done', papers: count, read: 0, recoveryEvidence: true })
+    expect(vi.mocked(searchCandidates).mock.calls).toHaveLength(searches)
+    expect(runPaper).not.toHaveBeenCalled()
+    expect(triage).toHaveBeenCalledTimes(1)
+    expect(mem.get('digests/daily:latest').results.map((r) => r.paper.id)).toEqual(papers.map((p) => p.id))
+  })
+
   it('does not rank when every successful paper is already ranked', async () => {
     vi.mocked(triage).mockClear()
     const paper = { id: '101', pmid: '101', title: 'Paper 101', topics: ['CLTI'] }
