@@ -470,7 +470,7 @@ export default function OnboardingQuiz({ onDone, preview = false, account = null
       </p>
 
       <div style={{ marginTop: 26 }}>
-        <label htmlFor="digest-name" style={fieldLabel}>I&rsquo;ll call you</label>
+        <label htmlFor="digest-name" style={fieldLabel}>Your name</label>
         <input
           id="digest-name"
           value={draft?.name || ''}

@@ -543,7 +543,7 @@ describe('onboarding sign-in and review', () => {
     expect(dom.text()).toContain('aortic aneurysm OR dissection')
     expect(dom.text()).toContain('Limb preservation')
     expect(dom.text()).toContain('Rank trials first.')
-    expect(dom.q('label[for="digest-name"]').textContent).toMatch(/I.ll call you/)
+    expect(dom.q('label[for="digest-name"]').textContent).toMatch(/Your name/)
   })
 
   it('keeps a timed-out code check in flight and honors the session it creates', async () => {

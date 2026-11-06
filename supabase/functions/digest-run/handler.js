@@ -69,7 +69,7 @@ import { guardedPubmedSearch } from '../_shared/pubmedCircuit.js'
 import { accountActive, localClock, digestGate, requestedTimezone } from '../model/logic.js'
 import { makeGuardedFetch } from '../_shared/spending.js'
 import { CLAIM_STALE_SECONDS } from '../_shared/timeouts.js'
-import { buildDigestEmail, buildPauseEmail, digestLinks, pauseLinks, prepareTracker, untracked, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
+import { buildDigestEmail, buildPauseEmail, digestLinks, pauseLinks, prepareTracker, untracked, greetingFor, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
 
 // Reading budget per tick. The edge runtime's wall clock is 150 s (free) / 400 s (paid);
 // reading stops here so persistence and the handoff still fit.
@@ -160,6 +160,18 @@ async function readLatest(admin, userId) {
   return data?.value || null
 }
 
+// The opening line of an email to this account, or null: the greeting is an opt-in on the
+// profile (greetingFor). A profile that cannot be read sends the plain digest; the papers
+// never wait on a hello.
+async function greetingOf(admin, userId) {
+  try {
+    const { data, error } = await admin.from('kv').select('value').eq('user_id', userId).eq('collection', 'profile').eq('key', 'me').maybeSingle()
+    return error ? null : greetingFor(data?.value)
+  } catch {
+    return null
+  }
+}
+
 function gateFor({ row, record, now, manual, mayRun }) {
   const { hour, day } = localClock(now, row.timezone)
   const ranToday = !!row.last_run_at && localClock(new Date(row.last_run_at), row.timezone).day === day
@@ -204,6 +216,7 @@ async function deliverDue(admin, email, rows, now) {
     await deliver(admin, email, row, {
       build: async ({ unsubscribeUrl }) => buildDigestEmail({
         record, unsubscribeUrl,
+        greeting: await greetingOf(admin, row.user_id),
         track: await trackerFor(email, row.user_id, digestLinks(record, email.appUrl || DEFAULT_APP_URL)),
         appUrl: email.appUrl || DEFAULT_APP_URL,
         replyTo: email.replyTo || null,
@@ -303,7 +316,7 @@ async function pauseAccount(admin, email, row, streak, now) {
       let resumeUrl = null
       try { resumeUrl = email.resumeUrl ? await email.resumeUrl(row.user_id) : null } catch { resumeUrl = null }
       const track = await trackerFor(email, row.user_id, pauseLinks(appUrl))
-      return buildPauseEmail({ appUrl, streak, replyTo: email.replyTo || null, unsubscribeUrl, resumeUrl, track })
+      return buildPauseEmail({ appUrl, streak, replyTo: email.replyTo || null, unsubscribeUrl, resumeUrl, track, greeting: await greetingOf(admin, row.user_id) })
     },
     sentType: 'digest_pause_emailed',
     failedType: 'digest_pause_email_failed',

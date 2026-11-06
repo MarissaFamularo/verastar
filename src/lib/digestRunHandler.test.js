@@ -777,6 +777,7 @@ describe('unopened digests', () => {
     expect(events(db, 'digest_paused')).toEqual([expect.objectContaining({ user_id: 'A', payload: { streak: PAUSE_AFTER_UNOPENED } })])
     expect(sent).toEqual([expect.objectContaining({ to: 'a@example.test', subject: 'Your Verastar digest is paused' })])
     expect(sent[0].text).toContain('haven’t seen a click on your Verastar digest in a week')
+    expect(sent[0].text).not.toContain('Hello, doctor')
     expect(events(db, 'digest_pause_emailed')).toHaveLength(1)
     // Later ticks stay quiet.
     const second = await (await handleDigestRun(cron(), h)).json()
@@ -930,6 +931,27 @@ describe('delivery', () => {
     // Later ticks: nothing to build (ran today), nothing to send (day delivered).
     expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(false)
     expect(sent).toHaveLength(1)
+  })
+  it('opens with the papers by default, and with "Good morning, {name}." when the profile opted in', async () => {
+    const db = memoryDb({ users: ['A'] })
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(sent).toHaveLength(1)
+    expect(sent[0].text.startsWith('1 paper from the last 3 days')).toBe(true)
+    expect(sent[0].text).not.toContain('Good morning')
+    expect(sent[0].text).not.toContain('Hello, doctor')
+
+    const opted = memoryDb({ users: ['B'] })
+    Object.assign(opted.t.kv.find((r) => r.user_id === 'B' && r.collection === 'profile').value, { name: 'Dr. B', greeting: true })
+    const two = fakeEmail()
+    const g = deps(opted, { run: doneRun(1) }).deps
+    g.email = two.email
+    await handleDigestRun(cron(), g)
+    expect(two.sent).toHaveLength(1)
+    expect(two.sent[0].text.startsWith('Good morning, Dr. B.\n\n1 paper')).toBe(true)
+    expect(two.sent[0].html).toContain('Good morning, Dr. B.')
   })
   it('a digest built in the hour before is held and emailed at the hour', async () => {
     const db = memoryDb({ users: ['A'] })

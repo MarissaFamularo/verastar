@@ -1,6 +1,6 @@
 // The digest email builders and the Resend sender (supabase/functions/_shared/digestEmail.js).
 import { describe, it, expect } from 'vitest'
-import { buildDigestEmail, buildPauseEmail, digestItems, digestLinks, digestSender, makeResendSender, pauseLinks, prepareTracker, subjectFromTitle, DEFAULT_APP_URL, RESUME_LABEL } from '../../supabase/functions/_shared/digestEmail.js'
+import { buildDigestEmail, buildPauseEmail, digestItems, digestLinks, digestSender, greetingFor, makeResendSender, pauseLinks, prepareTracker, subjectFromTitle, DEFAULT_APP_URL, RESUME_LABEL } from '../../supabase/functions/_shared/digestEmail.js'
 
 const paper = (i, extra = {}) => ({ paper: { id: `p${i}`, pmid: `p${i}`, title: `Paper ${i} title.`, author: 'Li X et al.', journal: 'J Vasc Surg', year: '2026', ...extra }, citation: { url: `https://pubmed.ncbi.nlm.nih.gov/p${i}/` } })
 const record = (over = {}) => ({
@@ -21,6 +21,17 @@ describe('subjectFromTitle', () => {
     expect(long.length).toBeLessThanOrEqual(61)
     expect(long.endsWith('…')).toBe(true)
     expect(long).not.toMatch(/ …$/)
+  })
+})
+
+describe('greetingFor', () => {
+  it('is null unless the profile opted in; then the typed name, or Doctor when blank', () => {
+    expect(greetingFor(null)).toBeNull()
+    expect(greetingFor({ name: 'Dr. Kim' })).toBeNull()
+    expect(greetingFor({ name: 'Dr. Kim', greeting: false })).toBeNull()
+    expect(greetingFor({ name: 'Dr. Kim', greeting: 'yes' })).toBeNull()
+    expect(greetingFor({ name: '  Dr.  Kim ', greeting: true })).toBe('Good morning, Dr. Kim.')
+    expect(greetingFor({ name: '', greeting: true })).toBe('Good morning, Doctor.')
   })
 })
 
@@ -51,7 +62,10 @@ describe('buildDigestEmail', () => {
   it('subject is the top paper; text and html carry the same items, labels and link', () => {
     const m = buildDigestEmail({ record: record(), replyTo: 'm@example.com', hourLabel: '6:00 am', timezone: 'America/New_York' })
     expect(m.subject).toBe('Paper 0 title')
-    expect(m.text.startsWith('Hello, doctor,\n\n')).toBe(true)
+    // No greeting unless one is passed: the email opens with the count.
+    expect(m.text.startsWith('3 papers from the last 3 days')).toBe(true)
+    expect(m.text).not.toContain('Hello, doctor')
+    expect(m.html).not.toContain('Good morning')
     expect(m.text).toContain('3 papers from the last 3 days')
     expect(m.text).toContain('1. Paper 0 title.')
     expect(m.text).toContain('Amputation-free survival was 71% at one year.')
@@ -64,6 +78,11 @@ describe('buildDigestEmail', () => {
     expect(m.html).toContain('Amputation-free survival was 71% at one year.')
     expect(m.html).toContain('href="https://pubmed.ncbi.nlm.nih.gov/p0/"')
     expect(m.items).toHaveLength(3)
+  })
+  it('opens with the greeting when one is passed, in text and html', () => {
+    const m = buildDigestEmail({ record: record(), greeting: 'Good morning, Dr. Kim.' })
+    expect(m.text.startsWith('Good morning, Dr. Kim.\n\n3 papers')).toBe(true)
+    expect(m.html).toContain('<p style="margin:0 0 8px 0;">Good morning, Dr. Kim.</p>')
   })
   it('escapes html and omits the reply line without a reply address', () => {
     const m = buildDigestEmail({ record: record({ results: [paper(0, { title: 'A <b>bold</b> & "quoted" claim' })], triaged: {} }), appUrl: 'https://app.test/' })
@@ -79,7 +98,8 @@ describe('buildPauseEmail', () => {
   it('is built around the resume button: no click in a week, the button, doing nothing leaves it paused', () => {
     const m = buildPauseEmail({ streak: 7, replyTo: 'm@example.com', resumeUrl: RESUME })
     expect(m.subject).toBe('Your Verastar digest is paused')
-    expect(m.text.startsWith('Hello, doctor,')).toBe(true)
+    expect(m.text.startsWith('We haven’t seen a click')).toBe(true)
+    expect(buildPauseEmail({ streak: 7, greeting: 'Good morning, Dr. Kim.' }).text.startsWith('Good morning, Dr. Kim.\n\nWe haven’t')).toBe(true)
     expect(m.text).toContain('We haven’t seen a click on your Verastar digest in a week')
     expect(m.text).toContain(`${RESUME_LABEL} ${RESUME}`)
     expect(m.text).toContain('If you do nothing, it stays paused')

@@ -13,9 +13,19 @@ export const DEFAULT_APP_URL = 'https://verastar.papertrellis.com'
 // Replies continue to go to the mailbox configured for reader responses.
 export const DIGEST_FROM_NAME = 'Verastar'
 export const DIGEST_REPLY_TO = 'statupfordocs@gmail.com'
-// Every email opens the same way: profile names are free text ("Dr. Kim", "Anna", blank), so
-// no greeting is built from them (2026-10-26).
+// A digest opens with the papers unless the reader asked to be greeted: the greeting is an
+// opt-in (profile.greeting === true, Settings → Reading → "Open each digest with a
+// greeting"), and off by default since 2026-11-06, when a reader asked not to be greeted by
+// an AI. The reader who opts in is addressed by the name they typed (free text: "Dr. Kim",
+// "Anna") or "Doctor" when it is blank. Before that date every email opened "Hello, doctor,";
+// that salutation remains only for the founder note (scripts/founder-recapture-email.mjs).
 export const GREETING = 'Hello, doctor,'
+export const DEFAULT_NAME = 'Doctor'
+export function greetingFor(profile) {
+  if (profile?.greeting !== true) return null
+  const name = clean(profile.name) || DEFAULT_NAME
+  return `Good morning, ${name}.`
+}
 
 // "Verastar <addr>" from whatever SMTP_FROM holds: "Name <addr>" or a bare
 // address. Anything else comes back unchanged, so a malformed value fails at Resend, not
@@ -158,11 +168,12 @@ export async function prepareTracker(links, sign) {
 // The morning digest. `record` is the stored daily digest (kv digests/daily:latest).
 // Returns null when there is nothing to send (no items). The result carries `headers` for
 // the sender (unsubscribe headers when a link was given).
-export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null, track = untracked } = {}) {
+// `greeting` is the opening line (greetingFor) or null: with null the email starts with the
+// papers.
+export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null, track = untracked, greeting = null } = {}) {
   const items = digestItems(record)
   if (!items.length) return null
   const days = Number(record?.searchContext?.days) || null
-  const greeting = GREETING
   const count = `${items.length} paper${items.length === 1 ? '' : 's'}${days ? ` from the last ${days} day${days === 1 ? '' : 's'}` : ''}, picked for your north stars.`
   const link = track({ kind: 'open', paperId: '', to: openLink(appUrl, 'digest-email') })
   const lead = intro ? clean(intro) : null
@@ -170,8 +181,7 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = n
   const textItems = formatItemsText(items, track)
 
   const text = [
-    greeting,
-    '',
+    ...(greeting ? [greeting, ''] : []),
     lead,
     count,
     '',
@@ -183,7 +193,7 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = n
   ].filter((l) => l !== null).join('\n')
 
   const html = wrapHtml(`
-    <p style="margin:0 0 8px 0;">${esc(greeting)}</p>
+    ${greeting ? `<p style="margin:0 0 8px 0;">${esc(greeting)}</p>` : ''}
     ${lead ? `<p style="margin:0 0 8px 0;">${esc(lead)}</p>` : ''}
     <p style="margin:0 0 18px 0;">${esc(count)}</p>
     ${formatItemsHtml(items, track)}
@@ -259,7 +269,7 @@ export const RESUME_LABEL = 'No, don’t pause me. I like these digests!'
 // Sent once when the scheduler pauses an account. Built around one button: `resumeUrl`
 // (digest-resume, signed) clears the pause. Without a signed button (no secret on the
 // server) the email falls back to opening the app, which also resumes.
-export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, streak = 7, replyTo = null, unsubscribeUrl = null, resumeUrl = null, track = untracked } = {}) {
+export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, streak = 7, replyTo = null, unsubscribeUrl = null, resumeUrl = null, track = untracked, greeting = null } = {}) {
   const link = track({ kind: 'pause-open', paperId: '', to: openLink(appUrl, 'pause-email') })
   const n = Number(streak) || 7
   const span = n === 7 ? 'a week' : `${n} mornings`
@@ -271,8 +281,7 @@ export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, streak = 7, replyTo 
     replyTo ? 'If it stopped earning your attention, reply and say why. That is the most useful thing you can send.' : '',
   ].filter(Boolean)
   const text = [
-    GREETING,
-    '',
+    ...(greeting ? [greeting, ''] : []),
     lead,
     ask,
     resumeUrl ? `${RESUME_LABEL} ${resumeUrl}` : `Open Verastar: ${link}`,
@@ -284,7 +293,7 @@ export function buildPauseEmail({ appUrl = DEFAULT_APP_URL, streak = 7, replyTo 
   ].filter((l) => l !== null).join('\n')
   const tailHtml = tail.map((l) => (unsubscribeUrl && l.startsWith('Unsubscribe: ') ? `<a href="${esc(unsubscribeUrl)}">Unsubscribe</a>` : esc(l))).join('<br>')
   const html = wrapHtml(`
-    <p>${esc(GREETING)}</p>
+    ${greeting ? `<p>${esc(greeting)}</p>` : ''}
     <p>${esc(lead)}<br>${esc(ask)}</p>
     ${resumeUrl ? buttonHtml(resumeUrl, RESUME_LABEL) : buttonHtml(link, 'Open Verastar')}
     <p>${esc(rest)}${resumeUrl ? ` <a href="${esc(link)}">Open Verastar</a>` : ''}</p>

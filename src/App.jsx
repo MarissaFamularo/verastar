@@ -49,6 +49,7 @@ import { checkBetaAdmin } from './lib/betaAdmin.js'
 import { BetaLabel, FeedbackButton } from './components/BetaFeedback.jsx'
 import { savedKeyLabel } from './lib/accessLabel.js'
 import { DEMO_DIGEST_COUNTS } from './demo/demoDigest.js'
+import { greetingFor, DEFAULT_NAME } from '../supabase/functions/_shared/digestEmail.js'
 
 // ── Observatory shell ──────────────────────────────────────────────────────
 // The app is a dark, star-lit reading room. A fixed 88px icon rail on the left
@@ -1161,7 +1162,10 @@ export default function App() {
     )
   }
 
-  const name = profile?.name || 'Doctor'
+  const name = profile?.name || DEFAULT_NAME
+  // The hero greets by name only when the profile opts in (Settings → Reading); the default
+  // is a plain digest, since 2026-11-06.
+  const greeting = greetingFor(profile)
   const stars = profile?.northStars || []
   const projects = profile?.projects || []
   const demo = !!profile?.demo && !account
@@ -1191,7 +1195,7 @@ export default function App() {
                     {!demo && <FeedbackButton view="digest" style={{ fontSize: 12 }} />}
                   </div>
                   <h1 className="vs-hero-h1" style={{ margin: '9px 0 0', fontFamily: 'var(--font-serif)', fontSize: 37, fontWeight: 500, letterSpacing: '-.01em', color: 'var(--color-fg)', lineHeight: 1.08 }}>
-                    Good morning, {name}.
+                    {greeting || 'Your digest.'}
                   </h1>
                 </div>
               </div>

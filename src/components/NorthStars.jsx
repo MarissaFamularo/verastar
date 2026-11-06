@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import { hasModelAccess } from '../lib/anthropic.js'
 import { getProfile, saveProfile } from '../lib/store.js'
+import { greetingFor, DEFAULT_NAME } from '../../supabase/functions/_shared/digestEmail.js'
 import { isSignedIn } from '../lib/supabase.js'
 import { getTrellisProjects, getTrellisExcluded, setTrellisExcluded, PAPERTRELLIS_URL } from '../lib/trellis.js'
 import { isMobileNow } from '../lib/useMobile.js'
@@ -56,8 +57,16 @@ export default function NorthStars() {
   // The synced list is tall on a phone — collapsed there by default, open on desktop.
   const [trellisOpen, setTrellisOpen] = useState(() => !isMobileNow())
 
+  // The greeting is an opt-in (2026-11-06): off, the digest and its email open with the
+  // papers; on, with "Good morning, {name}." A reader asked not to be greeted by an AI, so
+  // the plain digest is the default and the friendliness is the setting.
+  const [name, setName] = useState('')
+  const [greeting, setGreeting] = useState(false)
+
   useEffect(() => {
     getProfile().then((profile) => {
+      setName(typeof profile?.name === 'string' ? profile.name : '')
+      setGreeting(profile?.greeting === true)
       setStars(profile?.northStars ?? [])
       setProjects(profile?.projects ?? [])
       setJournalPreferences(normalizeJournalPreferences(profile?.journalPreferences))
@@ -99,6 +108,8 @@ export default function NorthStars() {
     getProfile().then((profile) =>
       saveProfile({
         ...(profile || {}),
+        name: name.trim() || DEFAULT_NAME,
+        greeting,
         northStars: stars,
         projects,
         journalPreferences: normalizeJournalPreferences(journalPreferences),
@@ -107,7 +118,7 @@ export default function NorthStars() {
         search,
       }),
     )
-  }, [stars, projects, journalPreferences, rubric, topics, search, loaded])
+  }, [name, greeting, stars, projects, journalPreferences, rubric, topics, search, loaded])
 
   // A fresh draft lands in the editors, NOT straight in storage: the save effect above then
   // persists it exactly the way a hand edit is persisted. An empty field in the draft leaves
@@ -172,6 +183,27 @@ export default function NorthStars() {
           </span>
         </div>
       )}
+
+      <div style={{ marginTop: 22 }}>
+        <label className="flex items-center cursor-pointer" style={{ gap: 8, fontSize: 13, color: 'var(--color-fg-soft)', fontWeight: 500 }}>
+          <input type="checkbox" checked={greeting} onChange={(e) => setGreeting(e.target.checked)} />
+          Open each digest with a greeting
+        </label>
+        <p style={{ margin: '6px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--color-fg-faint)' }}>
+          {greeting
+            ? `The digest and its email open with “${greetingFor({ greeting: true, name })}”`
+            : 'Off: the digest and its email start with the papers.'}
+        </p>
+        {greeting && (
+          <input
+            aria-label="Name for the greeting"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Dr. Lastname"
+            style={{ marginTop: 8, width: '100%', maxWidth: 320, padding: '8px 12px', borderRadius: 9, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 13.5, fontFamily: 'inherit', outline: 'none' }}
+          />
+        )}
+      </div>
 
       <div className="grid gap-6 sm:grid-cols-2" style={{ marginTop: 20 }}>
         <ChipGroup
