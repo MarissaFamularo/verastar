@@ -1163,8 +1163,8 @@ export default function App() {
   }
 
   const name = profile?.name || DEFAULT_NAME
-  // The hero greets by name only when the profile opts in (Settings → Reading); the default
-  // is a plain digest, since 2026-11-06.
+  // The hero greets by name unless the profile turned the greeting off (Settings → Reading,
+  // since 2026-11-06); then it is a plain digest.
   const greeting = greetingFor(profile)
   const stars = profile?.northStars || []
   const projects = profile?.projects || []

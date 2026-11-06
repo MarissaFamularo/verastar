@@ -13,17 +13,18 @@ export const DEFAULT_APP_URL = 'https://verastar.papertrellis.com'
 // Replies continue to go to the mailbox configured for reader responses.
 export const DIGEST_FROM_NAME = 'Verastar'
 export const DIGEST_REPLY_TO = 'statupfordocs@gmail.com'
-// A digest opens with the papers unless the reader asked to be greeted: the greeting is an
-// opt-in (profile.greeting === true, Settings → Reading → "Open each digest with a
-// greeting"), and off by default since 2026-11-06, when a reader asked not to be greeted by
-// an AI. The reader who opts in is addressed by the name they typed (free text: "Dr. Kim",
-// "Anna") or "Doctor" when it is blank. Before that date every email opened "Hello, doctor,";
-// that salutation remains only for the founder note (scripts/founder-recapture-email.mjs).
+// A digest opens "Good morning, {name}." unless the reader turned the greeting off
+// (profile.greeting === false, Settings → Reading → "Open each digest with a greeting"; a
+// profile without the field greets). The switch exists since 2026-11-06, when a reader asked
+// not to be greeted by an AI; their profile carries the flag so they never had to find it.
+// The name is the one they typed (free text: "Dr. Kim", "Anna") or "Doctor" when blank.
+// Before that date every email opened "Hello, doctor,"; that salutation remains only for
+// the founder note (scripts/founder-recapture-email.mjs).
 export const GREETING = 'Hello, doctor,'
 export const DEFAULT_NAME = 'Doctor'
 export function greetingFor(profile) {
-  if (profile?.greeting !== true) return null
-  const name = clean(profile.name) || DEFAULT_NAME
+  if (profile?.greeting === false) return null
+  const name = clean(profile?.name) || DEFAULT_NAME
   return `Good morning, ${name}.`
 }
 

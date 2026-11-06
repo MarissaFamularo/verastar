@@ -57,16 +57,16 @@ export default function NorthStars() {
   // The synced list is tall on a phone — collapsed there by default, open on desktop.
   const [trellisOpen, setTrellisOpen] = useState(() => !isMobileNow())
 
-  // The greeting is an opt-in (2026-11-06): off, the digest and its email open with the
-  // papers; on, with "Good morning, {name}." A reader asked not to be greeted by an AI, so
-  // the plain digest is the default and the friendliness is the setting.
+  // The greeting can be turned off (2026-11-06): on, the digest and its email open with
+  // "Good morning, {name}."; off, with the papers. A reader asked not to be greeted by an
+  // AI; the default stays friendly and the plain digest is the setting.
   const [name, setName] = useState('')
-  const [greeting, setGreeting] = useState(false)
+  const [greeting, setGreeting] = useState(true)
 
   useEffect(() => {
     getProfile().then((profile) => {
       setName(typeof profile?.name === 'string' ? profile.name : '')
-      setGreeting(profile?.greeting === true)
+      setGreeting(profile?.greeting !== false)
       setStars(profile?.northStars ?? [])
       setProjects(profile?.projects ?? [])
       setJournalPreferences(normalizeJournalPreferences(profile?.journalPreferences))

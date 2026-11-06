@@ -25,13 +25,14 @@ describe('subjectFromTitle', () => {
 })
 
 describe('greetingFor', () => {
-  it('is null unless the profile opted in; then the typed name, or Doctor when blank', () => {
-    expect(greetingFor(null)).toBeNull()
-    expect(greetingFor({ name: 'Dr. Kim' })).toBeNull()
+  it('greets by the typed name, or Doctor when blank, unless the profile turned it off', () => {
     expect(greetingFor({ name: 'Dr. Kim', greeting: false })).toBeNull()
-    expect(greetingFor({ name: 'Dr. Kim', greeting: 'yes' })).toBeNull()
-    expect(greetingFor({ name: '  Dr.  Kim ', greeting: true })).toBe('Good morning, Dr. Kim.')
-    expect(greetingFor({ name: '', greeting: true })).toBe('Good morning, Doctor.')
+    expect(greetingFor({ name: '  Dr.  Kim ' })).toBe('Good morning, Dr. Kim.')
+    expect(greetingFor({ name: 'Dr. Kim', greeting: true })).toBe('Good morning, Dr. Kim.')
+    // Only an explicit false turns it off: a profile without the field, a blank name, or no
+    // profile at all greets.
+    expect(greetingFor({ name: '', greeting: 'no' })).toBe('Good morning, Doctor.')
+    expect(greetingFor(null)).toBe('Good morning, Doctor.')
   })
 })
 

@@ -160,9 +160,9 @@ async function readLatest(admin, userId) {
   return data?.value || null
 }
 
-// The opening line of an email to this account, or null: the greeting is an opt-in on the
-// profile (greetingFor). A profile that cannot be read sends the plain digest; the papers
-// never wait on a hello.
+// The opening line of an email to this account, or null when the profile turned the
+// greeting off (greetingFor). A profile that cannot be read sends the plain digest; the
+// papers never wait on a hello.
 async function greetingOf(admin, userId) {
   try {
     const { data, error } = await admin.from('kv').select('value').eq('user_id', userId).eq('collection', 'profile').eq('key', 'me').maybeSingle()

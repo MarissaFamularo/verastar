@@ -167,12 +167,13 @@ sends nothing. The in-app digest appears as soon as it is built.
 The handler reads the stored digest back and sends it (`../_shared/digestEmail.js`):
 
 - Subject: the top paper's title.
-- Opening: the papers, unless the profile opted in to a greeting (Settings → Reading →
-  "Open each digest with a greeting", `profile.greeting === true`), in which case the
-  first line is "Good morning, {name}." with the name the reader typed, or "Doctor" when
-  blank. Off by default since 2026-11-06, when a reader asked not to be greeted by an AI;
-  before that every email opened "Hello, doctor,". The in-app hero follows the same
-  setting ("Your digest." when off). The pause email opens the same way.
+- Opening: "Good morning, {name}." with the name the reader typed, or "Doctor" when
+  blank, unless the profile turned the greeting off (Settings → Reading → "Open each
+  digest with a greeting", stored as `profile.greeting === false`; a profile without the
+  field greets), in which case the email starts with the papers. The switch exists since
+  2026-11-06, when a reader asked not to be greeted by an AI, and their profile was given
+  the flag directly; before that every email opened "Hello, doctor,". The in-app hero
+  follows the same setting ("Your digest." when off). The pause email opens the same way.
 - Body: up to five items in digest order; title, authors, journal, year; the triage
   finding, labelled **"Checked against the source text."** only when the triage check
   verdict is `supported`, otherwise **"Not checked against the source text; read the
