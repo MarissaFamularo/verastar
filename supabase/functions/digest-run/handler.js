@@ -27,17 +27,12 @@ import { guardedPubmedSearch } from '../_shared/pubmedCircuit.js'
 // runs scheduler_recover (supabase/migrations/20261010130000_scheduler_hold.sql). Nothing here
 // retries, reconciles or recovers.
 //
-// Unopened digests (20261025120000_digest_unopened_pause.sql): a finished digest nobody
-// opened used to block every later scheduled run for the account. Now it is replaced each
-// morning and counted: digest_schedules.unopened_streak is stamped when a run claims the
-// account (0 when the reader engaged with the previous digest or pressed "run now", +1 when
-// they did not, unchanged after an empty day or mid-flight). Engaged means opened in the app
-// (openedAt) or, since the digest is emailed, any sign of the reader after it was built:
-// a click on a link in an email (digest-click), the pause email's resume button
-// (digest-resume), or a Settings save; all three stamp digest_schedules.engaged_at
-// (20261026150000_digest_engagement.sql). At PAUSE_AFTER_UNOPENED the scheduler stops
-// starting runs (paused_at), tells the reader once by email, and resumes on the first tick
-// after any of those, because that resets the streak to 0.
+// Inactivity: older finished reading days count once, identified by stable ranAt and
+// a service-owned checkpoint. Only an eligible new-run claim can count: retries,
+// resumptions and today's just-built digest cannot inflate the streak. A persisted
+// pause is authoritative until later reader engagement, a manual run, or an explicit
+// repair. The update is fenced by the claim and the observed engagement/digest state.
+// A seventh missed digest pauses atomically and releases the claim before notification.
 //
 // Delivery: the reader's hour is when the email lands, not when work starts. A scheduled
 // build may start BUILD_LEAD_HOURS before her hour (the gate's leadHours), and every cron
@@ -108,19 +103,58 @@ export function readerEngaged(record, engagedAt) {
   return !Number.isFinite(built) || engaged >= built
 }
 
-// Pure: the account's unopened streak once the scheduler replaces `record` (the stored
-// daily digest, or null). A manual run means the reader is present: 0. An unfinished
-// scheduler record is a run being resumed, and a record without papers is an empty day:
-// both leave the streak alone. A finished digest with papers counts: engaged with
-// (readerEngaged) resets to 0, otherwise it adds one.
-export function nextUnopenedStreak(record, current, { manual = false, engagedAt = null } = {}) {
+// The stable run identity and completion day, never savedAt (which moves on reads).
+const atMillis = (value) => { const n = Date.parse(value); return Number.isFinite(n) ? n : null }
+export function inactivityRecordVersion(record) {
+  return { kind: record?.kind ?? null, runBy: record?.runBy ?? null, ranAt: record?.ranAt ?? null,
+    savedAt: record?.ranAt ? null : record?.savedAt ?? null, phase: record?.server?.phase ?? null,
+    finishedAt: record?.server?.finishedAt ?? null, openedAt: record?.openedAt ?? null,
+    papers: Array.isArray(record?.results) ? record.results.length : 0 }
+}
+export function pauseMayResume(row, record, manual = false) {
+  if (!row.paused_at || manual) return true
+  const paused = atMillis(row.paused_at)
+  return paused !== null && [record?.openedAt, row.engaged_at].some((value) => {
+    const at = atMillis(value)
+    return at !== null && at >= paused
+  })
+}
+
+// One previous, finished reading day may count once. A retry of the same saved
+// digest keeps its checkpoint; today's newly finished digest never counts yet.
+export function inactivityState(record, current, { manual = false, engagedAt = null, countedAt = null, now = new Date(), timezone = 'UTC', resumed = false } = {}) {
   const cur = Math.max(0, Number(current) || 0)
-  if (manual) return 0
-  if (!record || record.kind !== 'daily') return cur
-  if (record.runBy === 'scheduler' && record.server?.phase && record.server.phase !== 'done') return cur
-  const hasPapers = Array.isArray(record.results) && record.results.length > 0
-  if (!hasPapers) return cur
-  return readerEngaged(record, engagedAt) ? 0 : cur + 1
+  const previous = atMillis(countedAt)
+  const identity = atMillis(record?.ranAt ?? record?.savedAt)
+  const marker = (at) => at === null ? null : new Date(at).toISOString()
+  const baseline = identity !== null && identity <= now.getTime() ? Math.max(previous ?? -Infinity, identity) : previous
+  if (manual || resumed) return { streak: 0, countedAt: marker(baseline), pause: false }
+  const unchanged = { streak: cur, countedAt: marker(previous), pause: false }
+  if (record?.kind !== 'daily' || !Array.isArray(record.results) || !record.results.length) return unchanged
+  if (record.runBy === 'scheduler' && record.server?.phase && record.server.phase !== 'done') return unchanged
+  if (readerEngaged(record, engagedAt)) return { streak: 0, countedAt: marker(baseline), pause: false }
+  const finished = atMillis(record.server?.finishedAt ?? record.ranAt ?? record.savedAt)
+  if (identity === null || finished === null || identity > now.getTime() || finished > now.getTime()) return unchanged
+  if (localClock(new Date(finished), timezone).day >= localClock(now, timezone).day || (previous !== null && identity <= previous)) return unchanged
+  const streak = Math.min(PAUSE_AFTER_UNOPENED, cur + 1)
+  return { streak, countedAt: marker(identity), pause: streak >= PAUSE_AFTER_UNOPENED }
+}
+export function nextUnopenedStreak(record, current, options = {}) {
+  return inactivityState(record, current, options).streak
+}
+
+async function saveInactivity(admin, row, record, token, state, clearPause) {
+  try {
+    const { data, error } = await admin.rpc('digest_inactivity_update', {
+      p_user_id: row.user_id, p_token: token,
+      p_expected_streak: Number(row.unopened_streak) || 0,
+      p_expected_counted_at: row.inactivity_counted_at ?? null,
+      p_expected_paused_at: row.paused_at ?? null, p_expected_engaged_at: row.engaged_at ?? null,
+      p_expected_record: inactivityRecordVersion(record),
+      p_streak: state.streak, p_counted_at: state.countedAt, p_pause: state.pause, p_clear_pause: clearPause,
+    })
+    return !error && data === true
+  } catch { return false }
 }
 
 const HELD_NOTE = 'A paid step ended without a confirmed outcome; the run is held for operator review.'
@@ -240,7 +274,7 @@ function hourText(h) {
   return `${twelve}:00 ${n < 12 ? 'am' : 'pm'}`
 }
 const DEFAULT_TIMEZONE = 'America/New_York'
-const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, claim_token, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, claim_token, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result, inactivity_counted_at'
 
 async function recordEvent(admin, userId, type, payload) {
   await admin.from('events').insert({ user_id: userId, type, payload }).then(() => {}, () => {})
@@ -292,19 +326,9 @@ async function pauseEmailedRecently(admin, userId, now) {
   }
 }
 
-// The account reached the pause threshold: stamp paused_at once, record it, and tell the
-// reader once. The tick loop only gets here when no live claim holds the row, so the claim
-// it read is either empty or left by a dead run. The write is a compare-and-set on that
-// claim and clears it: a run that took the account since then keeps it, and a dead claim
-// can no longer block the pause. Only the tick whose write landed records and emails;
-// before 2026-11-03 a dead claim made every tick re-send the pause email (one reader got
-// 959 of them).
-async function pauseAccount(admin, email, row, streak, now) {
-  if (row.paused_at) return
-  let q = admin.from('digest_schedules').update({ paused_at: now.toISOString(), claimed_at: null, claim_token: null, updated_at: now.toISOString() }).eq('user_id', row.user_id).is('paused_at', null)
-  q = row.claim_token == null ? q.is('claim_token', null) : q.eq('claim_token', row.claim_token)
-  const { data: won, error } = await q.select('user_id').then((r) => r, () => ({ data: null, error: true }))
-  if (error || !won?.length) return
+// Called only after the atomic, claim-fenced pause transition won. The outbox cap
+// remains independent: no duplicate notifications from stale workers or repeated ticks.
+async function notifyPause(admin, email, row, streak, now) {
   await recordEvent(admin, row.user_id, 'digest_paused', { streak })
   if (await pauseEmailedRecently(admin, row.user_id, now)) {
     await recordEvent(admin, row.user_id, 'digest_pause_email_capped', { streak })
@@ -450,15 +474,7 @@ export async function handleDigestRun(req, deps) {
     let record
     try { record = await readLatest(admin, row.user_id) } catch { reason = 'storage unavailable'; continue }
     if (!manual && attemptsToday(row, now) >= ATTEMPTS_PER_DAY && !mayFinishAtAttemptCap(row, record, now)) { reason = 'attempt cap reached'; continue }
-    // An unopened digest no longer blocks the next one; it is counted, and the count pauses
-    // the account at the threshold. Opening the digest resets the count, so the next tick
-    // after that resumes without any other action.
-    const streak = nextUnopenedStreak(record, row.unopened_streak, { manual, engagedAt: row.engaged_at })
-    if (!manual && streak >= PAUSE_AFTER_UNOPENED) {
-      reason = PAUSED_REASON
-      await pauseAccount(admin, deps.email, row, streak, now)
-      continue
-    }
+    if (!pauseMayResume(row, record, manual)) { reason = PAUSED_REASON; continue }
     const gate = gateFor({ row, record, now, manual, mayRun: true })
     if (!gate.run) { reason = gate.reason; continue }
 
@@ -479,7 +495,7 @@ export async function handleDigestRun(req, deps) {
     // finished between the first read and the claim.
     let fresh
     try {
-      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result').eq('user_id', row.user_id).maybeSingle()
+      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result, inactivity_counted_at').eq('user_id', row.user_id).maybeSingle()
       if (error || !again) throw new Error('schedule unavailable')
       fresh = { row: again, record: await readLatest(admin, row.user_id) }
     } catch {
@@ -489,6 +505,7 @@ export async function handleDigestRun(req, deps) {
       continue
     }
     const regate = gateFor({ row: fresh.row, record: fresh.record, now, manual, mayRun: true })
+    if (!pauseMayResume(fresh.row, fresh.record, manual)) { regate.run = false; regate.reason = PAUSED_REASON }
     if (!manual && fresh.row.next_attempt_at && new Date(fresh.row.next_attempt_at) > now) { regate.run = false; regate.reason = 'retry pending' }
     if (!manual && attemptsToday(fresh.row, now) >= ATTEMPTS_PER_DAY && !mayFinishAtAttemptCap(fresh.row, fresh.record, now)) { regate.run = false; regate.reason = 'attempt cap reached' }
     if (!regate.run) {
@@ -496,12 +513,23 @@ export async function handleDigestRun(req, deps) {
       reason = regate.reason
       continue
     }
-    // This run replaces fresh.record: stamp what the streak becomes, fenced on the claim.
-    // A paused account only gets here after the reader opened the digest or pressed "run
-    // now", so the stamp also clears the pause.
-    const stamped = nextUnopenedStreak(fresh.record, fresh.row.unopened_streak, { manual, engagedAt: fresh.row.engaged_at })
-    if (stamped !== (Number(fresh.row.unopened_streak) || 0) || fresh.row.paused_at) {
-      await admin.from('digest_schedules').update({ unopened_streak: stamped, paused_at: null, updated_at: now.toISOString() }).eq('user_id', row.user_id).eq('claim_token', token).then(() => {}, () => {})
+    const state = inactivityState(fresh.record, fresh.row.unopened_streak, {
+      manual, engagedAt: fresh.row.engaged_at, countedAt: fresh.row.inactivity_counted_at,
+      now, timezone: fresh.row.timezone, resumed: !!fresh.row.paused_at,
+    })
+    const markerChanged = atMillis(state.countedAt) !== atMillis(fresh.row.inactivity_counted_at)
+    if (state.streak !== (Number(fresh.row.unopened_streak) || 0) || markerChanged || fresh.row.paused_at || state.pause) {
+      const saved = await saveInactivity(admin, fresh.row, fresh.record, token, state, !!fresh.row.paused_at)
+      if (!saved) {
+        await admin.rpc('digest_claim_release', { p_user_id: row.user_id, p_token: token }).then(() => {}, () => {})
+        reason = 'inactivity state changed; will retry'
+        continue
+      }
+    }
+    if (state.pause) {
+      await notifyPause(admin, deps.email, fresh.row, state.streak, now)
+      reason = PAUSED_REASON
+      continue // the atomic inactivity update released this claim; no digest ran
     }
     picked = { row: fresh.row, token }
     break
