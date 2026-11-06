@@ -11,7 +11,8 @@ const APP = 'http://localhost:5198/'
 const DESKTOP = { width: 1280, height: 900 }
 const MOBILE = { width: 390, height: 844 }
 const STATS = (await import('../../src/lib/betaAdmin.fixture.js')).STATS
-const PROFILE = { name: 'Dr. Synthetic', specialty: 'vascular-surgery', northStars: ['Limb preservation'], projects: [], topics: [], journalPreferences: { mustNotMiss: [], preferred: [] }, rubric: { criteria: 'Rank trials first.', selectCount: 5, scoreFloor: 0 }, onboarded: true }
+// greeting: true keeps the hero's "Good morning, Dr. Synthetic" as the signal that the shell loaded (it is off by default).
+const PROFILE = { name: 'Dr. Synthetic', greeting: true, specialty: 'vascular-surgery', northStars: ['Limb preservation'], projects: [], topics: [], journalPreferences: { mustNotMiss: [], preferred: [] }, rubric: { criteria: 'Rank trials first.', selectCount: 5, scoreFloor: 0 }, onboarded: true }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--no-sandbox'] })
 const results = []
