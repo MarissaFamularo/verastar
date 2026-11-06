@@ -43,6 +43,16 @@ function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
   const rpcCalls = []
   let pubmedBlocked = false
   const rpcs = {
+    digest_inactivity_update: (a) => {
+      const row = t.digest_schedules.find((r) => r.user_id === a.p_user_id && r.claim_token === a.p_token)
+      const record = t.kv.find((r) => r.user_id === a.p_user_id && r.collection === 'digests' && r.key === 'daily:latest')?.value
+      if (!row || !row.enabled || row.unopened_streak !== a.p_expected_streak ||
+          (row.inactivity_counted_at ?? null) !== a.p_expected_counted_at || (row.paused_at ?? null) !== a.p_expected_paused_at ||
+          (row.engaged_at ?? null) !== a.p_expected_engaged_at || JSON.stringify(inactivityRecordVersion(record)) !== JSON.stringify(a.p_expected_record)) return false
+      Object.assign(row, { unopened_streak: a.p_streak, inactivity_counted_at: a.p_counted_at,
+        ...(a.p_pause ? { paused_at: new Date().toISOString(), claim_token: null, claimed_at: null } : a.p_clear_pause ? { paused_at: null } : {}) })
+      return true
+    },
     pubmed_search_claim: () => pubmedBlocked ? null : 'pubmed-token',
     pubmed_search_finish: ({ p_outcome }) => { pubmedBlocked = p_outcome === 'unavailable'; return true },
     beta_digest_observe: () => null,
@@ -600,7 +610,7 @@ describe('the fenced store', () => {
 })
 
 // --- unopened digests: counted and paused, never a silent freeze --------------------------
-import { nextUnopenedStreak, PAUSE_AFTER_UNOPENED, PAUSED_REASON } from '../../supabase/functions/digest-run/handler.js'
+import { nextUnopenedStreak, inactivityState, inactivityRecordVersion, pauseMayResume, PAUSE_AFTER_UNOPENED, PAUSED_REASON } from '../../supabase/functions/digest-run/handler.js'
 
 const YESTERDAY = new Date(Date.now() - 36 * 3600 * 1000).toISOString()
 function seedDigest(db, u, { opened = false, papers = 2, phase = 'done', runBy = 'scheduler', streak = 0, pausedAt = null } = {}) {
@@ -630,7 +640,7 @@ const row = (db, u = 'A') => db.t.digest_schedules.find((r) => r.user_id === u)
 const events = (db, type) => db.t.events.filter((e) => e.type === type)
 
 describe('nextUnopenedStreak', () => {
-  const finished = (openedAt, papers = 1) => ({ kind: 'daily', runBy: 'scheduler', server: { phase: 'done' }, openedAt, results: Array.from({ length: papers }, () => ({})) })
+  const finished = (openedAt, papers = 1) => ({ kind: 'daily', runBy: 'scheduler', server: { phase: 'done' }, ranAt: YESTERDAY, openedAt, results: Array.from({ length: papers }, () => ({})) })
   it('counts an unopened finished digest, resets on an opened one, ignores empty days and resumes', () => {
     expect(nextUnopenedStreak(finished(null), 2)).toBe(3)
     expect(nextUnopenedStreak(finished('2026-10-24T00:00:00Z'), 6)).toBe(0)
@@ -651,8 +661,8 @@ describe('nextUnopenedStreak', () => {
     expect(nextUnopenedStreak(built, 6, { engagedAt: null })).toBe(7)
     expect(nextUnopenedStreak(built, 6, { engagedAt: 'junk' })).toBe(7)
     // savedAt stands in for ranAt; a record with neither counts any engagement.
-    expect(nextUnopenedStreak({ ...finished(null), savedAt: '2026-10-25T10:00:00Z' }, 2, { engagedAt: '2026-10-24T00:00:00Z' })).toBe(3)
-    expect(nextUnopenedStreak(finished(null), 2, { engagedAt: '2020-01-01T00:00:00Z' })).toBe(0)
+    expect(nextUnopenedStreak({ ...finished(null), ranAt: null, savedAt: '2026-10-25T10:00:00Z' }, 2, { engagedAt: '2026-10-24T00:00:00Z' })).toBe(3)
+    expect(nextUnopenedStreak({ ...finished(null), ranAt: null }, 2, { engagedAt: '2020-01-01T00:00:00Z' })).toBe(0)
     // Engagement never touches an empty day or a run being resumed.
     expect(nextUnopenedStreak({ ...finished(null, 0), ranAt: '2026-10-25T10:00:00Z' }, 3, { engagedAt: '2026-10-25T11:00:00Z' })).toBe(3)
   })
@@ -773,7 +783,7 @@ describe('unopened digests', () => {
     expect(first).toEqual({ ran: false, reason: PAUSED_REASON })
     expect(runs).toBe(0)
     expect(row(db).paused_at).toBeTruthy()
-    expect(row(db).unopened_streak).toBe(PAUSE_AFTER_UNOPENED - 1)
+    expect(row(db).unopened_streak).toBe(PAUSE_AFTER_UNOPENED)
     expect(events(db, 'digest_paused')).toEqual([expect.objectContaining({ user_id: 'A', payload: { streak: PAUSE_AFTER_UNOPENED } })])
     expect(sent).toEqual([expect.objectContaining({ to: 'a@example.test', subject: 'Your Verastar digest is paused' })])
     expect(sent[0].text).toContain('haven’t seen a click on your Verastar digest in a week')
@@ -812,7 +822,7 @@ describe('unopened digests', () => {
       h.email = email
       return { h, sent }
     }
-    it('a pause re-stamped every tick still sends one email; the rest are recorded as capped', async () => {
+    it('clearing a pause cannot repeatedly count the same old digest or resend its notice', async () => {
       const db = memoryDb({ users: ['A'] })
       seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
       const { h, sent } = pauseHandler(db)
@@ -820,10 +830,10 @@ describe('unopened digests', () => {
         await handleDigestRun(cron(), h)
         row(db).paused_at = null // whatever un-pauses the row, the email must not repeat
       }
-      expect(events(db, 'digest_paused')).toHaveLength(5)
+      expect(events(db, 'digest_paused')).toHaveLength(1)
       expect(sent).toHaveLength(1)
       expect(events(db, 'digest_pause_emailed')).toHaveLength(1)
-      expect(events(db, 'digest_pause_email_capped')).toHaveLength(4)
+      expect(events(db, 'digest_pause_email_capped')).toHaveLength(0)
     })
     it('a pause email inside the window blocks the next one', async () => {
       const db = memoryDb({ users: ['A'] })
@@ -871,19 +881,15 @@ describe('unopened digests', () => {
     const db = memoryDb({ users: ['A'] })
     seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
     Object.assign(row(db), { claimed_at: new Date(Date.now() - 3 * 86400 * 1000).toISOString(), claim_token: 'tok-dead' })
-    // Another tick takes the account between this tick's read and its pause write.
-    const from = db.admin.from
-    db.admin.from = (table) => {
-      const chain = from(table)
-      const update = chain.update
-      // A new object: the handler's copy of the row (a real read) keeps the token it saw.
-      chain.update = (p) => { if (p.paused_at) db.t.digest_schedules[0] = { ...row(db), claim_token: 'tok-new', claimed_at: new Date().toISOString() }; return update(p) }
-      return chain
+    const rpc = db.admin.rpc
+    db.admin.rpc = async (name, args) => {
+      if (name === 'digest_inactivity_update') db.t.digest_schedules[0] = { ...row(db), claim_token: 'tok-new', claimed_at: new Date().toISOString() }
+      return rpc(name, args)
     }
     const { email, sent } = fakeEmail()
     const h = deps(db).deps
     h.email = email
-    expect(await (await handleDigestRun(cron(), h)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(await (await handleDigestRun(cron(), h)).json()).toEqual({ ran: false, reason: 'inactivity state changed; will retry' })
     expect(row(db)).toMatchObject({ claim_token: 'tok-new', paused_at: null })
     expect(events(db, 'digest_paused')).toHaveLength(0)
     expect(sent).toHaveLength(0)
@@ -1298,5 +1304,111 @@ describe('bounded completion after the daily attempt cap', () => {
     row(db).delivered_day = null
     row(db).last_run_at = at
     expect(mayFinishAtAttemptCap(row(db), record, now)).toBe(false)
+  })
+})
+
+describe('inactivity counts reading days once', () => {
+  it.each(['error', 'upstream wait'])('does not recount the same old digest on repeated %s ticks', async (kind) => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: 2 })
+    let searches = 0
+    const h = deps(db, { run: async () => {
+      if (kind === 'error') throw new Error('definitive search failure')
+      return currentServerScope().runSearch(async () => { searches++; throw Object.assign(new Error('PubMed down'), { code: 'PUBMED_UNAVAILABLE' }) })
+    } }).deps
+    for (let i = 0; i < 8; i++) await handleDigestRun(cron(), h)
+    expect(row(db).unopened_streak).toBe(3)
+    expect(row(db).inactivity_counted_at).toBe(YESTERDAY)
+    expect(row(db).paused_at).toBeNull()
+    expect(events(db, 'digest_paused')).toHaveLength(0)
+    if (kind === 'upstream wait') expect(searches).toBe(1)
+  })
+  it('never pauses or recounts a just-built digest before or after its delivery hour', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: 6 })
+    const record = db.t.kv.find((r) => r.key === 'daily:latest').value
+    record.ranAt = new Date().toISOString()
+    record.server.finishedAt = record.ranAt
+    row(db).last_run_at = record.ranAt
+    row(db).hour_local = LOCAL_HOUR + 1
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: async () => { throw new Error('already built') } }).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(sent).toHaveLength(0)
+    expect(row(db)).toMatchObject({ unopened_streak: 6, paused_at: null })
+    row(db).hour_local = LOCAL_HOUR
+    await handleDigestRun(cron(), h)
+    expect(sent).toHaveLength(1)
+    expect(row(db)).toMatchObject({ unopened_streak: 6, paused_at: null })
+    expect(events(db, 'digest_paused')).toHaveLength(0)
+  })
+  it('a zero counter cannot silently resume a persisted pause', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: 0, pausedAt: YESTERDAY })
+    for (let i = 0; i < 3; i++) expect(await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(row(db)).toMatchObject({ unopened_streak: 0, paused_at: YESTERDAY })
+    expect(db.rpcCalls).not.toContain('digest_claim')
+  })
+  it('requires reader activity after the pause, rather than an old open or click', () => {
+    const record = { openedAt: '2026-11-02T12:00:00Z' }
+    expect(pauseMayResume({ paused_at: '2026-11-04T12:00:00Z', engaged_at: '2026-11-03T12:00:00Z' }, record)).toBe(false)
+    expect(pauseMayResume({ paused_at: '2026-11-04T12:00:00Z', engaged_at: '2026-11-05T12:00:00Z' }, record)).toBe(true)
+    expect(pauseMayResume({ paused_at: 'bad' }, record)).toBe(false)
+    expect(pauseMayResume({ paused_at: 'bad' }, record, true)).toBe(true)
+  })
+  it('counts seven distinct older finished digests and not repeated evaluations', () => {
+    let streak = 0, countedAt = null
+    for (let day = 1; day <= 7; day++) {
+      const ranAt = `2026-11-${String(day).padStart(2, '0')}T10:00:00Z`
+      const now = new Date(`2026-11-${String(day + 1).padStart(2, '0')}T10:00:00Z`)
+      const record = { kind: 'daily', runBy: 'scheduler', ranAt, server: { phase: 'done' }, results: [{}] }
+      const state = inactivityState(record, streak, { countedAt, now, timezone: 'America/New_York' })
+      expect(state.streak).toBe(day)
+      expect(state.pause).toBe(day === 7)
+      streak = state.streak; countedAt = state.countedAt
+      expect(inactivityState(record, streak, { countedAt, now, timezone: 'America/New_York' })).toEqual({ streak, countedAt, pause: false })
+    }
+  })
+  it('uses completion and account local day rather than the scan start or UTC midnight', () => {
+    const record = { kind: 'daily', runBy: 'scheduler', ranAt: '2026-11-04T23:59:00Z', server: { phase: 'done', finishedAt: '2026-11-05T05:05:00Z' }, results: [{}] }
+    const now = new Date('2026-11-05T10:00:00Z')
+    expect(inactivityState(record, 6, { now, timezone: 'America/New_York' }).streak).toBe(6)
+    record.server.finishedAt = '2026-11-05T04:59:00Z'
+    expect(inactivityState(record, 6, { now, timezone: 'America/New_York' }).streak).toBe(7)
+    record.ranAt = 'invalid'
+    expect(inactivityState(record, 6, { now }).streak).toBe(6)
+  })
+  it.each(['engagement', 'browser open'])('rejects an inactivity write when %s changes after the read', async (change) => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: 6 })
+    const rpc = db.admin.rpc
+    db.admin.rpc = async (name, args) => {
+      if (name === 'digest_inactivity_update') {
+        if (change === 'engagement') row(db).engaged_at = new Date().toISOString()
+        else db.t.kv.find((r) => r.key === 'daily:latest').value.openedAt = new Date().toISOString()
+      }
+      return rpc(name, args)
+    }
+    const h = deps(db, { run: async () => { throw new Error('must not dispatch') } })
+    expect(await (await handleDigestRun(cron(), h.deps)).json()).toEqual({ ran: false, reason: 'inactivity state changed; will retry' })
+    expect(row(db)).toMatchObject({ unopened_streak: 6, paused_at: null, claim_token: null })
+    expect(events(db, 'digest_paused')).toHaveLength(0)
+    expect(h.provider.sent).toHaveLength(0)
+  })
+  it.each(['error response', 'thrown transport failure'])('does not dispatch on checkpoint %s', async (failure) => {
+    const db = memoryDb({ users: ['A'], failRpc: { digest_inactivity_update: true } })
+    seedDigest(db, 'A', { streak: 2 })
+    if (failure === 'thrown transport failure') {
+      const rpc = db.admin.rpc
+      db.admin.rpc = (name, args) => {
+        if (name === 'digest_inactivity_update') throw new Error('connection interrupted')
+        return rpc(name, args)
+      }
+    }
+    const h = deps(db, { run: async () => { throw new Error('must not dispatch') } })
+    expect(await (await handleDigestRun(cron(), h.deps)).json()).toEqual({ ran: false, reason: 'inactivity state changed; will retry' })
+    expect(row(db)).toMatchObject({ unopened_streak: 2, claim_token: null })
+    expect(h.provider.sent).toHaveLength(0)
   })
 })

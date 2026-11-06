@@ -42,7 +42,8 @@ for f in supabase/tests/spending_fixture.sql \
          supabase/migrations/20261026150000_digest_engagement.sql \
          supabase/migrations/20261026151000_beta_email_engagement_metrics.sql \
          supabase/migrations/20261026233000_beta_monitor_build_lead.sql \
-         supabase/migrations/20261105103716_pubmed_outage_resilience.sql; do
+         supabase/migrations/20261105103716_pubmed_outage_resilience.sql \
+         supabase/migrations/20261106112838_inactivity_once_per_digest.sql; do
   "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { echo "migration failed: $f" >&2; "$PSQL" -X -q -v ON_ERROR_STOP=1 -f "$f"; exit 1; }
 done
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/beta_admin_dashboard.sql 2>&1 | grep -E "^psql.*(ERROR|FAIL)|ok:" || true
@@ -51,5 +52,7 @@ done
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/share_click_metrics.sql
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/email_engagement.sql
 "$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/pubmed_outage.sql
+"$PSQL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/inactivity.sql
+python3 supabase/tests/inactivity_repair.py
 echo "beta admin dashboard and release SQL tests passed"
 [ -n "${KEEP_DB:-}" ] || "$BIN/dropdb" "$DB"
