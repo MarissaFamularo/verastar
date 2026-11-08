@@ -61,8 +61,8 @@ describe('handleUnsubscribe', () => {
   it('a valid link turns the email off, records it, and says so', async () => {
     const { admin, t } = fakeAdmin()
     const res = await handleUnsubscribe(await req('GET'), { admin, secret: SECRET, appUrl: 'https://app.test' })
-    expect(res.status).toBe(200)
-    expect(await res.text()).toContain('Unsubscribed')
+    expect(res.status).toBe(303)
+    expect(res.headers.get('Location')).toBe('https://app.test/digest-status.html?result=unsubscribed')
     expect(t.digest_schedules[0]).toMatchObject({ enabled: true, email_digest: false })
     expect(t.events).toEqual([expect.objectContaining({ user_id: USER, type: 'digest_email_unsubscribed', payload: { via: 'link' } })])
   })

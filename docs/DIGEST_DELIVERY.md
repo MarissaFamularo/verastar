@@ -110,8 +110,18 @@ printed untracked, and the email still goes.
 construction as the unsubscribe link with its own `digest-resume:` prefix, so neither
 token works as the other. GET or POST with a valid token clears `paused_at`, sets
 `unopened_streak` to 0, stamps `engaged_at`, records `digest_resume_clicked`, and shows
-"Thanks. Your digest is back on". A schedule the reader switched off in Settings stays off,
-and the page says so. HEAD changes nothing.
+"Thanks. Your digest is back on" only when the update returns a matching schedule.
+A missing schedule is not success and records no resume event. A schedule the reader
+switched off in Settings stays off, and the page says so. HEAD changes nothing.
+
+Browser GETs redirect (303) to `/digest-status.html?result=<allowlisted outcome>` on
+`APP_URL`. Supabase rewrites HTML GET responses to plain text, so the frontend serves
+this standalone page. The redirect sends neither the account id nor the signed token,
+sets `Referrer-Policy: no-referrer` and `Cache-Control: no-store`, and never accepts a
+destination from the request. The page does not mount the app or record engagement;
+refreshing it does not repeat the mutation. POSTs return direct plain-text HTTP statuses
+(200 on success, 400 for an invalid token, 404 for a missing resume schedule, 503 when a
+write cannot be confirmed). Without a valid `APP_URL`, GETs also use plain text.
 
 ### The pause email
 
@@ -209,11 +219,14 @@ Three ways, all leaving the in-app digest running:
   DIGEST_UNSUBSCRIBE_SECRET>`, signed by `digest-run` (`_shared/unsubscribe.js`) and
   honoured by the `digest-unsubscribe` function with no sign-in: one click turns
   `email_digest` off (creating an all-off row when the account has none), records
-  `digest_email_unsubscribed`, and shows a plain confirmation page. A wrong token is a
-  400 page and changes nothing. The founder mailing uses the same link.
+  `digest_email_unsubscribed`, and redirects to the same frontend confirmation page.
+  A wrong token changes nothing. If a concurrent insert wins while creating the all-off
+  row, the handler retries the email-only update and confirms a returned row before
+  reporting success. The founder mailing uses the same link.
 - **The mail client's own button.** Every email carries `List-Unsubscribe` and
   `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058) pointing at the same
-  link; Gmail and Apple Mail POST to it.
+  link; Gmail and Apple Mail POST to it and receive a direct 200 plain-text response,
+  not a redirect. A storage failure remains a non-2xx response for retry.
 
 Without `DIGEST_UNSUBSCRIBE_SECRET` the emails carry no link or headers and name the
 Settings switch only, links are not tracked, and the pause email has no resume button;

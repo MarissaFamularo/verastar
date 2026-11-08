@@ -3,7 +3,7 @@
 // app. The token in the link is the only credential.
 // Secrets: DIGEST_UNSUBSCRIBE_SECRET (shared with digest-run, which signs the button; the
 // resume token uses its own "digest-resume:" prefix); SUPABASE_* injected by the platform.
-// Optional APP_URL for the page's link.
+// Optional APP_URL for the frontend confirmation page; no signed tokens are forwarded.
 
 import { createClient } from '@supabase/supabase-js'
 import { handleResume } from './handler.js'

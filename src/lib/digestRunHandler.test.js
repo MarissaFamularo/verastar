@@ -132,9 +132,10 @@ function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
     const filters = []
     let op = 'select'
     let payload = null
+    let selected = '*'
     const rows = () => t[table].filter((r) => filters.every((f) => f(r)))
     const chain = {
-      select: () => chain,
+      select: (columns = '*') => { selected = columns; return chain },
       eq: (k, v) => { filters.push((r) => r[k] === v); return chain },
       in: (k, vs) => { filters.push((r) => vs.includes(r[k])); return chain },
       is: (k, v) => { filters.push((r) => (r[k] ?? null) === v); return chain },
@@ -148,7 +149,11 @@ function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
       insert: (row) => { t[table].push(row); return Promise.resolve({ error: null }) },
       upsert: (row) => { t[table].push(row); return Promise.resolve({ error: null }) },
       then: (res, rej) => {
-        if (op === 'update') { const hit = rows(); for (const r of hit) Object.assign(r, payload); return Promise.resolve({ data: hit.map((r) => ({ user_id: r.user_id })), error: null }).then(res, rej) }
+        if (op === 'update') {
+          const hit = rows(); for (const r of hit) Object.assign(r, payload)
+          const data = hit.map((r) => selected === '*' ? { ...r } : Object.fromEntries(selected.split(',').map((key) => [key.trim(), r[key.trim()]])))
+          return Promise.resolve({ data, error: null }).then(res, rej)
+        }
         return sleep(1).then(() => ({ data: rows(), error: null })).then(res, rej)
       },
     }
