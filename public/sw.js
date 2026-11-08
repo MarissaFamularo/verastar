@@ -31,6 +31,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
+  // A confirmation must never fall back to the app shell (which can sign in and
+  // record engagement). Refreshing it only displays the original link's outcome.
+  if (url.pathname.endsWith('/digest-status.html')) return
+
   // Navigations: network-first so a deploy is never masked; the cached shell is
   // only the fallback for a flaky launch. The fresh copy re-primes the cache.
   if (event.request.mode === 'navigate') {

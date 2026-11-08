@@ -6,6 +6,9 @@ import tailwindcss from '@tailwindcss/vite'
 // data endpoints. No backend, no dev proxy — every fetch goes direct.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rollupOptions: { input: { app: 'index.html', digestStatus: 'digest-status.html' } },
+  },
   // PORT is set by tooling (e.g. the preview harness) to avoid clashing with a dev server already on 5173.
   server: {
     port: Number(process.env.PORT) || 5173,

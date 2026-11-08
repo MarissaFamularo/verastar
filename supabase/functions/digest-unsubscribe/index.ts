@@ -2,7 +2,7 @@
 // verify_jwt = false (supabase/config.toml): the link is opened signed out, and mail clients
 // POST to it with no headers of ours. The token in the link is the only credential.
 // Secrets: DIGEST_UNSUBSCRIBE_SECRET (shared with digest-run, which signs the links);
-// SUPABASE_* injected by the platform. Optional APP_URL for the page's link.
+// SUPABASE_* injected by the platform. Optional APP_URL for browser confirmations.
 
 import { createClient } from '@supabase/supabase-js'
 import { handleUnsubscribe } from './handler.js'
