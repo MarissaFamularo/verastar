@@ -24,8 +24,8 @@ const PAPER_ID = /^[A-Za-z0-9._:/-]{0,128}$/
 
 // What a link is: "paper" (the paper's citation, usually PubMed), "fulltext" (the
 // open-access copy), "open" (the digest email's "Open in Verastar"), "pause-open" (the
-// pause email's link to the app).
-export const CLICK_KINDS = ['paper', 'fulltext', 'open', 'pause-open']
+// pause email's link to the app), "survey" (the digest email's day-30 survey invitation).
+export const CLICK_KINDS = ['paper', 'fulltext', 'open', 'pause-open', 'survey']
 
 function destination(to) {
   try {

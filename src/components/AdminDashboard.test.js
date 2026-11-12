@@ -126,3 +126,37 @@ it('lists feedback with its sender and counts wrong-badge reports', async () => 
     expect(dom.text()).toContain('“This is wrong” reports')
     expect(dom.text()).toContain('1 in the last 7 days')
   })
+
+describe('Day-30 survey section', () => {
+  const S30 = {
+    eligible_now: 12, completed: 3,
+    read_frequency: { weekly: 2, daily: 1 }, weekly_time: { '30_60m': 3 }, confidence: { 4: 2, 2: 1 },
+    digest_fit: { 5: 1, 4: 2 }, if_gone: { very_disappointed: 2, stopped_using: 1 },
+    paired: { n: 3, confidence: { up: 2, same: 0, down: 1 }, weekly_time: { more: 0, same: 1, less: 2 } },
+  }
+  const respond = (s30) => mocks.rpc.mockImplementation(async (name) =>
+    name === 'beta_survey30_stats' ? s30 : name === 'beta_admin_feedback' ? { data: { messages: [] }, error: null } : { data: STATS, error: null })
+
+  it('shows counts, the paired change, and the day-30 answer tables', async () => {
+    respond({ data: S30, error: null })
+    await dom.render(React.createElement(AdminDashboard, { active: true }))
+    const s = dom.container.querySelector('section[aria-label="Day-30 survey"]')
+    expect(s.textContent).toContain('3 of 12 accounts past day 30 have answered')
+    expect(s.textContent).toContain('Change since signup (3 answered both)')
+    expect(s.textContent).toContain('Higher 2')
+    expect(s.textContent).toContain('Less 2')
+    expect(s.textContent).toContain('How would you feel if you could no longer use Verastar?')
+    expect(s.textContent).toContain('Very disappointed')
+    expect(s.textContent).toContain('67%')
+  })
+  it('says when nobody has answered both, and says so when the stats fail', async () => {
+    respond({ data: { ...S30, paired: { n: 0 } }, error: null })
+    await dom.render(React.createElement(AdminDashboard, { active: true }))
+    expect(dom.container.querySelector('section[aria-label="Day-30 survey"]').textContent).toContain('No account has completed both surveys yet.')
+    await dom.unmount()
+    dom = await mountDom()
+    respond({ data: null, error: { code: 'PGRST202', message: 'missing' } })
+    await dom.render(React.createElement(AdminDashboard, { active: true }))
+    expect(dom.container.querySelector('section[aria-label="Day-30 survey"]').textContent).toContain('Not available')
+  })
+})

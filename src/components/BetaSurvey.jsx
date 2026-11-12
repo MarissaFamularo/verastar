@@ -1,9 +1,11 @@
-// components/BetaSurvey.jsx — the optional one-minute signup survey, shown once after a
-// beta code enrolls the account (OnboardingQuiz connect step).
+// components/BetaSurvey.jsx — the optional beta survey form. With no wave props it is the
+// one-minute signup survey, shown once after a beta code enrolls the account (OnboardingQuiz
+// connect step); Day30Survey.jsx renders it with the day-30 wave's questions.
 //
-// Four single-choice questions as native radio groups (one fieldset and one `name` per
+// Single-choice questions (four at signup) as native radio groups (one fieldset and one `name` per
 // question, so arrow keys move within a question and Tab moves between them), a Skip that is
-// always available, and no way to block the flow: whatever the server answers (or fails to
+// always available (or, with `onLater`, a "not now" that records nothing: the day-30 wave
+// cannot be skipped), and no way to block the flow: whatever the server answers (or fails to
 // answer), onDone fires and onboarding continues. Answers are option codes
 // (lib/betaSurvey.js); nothing typed, nothing logged. Answers are linked to the account:
 // the copy says so and does not promise anonymity.
@@ -39,18 +41,27 @@ function optionStyle(selected, focused) {
 }
 const radioStyle = { margin: 0, width: 16, height: 16, accentColor: 'var(--color-accent)', flex: 'none' }
 
-export default function BetaSurvey({ onDone }) {
+export default function BetaSurvey({
+  onDone,
+  wave = 'signup',
+  questions = SURVEY_QUESTIONS,
+  intro = SURVEY_INTRO,
+  mark = 'BETA · ONE MINUTE',
+  heading = 'Before you start',
+  skipLabel = 'Skip for now',
+  onLater = null,
+}) {
   const [answers, setAnswers] = useState({})
   const [busy, setBusy] = useState(false)
   const [focused, setFocused] = useState(null) // `${key}:${code}` of the radio with keyboard focus
-  const complete = surveyComplete(answers)
+  const complete = surveyComplete(answers, questions)
 
   async function finish(status) {
     if (busy) return
     setBusy(true)
     try {
       // The survey must never hold the flow: a slow or failed write is simply let go.
-      await awaitWithin(submitBetaSurvey({ status, answers }), SURVEY_SUBMIT_TIMEOUT_MS)
+      await awaitWithin(submitBetaSurvey({ status, answers, wave }), SURVEY_SUBMIT_TIMEOUT_MS)
     } catch {
       /* ignored: the app continues either way */
     }
@@ -59,12 +70,12 @@ export default function BetaSurvey({ onDone }) {
 
   return (
     <div>
-      <p style={stepMark}>BETA · ONE MINUTE</p>
-      <h2 className="vs-step-title" style={title}>Before you start</h2>
-      <p style={lede}>{SURVEY_INTRO}</p>
+      <p style={stepMark}>{mark}</p>
+      <h2 className="vs-step-title" style={title}>{heading}</h2>
+      <p style={lede}>{intro}</p>
 
       <form onSubmit={(e) => { e.preventDefault(); if (complete) finish('completed') }}>
-        {SURVEY_QUESTIONS.map((q, i) => (
+        {questions.map((q, i) => (
           <fieldset key={q.key} style={{ margin: '26px 0 0', padding: 0, border: 0, minWidth: 0 }}>
             <legend style={prompt}>{i + 1}. {q.prompt}</legend>
             {q.scale && (
@@ -75,7 +86,7 @@ export default function BetaSurvey({ onDone }) {
             <div className="flex flex-wrap" style={{ marginTop: 10, gap: 8 }}>
               {q.options.map(([code, label]) => {
                 const selected = answers[q.key] === code
-                const id = `survey-${q.key}-${code}`
+                const id = `survey-${wave}-${q.key}-${code}`
                 return (
                   <label key={code} htmlFor={id} className="cursor-pointer" style={optionStyle(selected, focused === id)}>
                     <input
@@ -101,12 +112,12 @@ export default function BetaSurvey({ onDone }) {
           <button type="submit" disabled={!complete || busy} className="cursor-pointer" style={{ ...primaryBtn, opacity: !complete || busy ? 0.5 : 1 }}>
             {busy ? 'Saving…' : 'Send answers →'}
           </button>
-          <button type="button" onClick={() => finish('skipped')} disabled={busy} className="cursor-pointer" style={ghostLink}>
-            Skip for now
+          <button type="button" onClick={() => (onLater ? onLater() : finish('skipped'))} disabled={busy} className="cursor-pointer" style={ghostLink}>
+            {skipLabel}
           </button>
         </div>
         <p style={{ margin: '14px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-fg-muted)', maxWidth: 520 }}>
-          Your answers are linked to your account and shown to the beta operators as counts. In a small beta those counts can reveal an individual’s answers, so this is not anonymous. Only the choices above are collected, never free text. Skipping changes nothing about your access.
+          Your answers are linked to your account and shown to the beta operators as counts. In a small beta those counts can reveal an individual’s answers, so this is not anonymous. Only the choices above are collected, never free text. {onLater ? 'Answering or not changes nothing about your access.' : 'Skipping changes nothing about your access.'}
         </p>
       </form>
     </div>

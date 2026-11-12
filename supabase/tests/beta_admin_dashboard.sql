@@ -93,7 +93,7 @@ select pg_temp.as_user(:D);
 select pg_temp.fails($q$select public.beta_survey_submit('signup', 'v1', 'completed', '{"reason":"stay_current","read_frequency":"weekly","weekly_time":"1_3h","confidence":"7"}')$q$, '22023', 'confidence outside 1..5 is refused');
 select pg_temp.fails($q$select public.beta_survey_submit('signup', 'v1', 'completed', '{"reason":"free text here","read_frequency":"weekly","weekly_time":"1_3h","confidence":"3"}')$q$, '22023', 'an answer outside the offered options is refused');
 select pg_temp.fails($q$select public.beta_survey_submit('signup', 'v1', 'completed', '{"reason":"stay_current","read_frequency":"weekly","confidence":"3"}')$q$, '22023', 'a missing answer is refused');
-select pg_temp.fails($q$select public.beta_survey_submit('day30', 'v1', 'skipped')$q$, '22023', 'the day-30 wave is not accepted yet');
+select pg_temp.fails($q$select public.beta_survey_submit('day30', 'v1', 'skipped')$q$, '22023', 'the day-30 wave refuses an account enrolled under 30 days ago (D: 5 days)');
 select pg_temp.fails($q$select public.beta_survey_submit('signup', 'v1', 'maybe')$q$, '22023', 'an unknown status is refused');
 select pg_temp.ok((select count(*) from public.beta_survey_responses) = 0, 'a refused submit stores nothing for D');
 -- Eligibility: E is signed in but never redeemed a code (no sponsored_accounts row).

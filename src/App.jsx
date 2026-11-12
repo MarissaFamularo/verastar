@@ -47,6 +47,7 @@ import InviteCode from './components/InviteCode.jsx'
 import AdminDashboard from './components/AdminDashboard.jsx'
 import { checkBetaAdmin } from './lib/betaAdmin.js'
 import { BetaLabel, FeedbackButton } from './components/BetaFeedback.jsx'
+import Day30Survey from './components/Day30Survey.jsx'
 import { savedKeyLabel } from './lib/accessLabel.js'
 import { DEMO_DIGEST_COUNTS } from './demo/demoDigest.js'
 import { greetingFor, DEFAULT_NAME } from '../supabase/functions/_shared/digestEmail.js'
@@ -917,6 +918,8 @@ export default function App() {
   const [onboarded, setOnboarded] = useState(null)
   // ?firstrun=1 previews the onboarding flow without touching the saved profile or key.
   const [firstrunPreview, setFirstrunPreview] = useState(() => new URLSearchParams(window.location.search).has('firstrun'))
+  // ?survey=day30 (the digest email's survey link) opens the day-30 survey when it is due.
+  const [surveyLink] = useState(() => new URLSearchParams(window.location.search).get('survey') === 'day30')
   const [view, setView] = useState('digest')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [starsOpen, setStarsOpen] = useState(false) // north-star chips: collapsed by default
@@ -1234,6 +1237,8 @@ export default function App() {
                   <RetractionNotice alerts={retractionAlerts} onKeep={(p) => acknowledgeRetraction(p.id).catch(() => {})} onOpenLibrary={() => setView('library')} />
                 </div>
               )}
+              {/* Renders nothing (no gap) unless the day-30 survey is due. */}
+              {!demo && account && <Day30Survey autoOpen={surveyLink} />}
               <div style={{ marginTop: 34 }}>
                 <SpineCheck key={`${saved ? 'keyed' : 'nokey'}-${demo ? 'demo' : 'live'}`} demo={demo} onDigestDate={setDigestSavedAt} />
               </div>
