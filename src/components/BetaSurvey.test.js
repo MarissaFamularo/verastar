@@ -75,6 +75,7 @@ describe('BetaSurvey', () => {
     expect(submitBetaSurvey).toHaveBeenCalledWith({
       status: 'completed',
       answers: { reason: 'stay_current', read_frequency: 'weekly', weekly_time: '1_3h', confidence: '4' },
+      wave: 'signup',
     })
     expect(onDone).toHaveBeenCalledWith('completed')
   })
@@ -93,7 +94,7 @@ describe('BetaSurvey', () => {
     submitBetaSurvey.mockResolvedValue({ ok: true, status: 'recorded' })
     await dom.render(React.createElement(BetaSurvey, { onDone }))
     await dom.click(dom.button('Skip for now'))
-    expect(submitBetaSurvey).toHaveBeenCalledWith({ status: 'skipped', answers: {} })
+    expect(submitBetaSurvey).toHaveBeenCalledWith({ status: 'skipped', answers: {}, wave: 'signup' })
     expect(onDone).toHaveBeenCalledWith('skipped')
   })
 

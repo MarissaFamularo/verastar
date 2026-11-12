@@ -1,8 +1,12 @@
-// lib/betaSurvey.js — the optional one-minute signup survey (docs/BETA_ADMIN_DASHBOARD.md).
+// lib/betaSurvey.js — the optional beta surveys (docs/BETA_ADMIN_DASHBOARD.md): the
+// one-minute signup survey and the day-30 follow-up.
 //
-// Offered once, right after a beta code enrolls the account. Answers are option CODES only
+// Signup is offered once, right after a beta code enrolls the account. Day 30 is offered in
+// the app (and linked from the digest email) once the server says the account is 30 days
+// past enrollment; it repeats the three habit questions so each account can be compared
+// with its own signup answers. Answers are option CODES only
 // (no free text); the server validates them again and stores one row per account through
-// the beta_survey_submit RPC, so a repeat submit is a no-op and a skip is final. Nothing
+// the beta_survey_submit RPC, so a repeat submit is a no-op and a signup skip is final (day 30 refuses skips). Nothing
 // here can block the app: every call resolves, never throws, and a failure is reported as
 // { ok: false } for the caller to ignore.
 
@@ -55,9 +59,42 @@ export const SURVEY_QUESTIONS = [
   },
 ]
 
+// --- Day 30 ---------------------------------------------------------------------------------
+export const DAY30_VERSION = 'day30-v1'
+export const DAY30_WAVE = 'day30'
+export const DAY30_INTRO = 'You’ve had Verastar for about a month. Five quick questions on how it’s going; three repeat what we asked at signup so we can see what changed.'
+
+const habit = (key) => SURVEY_QUESTIONS.find((q) => q.key === key)
+export const DAY30_QUESTIONS = [
+  habit('read_frequency'),
+  habit('weekly_time'),
+  habit('confidence'),
+  {
+    key: 'digest_fit',
+    prompt: 'How well do the papers in your digest match your work?',
+    scale: { min: 1, max: 5, minLabel: 'Not at all', maxLabel: 'Very well' },
+    options: [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']],
+  },
+  {
+    key: 'if_gone',
+    prompt: 'How would you feel if you could no longer use Verastar?',
+    options: [
+      ['very_disappointed', 'Very disappointed'],
+      ['somewhat_disappointed', 'Somewhat disappointed'],
+      ['not_disappointed', 'Not disappointed'],
+      ['stopped_using', 'I’ve stopped using it'],
+    ],
+  },
+]
+
+const WAVES = {
+  signup: { wave: SURVEY_WAVE, version: SURVEY_VERSION, questions: SURVEY_QUESTIONS },
+  day30: { wave: DAY30_WAVE, version: DAY30_VERSION, questions: DAY30_QUESTIONS },
+}
+
 // Pure: every question answered with one of its offered codes.
-export function surveyComplete(answers) {
-  return SURVEY_QUESTIONS.every((q) => q.options.some(([code]) => code === answers?.[q.key]))
+export function surveyComplete(answers, questions = SURVEY_QUESTIONS) {
+  return questions.every((q) => q.options.some(([code]) => code === answers?.[q.key]))
 }
 
 export function canOfferSurvey() {
@@ -66,17 +103,20 @@ export function canOfferSurvey() {
 
 // Record a completed survey or a skip. Resolves { ok, status } where status is
 // 'recorded' | 'already' | 'unavailable'. Never throws.
-export async function submitBetaSurvey({ status, answers = {} }) {
+// `wave` is 'signup' (default) or 'day30'.
+export async function submitBetaSurvey({ status, answers = {}, wave = 'signup' }) {
+  const w = WAVES[wave]
+  if (!w) return { ok: false, status: 'unavailable' }
   if (!canOfferSurvey()) return { ok: false, status: 'unavailable' }
   if (status !== 'completed' && status !== 'skipped') return { ok: false, status: 'unavailable' }
-  if (status === 'completed' && !surveyComplete(answers)) return { ok: false, status: 'unavailable' }
+  if (status === 'completed' && !surveyComplete(answers, w.questions)) return { ok: false, status: 'unavailable' }
   const payload = status === 'completed'
-    ? Object.fromEntries(SURVEY_QUESTIONS.map((q) => [q.key, answers[q.key]]))
+    ? Object.fromEntries(w.questions.map((q) => [q.key, answers[q.key]]))
     : {}
   try {
     const { data, error } = await supabase.rpc('beta_survey_submit', {
-      p_wave: SURVEY_WAVE,
-      p_version: SURVEY_VERSION,
+      p_wave: w.wave,
+      p_version: w.version,
       p_status: status,
       p_answers: payload,
     })
@@ -102,5 +142,20 @@ export async function betaSurveyRecorded() {
     return !!data
   } catch {
     return null
+  }
+}
+
+// Should the app offer the day-30 survey now? Resolves true only when the server says the
+// account is past day 30 and has not answered (the day-30 wave cannot be skipped). Any failure (signed out,
+// unconfigured, RPC error, an older database without the function) resolves false: the
+// prompt is a nicety and never an error the reader sees.
+export async function day30SurveyDue() {
+  if (!canOfferSurvey()) return false
+  try {
+    const { data, error } = await supabase.rpc('beta_survey_day30_state')
+    if (error || !data) return false
+    return data.eligible === true && !data.recorded
+  } catch {
+    return false
   }
 }

@@ -10,7 +10,7 @@ vi.mock('./supabase.js', () => ({
   },
 }))
 
-import { SURVEY_QUESTIONS, SURVEY_VERSION, betaSurveyRecorded, submitBetaSurvey, surveyComplete } from './betaSurvey.js'
+import { DAY30_QUESTIONS, DAY30_VERSION, SURVEY_QUESTIONS, SURVEY_VERSION, betaSurveyRecorded, day30SurveyDue, submitBetaSurvey, surveyComplete } from './betaSurvey.js'
 
 const FULL = { reason: 'stay_current', read_frequency: 'weekly', weekly_time: '1_3h', confidence: '4' }
 
@@ -83,5 +83,56 @@ describe('betaSurveyRecorded', () => {
     expect(await betaSurveyRecorded()).toBe(null)
     mocks.user = null
     expect(await betaSurveyRecorded()).toBe(null)
+  })
+})
+
+const DAY30 = { read_frequency: 'daily', weekly_time: '30_60m', confidence: '5', digest_fit: '4', if_gone: 'very_disappointed' }
+
+describe('day-30 wave', () => {
+  it('repeats the three habit questions word for word and adds digest fit and if-gone', () => {
+    expect(DAY30_QUESTIONS.map((q) => q.key)).toEqual(['read_frequency', 'weekly_time', 'confidence', 'digest_fit', 'if_gone'])
+    for (const key of ['read_frequency', 'weekly_time', 'confidence']) {
+      expect(DAY30_QUESTIONS.find((q) => q.key === key)).toBe(SURVEY_QUESTIONS.find((q) => q.key === key))
+    }
+    // Option codes match the table's checks (20261111120000_beta_survey_day30.sql).
+    expect(DAY30_QUESTIONS[4].options.map(([c]) => c)).toEqual(['very_disappointed', 'somewhat_disappointed', 'not_disappointed', 'stopped_using'])
+    expect(DAY30_QUESTIONS[3].options.map(([c]) => c)).toEqual(['1', '2', '3', '4', '5'])
+  })
+  it('completeness is judged against the wave’s own questions', () => {
+    expect(surveyComplete(DAY30, DAY30_QUESTIONS)).toBe(true)
+    expect(surveyComplete(DAY30)).toBe(false) // no reason: not a signup answer
+    expect(surveyComplete(FULL, DAY30_QUESTIONS)).toBe(false)
+  })
+  it('submits the day-30 codes with its own wave and version, and nothing else', async () => {
+    mocks.rpc.mockResolvedValue({ data: { status: 'recorded' }, error: null })
+    const out = await submitBetaSurvey({ status: 'completed', wave: 'day30', answers: { ...DAY30, reason: 'other', extra: 'x' } })
+    expect(out).toEqual({ ok: true, status: 'recorded' })
+    expect(mocks.rpc).toHaveBeenCalledWith('beta_survey_submit', { p_wave: 'day30', p_version: DAY30_VERSION, p_status: 'completed', p_answers: DAY30 })
+  })
+  it('an incomplete day-30 answer or an unknown wave never reaches the server', async () => {
+    expect(await submitBetaSurvey({ status: 'completed', wave: 'day30', answers: FULL })).toEqual({ ok: false, status: 'unavailable' })
+    expect(await submitBetaSurvey({ status: 'skipped', wave: 'day60' })).toEqual({ ok: false, status: 'unavailable' })
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+})
+
+describe('day30SurveyDue', () => {
+  it('is due only when eligible and nothing is recorded', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: { eligible: true, recorded: null }, error: null })
+    expect(await day30SurveyDue()).toBe(true)
+    expect(mocks.rpc).toHaveBeenCalledWith('beta_survey_day30_state')
+    mocks.rpc.mockResolvedValueOnce({ data: { eligible: true, recorded: 'skipped' }, error: null })
+    expect(await day30SurveyDue()).toBe(false)
+    mocks.rpc.mockResolvedValueOnce({ data: { eligible: false, recorded: null }, error: null })
+    expect(await day30SurveyDue()).toBe(false)
+  })
+  it('answers false on any failure, and without asking when signed out', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } })
+    expect(await day30SurveyDue()).toBe(false)
+    mocks.rpc.mockRejectedValueOnce(new Error('offline'))
+    expect(await day30SurveyDue()).toBe(false)
+    mocks.user = null
+    expect(await day30SurveyDue()).toBe(false)
+    expect(mocks.rpc).toHaveBeenCalledTimes(2)
   })
 })

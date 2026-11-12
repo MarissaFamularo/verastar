@@ -62,7 +62,7 @@ describe('signed click link', () => {
     await expect(signClick({ userId: USER, kind: 'paper', paperId: 'a b<', to: TO }, SECRET)).rejects.toThrow(/paper id/)
     await expect(signClick({ userId: USER, kind: 'paper', to: 'javascript:alert(1)' }, SECRET)).rejects.toThrow(/http/)
     await expect(signClick({ userId: USER, kind: 'paper', to: 'not a url' }, SECRET)).rejects.toThrow(/http/)
-    expect(CLICK_KINDS).toEqual(['paper', 'fulltext', 'open', 'pause-open'])
+    expect(CLICK_KINDS).toEqual(['paper', 'fulltext', 'open', 'pause-open', 'survey'])
   })
   it('is not interchangeable with the unsubscribe or resume tokens', async () => {
     const unsub = await signUnsubscribe(USER, SECRET)

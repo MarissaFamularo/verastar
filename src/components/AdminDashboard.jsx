@@ -6,7 +6,7 @@
 // what beta users wrote in "Send feedback", with their sign-in email, so it can be answered.
 
 import { useEffect, useRef, useState } from 'react'
-import { defaultRange, fetchBetaFeedback, fetchBetaStats, metricSections, rangeFromInputs, surveyDistributions } from '../lib/betaAdmin.js'
+import { day30Distributions, day30Paired, defaultRange, fetchBetaFeedback, fetchBetaStats, fetchSurvey30, metricSections, rangeFromInputs, surveyDistributions } from '../lib/betaAdmin.js'
 
 const eyebrow = { margin: 0, fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--color-fg-faint)', fontWeight: 600 }
 const inputStyle = { padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'var(--surface-input)', color: 'var(--color-fg)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
@@ -16,6 +16,7 @@ export default function AdminDashboard({ active = true }) {
   const [{ fromDate, toDate }, setDates] = useState(() => defaultRange())
   const [state, setState] = useState({ phase: 'idle' })
   const [feedback, setFeedback] = useState({ phase: 'idle' })
+  const [survey30, setSurvey30] = useState({ phase: 'idle' })
   const loadedOnce = useRef(false)
 
   async function load(f = fromDate, t = toDate) {
@@ -27,6 +28,7 @@ export default function AdminDashboard({ active = true }) {
     }
     setState({ phase: 'loading' })
     fetchBetaFeedback().then((r) => setFeedback(r.ok ? { phase: 'ready', data: r.feedback } : { phase: 'error' }))
+    fetchSurvey30().then((r) => setSurvey30(r.ok ? { phase: 'ready', stats: r.stats } : { phase: 'error' }))
     const result = await fetchBetaStats(range)
     if (result.ok) setState({ phase: 'ready', stats: result.stats, days: range.days })
     else setState({ phase: result.reason === 'forbidden' ? 'forbidden' : 'error', message: result.message })
@@ -109,23 +111,12 @@ export default function AdminDashboard({ active = true }) {
             <h3>Signup survey</h3>
             <p>{state.stats.survey?.completed ?? 0} completed · {state.stats.survey?.skipped ?? 0} skipped in the selected range. Known test responses excluded. Self-reported answers, not measured impact.</p>
             <p style={eyebrow}>Survey answers (completed surveys in range)</p>
-            {distributions.map((d) => (
-              <div key={d.key} style={{ marginTop: 12 }}>
-                <p style={{ margin: 0, fontSize: 13, color: 'var(--color-fg-soft)', fontWeight: 500 }}>{d.prompt}</p>
-                <table style={{ marginTop: 6, width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                  <tbody>
-                    {d.rows.map((r) => (
-                      <tr key={r.code}>
-                        <td style={{ padding: '3px 0', color: 'var(--color-fg-dim)' }}>{r.label}</td>
-                        <td style={{ padding: '3px 0', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--color-fg)' }}>{r.count.toLocaleString()}</td>
-                        <td style={{ padding: '3px 0 3px 10px', textAlign: 'right', width: 48, color: 'var(--color-fg-faint)' }}>{d.total ? `${Math.round((100 * r.count) / d.total)}%` : '–'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
+            <Distributions items={distributions} />
           </section>
+          {survey30.phase === 'ready' && <Day30Section stats={survey30.stats} />}
+          {survey30.phase === 'error' && (
+            <section style={panel} aria-label="Day-30 survey"><h3>Day-30 survey</h3><p style={{ color: 'var(--color-abstract)' }}>Not available: the day-30 survey stats could not be loaded.</p></section>
+          )}
         </>
       )}
     </div>
@@ -206,4 +197,54 @@ export function FeedbackInbox({ feedback }) {
         ))}
     </section>
   </>
+}
+
+function Distributions({ items }) {
+  return items.map((d) => (
+    <div key={d.key} style={{ marginTop: 12 }}>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--color-fg-soft)', fontWeight: 500 }}>{d.prompt}</p>
+      <table style={{ marginTop: 6, width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <tbody>
+          {d.rows.map((r) => (
+            <tr key={r.code}>
+              <td style={{ padding: '3px 0', color: 'var(--color-fg-dim)' }}>{r.label}</td>
+              <td style={{ padding: '3px 0', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--color-fg)' }}>{r.count.toLocaleString()}</td>
+              <td style={{ padding: '3px 0 3px 10px', textAlign: 'right', width: 48, color: 'var(--color-fg-faint)' }}>{d.total ? `${Math.round((100 * r.count) / d.total)}%` : '–'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ))
+}
+
+// The day-30 wave, all time: who has reached day 30, who answered, the answers, and the
+// change against each account's own signup answers (direction only).
+function Day30Section({ stats }) {
+  const paired = day30Paired(stats)
+  return (
+    <section style={panel} aria-label="Day-30 survey">
+      <h3>Day-30 survey</h3>
+      <p>{stats?.completed ?? 0} of {stats?.eligible_now ?? 0} accounts past day 30 have answered (it cannot be skipped). All time, known test accounts excluded. Self-reported; in a small beta a count of one can identify a person’s answer.</p>
+      <p style={eyebrow}>Change since signup ({paired.n} answered both)</p>
+      {paired.n === 0 ? (
+        <p style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>No account has completed both surveys yet.</p>
+      ) : (
+        <table style={{ marginTop: 6, width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <tbody>
+            {paired.rows.map((r) => (
+              <tr key={r.key}>
+                <td style={{ padding: '3px 0', color: 'var(--color-fg-dim)' }}>{r.label}</td>
+                {r.parts.map(([label, count]) => (
+                  <td key={label} style={{ padding: '3px 0 3px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--color-fg)', whiteSpace: 'nowrap' }}>{label} {count}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <p style={{ ...eyebrow, marginTop: 14 }}>Day-30 answers</p>
+      <Distributions items={day30Distributions(stats)} />
+    </section>
+  )
 }

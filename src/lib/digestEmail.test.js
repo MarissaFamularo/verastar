@@ -1,6 +1,6 @@
 // The digest email builders and the Resend sender (supabase/functions/_shared/digestEmail.js).
 import { describe, it, expect } from 'vitest'
-import { buildDigestEmail, buildPauseEmail, digestItems, digestLinks, digestSender, greetingFor, makeResendSender, pauseLinks, prepareTracker, subjectFromTitle, DEFAULT_APP_URL, RESUME_LABEL } from '../../supabase/functions/_shared/digestEmail.js'
+import { buildDigestEmail, buildPauseEmail, digestItems, digestLinks, digestSender, greetingFor, makeResendSender, pauseLinks, prepareTracker, subjectFromTitle, surveyInvited, DEFAULT_APP_URL, RESUME_LABEL } from '../../supabase/functions/_shared/digestEmail.js'
 
 const paper = (i, extra = {}) => ({ paper: { id: `p${i}`, pmid: `p${i}`, title: `Paper ${i} title.`, author: 'Li X et al.', journal: 'J Vasc Surg', year: '2026', ...extra }, citation: { url: `https://pubmed.ncbi.nlm.nih.gov/p${i}/` } })
 const record = (over = {}) => ({
@@ -228,5 +228,36 @@ describe('digestSender', () => {
     expect(digestSender('')).toBeUndefined()
     expect(digestSender(undefined)).toBeUndefined()
     expect(digestSender('not an address')).toBe('not an address')
+  })
+})
+
+describe('day-30 survey invitation', () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const now = new Date('2026-11-11T12:00:00Z')
+  const ago = (d) => new Date(now.getTime() - d * DAY).toISOString()
+  it('is invited from day 30 until a response is recorded, with no cutoff', () => {
+    expect(surveyInvited({ enrolledAt: ago(29.9), now })).toBe(false)
+    expect(surveyInvited({ enrolledAt: ago(30), now })).toBe(true)
+    expect(surveyInvited({ enrolledAt: ago(44), now })).toBe(true)
+    expect(surveyInvited({ enrolledAt: ago(120), now })).toBe(true)
+    expect(surveyInvited({ enrolledAt: ago(35), now, recorded: 'completed' })).toBe(false)
+    expect(surveyInvited({ enrolledAt: ago(35), now, recorded: 'skipped' })).toBe(false)
+    expect(surveyInvited({ enrolledAt: null, now })).toBe(false)
+    expect(surveyInvited({ enrolledAt: 'not a date', now })).toBe(false)
+    expect(surveyInvited()).toBe(false)
+  })
+  it('adds one tracked line after the papers, in text and html, and nothing without it', () => {
+    const plain = buildDigestEmail({ record: record(), appUrl: 'https://app.test' })
+    expect(plain.text).not.toContain('survey')
+    expect(plain.html).not.toContain('survey')
+    const track = (l) => `https://t.test/${l.kind}`
+    const m = buildDigestEmail({ record: record(), appUrl: 'https://app.test', survey: true, track })
+    expect(m.text).toContain('Five quick questions on how it’s going: https://t.test/survey')
+    expect(m.text.indexOf('https://t.test/survey')).toBeLessThan(m.text.indexOf('Open in Verastar:'))
+    expect(m.html).toContain('<a href="https://t.test/survey">Answer the one-month survey</a>')
+  })
+  it('digestLinks lists the survey link for signing only when invited', () => {
+    expect(digestLinks(record(), 'https://app.test').some((l) => l.kind === 'survey')).toBe(false)
+    expect(digestLinks(record(), 'https://app.test', { survey: true })).toContainEqual({ kind: 'survey', paperId: '', to: 'https://app.test/?src=digest-email&survey=day30' })
   })
 })

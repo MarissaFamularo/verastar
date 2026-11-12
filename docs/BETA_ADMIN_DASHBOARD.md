@@ -86,7 +86,33 @@ with an "oldest retained record" note. Verifier reasons are unavailable regardle
 - **Survey only on the onboarding connect step.** A code redeemed later from Settings does not offer it.
 - **Small cells.** With few users a per-option count of 1 identifies that user's answer to the admin.
   The survey copy and the dashboard both say so; answers are account-linked, not anonymous.
-- **Day-30 wave** is reserved in the schema (`wave = 'day30'`) but the RPC refuses it until built.
+- **Day-30 wave** is built (`20261111120000_beta_survey_day30.sql`); see "Day-30 survey" below.
+
+### Day-30 survey
+
+Same table, same rules as signup: option codes only, first write wins, answers linked to
+the account and never readable back by the participant. One difference: **the day-30 wave
+cannot be skipped.** `beta_survey_submit` refuses a day-30 `skipped` status, so beta
+testers are asked until they answer.
+
+- **Who and when.** Opens 30 days after `sponsored_accounts.created_at`. The server refuses a
+  day-30 answer before then (`beta_survey_submit`), so the app and the email only decide when
+  to ask. An account whose access ended may still answer.
+- **Questions.** The three habit questions from signup, word for word (`read_frequency`,
+  `weekly_time`, `confidence`), plus `digest_fit` ("How well do the papers in your digest
+  match your work?", 1–5) and `if_gone` ("How would you feel if you could no longer use
+  Verastar?": very / somewhat / not disappointed, or stopped using it). No `reason`.
+- **Where it is asked.** A card above the digest while `beta_survey_day30_state()` says
+  eligible and nothing recorded. It has no Skip; "Not now" (on the card and in the open
+  form) hides it for that visit and records nothing, so it returns on the next one. Every
+  digest email from day 30 carries one tracked line (click kind `survey`, link
+  `?survey=day30`, which opens the form directly) until the account answers. After
+  answering, the card offers the existing "Send feedback" box for anything in words.
+- **Dashboard.** `beta_survey30_stats()` (admins only, all time, test accounts excluded):
+  accounts past day 30, how many of them have answered, the five answer tables, and the paired change
+  for accounts that completed both waves: confidence higher / same / lower and weekly time
+  less / same / more. Direction only, no per-account values. Small cells identify people,
+  as with signup.
 
 ### Share clicks
 

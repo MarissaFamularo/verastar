@@ -38,6 +38,7 @@ function memoryDb({ users = ['A', 'B'], failRpc = {} } = {}) {
     evidence_cache_trusted: [],
     events: [],
     reservations: [],
+    beta_survey_responses: [],
   }
   let tokens = 0
   const rpcCalls = []
@@ -942,6 +943,28 @@ describe('delivery', () => {
     // Later ticks: nothing to build (ran today), nothing to send (day delivered).
     expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(false)
     expect(sent).toHaveLength(1)
+  })
+  it('carries the day-30 survey line from day 30 after enrollment until a response is recorded', async () => {
+    const DAY = 24 * 60 * 60 * 1000
+    const send = async (enrolledDaysAgo, recorded = null) => {
+      const db = memoryDb({ users: ['A'] })
+      db.t.sponsored_accounts[0].created_at = new Date(Date.now() - enrolledDaysAgo * DAY).toISOString()
+      if (recorded) db.t.beta_survey_responses.push({ user_id: 'A', wave: 'day30', status: recorded })
+      const { email, sent } = fakeEmail()
+      const h = deps(db, { run: doneRun(1) }).deps
+      h.email = email
+      await handleDigestRun(cron(), h)
+      expect(sent).toHaveLength(1)
+      return sent[0]
+    }
+    const due = await send(31)
+    expect(due.text).toContain('Five quick questions on how it’s going: https://app.test/?src=digest-email&survey=day30')
+    expect(due.html).toContain('Answer the one-month survey')
+    expect((await send(60)).text).toContain('survey=day30')
+    for (const m of [await send(29), await send(31, 'completed'), await send(31, 'skipped')]) {
+      expect(m.text).not.toContain('survey=day30')
+      expect(m.text).toContain('Paper 0 for A')
+    }
   })
   it('opens "Good morning, {name}." from the stored profile, and with the papers when the profile turned the greeting off', async () => {
     const db = memoryDb({ users: ['A'] })

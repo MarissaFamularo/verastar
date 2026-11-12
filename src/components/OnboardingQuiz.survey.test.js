@@ -60,7 +60,7 @@ describe('signup survey after enrollment', () => {
     expect(dom.text()).toContain('This optional, one-minute survey')
     expect(dom.text()).not.toContain('You are all set')
     await dom.click(dom.button('Skip for now'))
-    expect(submitBetaSurvey).toHaveBeenCalledWith({ status: 'skipped', answers: {} })
+    expect(submitBetaSurvey).toHaveBeenCalledWith({ status: 'skipped', answers: {}, wave: 'signup' })
     expect(dom.text()).toContain('You are all set')
     expect(dom.button('Continue →')).toBeTruthy()
     expect(dom.text()).not.toContain('one-minute survey')

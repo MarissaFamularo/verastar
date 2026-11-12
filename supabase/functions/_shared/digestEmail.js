@@ -97,6 +97,27 @@ function openLink(appUrl, src) {
   return `${base}/?src=${encodeURIComponent(src)}`
 }
 
+// --- day-30 survey invitation ----------------------------------------------------------
+// The digest carries one line inviting the reader to the day-30 beta survey from day 30
+// after enrollment until a response is recorded. The day-30 wave cannot be skipped, so in
+// practice that is until they answer (a 'skipped' row, which only a direct database write
+// can make, also stops it). The server is what enforces day 30 (beta_survey_submit), so
+// this only decides when to ask.
+export const SURVEY_OPENS_DAYS = 30
+const DAY_MS = 24 * 60 * 60 * 1000
+export function surveyInvited({ enrolledAt, now = new Date(), recorded = null } = {}) {
+  if (recorded || !enrolledAt) return false
+  const t = new Date(enrolledAt).getTime()
+  if (!Number.isFinite(t)) return false
+  const age = new Date(now).getTime() - t
+  return age >= SURVEY_OPENS_DAYS * DAY_MS
+}
+export const SURVEY_LINE = 'You’ve had Verastar for about a month. Five quick questions on how it’s going:'
+export const SURVEY_LABEL = 'Answer the one-month survey'
+function surveyLink(appUrl) {
+  return `${openLink(appUrl, 'digest-email')}&survey=day30`
+}
+
 // How to stop the email, in every footer: the one-click link when the runtime signs one,
 // and the Settings switch either way. The in-app digest is not affected by either.
 export function stopLines(unsubscribeUrl) {
@@ -135,10 +156,12 @@ function footerHtml(appUrl, opts) {
 export const untracked = (link) => link.to
 const linkKey = (l) => `${l.kind}|${l.paperId || ''}|${l.to}`
 
-// The links buildDigestEmail will print for `record`, in order.
-export function digestLinks(record, appUrl = DEFAULT_APP_URL) {
+// The links buildDigestEmail will print for `record`, in order (`survey`: the day-30
+// invitation is included).
+export function digestLinks(record, appUrl = DEFAULT_APP_URL, { survey = false } = {}) {
   const out = []
   for (const it of digestItems(record)) out.push(...itemLinks(it))
+  if (survey) out.push({ kind: 'survey', paperId: '', to: surveyLink(appUrl) })
   out.push({ kind: 'open', paperId: '', to: openLink(appUrl, 'digest-email') })
   return out
 }
@@ -170,14 +193,15 @@ export async function prepareTracker(links, sign) {
 // Returns null when there is nothing to send (no items). The result carries `headers` for
 // the sender (unsubscribe headers when a link was given).
 // `greeting` is the opening line (greetingFor) or null: with null the email starts with the
-// papers.
-export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null, track = untracked, greeting = null } = {}) {
+// papers. `survey` adds the day-30 survey invitation (surveyInvited) after the papers.
+export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null, track = untracked, greeting = null, survey = false } = {}) {
   const items = digestItems(record)
   if (!items.length) return null
   const days = Number(record?.searchContext?.days) || null
   const count = `${items.length} paper${items.length === 1 ? '' : 's'}${days ? ` from the last ${days} day${days === 1 ? '' : 's'}` : ''}, picked for your north stars.`
   const link = track({ kind: 'open', paperId: '', to: openLink(appUrl, 'digest-email') })
   const lead = intro ? clean(intro) : null
+  const invite = survey ? track({ kind: 'survey', paperId: '', to: surveyLink(appUrl) }) : null
 
   const textItems = formatItemsText(items, track)
 
@@ -188,6 +212,7 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = n
     '',
     textItems,
     '',
+    ...(invite ? [`${SURVEY_LINE} ${invite}`, ''] : []),
     `Open in Verastar: ${link}`,
     '',
     FOOTER_TEXT(appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl }),
@@ -198,6 +223,7 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = n
     ${lead ? `<p style="margin:0 0 8px 0;">${esc(lead)}</p>` : ''}
     <p style="margin:0 0 18px 0;">${esc(count)}</p>
     ${formatItemsHtml(items, track)}
+    ${invite ? `<p style="margin:18px 0 0 0;">${esc(SURVEY_LINE)} <a href="${esc(invite)}">${esc(SURVEY_LABEL)}</a></p>` : ''}
     ${buttonHtml(link, 'Open in Verastar')}
     ${footerHtml(appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl })}`)
 

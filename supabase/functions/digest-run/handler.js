@@ -64,7 +64,7 @@ import { guardedPubmedSearch } from '../_shared/pubmedCircuit.js'
 import { accountActive, localClock, digestGate, requestedTimezone } from '../model/logic.js'
 import { makeGuardedFetch } from '../_shared/spending.js'
 import { CLAIM_STALE_SECONDS } from '../_shared/timeouts.js'
-import { buildDigestEmail, buildPauseEmail, digestLinks, pauseLinks, prepareTracker, untracked, greetingFor, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
+import { buildDigestEmail, buildPauseEmail, digestLinks, pauseLinks, prepareTracker, untracked, greetingFor, surveyInvited, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
 
 // Reading budget per tick. The edge runtime's wall clock is 150 s (free) / 400 s (paid);
 // reading stops here so persistence and the handoff still fit.
@@ -206,6 +206,22 @@ async function greetingOf(admin, userId) {
   }
 }
 
+// Does this account's digest carry the day-30 survey invitation (surveyInvited)? Reads its
+// enrollment date and whether it already answered or skipped. Any read failure answers
+// false: the papers never wait on, or fail because of, the survey line.
+async function surveyInviteFor(admin, userId, now) {
+  try {
+    const { data: acct, error } = await admin.from('sponsored_accounts').select('created_at').eq('user_id', userId).maybeSingle()
+    if (error || !acct?.created_at) return false
+    if (!surveyInvited({ enrolledAt: acct.created_at, now })) return false
+    const { data: row, error: rowError } = await admin.from('beta_survey_responses').select('status').eq('user_id', userId).eq('wave', 'day30').maybeSingle()
+    if (rowError) return false
+    return surveyInvited({ enrolledAt: acct.created_at, now, recorded: row?.status || null })
+  } catch {
+    return false
+  }
+}
+
 function gateFor({ row, record, now, manual, mayRun }) {
   const { hour, day } = localClock(now, row.timezone)
   const ranToday = !!row.last_run_at && localClock(new Date(row.last_run_at), row.timezone).day === day
@@ -248,15 +264,18 @@ async function deliverDue(admin, email, rows, now) {
     row.delivered_day = day
     if (!ready || row.email_digest === false) continue
     await deliver(admin, email, row, {
-      build: async ({ unsubscribeUrl }) => buildDigestEmail({
-        record, unsubscribeUrl,
-        greeting: await greetingOf(admin, row.user_id),
-        track: await trackerFor(email, row.user_id, digestLinks(record, email.appUrl || DEFAULT_APP_URL)),
-        appUrl: email.appUrl || DEFAULT_APP_URL,
-        replyTo: email.replyTo || null,
-        hourLabel: hourText(row.hour_local),
-        timezone: row.timezone || '',
-      }),
+      build: async ({ unsubscribeUrl }) => {
+        const survey = await surveyInviteFor(admin, row.user_id, now)
+        return buildDigestEmail({
+          record, unsubscribeUrl, survey,
+          greeting: await greetingOf(admin, row.user_id),
+          track: await trackerFor(email, row.user_id, digestLinks(record, email.appUrl || DEFAULT_APP_URL, { survey })),
+          appUrl: email.appUrl || DEFAULT_APP_URL,
+          replyTo: email.replyTo || null,
+          hourLabel: hourText(row.hour_local),
+          timezone: row.timezone || '',
+        })
+      },
       sentType: 'digest_emailed',
       failedType: 'digest_email_failed',
       payload: { papers: record.results.length },

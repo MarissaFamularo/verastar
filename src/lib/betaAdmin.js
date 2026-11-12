@@ -12,7 +12,7 @@
 // retained row is reported as not available rather than as zero.
 
 import { supabase, supabaseConfigured, currentUser } from './supabase.js'
-import { SURVEY_QUESTIONS } from './betaSurvey.js'
+import { DAY30_QUESTIONS, SURVEY_QUESTIONS } from './betaSurvey.js'
 
 export const DEFAULT_RANGE_DAYS = 30
 export const MAX_RANGE_DAYS = 400
@@ -32,6 +32,19 @@ export async function fetchBetaStats({ from, to }) {
   if (!supabaseConfigured || !currentUser()) return { ok: false, reason: 'forbidden' }
   try {
     const { data, error } = await supabase.rpc('beta_release_stats', { p_from: from, p_to: to })
+    if (error) return { ok: false, reason: error.code === '42501' ? 'forbidden' : 'error', message: error.message }
+    return { ok: true, stats: data }
+  } catch (err) {
+    return { ok: false, reason: 'error', message: err?.message }
+  }
+}
+
+// Day-30 survey counts, distributions and the paired signup -> day-30 change, admins only
+// (beta_survey30_stats, all time). Resolves { ok: true, stats } or { ok: false, reason }.
+export async function fetchSurvey30() {
+  if (!supabaseConfigured || !currentUser()) return { ok: false, reason: 'forbidden' }
+  try {
+    const { data, error } = await supabase.rpc('beta_survey30_stats')
     if (error) return { ok: false, reason: error.code === '42501' ? 'forbidden' : 'error', message: error.message }
     return { ok: true, stats: data }
   } catch (err) {
@@ -241,8 +254,32 @@ export function metricSections(stats) {
 // Pure: answer distributions for the completed surveys, one table per question, in the
 // question’s own option order, with zero for options nobody chose.
 export function surveyDistributions(stats) {
-  const sv = stats?.survey || {}
-  return SURVEY_QUESTIONS.map((q) => {
+  return answerDistributions(stats?.survey, SURVEY_QUESTIONS)
+}
+
+// Pure: the same tables for the day-30 wave (beta_survey30_stats).
+export function day30Distributions(s30) {
+  return answerDistributions(s30, DAY30_QUESTIONS)
+}
+
+// Pure: the paired change for accounts that completed both waves, as display rows.
+// Direction only (up / same / down); the server sends no per-account values.
+export function day30Paired(s30) {
+  const p = s30?.paired || {}
+  const c = p.confidence || {}
+  const w = p.weekly_time || {}
+  return {
+    n: n(p.n),
+    rows: [
+      { key: 'confidence', label: 'Confidence keeping up', parts: [['Higher', n(c.up)], ['Same', n(c.same)], ['Lower', n(c.down)]] },
+      { key: 'weekly_time', label: 'Weekly time finding and reviewing research', parts: [['Less', n(w.less)], ['Same', n(w.same)], ['More', n(w.more)]] },
+    ],
+  }
+}
+
+function answerDistributions(block, questions) {
+  const sv = block || {}
+  return questions.map((q) => {
     const counts = sv[q.key] || {}
     const rows = q.options.map(([code, label]) => ({ code, label, count: n(counts[code]) }))
     const total = rows.reduce((t, r) => t + r.count, 0)
