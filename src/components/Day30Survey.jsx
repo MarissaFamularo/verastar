@@ -31,6 +31,8 @@ export default function Day30Survey({ autoOpen = false, isDue = day30SurveyDue }
       .catch(() => false)
       .then((due) => { if (live) setPhase(due ? (autoOpen ? 'open' : 'offer') : 'hidden') })
     return () => { live = false }
+    // Checked once per mount (one visit); a changed prop must not re-ask mid-visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (phase === 'checking' || phase === 'hidden') return null
