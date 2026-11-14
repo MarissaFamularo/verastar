@@ -324,6 +324,37 @@ Rollback: redeploy the previous `digest-run` (emails go back to plain links; the
 rule returns). The two functions can stay; the column and trigger are harmless; re-apply
 `20261015233845_share_click_metrics.sql` to restore the dashboard RPC.
 
+## Release: email readers (2026-11-14)
+
+Not deployed. For readers who use Verastar from the email and rarely open the site:
+
+- **A resume press is lasting.** 16 of the 34 testers paused between 2026-10-24 and
+  2026-11-14 pressed "No, don't pause me": they read the email without clicking. The press
+  now stamps `digest_schedules.pause_exempt_at`, and `digest-run` never auto-pauses that
+  account again (its streak still counts, capped at six). The migration backfills everyone
+  who already pressed it. Unsubscribe, the Settings switches and the spending caps still apply.
+- **The day-30 survey is answered from the email, signed out.** The invitation now links to
+  the app's static `email-survey.html?u=…&t=…` (signed, `digest-survey:` prefix), which posts
+  to the new `digest-survey` function; that records through `beta_survey_submit_signed`
+  (service_role only), the same body as the app's `beta_survey_submit`. Answering stamps
+  `engaged_at`. Without the secret the email falls back to the old in-app link. 47 testers
+  reach day 30 between 2026-11-17 and 2026-11-21.
+
+No new secrets (`DIGEST_UNSUBSCRIBE_SECRET` signs the new link). Order matters:
+
+1. `npm test` and `supabase/tests/run_beta_admin_tests.sh` against a local server.
+2. **Apply** `20261114120000_resume_exempt_and_email_survey.sql` (one transaction).
+   **Before** step 4: `digest-run` selects `pause_exempt_at` and fails without it.
+3. **Deploy the site** (Netlify, from main) so `email-survey.html` exists, and
+   **deploy** `digest-survey` (`verify_jwt = false`) and `digest-resume`.
+4. **Deploy** `digest-run` last: it starts printing the new survey link.
+5. **Smoke test**: open `surveyPageUrl(...)` for a test account past day 30, answer, check
+   `beta_survey_responses` and `events.beta_survey_answered_by_email`; press a resume link
+   and check `pause_exempt_at`.
+
+Rollback: redeploy the previous `digest-run` (the in-app survey link and the old pause rule
+return). The page, function, column and RPC are harmless left in place.
+
 ## Scheduler capacity (decide before release)
 
 The scheduler serves one account per cron tick, and the tick is every five minutes. A

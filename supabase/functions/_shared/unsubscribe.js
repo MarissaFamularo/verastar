@@ -53,6 +53,17 @@ export async function resumeUrl(functionsBase, userId, secret) {
   return `${base}/digest-resume?u=${encodeURIComponent(String(userId).toLowerCase())}&t=${t}`
 }
 
+// The digest email's day-30 survey link: the app's email-survey.html page, answered signed
+// out, which posts to digest-survey. Same secret, own prefix.
+export const signSurvey = (userId, secret) => signFor('survey', userId, secret)
+export const verifySurvey = (userId, token, secret) => verifyFor('survey', userId, token, secret)
+export async function surveyPageUrl(appUrl, userId, secret) {
+  const base = String(appUrl || '').replace(/\/+$/, '')
+  if (!base) throw new Error('survey: app url is required')
+  const t = await signSurvey(userId, secret)
+  return `${base}/email-survey.html?u=${encodeURIComponent(String(userId).toLowerCase())}&t=${t}`
+}
+
 // True only for a well-formed id and a token that matches it. Never throws.
 export async function verifyUnsubscribe(userId, token, secret) {
   try {

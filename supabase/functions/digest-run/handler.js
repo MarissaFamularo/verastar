@@ -33,6 +33,8 @@ import { guardedPubmedSearch } from '../_shared/pubmedCircuit.js'
 // pause is authoritative until later reader engagement, a manual run, or an explicit
 // repair. The update is fenced by the claim and the observed engagement/digest state.
 // A seventh missed digest pauses atomically and releases the claim before notification.
+// A reader who pressed the pause email's "No, don't pause me" (pause_exempt_at) is never
+// paused again: 16 of the first 34 paused testers pressed it (email readers who never click).
 //
 // Delivery: the reader's hour is when the email lands, not when work starts. A scheduled
 // build may start BUILD_LEAD_HOURS before her hour (the gate's leadHours), and every cron
@@ -122,7 +124,9 @@ export function pauseMayResume(row, record, manual = false) {
 
 // One previous, finished reading day may count once. A retry of the same saved
 // digest keeps its checkpoint; today's newly finished digest never counts yet.
-export function inactivityState(record, current, { manual = false, engagedAt = null, countedAt = null, now = new Date(), timezone = 'UTC', resumed = false } = {}) {
+// `exempt`: the reader pressed the pause email's "No, don't pause me" (pause_exempt_at). The
+// streak still counts, capped one below the threshold, and never pauses.
+export function inactivityState(record, current, { manual = false, engagedAt = null, countedAt = null, now = new Date(), timezone = 'UTC', resumed = false, exempt = false } = {}) {
   const cur = Math.max(0, Number(current) || 0)
   const previous = atMillis(countedAt)
   const identity = atMillis(record?.ranAt ?? record?.savedAt)
@@ -136,8 +140,8 @@ export function inactivityState(record, current, { manual = false, engagedAt = n
   const finished = atMillis(record.server?.finishedAt ?? record.ranAt ?? record.savedAt)
   if (identity === null || finished === null || identity > now.getTime() || finished > now.getTime()) return unchanged
   if (localClock(new Date(finished), timezone).day >= localClock(now, timezone).day || (previous !== null && identity <= previous)) return unchanged
-  const streak = Math.min(PAUSE_AFTER_UNOPENED, cur + 1)
-  return { streak, countedAt: marker(identity), pause: streak >= PAUSE_AFTER_UNOPENED }
+  const streak = Math.min(exempt ? PAUSE_AFTER_UNOPENED - 1 : PAUSE_AFTER_UNOPENED, cur + 1)
+  return { streak, countedAt: marker(identity), pause: !exempt && streak >= PAUSE_AFTER_UNOPENED }
 }
 export function nextUnopenedStreak(record, current, options = {}) {
   return inactivityState(record, current, options).streak
@@ -266,10 +270,12 @@ async function deliverDue(admin, email, rows, now) {
     await deliver(admin, email, row, {
       build: async ({ unsubscribeUrl }) => {
         const survey = await surveyInviteFor(admin, row.user_id, now)
+        let surveyUrl = null
+        if (survey && email.surveyUrl) { try { surveyUrl = await email.surveyUrl(row.user_id) } catch { surveyUrl = null } }
         return buildDigestEmail({
-          record, unsubscribeUrl, survey,
+          record, unsubscribeUrl, survey, surveyUrl,
           greeting: await greetingOf(admin, row.user_id),
-          track: await trackerFor(email, row.user_id, digestLinks(record, email.appUrl || DEFAULT_APP_URL, { survey })),
+          track: await trackerFor(email, row.user_id, digestLinks(record, email.appUrl || DEFAULT_APP_URL, { survey, surveyUrl })),
           appUrl: email.appUrl || DEFAULT_APP_URL,
           replyTo: email.replyTo || null,
           hourLabel: hourText(row.hour_local),
@@ -293,7 +299,7 @@ function hourText(h) {
   return `${twelve}:00 ${n < 12 ? 'am' : 'pm'}`
 }
 const DEFAULT_TIMEZONE = 'America/New_York'
-const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, claim_token, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result, inactivity_counted_at'
+const SCHEDULE_COLUMNS = 'user_id, enabled, hour_local, timezone, claimed_at, claim_token, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result, inactivity_counted_at, pause_exempt_at'
 
 async function recordEvent(admin, userId, type, payload) {
   await admin.from('events').insert({ user_id: userId, type, payload }).then(() => {}, () => {})
@@ -514,7 +520,7 @@ export async function handleDigestRun(req, deps) {
     // finished between the first read and the claim.
     let fresh
     try {
-      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result, inactivity_counted_at').eq('user_id', row.user_id).maybeSingle()
+      const { data: again, error } = await admin.from('digest_schedules').select('user_id, enabled, hour_local, timezone, last_run_at, last_attempt_at, attempt_day, attempts_today, unopened_streak, paused_at, email_digest, delivered_day, engaged_at, next_attempt_at, last_result, inactivity_counted_at, pause_exempt_at').eq('user_id', row.user_id).maybeSingle()
       if (error || !again) throw new Error('schedule unavailable')
       fresh = { row: again, record: await readLatest(admin, row.user_id) }
     } catch {
@@ -534,7 +540,7 @@ export async function handleDigestRun(req, deps) {
     }
     const state = inactivityState(fresh.record, fresh.row.unopened_streak, {
       manual, engagedAt: fresh.row.engaged_at, countedAt: fresh.row.inactivity_counted_at,
-      now, timezone: fresh.row.timezone, resumed: !!fresh.row.paused_at,
+      now, timezone: fresh.row.timezone, resumed: !!fresh.row.paused_at, exempt: !!fresh.row.pause_exempt_at,
     })
     const markerChanged = atMillis(state.countedAt) !== atMillis(fresh.row.inactivity_counted_at)
     if (state.streak !== (Number(fresh.row.unopened_streak) || 0) || markerChanged || fresh.row.paused_at || state.pause) {

@@ -256,6 +256,14 @@ describe('day-30 survey invitation', () => {
     expect(m.text.indexOf('https://t.test/survey')).toBeLessThan(m.text.indexOf('Open in Verastar:'))
     expect(m.html).toContain('<a href="https://t.test/survey">Answer the one-month survey</a>')
   })
+  it('uses the signed no-sign-in survey page when given one, in the email and the signing list', () => {
+    const surveyUrl = 'https://app.test/email-survey.html?u=x&t=y'
+    const m = buildDigestEmail({ record: record(), appUrl: 'https://app.test', survey: true, surveyUrl })
+    expect(m.text).toContain(`Five quick questions on how it’s going: ${surveyUrl}`)
+    expect(m.html).toContain(`<a href="${surveyUrl.replace('&', '&amp;')}">Answer the one-month survey</a>`)
+    expect(digestLinks(record(), 'https://app.test', { survey: true, surveyUrl })).toContainEqual({ kind: 'survey', paperId: '', to: surveyUrl })
+    expect(buildDigestEmail({ record: record(), appUrl: 'https://app.test', surveyUrl }).text).not.toContain(surveyUrl)
+  })
   it('digestLinks lists the survey link for signing only when invited', () => {
     expect(digestLinks(record(), 'https://app.test').some((l) => l.kind === 'survey')).toBe(false)
     expect(digestLinks(record(), 'https://app.test', { survey: true })).toContainEqual({ kind: 'survey', paperId: '', to: 'https://app.test/?src=digest-email&survey=day30' })

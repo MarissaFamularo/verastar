@@ -75,3 +75,11 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/digest-resume/index.ts"
+
+[functions.digest-survey]
+enabled = true
+# The day-30 survey answered from the email: the app's email-survey.html page posts here
+# signed out. The signed token in the link is the credential (docs/DIGEST_DELIVERY.md § Survey).
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/digest-survey/index.ts"
