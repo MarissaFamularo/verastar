@@ -5,7 +5,9 @@
 //
 // A valid token clears paused_at, resets unopened_streak to 0, stamps engaged_at (the
 // button is a click from the reader, so the digest it replaces counts as read), and records
-// digest_resume_clicked. The next scheduled tick builds a digest as usual. A schedule the
+// digest_resume_clicked. It also stamps pause_exempt_at: the press is a lasting answer,
+// and the scheduler never auto-pauses this account again (digest-run inactivityState).
+// The next scheduled tick builds a digest as usual. A schedule the
 // reader switched off in Settings stays off; the page says so. HEAD changes nothing, so a
 // link checker that only probes the button does not resume anyone. A bad token is a plain
 // invalid-link result and nothing changes. Pure except for `admin`; index.ts binds the runtime.
@@ -27,7 +29,7 @@ export async function handleResume(req, { admin, secret, appUrl = '', now = () =
   const at = now().toISOString()
   try {
     const { data: rows, error } = await admin.from('digest_schedules')
-      .update({ paused_at: null, unopened_streak: 0, engaged_at: at, updated_at: at })
+      .update({ paused_at: null, unopened_streak: 0, engaged_at: at, pause_exempt_at: at, updated_at: at })
       .eq('user_id', userId)
       .select('user_id,enabled')
     if (error || !Array.isArray(rows)) return reply('retry')

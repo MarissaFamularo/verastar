@@ -1,0 +1,15 @@
+/* The email survey page: digestStatus.css plus the question list. */
+/* .button sets display, which would beat the hidden attribute. */
+[hidden] { display: none !important; }
+#survey-status { color: #c0ccda; margin: 0 0 24px; }
+form { margin: 0; }
+fieldset { margin: 0 0 22px; padding: 0; border: 0; }
+legend { padding: 0; margin: 0 0 10px; font-size: 16px; font-weight: 600; line-height: 1.45; }
+.scale-hint { margin: -4px 0 10px; color: #9eafc4; font-size: 13px; }
+.options { display: grid; gap: 8px; }
+.options.scale { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.options label { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #293647; border-radius: 8px; font-size: 15px; cursor: pointer; }
+.options.scale label { justify-content: center; gap: 6px; padding: 10px 4px; }
+.options label:has(input:checked) { border-color: #a6c6f6; background: #1a2638; }
+form .button { border: 0; font: inherit; font-weight: 600; cursor: pointer; }
+form .button:disabled { opacity: .6; cursor: default; }

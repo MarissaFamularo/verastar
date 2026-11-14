@@ -34,7 +34,7 @@ import manifest from './app.bundle.manifest.js'
 import { handleDigestRun } from './handler.js'
 import { anthropicDispatch, anthropicTokenCounter, makeRpcLedger, resolveProviderUrl } from '../_shared/spending.js'
 import { makeResendSender, digestSender, DEFAULT_APP_URL, DIGEST_REPLY_TO } from '../_shared/digestEmail.js'
-import { unsubscribeUrl, resumeUrl } from '../_shared/unsubscribe.js'
+import { unsubscribeUrl, resumeUrl, surveyPageUrl } from '../_shared/unsubscribe.js'
 import { clickUrl } from '../_shared/digestClick.js'
 import { SERVER_CLIENT_TIMEOUT_MS } from '../_shared/timeouts.js'
 
@@ -86,6 +86,9 @@ Deno.serve((req) => {
     // digest-resume; both are signed with the same secret under their own prefixes.
     clickUrl: unsubscribeSecret ? (userId: string, link: { kind: string, paperId?: string, to: string }) => clickUrl(`${supabaseUrl}/functions/v1`, { userId, ...link }, unsubscribeSecret) : null,
     resumeUrl: unsubscribeSecret ? (userId: string) => resumeUrl(`${supabaseUrl}/functions/v1`, userId, unsubscribeSecret) : null,
+    // The day-30 survey invitation links to the app's email-survey.html page, answered
+    // without signing in (digest-survey); same secret, own prefix.
+    surveyUrl: unsubscribeSecret ? (userId: string) => surveyPageUrl(Deno.env.get('APP_URL') || DEFAULT_APP_URL, userId, unsubscribeSecret) : null,
     getAddress: async (userId: string) => {
       const { data, error } = await admin.auth.admin.getUserById(userId)
       return error ? null : data?.user?.email ?? null

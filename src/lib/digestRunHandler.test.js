@@ -966,6 +966,27 @@ describe('delivery', () => {
       expect(m.text).toContain('Paper 0 for A')
     }
   })
+  it('links the survey to the signed no-sign-in page when the runtime can sign one', async () => {
+    const db = memoryDb({ users: ['A'] })
+    db.t.sponsored_accounts[0].created_at = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString()
+    const { email, sent } = fakeEmail()
+    email.surveyUrl = async (userId) => `https://app.test/email-survey.html?u=${userId}&t=s`
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(sent[0].text).toContain('Five quick questions on how it’s going: https://app.test/email-survey.html?u=A&t=s')
+    expect(sent[0].text).not.toContain('survey=day30')
+  })
+  it('a survey link that fails to sign falls back to the app link; the email still goes', async () => {
+    const db = memoryDb({ users: ['A'] })
+    db.t.sponsored_accounts[0].created_at = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString()
+    const { email, sent } = fakeEmail()
+    email.surveyUrl = async () => { throw new Error('no secret') }
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(sent[0].text).toContain('https://app.test/?src=digest-email&survey=day30')
+  })
   it('opens "Good morning, {name}." from the stored profile, and with the papers when the profile turned the greeting off', async () => {
     const db = memoryDb({ users: ['A'] })
     const { email, sent } = fakeEmail()
@@ -1438,5 +1459,44 @@ describe('inactivity counts reading days once', () => {
     expect(await (await handleDigestRun(cron(), h.deps)).json()).toEqual({ ran: false, reason: 'inactivity state changed; will retry' })
     expect(row(db)).toMatchObject({ unopened_streak: 2, claim_token: null })
     expect(h.provider.sent).toHaveLength(0)
+  })
+})
+
+// --- "No, don't pause me" is a lasting answer (2026-11-14) ---------------------------------
+describe('a resume press exempts the reader from auto-pause', () => {
+  const SECRET = 'a-long-enough-test-secret-value'
+  const UID = '41fd38b0-c67e-4ce1-a647-3612fbc6010e'
+  const FN = 'https://fn.test/functions/v1'
+  it('the button stamps pause_exempt_at', async () => {
+    const db = memoryDb({ users: [UID] })
+    seedDigest(db, UID, { streak: PAUSE_AFTER_UNOPENED, pausedAt: YESTERDAY })
+    await handleResume(new Request(await signedResumeUrl(FN, UID, SECRET)), { admin: db.admin, secret: SECRET })
+    expect(row(db, UID).pause_exempt_at).toBeTruthy()
+  })
+  it('an exempt reader with a seventh unopened digest is not paused: no event, no email, the digest runs', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+    row(db).pause_exempt_at = YESTERDAY
+    const { email, sent } = fakeEmail()
+    const h = deps(db, { run: doneRun(1) }).deps
+    h.email = email
+    expect(await (await handleDigestRun(cron(), h)).json()).toMatchObject({ ran: true, phase: 'done' })
+    expect(row(db)).toMatchObject({ paused_at: null, unopened_streak: PAUSE_AFTER_UNOPENED - 1 })
+    expect(events(db, 'digest_paused')).toHaveLength(0)
+    expect(sent.map((m) => m.subject)).not.toContain('Your Verastar digest is paused')
+  })
+  it('the same reader without the stamp is paused (control)', async () => {
+    const db = memoryDb({ users: ['A'] })
+    seedDigest(db, 'A', { streak: PAUSE_AFTER_UNOPENED - 1 })
+    expect(await (await handleDigestRun(cron(), deps(db, { run: doneRun(1) }).deps)).json()).toEqual({ ran: false, reason: PAUSED_REASON })
+    expect(row(db).paused_at).toBeTruthy()
+  })
+  it('inactivityState: exempt caps the streak one below the threshold and never pauses', () => {
+    const now = new Date()
+    const record = { kind: 'daily', runBy: 'scheduler', server: { phase: 'done', finishedAt: YESTERDAY }, ranAt: YESTERDAY, results: [{}] }
+    expect(inactivityState(record, PAUSE_AFTER_UNOPENED - 1, { now })).toMatchObject({ streak: PAUSE_AFTER_UNOPENED, pause: true })
+    expect(inactivityState(record, PAUSE_AFTER_UNOPENED - 1, { now, exempt: true })).toMatchObject({ streak: PAUSE_AFTER_UNOPENED - 1, pause: false })
+    expect(inactivityState(record, 2, { now, exempt: true })).toMatchObject({ streak: 3, pause: false })
+    expect(inactivityState({ ...record, openedAt: YESTERDAY }, 5, { now, exempt: true })).toMatchObject({ streak: 0, pause: false })
   })
 })

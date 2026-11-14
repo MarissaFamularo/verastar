@@ -99,7 +99,7 @@ describe('email-link outcomes', () => {
       expect(locationResult(res)).toBe('resume-disabled')
     }
     for (const call of calls.filter((c) => c.method === 'PATCH')) {
-      expect(Object.keys(call.body).sort()).toEqual(['engaged_at', 'paused_at', 'unopened_streak', 'updated_at'])
+      expect(Object.keys(call.body).sort()).toEqual(['engaged_at', 'pause_exempt_at', 'paused_at', 'unopened_streak', 'updated_at'])
     }
   })
 

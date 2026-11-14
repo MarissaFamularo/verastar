@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
-    rollupOptions: { input: { app: 'index.html', digestStatus: 'digest-status.html' } },
+    rollupOptions: { input: { app: 'index.html', digestStatus: 'digest-status.html', emailSurvey: 'email-survey.html' } },
   },
   // PORT is set by tooling (e.g. the preview harness) to avoid clashing with a dev server already on 5173.
   server: {

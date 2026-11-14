@@ -114,8 +114,10 @@ export function surveyInvited({ enrolledAt, now = new Date(), recorded = null } 
 }
 export const SURVEY_LINE = 'You’ve had Verastar for about a month. Five quick questions on how it’s going:'
 export const SURVEY_LABEL = 'Answer the one-month survey'
-function surveyLink(appUrl) {
-  return `${openLink(appUrl, 'digest-email')}&survey=day30`
+// `surveyUrl`: the signed email-survey.html link (answered without signing in), when the
+// runtime can sign one; otherwise the app, which opens the survey after sign-in.
+function surveyLink(appUrl, surveyUrl = null) {
+  return surveyUrl || `${openLink(appUrl, 'digest-email')}&survey=day30`
 }
 
 // How to stop the email, in every footer: the one-click link when the runtime signs one,
@@ -158,10 +160,10 @@ const linkKey = (l) => `${l.kind}|${l.paperId || ''}|${l.to}`
 
 // The links buildDigestEmail will print for `record`, in order (`survey`: the day-30
 // invitation is included).
-export function digestLinks(record, appUrl = DEFAULT_APP_URL, { survey = false } = {}) {
+export function digestLinks(record, appUrl = DEFAULT_APP_URL, { survey = false, surveyUrl = null } = {}) {
   const out = []
   for (const it of digestItems(record)) out.push(...itemLinks(it))
-  if (survey) out.push({ kind: 'survey', paperId: '', to: surveyLink(appUrl) })
+  if (survey) out.push({ kind: 'survey', paperId: '', to: surveyLink(appUrl, surveyUrl) })
   out.push({ kind: 'open', paperId: '', to: openLink(appUrl, 'digest-email') })
   return out
 }
@@ -194,14 +196,14 @@ export async function prepareTracker(links, sign) {
 // the sender (unsubscribe headers when a link was given).
 // `greeting` is the opening line (greetingFor) or null: with null the email starts with the
 // papers. `survey` adds the day-30 survey invitation (surveyInvited) after the papers.
-export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null, track = untracked, greeting = null, survey = false } = {}) {
+export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null, track = untracked, greeting = null, survey = false, surveyUrl = null } = {}) {
   const items = digestItems(record)
   if (!items.length) return null
   const days = Number(record?.searchContext?.days) || null
   const count = `${items.length} paper${items.length === 1 ? '' : 's'}${days ? ` from the last ${days} day${days === 1 ? '' : 's'}` : ''}, picked for your north stars.`
   const link = track({ kind: 'open', paperId: '', to: openLink(appUrl, 'digest-email') })
   const lead = intro ? clean(intro) : null
-  const invite = survey ? track({ kind: 'survey', paperId: '', to: surveyLink(appUrl) }) : null
+  const invite = survey ? track({ kind: 'survey', paperId: '', to: surveyLink(appUrl, surveyUrl) }) : null
 
   const textItems = formatItemsText(items, track)
 
