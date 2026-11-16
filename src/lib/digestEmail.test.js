@@ -75,7 +75,12 @@ describe('buildDigestEmail', () => {
     expect(m.text).not.toContain('A number the guard withheld.')
     expect(m.text).toContain(`${DEFAULT_APP_URL}/?src=digest-email`)
     expect(m.text).toContain('for 6:00 am America/New_York')
+    // The ask for a reply sits under the count, above the first paper, and only there.
     expect(m.text).toContain('Reply to this email')
+    expect(m.text.indexOf('Reply to this email')).toBeLessThan(m.text.indexOf('1. Paper 0 title.'))
+    expect(m.text.indexOf('Reply to this email')).toBeGreaterThan(m.text.indexOf('3 papers from the last 3 days'))
+    expect(m.text.match(/Reply to this email/g)).toHaveLength(1)
+    expect(m.html.indexOf('Reply to this email')).toBeLessThan(m.html.indexOf('Paper 0 title'))
     expect(m.html).toContain('Amputation-free survival was 71% at one year.')
     expect(m.html).toContain('href="https://pubmed.ncbi.nlm.nih.gov/p0/"')
     expect(m.items).toHaveLength(3)

@@ -184,6 +184,10 @@ The handler reads the stored digest back and sends it (`../_shared/digestEmail.j
   2026-11-06, when a reader asked not to be greeted by an AI, and their profile was given
   the flag directly; before that every email opened "Hello, doctor,". The in-app hero
   follows the same setting ("Your digest." when off). The pause email opens the same way.
+- The ask for feedback, right under the paper count and above the list, when a reply-to
+  address is configured: "Anything off, missing, or not worth your morning? Reply to this
+  email and it reaches Marissa directly." It moved up from the footer on 2026-11-16, since
+  not every reader scrolls to the bottom.
 - Body: up to five items in digest order; title, authors, journal, year; the triage
   finding, labelled **"Checked against the source text."** only when the triage check
   verdict is `supported`, otherwise **"Not checked against the source text; read the
@@ -191,7 +195,7 @@ The handler reads the stored digest back and sends it (`../_shared/digestEmail.j
   A finding the number guard withheld is omitted. Every link goes through `digest-click`
   (see Engagement).
 - Footer: why the reader gets it (their hour and timezone), the signed unsubscribe link,
-  the Settings switch, and a reply line when a reply-to address is configured.
+  and the Settings switch.
 
 Nothing is generated at send time. No model call, no new numbers, no new citations: the
 email shows exactly what the app would show. A run that lost its claim delivers nothing.

@@ -135,10 +135,14 @@ export function unsubscribeHeaders(unsubscribeUrl) {
   return { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
 }
 
-const FOOTER_TEXT = (appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl }) => [
+// The ask for feedback sits above the papers, not in the footer (2026-11-16): not every
+// reader scrolls to the bottom, and the reply is the most useful thing a digest can earn.
+// It is printed only when a reply-to address is configured, so a reply has somewhere to go.
+export const REPLY_LINE = 'Anything off, missing, or not worth your morning? Reply to this email and it reaches Marissa directly.'
+
+const FOOTER_TEXT = (appUrl, { hourLabel, timezone, unsubscribeUrl }) => [
   `You get this because your Verastar morning digest is switched on${hourLabel ? ` for ${hourLabel}${timezone ? ` ${timezone}` : ''}` : ''}.`,
   ...stopLines(unsubscribeUrl),
-  replyTo ? 'Reply to this email and it reaches Marissa directly.' : '',
 ].filter(Boolean).join('\n')
 
 function footerHtml(appUrl, opts) {
@@ -211,23 +215,25 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = n
     ...(greeting ? [greeting, ''] : []),
     lead,
     count,
+    ...(replyTo ? [REPLY_LINE] : []),
     '',
     textItems,
     '',
     ...(invite ? [`${SURVEY_LINE} ${invite}`, ''] : []),
     `Open in Verastar: ${link}`,
     '',
-    FOOTER_TEXT(appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl }),
+    FOOTER_TEXT(appUrl, { hourLabel, timezone, unsubscribeUrl }),
   ].filter((l) => l !== null).join('\n')
 
   const html = wrapHtml(`
     ${greeting ? `<p style="margin:0 0 8px 0;">${esc(greeting)}</p>` : ''}
     ${lead ? `<p style="margin:0 0 8px 0;">${esc(lead)}</p>` : ''}
-    <p style="margin:0 0 18px 0;">${esc(count)}</p>
+    <p style="margin:0 0 ${replyTo ? 8 : 18}px 0;">${esc(count)}</p>
+    ${replyTo ? `<p style="margin:0 0 18px 0;">${esc(REPLY_LINE)}</p>` : ''}
     ${formatItemsHtml(items, track)}
     ${invite ? `<p style="margin:18px 0 0 0;">${esc(SURVEY_LINE)} <a href="${esc(invite)}">${esc(SURVEY_LABEL)}</a></p>` : ''}
     ${buttonHtml(link, 'Open in Verastar')}
-    ${footerHtml(appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl })}`)
+    ${footerHtml(appUrl, { hourLabel, timezone, unsubscribeUrl })}`)
 
   return { subject: subjectFromTitle(items[0].title), text, html, items, headers: unsubscribeHeaders(unsubscribeUrl) }
 }
