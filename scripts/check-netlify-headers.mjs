@@ -66,6 +66,11 @@ const navigationOnly = new Set([
   'papertrellis.com',
   'www.w3.org',
   'verastar.netlify.app',
+  // google-scholar-alerts guide: canonical/og URLs, the JSON-LD @context, and source links.
+  'verastar.papertrellis.com',
+  'schema.org',
+  'scholar.google.com',
+  'scholar.googleblog.com',
 ])
 // Strings shipped inside dependencies. They are not requests this app makes.
 const mentionedOnly = new Set([
