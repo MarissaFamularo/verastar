@@ -1,6 +1,6 @@
 // The digest email builders and the Resend sender (supabase/functions/_shared/digestEmail.js).
 import { describe, it, expect } from 'vitest'
-import { buildDigestEmail, buildPauseEmail, digestItems, digestLinks, digestSender, greetingFor, makeResendSender, pauseLinks, prepareTracker, subjectFromTitle, surveyInvited, DEFAULT_APP_URL, RESUME_LABEL } from '../../supabase/functions/_shared/digestEmail.js'
+import { buildDigestEmail, buildPauseEmail, digestItems, digestSubject, digestLinks, digestSender, greetingFor, makeResendSender, pauseLinks, prepareTracker, subjectFromTitle, surveyInvited, DEFAULT_APP_URL, RESUME_LABEL } from '../../supabase/functions/_shared/digestEmail.js'
 
 const paper = (i, extra = {}) => ({ paper: { id: `p${i}`, pmid: `p${i}`, title: `Paper ${i} title.`, author: 'Li X et al.', journal: 'J Vasc Surg', year: '2026', ...extra }, citation: { url: `https://pubmed.ncbi.nlm.nih.gov/p${i}/` } })
 const record = (over = {}) => ({
@@ -12,6 +12,17 @@ const record = (over = {}) => ({
     p2: { finding: 'Endothelial NR4A1 restrained thrombosis in mice.', check: { verdict: 'unchecked' } },
   },
   ...over,
+})
+
+describe('digestSubject', () => {
+  it('is the product and the local day, with no title', () => {
+    expect(digestSubject('2026-11-18')).toBe('Verastar · Nov 18, 2026')
+    expect(digestSubject('2026-01-05')).toBe('Verastar · Jan 5, 2026')
+    expect(digestSubject('2026-12-31')).toBe('Verastar · Dec 31, 2026')
+  })
+  it('falls back to a dated subject when the day is missing or malformed', () => {
+    for (const bad of [null, undefined, '', '11/18/26', 'nope']) expect(digestSubject(bad)).toMatch(/^Verastar · [A-Z][a-z]{2} \d{1,2}, \d{4}$/)
+  })
 })
 
 describe('subjectFromTitle', () => {
@@ -60,9 +71,10 @@ describe('buildDigestEmail', () => {
   it('is null with nothing to send', () => {
     expect(buildDigestEmail({ record: { results: [] } })).toBeNull()
   })
-  it('subject is the top paper; text and html carry the same items, labels and link', () => {
-    const m = buildDigestEmail({ record: record(), replyTo: 'm@example.com', hourLabel: '6:00 am', timezone: 'America/New_York' })
-    expect(m.subject).toBe('Paper 0 title')
+  it('subject is the local date; text and html carry the same items, labels and link', () => {
+    const m = buildDigestEmail({ record: record(), replyTo: 'm@example.com', hourLabel: '6:00 am', timezone: 'America/New_York', day: '2026-11-18' })
+    expect(m.subject).toBe('Verastar · Nov 18, 2026')
+    expect(m.subject).not.toContain('Paper 0 title')
     // No greeting unless one is passed: the email opens with the count.
     expect(m.text.startsWith('3 papers from the last 3 days')).toBe(true)
     expect(m.text).not.toContain('Hello, doctor')

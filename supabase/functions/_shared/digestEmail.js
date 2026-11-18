@@ -58,6 +58,17 @@ export function subjectFromTitle(title, max = 100) {
   return `${cut > 40 ? t.slice(0, cut) : t}…`
 }
 
+// The digest's subject: the product and the reader's local date, "Verastar · Nov 18, 2026".
+// A tester asked for the date rather than the top paper's title (2026-11-18), so the
+// morning email reads the same every day and threads by day. `day` is the local calendar day
+// ("YYYY-MM-DD", localClock's day); anything else falls back to today's UTC date.
+export function digestSubject(day) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day ?? ''))
+  const date = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : new Date()
+  const label = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+  return `${DIGEST_FROM_NAME} · ${label}`
+}
+
 // The record's results, in digest order, reduced to what an email shows. Items without a
 // title are dropped. A finding withheld by the number guard (findingWithheld) is omitted.
 export function digestItems(record, { limit = MAX_ITEMS } = {}) {
@@ -241,7 +252,8 @@ export async function prepareTracker(links, sign) {
 // the sender (unsubscribe headers when a link was given).
 // `greeting` is the opening line (greetingFor) or null: with null the email starts with the
 // papers. `survey` adds the day-30 survey invitation (surveyInvited) after the papers.
-export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null, track = untracked, greeting = null, survey = false, surveyUrl = null } = {}) {
+// `day` is the reader's local delivery day ("YYYY-MM-DD"), which dates the subject.
+export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = null, hourLabel = '', timezone = '', intro = null, unsubscribeUrl = null, track = untracked, greeting = null, survey = false, surveyUrl = null, day = null } = {}) {
   const items = digestItems(record)
   if (!items.length) return null
   const days = Number(record?.searchContext?.days) || null
@@ -274,7 +286,7 @@ export function buildDigestEmail({ record, appUrl = DEFAULT_APP_URL, replyTo = n
     ${buttonHtml(link, 'Open in Verastar')}
     ${footerHtml(appUrl, { replyTo, hourLabel, timezone, unsubscribeUrl })}`)
 
-  return { subject: subjectFromTitle(items[0].title), text, html, items, headers: unsubscribeHeaders(unsubscribeUrl) }
+  return { subject: digestSubject(day), text, html, items, headers: unsubscribeHeaders(unsubscribeUrl) }
 }
 
 // The numbered paper list, plain text. Shared with the founder mailing script. `track`
