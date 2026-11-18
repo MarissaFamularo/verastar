@@ -16,6 +16,8 @@ import { makeSupabaseStore } from './storeSupabase.js'
 import { PILOT_DIGEST_LIMIT } from '../pipeline/digestLimit.js'
 import { fakeProvider } from './spendingFakes.js'
 import { makeRpcLedger } from '../../supabase/functions/_shared/spending.js'
+import { digestSubject } from '../../supabase/functions/_shared/digestEmail.js'
+import { localClock } from '../../supabase/functions/model/logic.js'
 
 const HASH = 'e'.repeat(64)
 // A timezone in which the wall clock reads LOCAL_HOUR right now. Etc/GMT+N is UTC-N.
@@ -932,7 +934,9 @@ describe('delivery', () => {
     const out = await (await handleDigestRun(cron(), h)).json()
     expect(out).toMatchObject({ ran: true, phase: 'done', papers: 2 })
     expect(sent).toHaveLength(1)
-    expect(sent[0]).toMatchObject({ to: 'a@example.test', subject: 'Paper 0 for A' })
+    expect(sent[0]).toMatchObject({ to: 'a@example.test' })
+    // The subject is the reader's local delivery day, not the top paper.
+    expect(sent[0].subject).toBe(digestSubject(localClock(new Date(), TZ).day))
     expect(sent[0].text).toContain('Finding one.')
     expect(sent[0].text).toContain('Checked against the source text.')
     expect(sent[0].text).toContain('https://app.test/?src=digest-email')

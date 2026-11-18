@@ -176,7 +176,7 @@ sends nothing. The in-app digest appears as soon as it is built.
 
 The handler reads the stored digest back and sends it (`../_shared/digestEmail.js`):
 
-- Subject: the top paper's title.
+- Subject: "Verastar · Nov 18, 2026", the reader's local delivery date (`digestSubject`). It was the top paper's title until 2026-11-18; a tester asked for the date.
 - Opening: "Good morning, {name}." with the name the reader typed, or "Doctor" when
   blank, unless the profile turned the greeting off (Settings → Reading → "Open each
   digest with a greeting", stored as `profile.greeting === false`; a profile without the

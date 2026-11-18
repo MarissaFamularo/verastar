@@ -354,6 +354,7 @@ async function deliverDue(admin, email, rows, now) {
           replyTo: email.replyTo || null,
           hourLabel: hourText(row.hour_local),
           timezone: row.timezone || '',
+          day,
         })
       },
       sentType: 'digest_emailed',
