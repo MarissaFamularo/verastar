@@ -355,6 +355,39 @@ No new secrets (`DIGEST_UNSUBSCRIBE_SECRET` signs the new link). Order matters:
 Rollback: redeploy the previous `digest-run` (the in-app survey link and the old pause rule
 return). The page, function, column and RPC are harmless left in place.
 
+## Release: day-30 survey outside the digest (2026-11-18)
+
+Not deployed. The day-30 invitation is one line in the digest email, so a reader who gets no
+digest never sees it, and the day-30 answers would come only from readers still engaged. On
+2026-11-18, of the 50 testers reaching day 30 by 2026-11-25, 25 were getting no digest:
+14 paused by the scheduler, 8 with no schedule row, 3 unsubscribed. Only one of the 25 had
+opened the app in the previous two weeks, so the in-app card does not reach them either.
+
+- **One standalone email** (`buildSurveyEmail`, subject "Five quick questions about
+  Verastar") goes once to an account when: day 30 opened at least two days ago, no day-30
+  answer, no digest emailed since day 30 opened, and it is not being emailed digests (no
+  schedule row, schedule off, or paused with no engagement since). Unsubscribed readers
+  (`email_digest` off) get nothing. Local hour between the schedule's hour (default 6 am,
+  New York) and 9 pm. At most 10 per cron tick.
+- **Once** is `sponsored_accounts.day30_survey_emailed_at`, claimed by compare-and-set
+  before sending; a failed send is not retried. Events: `day30_survey_emailed`,
+  `day30_survey_email_failed`.
+- **Answering does not restart a paused digest.** The email's survey link is untracked
+  (a digest-click stamps `engaged_at`, which resumes a pause), and `digest-survey` now
+  stamps `engaged_at` only on an unpaused account. Unpaused readers answering from the
+  digest line are unchanged.
+
+Order:
+
+1. `npm test`.
+2. **Apply** `20261118120000_day30_survey_outreach.sql`. Before step 4: without the column
+   digest-run sends no survey email (digests unaffected).
+3. **Deploy** `digest-survey`.
+4. **Deploy** `digest-run`. The first cron tick after 6 am New York sends the backlog,
+   10 per tick.
+
+Rollback: redeploy the previous `digest-run`; the column is harmless left in place.
+
 ## Scheduler capacity (decide before release)
 
 The scheduler serves one account per cron tick, and the tick is every five minutes. A

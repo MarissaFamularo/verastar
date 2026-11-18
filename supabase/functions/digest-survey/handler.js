@@ -11,8 +11,8 @@
 // with a signed token, and that page posts here. The token is the only credential. The
 // answer is recorded by beta_survey_submit_signed (service_role only), which applies the
 // same rules as the app's signed-in path: beta access, day 30 opened, option codes only,
-// first write wins, no skip. A recorded answer also stamps engaged_at: answering is
-// reading. Supabase rewrites HTML responses, so this replies JSON and the page renders.
+// first write wins, no skip. A recorded answer also stamps engaged_at (answering is
+// reading), except on a paused account, where it would restart the digest. Supabase rewrites HTML responses, so this replies JSON and the page renders.
 // Pure except for `admin`; index.ts binds the runtime.
 
 import { verifySurvey } from '../_shared/unsubscribe.js'
@@ -89,7 +89,9 @@ export async function handleSurvey(req, { admin, secret, now = () => new Date() 
     }
     if (data?.status === 'already') return surveyReply('already')
     const at = now().toISOString()
-    await admin.from('digest_schedules').update({ engaged_at: at, updated_at: at }).eq('user_id', userId).then(() => {}, () => {})
+    // Not for a paused account: engaged_at after the pause restarts the digest
+    // (digest-run pauseMayResume), and answering a survey is not asking for that.
+    await admin.from('digest_schedules').update({ engaged_at: at, updated_at: at }).eq('user_id', userId).is('paused_at', null).then(() => {}, () => {})
     await admin.from('events').insert({ user_id: userId, type: 'beta_survey_answered_by_email', payload: { wave: 'day30' } }).then(() => {}, () => {})
     return surveyReply('recorded')
   } catch {

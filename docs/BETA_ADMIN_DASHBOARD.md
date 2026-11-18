@@ -108,6 +108,9 @@ testers are asked until they answer.
   digest email from day 30 carries one tracked line (click kind `survey`, link
   `?survey=day30`, which opens the form directly) until the account answers. After
   answering, the card offers the existing "Send feedback" box for anything in words.
+  A reader who gets no digest (paused, no schedule, schedule off; not unsubscribed) gets
+  one standalone survey email instead, two days after day 30 (docs/DIGEST_DELIVERY.md §
+  Release: day-30 survey outside the digest).
 - **Dashboard.** `beta_survey30_stats()` (admins only, all time, test accounts excluded):
   accounts past day 30, how many of them have answered, the five answer tables, and the paired change
   for accounts that completed both waves: confidence higher / same / lower and weekly time

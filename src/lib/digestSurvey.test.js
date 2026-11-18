@@ -25,21 +25,22 @@ describe('signed survey link', () => {
   })
 })
 
-function fakeAdmin({ enrolledDaysAgo = 31, answered = null, rpcError = null, readError = false } = {}) {
+function fakeAdmin({ enrolledDaysAgo = 31, answered = null, rpcError = null, readError = false, pausedAt = null } = {}) {
   const t = {
     sponsored_accounts: enrolledDaysAgo == null ? [] : [{ user_id: USER, created_at: new Date(NOW.getTime() - enrolledDaysAgo * DAY).toISOString() }],
     beta_survey_responses: answered ? [{ user_id: USER, wave: 'day30', status: answered }] : [],
-    digest_schedules: [{ user_id: USER, engaged_at: null }],
+    digest_schedules: [{ user_id: USER, engaged_at: null, paused_at: pausedAt }],
     events: [],
     rpc: [],
   }
   const from = (table) => {
     const filters = []
     let payload = null
-    const rows = () => t[table].filter((r) => filters.every(([k, v]) => r[k] === v))
+    const rows = () => t[table].filter((r) => filters.every(([k, v]) => (r[k] ?? null) === v))
     const chain = {
       select: () => chain,
       eq: (k, v) => { filters.push([k, v]); return chain },
+      is: (k, v) => { filters.push([k, v]); return chain },
       maybeSingle: async () => (readError ? { data: null, error: { message: 'down' } } : { data: rows()[0] ?? null, error: null }),
       update: (p) => { payload = p; return chain },
       insert: async (row) => { t[table].push(row); return { error: null } },
@@ -75,6 +76,13 @@ describe('digest-survey', () => {
     expect(t.rpc).toEqual([{ name: 'beta_survey_submit_signed', args: { p_user_id: USER, p_version: DAY30_VERSION, p_answers: ANSWERS } }])
     expect(t.digest_schedules[0].engaged_at).toBe(NOW.toISOString())
     expect(t.events).toEqual([expect.objectContaining({ user_id: USER, type: 'beta_survey_answered_by_email' })])
+  })
+  it('an answer from a paused account is recorded but does not restart its digest (no engagement stamp)', async () => {
+    const { t, admin } = fakeAdmin({ pausedAt: '2026-11-10T11:00:00Z' })
+    const out = await run(admin, { u: USER, t: await signSurvey(USER, SECRET), v: DAY30_VERSION, ...ANSWERS })
+    expect(out.body.result).toBe('recorded')
+    expect(t.digest_schedules[0].engaged_at).toBeNull()
+    expect(t.events).toEqual([expect.objectContaining({ type: 'beta_survey_answered_by_email' })])
   })
   it('a second answer is a no-op: already, no new engagement stamp', async () => {
     const { t, admin } = fakeAdmin({ answered: 'completed' })
