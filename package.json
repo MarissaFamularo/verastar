@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "A verifiable evidence digest for clinicians.",
+  "description": "A verifiable evidence digest for physicians.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
