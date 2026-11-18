@@ -19,4 +19,5 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: node scripts/check-netlify-headers.mjs
-      - run: npm audit --audit-level=moderate
+      # Shipped dependencies only: build/test tools (vite, vitest) never reach visitors.
+      - run: npm audit --omit=dev --audit-level=moderate

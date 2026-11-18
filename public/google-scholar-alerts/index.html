@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>How to set up Google Scholar alerts (and what they miss) — Verastar</title>
+    <meta name="description" content="Step-by-step: create a Google Scholar alert, follow new citations to a key paper, track an author, and tighten a noisy alert. Plus where a saved search stops." />
+    <link rel="canonical" href="https://verastar.papertrellis.com/google-scholar-alerts/" />
+    <meta property="og:title" content="How to set up Google Scholar alerts" />
+    <meta property="og:description" content="Create an alert, follow citations and authors, and keep the alert narrow." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://verastar.papertrellis.com/google-scholar-alerts/" />
+    <meta property="og:image" content="https://verastar.papertrellis.com/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Do I need a Google account for Google Scholar alerts?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. You can enter any email address. If it is not your signed-in Google account, Google Scholar emails a verification link, and the alert starts once you click it." }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I get an alert when a paper is cited?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Find the paper in Google Scholar, click Cited by under it, then click the envelope icon on the list of citing articles. New papers that cite it are emailed to you." }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I follow new papers by one author?",
+            "acceptedAnswer": { "@type": "Answer", "text": "If the author has a Google Scholar profile, open it and click Follow, then choose new articles. Otherwise create an alert on a search such as author:\"AW Bradbury\", adding a topic word if the name is common." }
+          },
+          {
+            "@type": "Question",
+            "name": "Why is my Google Scholar alert sending papers I don't want?",
+            "acceptedAnswer": { "@type": "Answer", "text": "The alert is a saved search, so it matches words, not relevance. Put multi-word concepts in quotes, add a second required term, or exclude a frequent off-topic word with a minus sign, then recreate the alert." }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I stop a Google Scholar alert?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Open the Google Scholar menu, choose Alerts, and click Cancel next to the alert. Each alert email also has a cancel link." }
+          }
+        ]
+      }
+    </script>
+    <style>
+      :root {
+        --fg: #f4f5f9; --fg-soft: #cbd0da; --fg-dim: #9aa1af; --fg-muted: #7a8291;
+        --accent: #ef8f5b; --accent-bright: #f4a679; --gold: #e9c46a; --verified: #7fbf9a; --abstract: #e6b877;
+        --line: rgba(255,255,255,.08); --panel: rgba(255,255,255,.035);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; color: var(--fg);
+        font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: radial-gradient(120% 80% at 50% -10%, #1a2138, #0b0e18 55%, #08090d) fixed;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 680px; margin: 0 auto; padding: 64px 24px 96px; }
+      .mark { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .14em; color: #6d7484; margin: 0; }
+      .mark a { color: inherit; text-decoration: none; }
+      h1 { font-family: "Spectral", Georgia, serif; font-weight: 500; font-size: 38px; line-height: 1.15; letter-spacing: -.01em; margin: 12px 0 0; }
+      .lede { font-size: 16.5px; line-height: 1.65; color: var(--fg-soft); margin: 16px 0 0; }
+      h2 { font-family: "Spectral", Georgia, serif; font-weight: 500; font-size: 25px; margin: 52px 0 0; }
+      h3 { font-size: 15.5px; font-weight: 600; color: var(--fg-soft); margin: 22px 0 0; }
+      p, li, td, th, summary { font-size: 15.5px; line-height: 1.7; color: var(--fg-dim); }
+      p { margin: 12px 0 0; }
+      ol { margin: 14px 0 0; padding-left: 22px; }
+      li { margin-top: 12px; padding-left: 4px; }
+      li::marker { color: var(--gold); font-family: "IBM Plex Mono", monospace; font-size: 13px; }
+      strong { color: var(--fg-soft); font-weight: 600; }
+      a { color: var(--accent); }
+      a:hover { color: var(--accent-bright); }
+      code { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; color: var(--fg-soft); background: var(--panel); padding: 1px 5px; border-radius: 5px; }
+      .answer { margin-top: 26px; padding: 16px 18px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
+      .answer .k { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; letter-spacing: .12em; color: var(--gold); margin: 0; }
+      .answer p { color: var(--fg-soft); margin-top: 6px; }
+      .cta {
+        display: inline-block; margin-top: 22px; padding: 13px 24px; border-radius: 11px;
+        background: var(--accent); color: #1c1206; font-weight: 600; font-size: 15px; text-decoration: none;
+      }
+      .cta:hover { background: var(--accent-bright); color: #1c1206; }
+      .card { margin-top: 22px; padding: 18px; border-radius: 14px; background: rgba(12,15,26,.85); border: 1px solid var(--line); }
+      .card .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; color: var(--fg-soft); }
+      .card .tag { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--fg-muted); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
+      .paper { margin-top: 12px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); }
+      .paper .cite { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--accent); margin: 0; }
+      .paper .why { font-size: 14.5px; color: var(--fg-soft); margin: 6px 0 0; line-height: 1.55; }
+      .badge { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; padding: 3px 9px; border-radius: 999px; font-size: 12px; }
+      .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+      .badge.v { color: var(--verified); background: rgba(127,191,154,.10); }
+      table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+      th, td { text-align: left; vertical-align: top; padding: 10px 10px 10px 0; border-bottom: 1px solid var(--line); font-size: 14.5px; line-height: 1.55; }
+      th { color: var(--fg-soft); font-weight: 600; }
+      td:first-child { color: var(--fg-soft); width: 26%; }
+      details { border-bottom: 1px solid var(--line); padding: 12px 0; }
+      summary { cursor: pointer; color: var(--fg-soft); font-weight: 500; }
+      details p { margin-top: 8px; }
+      .sources { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); }
+      .sources p, .sources li { font-size: 13.5px; }
+      .sources ul { padding-left: 18px; margin: 8px 0 0; }
+      @media (max-width: 480px) {
+        main { padding: 40px 16px 72px; } h1 { font-size: 31px; }
+        td:first-child { width: 32%; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="mark"><a href="/">✶ VERASTAR</a> · GUIDE</p>
+      <h1>How to set up Google Scholar alerts</h1>
+      <p class="lede">
+        A Google Scholar alert is a saved search that emails you new papers as Scholar finds them.
+        Setting one up takes a minute. Keeping it useful takes a little more thought, so this guide
+        covers both.
+      </p>
+
+      <div class="answer">
+        <p class="k">THE SHORT ANSWER</p>
+        <p>
+          Search for your topic on <a href="https://scholar.google.com" rel="noopener">scholar.google.com</a>,
+          click the envelope icon in the left sidebar of the results, confirm your email address, and
+          click <strong>Create alert</strong>. Scholar will email you newly published papers that
+          match the search.
+        </p>
+      </div>
+
+      <h2>Create your first alert</h2>
+      <ol>
+        <li>
+          <strong>Run the search you want to follow.</strong> Put multi-word concepts in quotes, such
+          as <code>"carotid stenosis"</code>, so the alert matches the phrase rather than either word.
+        </li>
+        <li>
+          <strong>Check the first page of results.</strong> The alert will send more of whatever you
+          see here. If it is already drifting off topic, add a second required term or exclude a
+          frequent stray word with a minus sign, like <code>-veterinary</code>, and search again.
+        </li>
+        <li>
+          <strong>Click the envelope icon</strong> in the left sidebar of the results page.
+        </li>
+        <li>
+          <strong>Confirm the email address and click Create alert.</strong> Any address works. If it
+          is not your signed-in Google account, Scholar sends a verification link first, and the
+          alert starts once you click it.
+        </li>
+        <li>
+          <strong>Manage it later from the Alerts page.</strong> Open the Scholar menu and choose
+          <strong>Alerts</strong> to see, edit, or cancel every alert you have.
+        </li>
+      </ol>
+
+      <h2>Three alerts worth adding</h2>
+      <p>A topic alert is the obvious one. These catch what a topic search misses.</p>
+
+      <h3>New papers citing a key study</h3>
+      <p>
+        Find the trial or review that defines your area, click <strong>Cited by</strong> under it,
+        then click the envelope icon above the list of citing articles. Every new paper that cites
+        it comes to you, whatever words it uses.
+      </p>
+
+      <h3>New work from a specific author</h3>
+      <p>
+        If the author has a Google Scholar profile, open it and click <strong>Follow</strong>. If
+        not, create an alert on <code>author:"AW Bradbury"</code>. For a common name, add a topic
+        word or an institution to keep it from catching namesakes.
+      </p>
+
+      <h3>Citations of your own papers</h3>
+      <p>
+        Set up a Google Scholar profile, then click <strong>Follow</strong> on it and choose new
+        citations. You hear when your work is cited, which is useful for tracking a paper's reach
+        and for spotting replies to it.
+      </p>
+
+      <h2>Where a Scholar alert stops</h2>
+      <p>
+        An alert matches words. It does not know which papers matter to you, and it does not read
+        them. A busy topic can bury a quiet one in the same inbox, and the numbers in each abstract
+        are yours to check against the paper.
+      </p>
+      <p>
+        That gap is what Verastar is built for. It searches PubMed once per topic, so a crowded
+        field cannot crowd out a small one. It scores each new paper against what you told it to
+        watch for, keeps only the few that clear the bar, and checks each reported value against
+        the source text. A value it cannot match is withheld and labeled, not passed along.
+      </p>
+
+      <div class="card" aria-label="Sample Verastar digest">
+        <div class="head"><span>✶ Morning digest</span><span class="tag">SAMPLE</span></div>
+        <div class="paper">
+          <p class="cite">Brott TG et al. · N Engl J Med · 2026</p>
+          <p class="why">Medical management and revascularization for asymptomatic carotid stenosis. Directly relevant to how you counsel asymptomatic patients.</p>
+          <span class="badge v">Estimate verified as printed · endpoint unchecked</span>
+        </div>
+        <div class="paper">
+          <p class="cite">Brott TG et al. · N Engl J Med · 2010</p>
+          <p class="why">Stenting versus endarterectomy for carotid stenosis. The trial most later comparisons are measured against.</p>
+          <span class="badge v">Values verified as printed · groups unchecked</span>
+        </div>
+      </div>
+      <p>
+        These are the labels the checker gives these two trials. Every label says what was checked
+        and what was not. "Verified as printed" means the value appears in the paper exactly as
+        reported. Which endpoint or groups it belongs to is not checked, and the label says so
+        rather than implying more.
+      </p>
+
+      <h2>Scholar alerts and Verastar side by side</h2>
+      <table>
+        <thead><tr><th></th><th>Google Scholar alert</th><th>Verastar</th></tr></thead>
+        <tbody>
+          <tr><td>Searches</td><td>Google Scholar's index</td><td>PubMed, one search per topic</td></tr>
+          <tr><td>Sends</td><td>Links to new papers that match the words</td><td>The few new papers that score highest for what you watch</td></tr>
+          <tr><td>Numbers</td><td>Not checked</td><td>Each value checked against its source, or withheld</td></tr>
+          <tr><td>Best for</td><td>Following citations, authors and broad topics</td><td>Physicians who want a short, checked read</td></tr>
+        </tbody>
+      </table>
+      <p>
+        They work well together. Keep Scholar alerts for citations and authors, and let Verastar
+        handle the topics you need to stay current in.
+      </p>
+
+      <a class="cta" href="/">Try Verastar →</a>
+      <p>
+        Verastar is running a free pilot for physicians. Nonphysicians can use Verastar free with their own Anthropic API key;
+        <a href="/api-key-guide.html">here is what that involves</a>.
+      </p>
+
+      <h2>Common questions</h2>
+      <details>
+        <summary>Do I need a Google account for Google Scholar alerts?</summary>
+        <p>No. You can enter any email address. If it is not your signed-in Google account, Scholar emails a verification link, and the alert starts once you click it.</p>
+      </details>
+      <details>
+        <summary>How do I get an alert when a paper is cited?</summary>
+        <p>Find the paper in Google Scholar, click <strong>Cited by</strong> under it, then click the envelope icon on the list of citing articles.</p>
+      </details>
+      <details>
+        <summary>How do I follow new papers by one author?</summary>
+        <p>Click <strong>Follow</strong> on the author's Scholar profile, or create an alert on a search such as <code>author:"AW Bradbury"</code>, adding a topic word if the name is common.</p>
+      </details>
+      <details>
+        <summary>Why is my alert sending papers I don't want?</summary>
+        <p>The alert is a saved search, so it matches words, not relevance. Quote multi-word concepts, add a second required term, or exclude a frequent off-topic word with a minus sign, then recreate the alert.</p>
+      </details>
+      <details>
+        <summary>How do I stop a Google Scholar alert?</summary>
+        <p>Open the Scholar menu, choose <strong>Alerts</strong>, and click <strong>Cancel</strong> next to the alert. Each alert email also has a cancel link.</p>
+      </details>
+
+      <div class="sources">
+        <p><strong>Sources</strong></p>
+        <ul>
+          <li><a href="https://scholar.google.com/intl/en/scholar/help.html" rel="noopener">Google Scholar Search Help: Email alerts</a></li>
+          <li><a href="https://scholar.googleblog.com/2010/06/google-scholar-alerts.html" rel="noopener">Google Scholar Blog: Google Scholar Alerts</a></li>
+        </ul>
+      </div>
+    </main>
+  </body>
+</html>
