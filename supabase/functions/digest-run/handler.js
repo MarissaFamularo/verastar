@@ -66,7 +66,7 @@ import { guardedPubmedSearch } from '../_shared/pubmedCircuit.js'
 import { accountActive, localClock, digestGate, requestedTimezone } from '../model/logic.js'
 import { makeGuardedFetch } from '../_shared/spending.js'
 import { CLAIM_STALE_SECONDS } from '../_shared/timeouts.js'
-import { buildDigestEmail, buildPauseEmail, digestLinks, pauseLinks, prepareTracker, untracked, greetingFor, surveyInvited, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
+import { buildDigestEmail, buildPauseEmail, buildSurveyEmail, digestLinks, pauseLinks, prepareTracker, untracked, greetingFor, helloFor, surveyInvited, DEFAULT_APP_URL } from '../_shared/digestEmail.js'
 
 // Reading budget per tick. The edge runtime's wall clock is 150 s (free) / 400 s (paid);
 // reading stops here so persistence and the handoff still fit.
@@ -201,10 +201,10 @@ async function readLatest(admin, userId) {
 // The opening line of an email to this account, or null when the profile turned the
 // greeting off (greetingFor). A profile that cannot be read sends the plain digest; the
 // papers never wait on a hello.
-async function greetingOf(admin, userId) {
+async function greetingOf(admin, userId, greet = greetingFor) {
   try {
     const { data, error } = await admin.from('kv').select('value').eq('user_id', userId).eq('collection', 'profile').eq('key', 'me').maybeSingle()
-    return error ? null : greetingFor(data?.value)
+    return error ? null : greet(data?.value)
   } catch {
     return null
   }
@@ -224,6 +224,80 @@ async function surveyInviteFor(admin, userId, now) {
   } catch {
     return false
   }
+}
+
+// --- the day-30 survey for readers who get no digest ------------------------------------
+// The digest line (surveyInviteFor) reaches only readers whose digest is being emailed. On
+// 2026-11-18, 25 of the 50 testers reaching day 30 that week got no digest: 14 paused by
+// the scheduler, 8 with no schedule row, 3 unsubscribed. So once per cron tick, an account
+// gets ONE standalone survey email (buildSurveyEmail) when all of these hold:
+//   - day 30 opened at least SURVEY_EMAIL_GRACE_DAYS ago and no day-30 response is recorded;
+//   - it is not being emailed digests: no schedule row, schedule switched off, or paused
+//     with no engagement since the pause (pauseMayResume's rule without the record);
+//   - no digest email has gone to it since day 30 opened (so it never saw the line);
+//   - it has not turned the email off (email_digest false: unsubscribe is respected);
+//   - it is at or past its digest hour (default 6) and before SURVEY_EMAIL_LAST_HOUR, local.
+// "Once" is a compare-and-set on sponsored_accounts.day30_survey_emailed_at, taken before
+// sending: overlapping ticks cannot both send, and a failed send is not retried. Without
+// the column (migration not applied) the select fails and nothing is sent. Any read
+// failure sends nothing. Cron only; a manual run never sends it.
+export const SURVEY_EMAIL_GRACE_DAYS = 2
+export const SURVEY_EMAIL_LAST_HOUR = 21
+export const SURVEY_EMAILS_PER_TICK = 10
+export function surveyEmailDue({ account, schedule = null, recorded = null, digestSinceOpen = false, now = new Date() } = {}) {
+  if (!account?.created_at || account.day30_survey_emailed_at) return false
+  if (!surveyInvited({ enrolledAt: account.created_at, now, recorded })) return false
+  const opened = Date.parse(account.created_at) + 30 * 86400 * 1000
+  if (now.getTime() - opened < SURVEY_EMAIL_GRACE_DAYS * 86400 * 1000) return false
+  if (digestSinceOpen) return false
+  if (schedule?.email_digest === false) return false
+  const paused = schedule?.paused_at ? atMillis(schedule.paused_at) : null
+  const engaged = schedule?.engaged_at ? atMillis(schedule.engaged_at) : null
+  const stillPaused = paused !== null && !(engaged !== null && engaged >= paused)
+  const getsDigest = !!schedule && schedule.enabled !== false && !stillPaused
+  if (getsDigest) return false
+  const { hour } = localClock(now, schedule?.timezone || DEFAULT_TIMEZONE)
+  const from = Number.isInteger(Number(schedule?.hour_local)) ? Number(schedule.hour_local) : DEFAULT_HOUR_LOCAL
+  return hour >= from && hour < SURVEY_EMAIL_LAST_HOUR
+}
+
+async function inviteSurveyOutsideDigest(admin, email, now) {
+  if (!email?.send) return
+  try {
+    const { data: accounts, error } = await admin.from('sponsored_accounts').select('user_id, created_at, day30_survey_emailed_at')
+    if (error || !accounts?.length) return
+    const graceMs = (30 + SURVEY_EMAIL_GRACE_DAYS) * 86400 * 1000
+    const candidates = accounts.filter((a) => !a.day30_survey_emailed_at && now.getTime() - Date.parse(a.created_at) >= graceMs)
+    let sent = 0
+    for (const account of candidates) {
+      if (sent >= SURVEY_EMAILS_PER_TICK) break
+      const userId = account.user_id
+      const { data: response, error: responseError } = await admin.from('beta_survey_responses').select('status').eq('user_id', userId).eq('wave', 'day30').maybeSingle()
+      if (responseError || response?.status) continue
+      const { data: schedule, error: scheduleError } = await admin.from('digest_schedules').select('user_id, enabled, email_digest, paused_at, engaged_at, hour_local, timezone').eq('user_id', userId).maybeSingle()
+      if (scheduleError) continue
+      const opened = new Date(Date.parse(account.created_at) + 30 * 86400 * 1000).toISOString()
+      const { data: digests, error: digestsError } = await admin.from('events').select('ts').eq('user_id', userId).eq('type', 'digest_emailed').gte('ts', opened).limit(1)
+      if (digestsError) continue
+      if (!surveyEmailDue({ account, schedule, digestSinceOpen: (digests?.length ?? 0) > 0, now })) continue
+      const { data: won, error: claimError } = await admin.from('sponsored_accounts').update({ day30_survey_emailed_at: now.toISOString() }).eq('user_id', userId).is('day30_survey_emailed_at', null).select('user_id')
+      if (claimError || !won?.length) continue
+      sent += 1
+      await deliver(admin, email, { user_id: userId, email_digest: schedule?.email_digest ?? true }, {
+        build: async ({ unsubscribeUrl }) => {
+          let surveyUrl = null
+          if (email.surveyUrl) { try { surveyUrl = await email.surveyUrl(userId) } catch { surveyUrl = null } }
+          return buildSurveyEmail({
+            appUrl: email.appUrl || DEFAULT_APP_URL, surveyUrl, unsubscribeUrl,
+            replyTo: email.replyTo || null, greeting: await greetingOf(admin, userId, helloFor),
+          })
+        },
+        sentType: 'day30_survey_emailed',
+        failedType: 'day30_survey_email_failed',
+        payload: { paused: !!schedule?.paused_at, schedule: !!schedule },
+      })
+    }
+  } catch { /* best effort: the survey never holds up a digest */ }
 }
 
 function gateFor({ row, record, now, manual, mayRun }) {
@@ -482,6 +556,7 @@ export async function handleDigestRun(req, deps) {
   rows = manual ? rows || [] : orderByAttempt(rows)
   // Deliveries first: they are cheap, and a digest built early must not wait behind a build.
   if (!manual) await deliverDue(admin, deps.email, rows, now)
+  if (!manual) await inviteSurveyOutsideDigest(admin, deps.email, now)
   const ids = rows.map((r) => r.user_id)
   if (!ids.length) return json(200, { ran: false, reason: 'nothing due' })
   const { data: accounts, error: accountsError } = await admin.from('sponsored_accounts').select('user_id, active, ends_at').in('user_id', ids)

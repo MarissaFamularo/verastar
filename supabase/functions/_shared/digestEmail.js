@@ -27,6 +27,11 @@ export function greetingFor(profile) {
   const name = clean(profile?.name) || DEFAULT_NAME
   return `Good morning, ${name}.`
 }
+// The same rule for an email that is not sent at the reader's digest hour.
+export function helloFor(profile) {
+  if (profile?.greeting === false) return null
+  return `Hello, ${clean(profile?.name) || DEFAULT_NAME}.`
+}
 
 // "Verastar <addr>" from whatever SMTP_FROM holds: "Name <addr>" or a bare
 // address. Anything else comes back unchanged, so a malformed value fails at Resend, not
@@ -118,6 +123,46 @@ export const SURVEY_LABEL = 'Answer the one-month survey'
 // runtime can sign one; otherwise the app, which opens the survey after sign-in.
 function surveyLink(appUrl, surveyUrl = null) {
   return surveyUrl || `${openLink(appUrl, 'digest-email')}&survey=day30`
+}
+
+// --- day-30 survey for readers who get no digest ---------------------------------------
+// The digest line above only reaches readers whose digest is being emailed. A reader the
+// scheduler paused, who switched the schedule off, or who never had a schedule gets nothing,
+// so without this the day-30 answers come only from the readers still engaged. digest-run
+// sends this once per account (sponsored_accounts.day30_survey_emailed_at). The survey link
+// is printed untracked: a digest-click would stamp engaged_at and restart a paused digest
+// the reader did not ask for.
+export const SURVEY_EMAIL_SUBJECT = 'Five quick questions about Verastar'
+export function buildSurveyEmail({ appUrl = DEFAULT_APP_URL, surveyUrl = null, replyTo = null, unsubscribeUrl = null, greeting = null } = {}) {
+  const link = surveyLink(appUrl, surveyUrl)
+  const lead = 'You joined the Verastar beta about a month ago. Whether you read every digest, paused it, or never really got started, your answer counts the same.'
+  const ask = `Five quick questions, about a minute${surveyUrl ? ', no sign-in needed' : ''}:`
+  const stopped = 'If you stopped using Verastar, that is one of the answers, and it is the one we learn the most from.'
+  const once = 'This is the only email about it. Answering does not restart a paused digest.'
+  const tail = [
+    unsubscribeUrl ? `Unsubscribe: ${unsubscribeUrl}` : '',
+    replyTo ? 'Reply to this email and it reaches Marissa directly.' : '',
+  ].filter(Boolean)
+  const text = [
+    ...(greeting ? [greeting, ''] : []),
+    lead,
+    '',
+    ask,
+    `${SURVEY_LABEL}: ${link}`,
+    '',
+    stopped,
+    once,
+    ...(tail.length ? ['', ...tail] : []),
+  ].join('\n')
+  const tailHtml = tail.map((l) => (unsubscribeUrl && l.startsWith('Unsubscribe: ') ? `<a href="${esc(unsubscribeUrl)}">Unsubscribe</a>` : esc(l))).join('<br>')
+  const html = wrapHtml(`
+    ${greeting ? `<p>${esc(greeting)}</p>` : ''}
+    <p>${esc(lead)}</p>
+    <p>${esc(ask)}</p>
+    ${buttonHtml(link, SURVEY_LABEL)}
+    <p>${esc(stopped)} ${esc(once)}</p>
+    ${tailHtml ? `<p style="color:#666;font-size:12px;">${tailHtml}</p>` : ''}`)
+  return { subject: SURVEY_EMAIL_SUBJECT, text, html, headers: unsubscribeHeaders(unsubscribeUrl) }
 }
 
 // How to stop the email, in every footer: the one-click link when the runtime signs one,

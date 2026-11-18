@@ -1500,3 +1500,108 @@ describe('a resume press exempts the reader from auto-pause', () => {
     expect(inactivityState({ ...record, openedAt: YESTERDAY }, 5, { now, exempt: true })).toMatchObject({ streak: 0, pause: false })
   })
 })
+
+import { surveyEmailDue, SURVEY_EMAIL_GRACE_DAYS, SURVEY_EMAILS_PER_TICK } from '../../supabase/functions/digest-run/handler.js'
+
+describe('day-30 survey for readers who get no digest', () => {
+  const D = 24 * 60 * 60 * 1000
+  const enrolled = (days, now = Date.now()) => new Date(now - days * D).toISOString()
+  // A paused account in the test zone (local hour 11 now), enrolled `days` ago.
+  function pausedDb({ days = 33, users = ['A'] } = {}) {
+    const db = memoryDb({ users })
+    for (const u of users) {
+      db.t.sponsored_accounts.find((a) => a.user_id === u).created_at = enrolled(days)
+      seedDigest(db, u, { streak: PAUSE_AFTER_UNOPENED, pausedAt: YESTERDAY })
+    }
+    return db
+  }
+  async function tick(db, { now = null } = {}) {
+    const { email, sent } = fakeEmail()
+    email.surveyUrl = async (userId) => `https://app.test/email-survey.html?u=${userId}&t=s`
+    const h = deps(db).deps
+    h.email = email
+    if (now) h.now = () => now
+    await handleDigestRun(cron(), h)
+    return sent
+  }
+
+  it('a paused reader past day 30 gets one standalone survey email, with an untracked signed link, once', async () => {
+    const db = pausedDb()
+    const sent = await tick(db)
+    expect(sent).toHaveLength(1)
+    expect(sent[0].subject).toBe('Five quick questions about Verastar')
+    expect(sent[0].text).toContain('Hello, A.')
+    expect(sent[0].text).toContain('Answer the one-month survey: https://app.test/email-survey.html?u=A&t=s')
+    expect(sent[0].text).not.toContain('digest-click')
+    expect(sent[0].text).toContain('Answering does not restart a paused digest.')
+    expect(db.t.sponsored_accounts[0].day30_survey_emailed_at).toBeTruthy()
+    expect(events(db, 'day30_survey_emailed')).toEqual([expect.objectContaining({ user_id: 'A', payload: expect.objectContaining({ paused: true, schedule: true }) })])
+    expect(row(db).paused_at).toBe(YESTERDAY) // nothing about the pause changes
+    expect(await tick(db)).toHaveLength(0)
+  })
+  it('an account with no schedule row gets it at or after 6 am New York, not before', async () => {
+    const at = (iso) => new Date(iso)
+    for (const [now, expected] of [[at('2026-11-25T17:00:00Z'), 1], [at('2026-11-25T09:00:00Z'), 0], [at('2026-11-26T03:00:00Z'), 0]]) {
+      const db = memoryDb({ users: [] })
+      db.t.sponsored_accounts.push({ user_id: 'N', active: true, ends_at: null, created_at: enrolled(33, now.getTime()) })
+      expect(await tick(db, { now })).toHaveLength(expected)
+    }
+  })
+  it('nothing for a reader whose digests are going out, who answered, who unsubscribed, or who is inside the grace days', async () => {
+    const cases = {
+      'getting digests': (db) => { row(db).paused_at = null },
+      'resuming (engaged after the pause)': (db) => { row(db).engaged_at = new Date().toISOString() },
+      answered: (db) => { db.t.beta_survey_responses.push({ user_id: 'A', wave: 'day30', status: 'completed' }) },
+      unsubscribed: (db) => { row(db).email_digest = false },
+      'within grace': (db) => { db.t.sponsored_accounts[0].created_at = enrolled(30 + SURVEY_EMAIL_GRACE_DAYS - 0.5) },
+      'before day 30': (db) => { db.t.sponsored_accounts[0].created_at = enrolled(20) },
+      'a digest went out after day 30 opened': (db) => { db.t.events.push({ user_id: 'A', type: 'digest_emailed', payload: {}, ts: enrolled(1) }) },
+      'already emailed': (db) => { db.t.sponsored_accounts[0].day30_survey_emailed_at = enrolled(1) },
+    }
+    for (const [name, change] of Object.entries(cases)) {
+      const db = pausedDb()
+      change(db)
+      const sent = await tick(db)
+      expect(sent.filter((m) => m.subject === 'Five quick questions about Verastar'), name).toHaveLength(0)
+    }
+  })
+  it('a digest sent before day 30 opened does not count as having seen the line', async () => {
+    const db = pausedDb()
+    db.t.events.push({ user_id: 'A', type: 'digest_emailed', payload: {}, ts: enrolled(10) })
+    expect(await tick(db)).toHaveLength(1)
+  })
+  it('sends nothing when the claim column is missing (migration not applied) or a read fails', async () => {
+    const db = pausedDb()
+    const from = db.admin.from
+    db.admin.from = (table) => {
+      const chain = from(table)
+      if (table !== 'sponsored_accounts') return chain
+      const select = chain.select
+      chain.select = (cols) => (String(cols).includes('day30_survey_emailed_at') ? { then: (ok) => Promise.resolve({ data: null, error: { message: 'column does not exist' } }).then(ok) } : select(cols))
+      return chain
+    }
+    expect(await tick(db)).toHaveLength(0)
+  })
+  it('a failed send is not retried', async () => {
+    const db = pausedDb()
+    const { email } = fakeEmail({ fail: true })
+    const h = deps(db).deps
+    h.email = email
+    await handleDigestRun(cron(), h)
+    expect(events(db, 'day30_survey_email_failed')).toHaveLength(1)
+    expect(await tick(db)).toHaveLength(0)
+  })
+  it(`sends at most ${SURVEY_EMAILS_PER_TICK} per tick; the rest go on the next`, async () => {
+    const users = Array.from({ length: SURVEY_EMAILS_PER_TICK + 2 }, (_, i) => `U${i}`)
+    const db = pausedDb({ users })
+    expect(await tick(db)).toHaveLength(SURVEY_EMAILS_PER_TICK)
+    expect(await tick(db)).toHaveLength(2)
+  })
+  it('surveyEmailDue: the hour window follows the schedule’s zone and hour', () => {
+    const now = new Date('2026-11-25T17:00:00Z') // 12:00 New York
+    const account = { created_at: new Date(now.getTime() - 33 * D).toISOString() }
+    expect(surveyEmailDue({ account, schedule: { enabled: false, timezone: 'America/New_York', hour_local: 9 }, now })).toBe(true)
+    expect(surveyEmailDue({ account, schedule: { enabled: false, timezone: 'America/New_York', hour_local: 13 }, now })).toBe(false)
+    expect(surveyEmailDue({ account, schedule: { enabled: false, timezone: 'Asia/Tokyo', hour_local: 6 }, now })).toBe(false) // 02:00 there
+  })
+})
