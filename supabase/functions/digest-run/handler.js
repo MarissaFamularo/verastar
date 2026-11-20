@@ -346,7 +346,7 @@ async function deliverDue(admin, email, rows, now) {
         const survey = await surveyInviteFor(admin, row.user_id, now)
         let surveyUrl = null
         if (survey && email.surveyUrl) { try { surveyUrl = await email.surveyUrl(row.user_id) } catch { surveyUrl = null } }
-        return buildDigestEmail({
+        const message = buildDigestEmail({
           record, unsubscribeUrl, survey, surveyUrl,
           greeting: await greetingOf(admin, row.user_id),
           track: await trackerFor(email, row.user_id, digestLinks(record, email.appUrl || DEFAULT_APP_URL, { survey, surveyUrl })),
@@ -356,6 +356,9 @@ async function deliverDue(admin, email, rows, now) {
           timezone: row.timezone || '',
           day,
         })
+        // Record whether this digest carried the day-30 survey line, so a check can count
+        // digest invites (day30_survey_emailed_at only covers the standalone email).
+        return { ...message, event: { survey: !!survey } }
       },
       sentType: 'digest_emailed',
       failedType: 'digest_email_failed',
@@ -397,7 +400,7 @@ async function deliver(admin, email, row, { build, sentType, failedType, payload
     const message = await build({ to, unsubscribeUrl })
     if (!message) return
     const out = await email.send({ to, subject: message.subject, text: message.text, html: message.html, headers: message.headers || null })
-    await recordEvent(admin, userId, sentType, { ...payload, provider_id: out?.id ?? null })
+    await recordEvent(admin, userId, sentType, { ...payload, ...(message.event || {}), provider_id: out?.id ?? null })
   } catch (err) {
     await recordEvent(admin, userId, failedType, { ...payload, error: String(err?.message || err).slice(0, 200) })
   }

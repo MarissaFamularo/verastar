@@ -196,7 +196,8 @@ The handler reads the stored digest back and sends it (`../_shared/digestEmail.j
 Nothing is generated at send time. No model call, no new numbers, no new citations: the
 email shows exactly what the app would show. A run that lost its claim delivers nothing.
 
-Outcomes are events on the account: `digest_emailed` (`papers`, `provider_id`),
+Outcomes are events on the account: `digest_emailed` (`papers`, `survey`, `provider_id`;
+`survey` is true when the digest carried the day-30 survey line; recorded from Nov 2026),
 `digest_email_failed` (`error`), `digest_paused` (`streak`), `digest_pause_emailed`,
 `digest_pause_email_failed`, `digest_link_clicked` (`paper_id`, `kind`),
 `digest_resume_clicked` (`via`). A send failure never fails the run.

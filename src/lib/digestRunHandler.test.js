@@ -942,7 +942,7 @@ describe('delivery', () => {
     expect(sent[0].text).toContain('https://app.test/?src=digest-email')
     expect(sent[0].text).toContain(`for 11:00 am ${TZ}`)
     expect(sent[0].html).toContain('Paper 1 for A')
-    expect(events(db, 'digest_emailed')).toEqual([expect.objectContaining({ user_id: 'A', payload: { papers: 2, provider_id: 'em_1' } })])
+    expect(events(db, 'digest_emailed')).toEqual([expect.objectContaining({ user_id: 'A', payload: { papers: 2, survey: false, provider_id: 'em_1' } })])
     expect(row(db).delivered_day).toBeTruthy()
     // Later ticks: nothing to build (ran today), nothing to send (day delivered).
     expect((await (await handleDigestRun(cron(), h)).json()).ran).toBe(false)
@@ -959,6 +959,8 @@ describe('delivery', () => {
       h.email = email
       await handleDigestRun(cron(), h)
       expect(sent).toHaveLength(1)
+      // The digest_emailed event says whether the survey line went out with it.
+      expect(events(db, 'digest_emailed')[0].payload.survey).toBe(sent[0].text.includes('survey=day30'))
       return sent[0]
     }
     const due = await send(31)
