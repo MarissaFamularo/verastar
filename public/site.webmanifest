@@ -1,7 +1,7 @@
 {
   "name": "Verastar",
   "short_name": "Verastar",
-  "description": "A verifiable evidence digest for clinicians.",
+  "description": "A verifiable evidence digest for physicians.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

@@ -1,6 +1,6 @@
 # Verastar
 
-**A verifiable evidence digest for clinicians.**
+**A verifiable evidence digest for physicians.**
 
 **▶ Demo:** https://youtu.be/RmT7JjTTqeM · **Live:** https://verastar.papertrellis.com
 
@@ -17,7 +17,7 @@ you own — your reading and your memory, on your own machine, never locked insi
 
 It is the app version of a system I already run by hand: a personal knowledge base, a
 context portfolio, and a daily research briefing. Verastar makes it something any
-clinician can pick up — and I built it end-to-end with Claude Code, as a physician who
+physician can pick up — and I built it end-to-end with Claude Code, as a physician who
 never wrote a line of code before late 2025.
 
 Built for **Built with Claude: Life Sciences** (Anthropic × Gladstone Institutes),

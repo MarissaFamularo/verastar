@@ -27,5 +27,5 @@
              fill="rgba(233,196,106,0.12)" stroke="#e9c46a" stroke-width="1.6" stroke-linejoin="round"/>
   </g>
   <text x="600" y="430" text-anchor="middle" font-family="Spectral, Georgia, serif" font-size="92" font-weight="500" fill="#f4f5f9" letter-spacing="2">Verastar</text>
-  <text x="600" y="505" text-anchor="middle" font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif" font-size="30" fill="#9aa1af" letter-spacing="0.5">A verifiable evidence digest for clinicians</text>
+  <text x="600" y="505" text-anchor="middle" font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif" font-size="30" fill="#9aa1af" letter-spacing="0.5">A verifiable evidence digest for physicians</text>
 </svg>
